@@ -20,6 +20,7 @@ type OnHTTPClientInitFunc func(client *http.Client) *http.Client
 type OnMakeRequestFunc func(number string) string
 type OnDecorateRequestFunc func(req *http.Request) error
 type OnDecodeHTTPDataFunc func(data []byte) (*AvMeta, error)
+type OnDecorateImageRequestFunc func(req *http.Request) error
 
 type DefaultPlugin struct {
 	name   string
@@ -28,10 +29,11 @@ type DefaultPlugin struct {
 }
 
 type DefaultPluginOption struct {
-	OnHTTPClientInit  OnHTTPClientInitFunc
-	OnMakeRequest     OnMakeRequestFunc
-	OnDecorateRequest OnDecorateRequestFunc
-	OnDecodeHTTPData  OnDecodeHTTPDataFunc
+	OnHTTPClientInit       OnHTTPClientInitFunc
+	OnMakeRequest          OnMakeRequestFunc
+	OnDecorateRequest      OnDecorateRequestFunc
+	OnDecodeHTTPData       OnDecodeHTTPDataFunc
+	OnDecorateImageRequest OnDecorateImageRequestFunc
 }
 
 func NewDefaultPlugin(name string, opt *DefaultPluginOption) (IPlugin, error) {
@@ -76,7 +78,7 @@ func (p *DefaultPlugin) setDefaultHttpOptions(req *http.Request) error {
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0")
 	}
 	if len(req.Referer()) == 0 {
-		req.Header.Set("Referer", fmt.Sprintf("%s://%s", req.URL.Scheme, req.URL.Host))
+		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
 	}
 	return nil
 }
@@ -93,6 +95,18 @@ func (p *DefaultPlugin) getResponseBody(rsp *http.Response) (io.ReadCloser, erro
 func (p *DefaultPlugin) decorateRequest(req *http.Request) error {
 	if err := p.opt.OnDecorateRequest(req); err != nil {
 		return err
+	}
+	if err := p.setDefaultHttpOptions(req); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *DefaultPlugin) decorateImageRequest(req *http.Request) error {
+	if p.opt.OnDecorateImageRequest != nil {
+		if err := p.opt.OnDecorateImageRequest(req); err != nil {
+			return err
+		}
 	}
 	if err := p.setDefaultHttpOptions(req); err != nil {
 		return err
@@ -200,7 +214,7 @@ func (p *DefaultPlugin) fetchImageData(url string) (*model.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)
 	}
-	if err := p.setDefaultHttpOptions(req); err != nil {
+	if err := p.decorateImageRequest(req); err != nil {
 		return nil, fmt.Errorf("decode request failed, err:%w", err)
 	}
 	rsp, err := p.client.Do(req)

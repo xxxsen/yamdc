@@ -26,8 +26,6 @@ func (p *javbus) decorateRequest(req *http.Request) error {
 		Name:  "dv",
 		Value: "1",
 	})
-	req.Header.Add("Referer", "https://www.javbus.com")
-	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0")
 	req.Header.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
 	req.Header.Add("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Add("Accept-Encoding", "gzip, deflate, br, zstd")
@@ -60,23 +58,12 @@ func (p *javbus) onDataDecode(data []byte) (*AvMeta, error) {
 }
 
 func (p *javbus) tryExtraPosterFromCover(cover string) string {
-	idx := strings.LastIndex(cover, "/")
-	if idx < 0 {
+	if len(cover) == 0 {
 		return ""
 	}
-	urlbase := cover[:idx]
-	filename := cover[idx+1:]
-	extIdx := strings.LastIndex(filename, ".")
-	if extIdx < 0 {
-		return ""
-	}
-	filenameNoExt := filename[:extIdx]
-	ext := filename[extIdx+1:]
-	if !strings.HasSuffix(filenameNoExt, "_b") {
-		return ""
-	}
-	filenameNoExt = filenameNoExt[:len(filenameNoExt)-2]
-	return urlbase + "/" + filenameNoExt + "." + ext
+	cover = strings.Replace(cover, "/cover/", "/thumb/", -1)
+	cover = strings.Replace(cover, "_b.", ".", -1)
+	return cover
 }
 
 func createJavbusPlugin(args interface{}) (IPlugin, error) {
