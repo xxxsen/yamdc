@@ -1,8 +1,8 @@
 package decoder
 
 import (
-	"av-capture/plugin/meta"
-	"av-capture/plugin/utils"
+	"av-capture/searcher/meta"
+	"av-capture/searcher/utils"
 	"bytes"
 	"strings"
 

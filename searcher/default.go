@@ -1,8 +1,8 @@
-package plugin
+package searcher
 
 import (
 	"av-capture/model"
-	"av-capture/plugin/meta"
+	"av-capture/searcher/meta"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -23,13 +23,13 @@ type OnDecorateRequestFunc func(req *http.Request) error
 type OnDecodeHTTPDataFunc func(data []byte) (*meta.AvMeta, error)
 type OnDecorateMediaRequestFunc func(req *http.Request) error
 
-type DefaultPlugin struct {
+type DefaultSearcher struct {
 	name   string
 	client *http.Client
-	opt    *DefaultPluginOption
+	opt    *DefaultSearchOption
 }
 
-type DefaultPluginOption struct {
+type DefaultSearchOption struct {
 	OnHTTPClientInit       OnHTTPClientInitFunc
 	OnMakeRequest          OnMakeRequestFunc
 	OnDecorateRequest      OnDecorateRequestFunc
@@ -37,7 +37,7 @@ type DefaultPluginOption struct {
 	OnDecorateMediaRequest OnDecorateMediaRequestFunc
 }
 
-func NewDefaultPlugin(name string, opt *DefaultPluginOption) (IPlugin, error) {
+func NewDefaultSearcher(name string, opt *DefaultSearchOption) (ISearcher, error) {
 	if opt == nil {
 		return nil, fmt.Errorf("invalid plugin opt")
 	}
@@ -63,18 +63,18 @@ func NewDefaultPlugin(name string, opt *DefaultPluginOption) (IPlugin, error) {
 	if opt.OnHTTPClientInit != nil {
 		client = opt.OnHTTPClientInit(client)
 	}
-	return &DefaultPlugin{
+	return &DefaultSearcher{
 		name:   name,
 		client: client,
 		opt:    opt,
 	}, nil
 }
 
-func (p *DefaultPlugin) Name() string {
+func (p *DefaultSearcher) Name() string {
 	return p.name
 }
 
-func (p *DefaultPlugin) setDefaultHttpOptions(req *http.Request) error {
+func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
 	if len(req.UserAgent()) == 0 {
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0")
 	}
@@ -84,7 +84,7 @@ func (p *DefaultPlugin) setDefaultHttpOptions(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultPlugin) getResponseBody(rsp *http.Response) (io.ReadCloser, error) {
+func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, error) {
 	switch rsp.Header.Get("Content-Encoding") {
 	case "gzip":
 		return gzip.NewReader(rsp.Body)
@@ -93,7 +93,7 @@ func (p *DefaultPlugin) getResponseBody(rsp *http.Response) (io.ReadCloser, erro
 	}
 }
 
-func (p *DefaultPlugin) decorateRequest(req *http.Request) error {
+func (p *DefaultSearcher) decorateRequest(req *http.Request) error {
 	if err := p.opt.OnDecorateRequest(req); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (p *DefaultPlugin) decorateRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultPlugin) decorateImageRequest(req *http.Request) error {
+func (p *DefaultSearcher) decorateImageRequest(req *http.Request) error {
 	if p.opt.OnDecorateMediaRequest != nil {
 		if err := p.opt.OnDecorateMediaRequest(req); err != nil {
 			return err
@@ -115,7 +115,7 @@ func (p *DefaultPlugin) decorateImageRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultPlugin) Search(number string) (*model.AvMeta, error) {
+func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	uri := p.opt.OnMakeRequest(number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {
@@ -150,7 +150,7 @@ func (p *DefaultPlugin) Search(number string) (*model.AvMeta, error) {
 	return p.renderAvMetaToModelAvMeta(meta), nil
 }
 
-func (p *DefaultPlugin) fixMeta(req *http.Request, meta *meta.AvMeta) {
+func (p *DefaultSearcher) fixMeta(req *http.Request, meta *meta.AvMeta) {
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	p.fixSingleURL(&meta.Cover, prefix)
 	p.fixSingleURL(&meta.Poster, prefix)
@@ -159,13 +159,13 @@ func (p *DefaultPlugin) fixMeta(req *http.Request, meta *meta.AvMeta) {
 	}
 }
 
-func (p *DefaultPlugin) fixSingleURL(input *string, prefix string) {
+func (p *DefaultSearcher) fixSingleURL(input *string, prefix string) {
 	if strings.HasPrefix(*input, "/") {
 		*input = prefix + *input
 	}
 }
 
-func (p *DefaultPlugin) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMeta {
+func (p *DefaultSearcher) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMeta {
 	out := &model.AvMeta{
 		Number:      in.Number,
 		Title:       in.Title,
@@ -191,7 +191,7 @@ func (p *DefaultPlugin) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMeta
 	return out
 }
 
-func (p *DefaultPlugin) fetchImageDatas(urls []string) map[string]*model.Image {
+func (p *DefaultSearcher) fetchImageDatas(urls []string) map[string]*model.Image {
 	rs := make(map[string]*model.Image)
 	for _, url := range urls {
 		if len(url) == 0 {
@@ -210,7 +210,7 @@ func (p *DefaultPlugin) fetchImageDatas(urls []string) map[string]*model.Image {
 	return rs
 }
 
-func (p *DefaultPlugin) fetchImageData(url string) (*model.Image, error) {
+func (p *DefaultSearcher) fetchImageData(url string) (*model.Image, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)

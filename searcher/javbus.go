@@ -1,8 +1,8 @@
-package plugin
+package searcher
 
 import (
-	"av-capture/plugin/decoder"
-	"av-capture/plugin/meta"
+	"av-capture/searcher/decoder"
+	"av-capture/searcher/meta"
 	"net/http"
 )
 
@@ -55,9 +55,9 @@ func (p *javbus) onDataDecode(data []byte) (*meta.AvMeta, error) {
 	return rs, nil
 }
 
-func createJavbusPlugin(args interface{}) (IPlugin, error) {
+func createJavbusPlugin(args interface{}) (ISearcher, error) {
 	jav := &javbus{}
-	plg, err := NewDefaultPlugin(PlgJavBus, &DefaultPluginOption{
+	plg, err := NewDefaultSearcher(SSJavBus, &DefaultSearchOption{
 		OnMakeRequest:     jav.makeRequest,
 		OnDecorateRequest: jav.decorateRequest,
 		OnDecodeHTTPData:  jav.onDataDecode,
@@ -70,5 +70,5 @@ func createJavbusPlugin(args interface{}) (IPlugin, error) {
 }
 
 func init() {
-	Register(PlgJavBus, createJavbusPlugin)
+	Register(SSJavBus, createJavbusPlugin)
 }

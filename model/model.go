@@ -19,3 +19,19 @@ type Image struct {
 	Name string
 	Data []byte
 }
+
+type ExtInfo struct {
+	Number    string
+	IsMultiCD bool
+	CDNumber  int
+}
+
+type FileContext struct {
+	FullFilePath string
+	FileName     string
+	FileExt      string
+	SaveFileBase string
+	SaveDir      string
+	Meta         *AvMeta
+	Ext          ExtInfo
+}
