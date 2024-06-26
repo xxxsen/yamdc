@@ -21,7 +21,7 @@ type OnHTTPClientInitFunc func(client *http.Client) *http.Client
 type OnMakeRequestFunc func(number string) string
 type OnDecorateRequestFunc func(req *http.Request) error
 type OnDecodeHTTPDataFunc func(data []byte) (*meta.AvMeta, error)
-type OnDecorateImageRequestFunc func(req *http.Request) error
+type OnDecorateMediaRequestFunc func(req *http.Request) error
 
 type DefaultPlugin struct {
 	name   string
@@ -34,7 +34,7 @@ type DefaultPluginOption struct {
 	OnMakeRequest          OnMakeRequestFunc
 	OnDecorateRequest      OnDecorateRequestFunc
 	OnDecodeHTTPData       OnDecodeHTTPDataFunc
-	OnDecorateImageRequest OnDecorateImageRequestFunc
+	OnDecorateMediaRequest OnDecorateMediaRequestFunc
 }
 
 func NewDefaultPlugin(name string, opt *DefaultPluginOption) (IPlugin, error) {
@@ -104,8 +104,8 @@ func (p *DefaultPlugin) decorateRequest(req *http.Request) error {
 }
 
 func (p *DefaultPlugin) decorateImageRequest(req *http.Request) error {
-	if p.opt.OnDecorateImageRequest != nil {
-		if err := p.opt.OnDecorateImageRequest(req); err != nil {
+	if p.opt.OnDecorateMediaRequest != nil {
+		if err := p.opt.OnDecorateMediaRequest(req); err != nil {
 			return err
 		}
 	}
