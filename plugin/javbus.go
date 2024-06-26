@@ -1,8 +1,9 @@
 package plugin
 
 import (
+	"av-capture/plugin/decoder"
+	"av-capture/plugin/meta"
 	"net/http"
-	"strings"
 )
 
 type javbus struct {
@@ -32,8 +33,8 @@ func (p *javbus) decorateRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *javbus) onDataDecode(data []byte) (*AvMeta, error) {
-	dec := XPathHtmlDecoder{
+func (p *javbus) onDataDecode(data []byte) (*meta.AvMeta, error) {
+	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="row movie"]/div[@class="col-md-3 info"]/p[span[contains(text(),'識別碼:')]]/span[2]/text()`,
 		TitleExpr:           `/html/head/title`,
 		ActorListExpr:       `//div[@class="star-name"]/a/text()`,
@@ -51,19 +52,7 @@ func (p *javbus) onDataDecode(data []byte) (*AvMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(rs.Cover) > 0 {
-		rs.Poster = p.tryExtraPosterFromCover(rs.Cover)
-	}
 	return rs, nil
-}
-
-func (p *javbus) tryExtraPosterFromCover(cover string) string {
-	if len(cover) == 0 {
-		return ""
-	}
-	cover = strings.Replace(cover, "/cover/", "/thumb/", -1)
-	cover = strings.Replace(cover, "_b.", ".", -1)
-	return cover
 }
 
 func createJavbusPlugin(args interface{}) (IPlugin, error) {

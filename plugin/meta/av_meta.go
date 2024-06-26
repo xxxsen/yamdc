@@ -1,4 +1,4 @@
-package plugin
+package meta
 
 type AvMeta struct {
 	Number       string   //番号

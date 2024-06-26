@@ -1,7 +1,8 @@
-package plugin
+package decoder
 
 import (
-	"av-capture/utils"
+	"av-capture/plugin/meta"
+	"av-capture/plugin/utils"
 	"bytes"
 	"strings"
 
@@ -55,7 +56,7 @@ func (d *XPathHtmlDecoder) decodeMulti(node *html.Node, expr string) []string {
 	return rs
 }
 
-func (d *XPathHtmlDecoder) DecodeHTML(data []byte) (*AvMeta, error) {
+func (d *XPathHtmlDecoder) DecodeHTML(data []byte) (*meta.AvMeta, error) {
 	node, err := htmlquery.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -63,8 +64,8 @@ func (d *XPathHtmlDecoder) DecodeHTML(data []byte) (*AvMeta, error) {
 	return d.Decode(node)
 }
 
-func (d *XPathHtmlDecoder) Decode(node *html.Node) (*AvMeta, error) {
-	meta := &AvMeta{
+func (d *XPathHtmlDecoder) Decode(node *html.Node) (*meta.AvMeta, error) {
+	meta := &meta.AvMeta{
 		Number:       d.decodeSingle(node, d.NumberExpr),
 		Title:        d.decodeSingle(node, d.TitleExpr),
 		Actors:       d.decodeMulti(node, d.ActorListExpr),

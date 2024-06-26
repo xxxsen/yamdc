@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/plugin/meta"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -19,7 +20,7 @@ import (
 type OnHTTPClientInitFunc func(client *http.Client) *http.Client
 type OnMakeRequestFunc func(number string) string
 type OnDecorateRequestFunc func(req *http.Request) error
-type OnDecodeHTTPDataFunc func(data []byte) (*AvMeta, error)
+type OnDecodeHTTPDataFunc func(data []byte) (*meta.AvMeta, error)
 type OnDecorateImageRequestFunc func(req *http.Request) error
 
 type DefaultPlugin struct {
@@ -149,7 +150,7 @@ func (p *DefaultPlugin) Search(number string) (*model.AvMeta, error) {
 	return p.renderAvMetaToModelAvMeta(meta), nil
 }
 
-func (p *DefaultPlugin) fixMeta(req *http.Request, meta *AvMeta) {
+func (p *DefaultPlugin) fixMeta(req *http.Request, meta *meta.AvMeta) {
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	p.fixSingleURL(&meta.Cover, prefix)
 	p.fixSingleURL(&meta.Poster, prefix)
@@ -164,7 +165,7 @@ func (p *DefaultPlugin) fixSingleURL(input *string, prefix string) {
 	}
 }
 
-func (p *DefaultPlugin) renderAvMetaToModelAvMeta(in *AvMeta) *model.AvMeta {
+func (p *DefaultPlugin) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMeta {
 	out := &model.AvMeta{
 		Number:      in.Number,
 		Title:       in.Title,

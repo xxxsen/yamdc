@@ -13,7 +13,7 @@ import (
 func TestJavbus(t *testing.T) {
 	p, err := createJavbusPlugin(map[string]interface{}{})
 	assert.NoError(t, err)
-	res, err := p.Search("ECBM-004")
+	res, err := p.Search("BANK-090")
 	assert.NoError(t, err)
 	_ = res
 }
