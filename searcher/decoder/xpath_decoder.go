@@ -13,6 +13,7 @@ import (
 type XPathHtmlDecoder struct {
 	NumberExpr          string
 	TitleExpr           string
+	PlotExpr            string
 	ActorListExpr       string
 	ReleaseDateExpr     string
 	DurationExpr        string
@@ -68,6 +69,7 @@ func (d *XPathHtmlDecoder) Decode(node *html.Node) (*meta.AvMeta, error) {
 	meta := &meta.AvMeta{
 		Number:       d.decodeSingle(node, d.NumberExpr),
 		Title:        d.decodeSingle(node, d.TitleExpr),
+		Plot:         d.decodeSingle(node, d.PlotExpr),
 		Actors:       d.decodeMulti(node, d.ActorListExpr),
 		ReleaseDate:  0,
 		Duration:     0,

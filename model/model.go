@@ -3,6 +3,7 @@ package model
 type AvMeta struct {
 	Number       string   //番号
 	Title        string   //标题
+	Plot         string   //简介
 	Actors       []string //演员
 	ReleaseDate  int64    //发行时间, unix时间戳, 精确到秒
 	Duration     int64    //影片时长, 单位为秒
