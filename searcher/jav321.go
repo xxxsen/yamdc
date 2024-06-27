@@ -15,6 +15,11 @@ func (s *jav321) onMakeRequest(number string) string {
 	return "https://www.jav321.com/video/" + number
 }
 
+func (s *jav321) defaultStringProcessor(v string) string {
+	v = strings.Trim(v, ": \t")
+	return strings.TrimSpace(v)
+}
+
 func (s *jav321) onDecodeHTTPDate(data []byte) (*meta.AvMeta, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
@@ -32,13 +37,12 @@ func (s *jav321) onDecodeHTTPDate(data []byte) (*meta.AvMeta, error) {
 		SampleImageListExpr: `//div[@class="col-md-3"]/div[@class="col-xs-12 col-md-12"]/p/a/img/@src`,
 	}
 	rs, err := dec.DecodeHTML(data,
+		decoder.WithDefaultStringProcessor(s.defaultStringProcessor),
 		decoder.WithReleaseDateParser(func(v string) int64 {
-			v = strings.Trim(v, ": \t")
 			rs, _ := utils.ToTimestamp(v)
 			return rs
 		}),
 		decoder.WithDurationParser(func(v string) int64 {
-			v = strings.Trim(v, ": \t")
 			rs, _ := utils.ToDuration(v)
 			return rs
 		}),

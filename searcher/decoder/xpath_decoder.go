@@ -25,7 +25,7 @@ type XPathHtmlDecoder struct {
 	SampleImageListExpr string
 }
 
-func (d *XPathHtmlDecoder) decodeSingle(node *html.Node, expr string) string {
+func (d *XPathHtmlDecoder) decodeSingle(c *config, node *html.Node, expr string) string {
 	if len(expr) == 0 {
 		return ""
 	}
@@ -33,10 +33,10 @@ func (d *XPathHtmlDecoder) decodeSingle(node *html.Node, expr string) string {
 	if res == nil {
 		return ""
 	}
-	return strings.TrimSpace(htmlquery.InnerText(res))
+	return c.DefaultStringProcessor(strings.TrimSpace(htmlquery.InnerText(res)))
 }
 
-func (d *XPathHtmlDecoder) decodeMulti(node *html.Node, expr string) []string {
+func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) []string {
 	rs := make([]string, 0, 5)
 	if len(expr) == 0 {
 		return rs
@@ -53,7 +53,7 @@ func (d *XPathHtmlDecoder) decodeMulti(node *html.Node, expr string) []string {
 		}
 		rs = append(rs, res)
 	}
-	return rs
+	return c.DefaultStringListProcessor(rs)
 }
 
 func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*meta.AvMeta, error) {
@@ -66,19 +66,21 @@ func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*meta.AvMeta
 
 func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 	c := &config{
-		OnNumberParse:          defaultStringParser,
-		OnTitleParse:           defaultStringParser,
-		OnPlotParse:            defaultStringParser,
-		OnActorListParse:       defaultStringListParser,
-		OnReleaseDateParse:     defaultNumberParser,
-		OnDurationParse:        defaultNumberParser,
-		OnStudioParse:          defaultStringParser,
-		OnLabelParse:           defaultStringParser,
-		OnSeriesParse:          defaultStringParser,
-		OnGenreListParse:       defaultStringListParser,
-		OnCoverParse:           defaultStringParser,
-		OnPosterParse:          defaultStringParser,
-		OnSampleImageListParse: defaultStringListParser,
+		OnNumberParse:              defaultStringParser,
+		OnTitleParse:               defaultStringParser,
+		OnPlotParse:                defaultStringParser,
+		OnActorListParse:           defaultStringListParser,
+		OnReleaseDateParse:         defaultNumberParser,
+		OnDurationParse:            defaultNumberParser,
+		OnStudioParse:              defaultStringParser,
+		OnLabelParse:               defaultStringParser,
+		OnSeriesParse:              defaultStringParser,
+		OnGenreListParse:           defaultStringListParser,
+		OnCoverParse:               defaultStringParser,
+		OnPosterParse:              defaultStringParser,
+		OnSampleImageListParse:     defaultStringListParser,
+		DefaultStringProcessor:     defaultStringProcessor,
+		DefaultStringListProcessor: defaultStringListProcessor,
 	}
 
 	for _, opt := range opts {
@@ -90,19 +92,19 @@ func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*meta.AvMeta, error) {
 	c := d.applyOpts(opts...)
 	meta := &meta.AvMeta{
-		Number:       c.OnNumberParse(d.decodeSingle(node, d.NumberExpr)),
-		Title:        c.OnTitleParse(d.decodeSingle(node, d.TitleExpr)),
-		Plot:         c.OnPlotParse(d.decodeSingle(node, d.PlotExpr)),
-		Actors:       c.OnActorListParse(d.decodeMulti(node, d.ActorListExpr)),
-		ReleaseDate:  c.OnReleaseDateParse(d.decodeSingle(node, d.ReleaseDateExpr)),
-		Duration:     c.OnDurationParse(d.decodeSingle(node, d.DurationExpr)),
-		Studio:       c.OnStudioParse(d.decodeSingle(node, d.StudioExpr)),
-		Label:        c.OnLabelParse(d.decodeSingle(node, d.LabelExpr)),
-		Series:       c.OnSeriesParse(d.decodeSingle(node, d.SeriesExpr)),
-		Genres:       c.OnGenreListParse(d.decodeMulti(node, d.GenreListExpr)),
-		Cover:        c.OnCoverParse(d.decodeSingle(node, d.CoverExpr)),
-		Poster:       c.OnPosterParse(d.decodeSingle(node, d.PosterExpr)),
-		SampleImages: c.OnSampleImageListParse(d.decodeMulti(node, d.SampleImageListExpr)),
+		Number:       c.OnNumberParse(d.decodeSingle(c, node, d.NumberExpr)),
+		Title:        c.OnTitleParse(d.decodeSingle(c, node, d.TitleExpr)),
+		Plot:         c.OnPlotParse(d.decodeSingle(c, node, d.PlotExpr)),
+		Actors:       c.OnActorListParse(d.decodeMulti(c, node, d.ActorListExpr)),
+		ReleaseDate:  c.OnReleaseDateParse(d.decodeSingle(c, node, d.ReleaseDateExpr)),
+		Duration:     c.OnDurationParse(d.decodeSingle(c, node, d.DurationExpr)),
+		Studio:       c.OnStudioParse(d.decodeSingle(c, node, d.StudioExpr)),
+		Label:        c.OnLabelParse(d.decodeSingle(c, node, d.LabelExpr)),
+		Series:       c.OnSeriesParse(d.decodeSingle(c, node, d.SeriesExpr)),
+		Genres:       c.OnGenreListParse(d.decodeMulti(c, node, d.GenreListExpr)),
+		Cover:        c.OnCoverParse(d.decodeSingle(c, node, d.CoverExpr)),
+		Poster:       c.OnPosterParse(d.decodeSingle(c, node, d.PosterExpr)),
+		SampleImages: c.OnSampleImageListParse(d.decodeMulti(c, node, d.SampleImageListExpr)),
 	}
 	return meta, nil
 }

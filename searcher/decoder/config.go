@@ -5,19 +5,21 @@ type StringListParseFunc func(v []string) []string
 type NumberParseFunc func(v string) int64
 
 type config struct {
-	OnNumberParse          StringParseFunc
-	OnTitleParse           StringParseFunc
-	OnPlotParse            StringParseFunc
-	OnActorListParse       StringListParseFunc
-	OnReleaseDateParse     NumberParseFunc
-	OnDurationParse        NumberParseFunc
-	OnStudioParse          StringParseFunc
-	OnLabelParse           StringParseFunc
-	OnSeriesParse          StringParseFunc
-	OnGenreListParse       StringListParseFunc
-	OnCoverParse           StringParseFunc
-	OnPosterParse          StringParseFunc
-	OnSampleImageListParse StringListParseFunc
+	OnNumberParse              StringParseFunc
+	OnTitleParse               StringParseFunc
+	OnPlotParse                StringParseFunc
+	OnActorListParse           StringListParseFunc
+	OnReleaseDateParse         NumberParseFunc
+	OnDurationParse            NumberParseFunc
+	OnStudioParse              StringParseFunc
+	OnLabelParse               StringParseFunc
+	OnSeriesParse              StringParseFunc
+	OnGenreListParse           StringListParseFunc
+	OnCoverParse               StringParseFunc
+	OnPosterParse              StringParseFunc
+	OnSampleImageListParse     StringListParseFunc
+	DefaultStringProcessor     StringParseFunc
+	DefaultStringListProcessor StringListParseFunc
 }
 
 func defaultStringParser(v string) string {
@@ -32,7 +34,27 @@ func defaultNumberParser(v string) int64 {
 	return 0
 }
 
+func defaultStringProcessor(v string) string {
+	return v
+}
+
+func defaultStringListProcessor(vs []string) []string {
+	return vs
+}
+
 type Option func(c *config)
+
+func WithDefaultStringProcessor(p StringParseFunc) Option {
+	return func(c *config) {
+		c.DefaultStringProcessor = p
+	}
+}
+
+func WithDefaultStringListProcessor(p StringListParseFunc) Option {
+	return func(c *config) {
+		c.DefaultStringListProcessor = p
+	}
+}
 
 func WithSampleImageListParser(p StringListParseFunc) Option {
 	return func(c *config) {

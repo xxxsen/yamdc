@@ -179,24 +179,23 @@ func (p *DefaultSearcher) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMe
 	images := make([]string, 0, len(in.SampleImages)+2)
 	images = append(images, in.Cover, in.Poster)
 	images = append(images, in.SampleImages...)
-	imageDataMap := p.fetchImageDatas(images)
-	out.Cover = imageDataMap[in.Cover]
-	out.Poster = imageDataMap[in.Poster]
-	for _, item := range in.SampleImages {
-		if imageData, ok := imageDataMap[item]; ok {
-			out.SampleImages = append(out.SampleImages, imageData)
+	imageDataList := p.fetchImageDatas(images)
+	out.Cover = imageDataList[0]
+	out.Poster = imageDataList[1]
+	imageDataList = imageDataList[2:]
+	for _, item := range imageDataList {
+		if item == nil {
+			continue
 		}
+		out.SampleImages = append(out.SampleImages, item)
 	}
 	return out
 }
 
-func (p *DefaultSearcher) fetchImageDatas(urls []string) map[string]*model.Image {
-	rs := make(map[string]*model.Image)
-	for _, url := range urls {
+func (p *DefaultSearcher) fetchImageDatas(urls []string) []*model.Image {
+	rs := make([]*model.Image, len(urls))
+	for idx, url := range urls {
 		if len(url) == 0 {
-			continue
-		}
-		if _, ok := rs[url]; ok {
 			continue
 		}
 		data, err := p.fetchImageData(url)
@@ -204,7 +203,7 @@ func (p *DefaultSearcher) fetchImageDatas(urls []string) map[string]*model.Image
 			logutil.GetLogger(context.Background()).Error("fetch image data failed", zap.Error(err), zap.String("url", url))
 			continue
 		}
-		rs[url] = data
+		rs[idx] = data
 	}
 	return rs
 }
