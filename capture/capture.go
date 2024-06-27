@@ -2,6 +2,7 @@ package capture
 
 import (
 	"av-capture/model"
+	"av-capture/nfo"
 	"av-capture/processor"
 	"av-capture/utils"
 	"context"
@@ -23,7 +24,8 @@ var (
 )
 
 const (
-	defaultImageExtName = ".jpg"
+	defaultImageExtName   = ".jpg"
+	defaultExtraFanartDir = "extrafanart"
 )
 
 type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
@@ -202,9 +204,12 @@ func (c *Capture) doNaming(ctx context.Context, fc *model.FileContext) error {
 	if err := c.resolveSaveDir(fc); err != nil {
 		return fmt.Errorf("resolve save dir failed, err:%w", err)
 	}
-
+	//创建必要的目录
 	if err := os.MkdirAll(fc.SaveDir, 0755); err != nil {
 		return fmt.Errorf("make save dir failed, err:%w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(fc.SaveDir, defaultExtraFanartDir), 0755); err != nil {
+		return fmt.Errorf("make fanart dir failed, err:%w", err)
 	}
 	//数据重命名
 	if err := c.renameMetaField(fc); err != nil {
@@ -261,8 +266,8 @@ func (c *Capture) renameMetaField(fc *model.FileContext) error {
 	if fc.Meta.Poster != nil {
 		fc.Meta.Poster.Name = fmt.Sprintf("%s-poster%s", fc.SaveFileBase, utils.GetExtName(fc.Meta.Poster.Name, defaultImageExtName))
 	}
-	for idx, item := range fc.Meta.SampleImages {
-		item.Name = fmt.Sprintf("%s-sample-%d%s", fc.SaveFileBase, idx, utils.GetExtName(item.Name, defaultImageExtName))
+	for idx, item := range fc.Meta.SampleImages { //TODO:这里需要构建子目录, 看看有没有更好的做法
+		item.Name = fmt.Sprintf("%s/%s-sample-%d%s", defaultExtraFanartDir, fc.SaveFileBase, idx, utils.GetExtName(item.Name, defaultImageExtName))
 	}
 	return nil
 }
@@ -293,7 +298,13 @@ func (c *Capture) saveMediaData(fc *model.FileContext) error {
 }
 
 func (c *Capture) exportNFOData(fc *model.FileContext) error {
-	//TODO: finish it
-
+	mov, err := utils.ConvertMetaToMovieNFO(fc.Meta)
+	if err != nil {
+		return fmt.Errorf("convert meta to movie nfo failed, err:%w", err)
+	}
+	save := filepath.Join(fc.SaveDir, fc.SaveFileBase+".nfo")
+	if err := nfo.WriteMovieToFile(save, mov); err != nil {
+		return fmt.Errorf("write movie nfo failed, err:%w", err)
+	}
 	return nil
 }
