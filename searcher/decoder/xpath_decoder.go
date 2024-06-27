@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"av-capture/searcher/meta"
-	"av-capture/searcher/utils"
 	"bytes"
 	"strings"
 
@@ -57,37 +56,53 @@ func (d *XPathHtmlDecoder) decodeMulti(node *html.Node, expr string) []string {
 	return rs
 }
 
-func (d *XPathHtmlDecoder) DecodeHTML(data []byte) (*meta.AvMeta, error) {
+func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*meta.AvMeta, error) {
 	node, err := htmlquery.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
-	return d.Decode(node)
+	return d.Decode(node, opts...)
 }
 
-func (d *XPathHtmlDecoder) Decode(node *html.Node) (*meta.AvMeta, error) {
+func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
+	c := &config{
+		OnNumberParse:          defaultStringParser,
+		OnTitleParse:           defaultStringParser,
+		OnPlotParse:            defaultStringParser,
+		OnActorListParse:       defaultStringListParser,
+		OnReleaseDateParse:     defaultNumberParser,
+		OnDurationParse:        defaultNumberParser,
+		OnStudioParse:          defaultStringParser,
+		OnLabelParse:           defaultStringParser,
+		OnSeriesParse:          defaultStringParser,
+		OnGenreListParse:       defaultStringListParser,
+		OnCoverParse:           defaultStringParser,
+		OnPosterParse:          defaultStringParser,
+		OnSampleImageListParse: defaultStringListParser,
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*meta.AvMeta, error) {
+	c := d.applyOpts(opts...)
 	meta := &meta.AvMeta{
-		Number:       d.decodeSingle(node, d.NumberExpr),
-		Title:        d.decodeSingle(node, d.TitleExpr),
-		Plot:         d.decodeSingle(node, d.PlotExpr),
-		Actors:       d.decodeMulti(node, d.ActorListExpr),
-		ReleaseDate:  0,
-		Duration:     0,
-		Studio:       d.decodeSingle(node, d.StudioExpr),
-		Label:        d.decodeSingle(node, d.LabelExpr),
-		Series:       d.decodeSingle(node, d.SeriesExpr),
-		Genres:       d.decodeMulti(node, d.GenreListExpr),
-		Cover:        d.decodeSingle(node, d.CoverExpr),
-		Poster:       d.decodeSingle(node, d.PosterExpr),
-		SampleImages: d.decodeMulti(node, d.SampleImageListExpr),
+		Number:       c.OnNumberParse(d.decodeSingle(node, d.NumberExpr)),
+		Title:        c.OnTitleParse(d.decodeSingle(node, d.TitleExpr)),
+		Plot:         c.OnPlotParse(d.decodeSingle(node, d.PlotExpr)),
+		Actors:       c.OnActorListParse(d.decodeMulti(node, d.ActorListExpr)),
+		ReleaseDate:  c.OnReleaseDateParse(d.decodeSingle(node, d.ReleaseDateExpr)),
+		Duration:     c.OnDurationParse(d.decodeSingle(node, d.DurationExpr)),
+		Studio:       c.OnStudioParse(d.decodeSingle(node, d.StudioExpr)),
+		Label:        c.OnLabelParse(d.decodeSingle(node, d.LabelExpr)),
+		Series:       c.OnSeriesParse(d.decodeSingle(node, d.SeriesExpr)),
+		Genres:       c.OnGenreListParse(d.decodeMulti(node, d.GenreListExpr)),
+		Cover:        c.OnCoverParse(d.decodeSingle(node, d.CoverExpr)),
+		Poster:       c.OnPosterParse(d.decodeSingle(node, d.PosterExpr)),
+		SampleImages: c.OnSampleImageListParse(d.decodeMulti(node, d.SampleImageListExpr)),
 	}
-
-	if v, err := utils.ToTimestamp(d.decodeSingle(node, d.ReleaseDateExpr)); err == nil {
-		meta.ReleaseDate = v
-	}
-	if v, err := utils.ToDuration(d.decodeSingle(node, d.DurationExpr)); err == nil {
-		meta.Duration = v
-	}
-
 	return meta, nil
 }

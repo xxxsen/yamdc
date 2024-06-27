@@ -44,9 +44,6 @@ func NewDefaultSearcher(name string, opt *DefaultSearchOption) (ISearcher, error
 	if opt.OnMakeRequest == nil {
 		return nil, fmt.Errorf("invalid make request func")
 	}
-	if opt.OnDecorateRequest == nil {
-		return nil, fmt.Errorf("invalid on decorate request func")
-	}
 	if opt.OnDecodeHTTPData == nil {
 		return nil, fmt.Errorf("invalid decode http data func")
 	}
@@ -94,8 +91,10 @@ func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, er
 }
 
 func (p *DefaultSearcher) decorateRequest(req *http.Request) error {
-	if err := p.opt.OnDecorateRequest(req); err != nil {
-		return err
+	if p.opt.OnDecorateRequest != nil {
+		if err := p.opt.OnDecorateRequest(req); err != nil {
+			return err
+		}
 	}
 	if err := p.setDefaultHttpOptions(req); err != nil {
 		return err

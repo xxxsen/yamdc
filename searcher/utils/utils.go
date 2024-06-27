@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	defaultDurationRegexp = regexp.MustCompile(`^(\d+)(分鐘)$`)
+	defaultDurationRegexp = regexp.MustCompile(`^(\d+)(\s*\w+)$`)
 )
 
 func ToTimestamp(date string) (int64, error) {

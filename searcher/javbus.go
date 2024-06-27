@@ -3,6 +3,7 @@ package searcher
 import (
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/meta"
+	"av-capture/searcher/utils"
 	"net/http"
 )
 
@@ -48,7 +49,16 @@ func (p *javbus) onDataDecode(data []byte) (*meta.AvMeta, error) {
 		PosterExpr:          "",
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
-	rs, err := dec.DecodeHTML(data)
+	rs, err := dec.DecodeHTML(data,
+		decoder.WithReleaseDateParser(func(v string) int64 {
+			rs, _ := utils.ToTimestamp(v)
+			return rs
+		}),
+		decoder.WithDurationParser(func(v string) int64 {
+			rs, _ := utils.ToDuration(v)
+			return rs
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
