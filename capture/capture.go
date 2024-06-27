@@ -26,6 +26,8 @@ const (
 	defaultImageExtName = ".jpg"
 )
 
+type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
+
 type Capture struct {
 	c *config
 }
@@ -153,7 +155,7 @@ func (c *Capture) verifyMetaData(meta *model.AvMeta) error {
 	return nil
 }
 
-func (c *Capture) resolveAndBuildSaveDir(fc *model.FileContext) error {
+func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	now := time.UnixMilli(fc.Meta.ReleaseDate)
 	date := now.Format(time.DateOnly)
 	year := fmt.Sprintf("%d", now.Year())
@@ -171,15 +173,10 @@ func (c *Capture) resolveAndBuildSaveDir(fc *model.FileContext) error {
 		return fmt.Errorf("invalid naming")
 	}
 	fc.SaveDir = filepath.Join(c.c.SaveDir, naming)
-	if err := os.MkdirAll(fc.SaveDir, 0755); err != nil {
-		return fmt.Errorf("make save dir failed, err:%w", err)
-	}
 	return nil
 }
 
-func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
-	//搜索->验证元数据->流程处理->重命名->保存元数据->导出jellyfin nfo信息
-	//搜索
+func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 	meta, err := c.c.Searcher.Search(fc.Ext.Number)
 	if err != nil {
 		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Ext.Number, err)
@@ -189,25 +186,71 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 		return fmt.Errorf("verify meta failed, err:%w", err)
 	}
 	fc.Meta = meta
-	//流程处理
+	return nil
+}
+
+func (c *Capture) doProcess(ctx context.Context, fc *model.FileContext) error {
+	//执行处理流程, 用于补齐数据或者数据转换
 	if err := c.c.Processor.Process(ctx, fc.Meta); err != nil {
 		return fmt.Errorf("process meta failed, err:%w", err)
 	}
-	if err := c.resolveAndBuildSaveDir(fc); err != nil {
+	return nil
+}
+
+func (c *Capture) doNaming(ctx context.Context, fc *model.FileContext) error {
+	//构建保存目录地址
+	if err := c.resolveSaveDir(fc); err != nil {
 		return fmt.Errorf("resolve save dir failed, err:%w", err)
+	}
+
+	if err := os.MkdirAll(fc.SaveDir, 0755); err != nil {
+		return fmt.Errorf("make save dir failed, err:%w", err)
 	}
 	//数据重命名
 	if err := c.renameMetaField(fc); err != nil {
 		return fmt.Errorf("rename meta field failed, err:%w", err)
 	}
+	return nil
+}
+
+func (c *Capture) doSaveData(ctx context.Context, fc *model.FileContext) error {
 	//保存元数据并将影片移入指定目录
-	if err := c.saveMetaData(fc); err != nil {
+	if err := c.saveMediaData(fc); err != nil {
 		return fmt.Errorf("save meta data failed, err:%w", err)
 	}
-	//导出jellyfin需要的nfo信息
+	return nil
+}
+
+func (c *Capture) doExport(ctx context.Context, fc *model.FileContext) error {
+	// 导出jellyfin需要的nfo信息
 	if err := c.exportNFOData(fc); err != nil {
 		return fmt.Errorf("export nfo data failed, err:%w", err)
 	}
+	return nil
+}
+
+func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
+	steps := []struct {
+		name string
+		fn   fcProcessFunc
+	}{
+		{"search", c.doSearch},
+		{"process", c.doProcess},
+		{"naming", c.doNaming},
+		{"savedata", c.doSaveData},
+		{"nfo", c.doExport},
+	}
+	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
+	for idx, step := range steps {
+		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
+		log.Debug("step start")
+		if err := step.fn(ctx, fc); err != nil {
+			log.Error("proc step failed", zap.Error(err))
+			return err
+		}
+		log.Debug("step end")
+	}
+	logger.Info("process succ")
 	return nil
 }
 
@@ -224,7 +267,7 @@ func (c *Capture) renameMetaField(fc *model.FileContext) error {
 	return nil
 }
 
-func (c *Capture) saveMetaData(fc *model.FileContext) error {
+func (c *Capture) saveMediaData(fc *model.FileContext) error {
 	images := make([]*model.Image, 0, len(fc.Meta.SampleImages)+2)
 	if fc.Meta.Cover != nil {
 		images = append(images, fc.Meta.Cover)
@@ -242,9 +285,9 @@ func (c *Capture) saveMetaData(fc *model.FileContext) error {
 		}
 		logger.Debug("write image succ")
 	}
-	media := filepath.Join(fc.SaveDir, fc.SaveFileBase, fc.FileExt)
-	if err := os.Rename(fc.FullFilePath, media); err != nil {
-		return fmt.Errorf("move media to save dir failed, err:%w", err)
+	movie := filepath.Join(fc.SaveDir, fc.SaveFileBase, fc.FileExt)
+	if err := os.Rename(fc.FullFilePath, movie); err != nil {
+		return fmt.Errorf("move movie to save dir failed, err:%w", err)
 	}
 	return nil
 }
