@@ -13,9 +13,9 @@ type Config struct {
 	Naming          string                 `json:"naming"`
 	SearcherConfig  map[string]interface{} `json:"searcher_config"`
 	ProcessorConfig map[string]interface{} `json:"processor_config"`
-	Searchers       []string
-	Processors      []string
-	LogConfig       logger.LogConfig
+	Searchers       []string               `json:"searchers"`
+	Processors      []string               `json:"processors"`
+	LogConfig       logger.LogConfig       `json:"log_config"`
 }
 
 func Parse(f string) (*Config, error) {

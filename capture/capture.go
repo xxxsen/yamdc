@@ -122,8 +122,9 @@ func (c *Capture) Run(ctx context.Context) error {
 }
 
 func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContext) {
+	logutil.GetLogger(ctx).Info("read movie file succ", zap.Int("count", len(fcs)))
 	for _, item := range fcs {
-		logutil.GetLogger(ctx).Info("read file succ",
+		logutil.GetLogger(ctx).Info("file info",
 			zap.String("number", item.Ext.Number),
 			zap.Bool("multi_cd", item.Ext.IsMultiCD),
 			zap.Int("cd", item.Ext.CDNumber), zap.String("file", item.FileName))
@@ -171,6 +172,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	naming = strings.ReplaceAll(naming, NamingReleaseYear, year)
 	naming = strings.ReplaceAll(naming, NamingReleaseMonth, month)
 	naming = strings.ReplaceAll(naming, NamingActor, actor)
+	naming = strings.ReplaceAll(naming, NamingNumber, fc.Ext.Number)
 	if len(naming) == 0 {
 		return fmt.Errorf("invalid naming")
 	}
@@ -282,15 +284,15 @@ func (c *Capture) saveMediaData(fc *model.FileContext) error {
 	}
 	images = append(images, fc.Meta.SampleImages...)
 	for _, image := range images {
-		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name))
 		target := filepath.Join(fc.SaveDir, image.Name)
+		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("target", target))
 		if err := os.WriteFile(target, image.Data, 0644); err != nil {
 			logger.Error("write image failed", zap.Error(err))
 			return err
 		}
 		logger.Debug("write image succ")
 	}
-	movie := filepath.Join(fc.SaveDir, fc.SaveFileBase, fc.FileExt)
+	movie := filepath.Join(fc.SaveDir, fc.SaveFileBase+fc.FileExt)
 	if err := os.Rename(fc.FullFilePath, movie); err != nil {
 		return fmt.Errorf("move movie to save dir failed, err:%w", err)
 	}

@@ -33,12 +33,12 @@ type Movie struct {
 }
 
 type Actor struct {
-	Name  string `xml:"name"`
-	Role  string `xml:"role"`
-	Thumb string `xml:"thumb"`
+	Name  string `xml:"name,omitempty"`
+	Role  string `xml:"role,omitempty"`
+	Thumb string `xml:"thumb,omitempty"`
 }
 
 type Art struct {
-	Poster string   `xml:"poster"`
-	Fanart []string `xml:"fanart"`
+	Poster string   `xml:"poster,omitempty"`
+	Fanart []string `xml:"fanart,omitempty"`
 }

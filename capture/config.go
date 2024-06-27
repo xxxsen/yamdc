@@ -10,10 +10,11 @@ const (
 	NamingReleaseYear  = "{YEAR}"
 	NamingReleaseMonth = "{MONTH}"
 	NamingActor        = "{ACTOR}"
+	NamingNumber       = "{NUMBER}"
 )
 
 const (
-	defaultNamingRule = NamingReleaseYear + "/" + NamingActor
+	defaultNamingRule = NamingReleaseYear + "/" + NamingActor + "/" + NamingNumber
 )
 
 type config struct {
