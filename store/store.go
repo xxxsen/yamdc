@@ -82,33 +82,13 @@ func (s *Store) generateDataKey(data []byte) string {
 	return hex.EncodeToString(res)
 }
 
-func (s *Store) Get(key string) (io.ReadCloser, error) {
-	_, f := s.buildFileLocation(key)
-	rc, err := os.Open(f)
-	if err != nil {
-		return nil, err
-	}
-	return rc, nil
-}
-
-func (s *Store) GetWithNamingKey(key string) (io.ReadCloser, error) {
-	return s.Get(s.generateDataKey(s.wrapNamingKey(key)))
-}
-
 func (s *Store) GetData(key string) ([]byte, error) {
-	rc, err := s.Get(key)
-	if err != nil {
-		return nil, fmt.Errorf("open io failed, key:%s, err:%w", key, err)
-	}
-	defer rc.Close()
-	return io.ReadAll(rc)
+	_, f := s.buildFileLocation(key)
+	raw, err := os.ReadFile(f)
+	return raw, err
 }
 
 func (s *Store) GetDataWithNamingKey(key string) ([]byte, error) {
-	rc, err := s.GetWithNamingKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("open io failed, naming key:%s, err:%w", key, err)
-	}
-	defer rc.Close()
-	return io.ReadAll(rc)
+	key = s.generateDataKey(s.wrapNamingKey(key))
+	return s.GetData(key)
 }
