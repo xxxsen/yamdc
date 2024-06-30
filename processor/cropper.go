@@ -31,8 +31,8 @@ func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) er
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	cutter := image.CutCensoredImage //默认情况下, 都按骑兵进行封面处理
-	if fc.Ext.IsUncensorNumber {     //如果为步兵, 则使用人脸识别
+	cutter := image.CutCensoredImage   //默认情况下, 都按骑兵进行封面处理
+	if fc.NumberInfo.IsUncensorMovie { //如果为步兵, 则使用人脸识别
 		cutter = image.CutImageWithFaceRec
 	}
 	res, err := cutter(fc.Meta.Cover.Data)

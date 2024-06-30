@@ -36,7 +36,7 @@ func TestNumber(t *testing.T) {
 		},
 	}
 	for file, info := range checkList {
-		rs, err := Parse(file)
+		rs, err := ParseWithFileName(file)
 		assert.NoError(t, err)
 		assert.Equal(t, info.Number, rs.Number)
 		assert.Equal(t, info.IsChineseSubtitle, rs.IsChineseSubtitle)

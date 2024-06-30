@@ -51,15 +51,16 @@ func resolveIsUncensorMovie(info *Info, str string) string {
 
 type numberResolveFunc func(info *Info, str string) string
 
+func ParseWithFileName(f string) (*Info, error) {
+	filename := filepath.Base(f)
+	fileext := filepath.Ext(f)
+	filenoext := filename[:len(filename)-len(fileext)]
+	return Parse(filenoext)
+}
+
 func Parse(str string) (*Info, error) {
 	if len(str) == 0 {
 		return nil, fmt.Errorf("empty number str")
-	}
-	filename := filepath.Base(str)
-	fileext := filepath.Ext(str)
-	filenoext := filename[:len(filename)-len(fileext)]
-	if len(filenoext) == 0 {
-		return nil, fmt.Errorf("invalid file name")
 	}
 	rs := &Info{
 		Number:            "",
@@ -68,7 +69,7 @@ func Parse(str string) (*Info, error) {
 		MultiCDIndex:      0,
 		IsUncensorMovie:   false,
 	}
-	number := filenoext
+	number := str
 	steps := defaultNumberResolveList
 	for _, step := range steps {
 		number = step(rs, number)

@@ -1,5 +1,7 @@
 package model
 
+import "av-capture/number"
+
 type AvMeta struct {
 	Number       string   //番号
 	Title        string   //标题
@@ -36,5 +38,5 @@ type FileContext struct {
 	SaveFileBase string
 	SaveDir      string
 	Meta         *AvMeta
-	Ext          ExtInfo
+	NumberInfo   *number.Info
 }

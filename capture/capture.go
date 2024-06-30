@@ -3,6 +3,7 @@ package capture
 import (
 	"av-capture/model"
 	"av-capture/nfo"
+	"av-capture/number"
 	"av-capture/processor"
 	"av-capture/utils"
 	"context"
@@ -10,17 +11,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
-)
-
-var (
-	defaultCDParserRegexp = regexp.MustCompile(`^(.*?)-[cC][dD](\d+)`)
 )
 
 const (
@@ -54,35 +50,18 @@ func New(opts ...Option) (*Capture, error) {
 	return &Capture{c: c}, nil
 }
 
-func (c *Capture) resolveMultiCDInfo(fc *model.FileContext) error {
-	matches := defaultCDParserRegexp.FindStringSubmatch(fc.FileName)
-	if len(matches) <= 2 {
-		return nil
-	}
-	fc.Ext.Number = matches[1]
-	fc.Ext.IsMultiCD = true
-	cdn, err := strconv.ParseUint(matches[2], 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse cd number failed, err:%w", err)
-	}
-	fc.Ext.CDNumber = int(cdn)
-	return nil
-}
-
 func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
-	fc.Ext.Number = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
-	if err := c.resolveMultiCDInfo(fc); err != nil {
-		return fmt.Errorf("resolve multi cd failed, err:%w", err)
+	fileNoExt := fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+	info, err := number.Parse(fileNoExt)
+	if err != nil {
+		return fmt.Errorf("parse number failed, err:%w", err)
 	}
-	if len(fc.Ext.Number) == 0 {
-		return fmt.Errorf("invalid number")
-	}
-
-	fc.SaveFileBase = fc.Ext.Number
-	if fc.Ext.IsMultiCD {
-		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.Ext.CDNumber), 10)
+	fc.NumberInfo = info
+	fc.SaveFileBase = fc.NumberInfo.Number
+	if fc.NumberInfo.IsMultiCD {
+		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.NumberInfo.MultiCDIndex), 10)
 	}
 	return nil
 }
@@ -125,9 +104,9 @@ func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContex
 	logutil.GetLogger(ctx).Info("read movie file succ", zap.Int("count", len(fcs)))
 	for _, item := range fcs {
 		logutil.GetLogger(ctx).Info("file info",
-			zap.String("number", item.Ext.Number),
-			zap.Bool("multi_cd", item.Ext.IsMultiCD),
-			zap.Int("cd", item.Ext.CDNumber), zap.String("file", item.FileName))
+			zap.String("number", item.NumberInfo.Number),
+			zap.Bool("multi_cd", item.NumberInfo.IsMultiCD),
+			zap.Int("cd", item.NumberInfo.MultiCDIndex), zap.String("file", item.FileName))
 	}
 }
 
@@ -172,7 +151,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	naming = strings.ReplaceAll(naming, NamingReleaseYear, year)
 	naming = strings.ReplaceAll(naming, NamingReleaseMonth, month)
 	naming = strings.ReplaceAll(naming, NamingActor, actor)
-	naming = strings.ReplaceAll(naming, NamingNumber, fc.Ext.Number)
+	naming = strings.ReplaceAll(naming, NamingNumber, fc.NumberInfo.Number)
 	if len(naming) == 0 {
 		return fmt.Errorf("invalid naming")
 	}
@@ -181,9 +160,9 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 }
 
 func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
-	meta, err := c.c.Searcher.Search(fc.Ext.Number)
+	meta, err := c.c.Searcher.Search(fc.NumberInfo.Number)
 	if err != nil {
-		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Ext.Number, err)
+		return fmt.Errorf("search number failed, number:%s, err:%w", fc.NumberInfo.Number, err)
 	}
 	//验证元信息
 	if err := c.verifyMetaData(meta); err != nil {
