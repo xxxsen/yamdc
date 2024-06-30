@@ -126,3 +126,13 @@ func (s *Store) GetData(key string) ([]byte, error) {
 	raw, err := os.ReadFile(f)
 	return raw, err
 }
+
+func (s *Store) IsCacheExist(key string) bool {
+	internalKey, ok := s.tryDecodeInternalKey(key)
+	if !ok {
+		internalKey = s.generateDataKey(s.wrapNamingKey(key))
+	}
+	_, f := s.buildFileLocation(internalKey)
+	_, err := os.Stat(f)
+	return err == nil
+}

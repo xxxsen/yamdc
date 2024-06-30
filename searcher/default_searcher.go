@@ -5,6 +5,8 @@ import (
 	"av-capture/store"
 	"compress/gzip"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -256,18 +258,31 @@ func (p *DefaultSearcher) saveRemoteURLData(urls []string) map[string]string {
 			continue
 		}
 		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
+		key := p.buildURLCacheKey(url)
+		if store.GetDefault().IsCacheExist(key) {
+			rs[url] = key
+			continue
+		}
 		data, err := p.fetchImageData(url)
 		if err != nil {
 			logger.Error("fetch image data failed", zap.Error(err))
 			continue
 		}
-		key, err := store.GetDefault().Put(data)
+		err = store.GetDefault().PutWithNamingKey(key, data)
 		if err != nil {
 			logger.Error("put image data to store failed", zap.Error(err))
 		}
 		rs[url] = key
 	}
 	return rs
+}
+
+func (p *DefaultSearcher) buildURLCacheKey(url string) string {
+	h := md5.New()
+	_, _ = h.Write([]byte(url))
+	hashsum := hex.EncodeToString(h.Sum(nil))
+	key := fmt.Sprintf("avc:search:cache:url:%s:%s", p.name, hashsum)
+	return key
 }
 
 func (p *DefaultSearcher) fetchImageData(url string) ([]byte, error) {
