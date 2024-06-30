@@ -46,6 +46,15 @@ func (s *Store) Put(data []byte) (string, error) {
 	return key, s.persist(key, data)
 }
 
+func (s *Store) wrapNamingKey(key string) []byte {
+	return []byte(fmt.Sprintf("^#NAMING_START:%s:NAMING_END#$", key))
+}
+
+func (s *Store) PutWithNamingKey(key string, data []byte) error {
+	key = s.generateDataKey(s.wrapNamingKey(key))
+	return s.persist(key, data)
+}
+
 func (s *Store) persist(key string, data []byte) error {
 	dir, f := s.buildFileLocation(key)
 	if _, err := os.Stat(dir); err != nil {
@@ -82,10 +91,23 @@ func (s *Store) Get(key string) (io.ReadCloser, error) {
 	return rc, nil
 }
 
+func (s *Store) GetWithNamingKey(key string) (io.ReadCloser, error) {
+	return s.Get(s.generateDataKey(s.wrapNamingKey(key)))
+}
+
 func (s *Store) GetData(key string) ([]byte, error) {
 	rc, err := s.Get(key)
 	if err != nil {
 		return nil, fmt.Errorf("open io failed, key:%s, err:%w", key, err)
+	}
+	defer rc.Close()
+	return io.ReadAll(rc)
+}
+
+func (s *Store) GetDataWithNamingKey(key string) ([]byte, error) {
+	rc, err := s.GetWithNamingKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("open io failed, naming key:%s, err:%w", key, err)
 	}
 	defer rc.Close()
 	return io.ReadAll(rc)
