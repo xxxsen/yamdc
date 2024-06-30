@@ -1,21 +1,23 @@
 package store
 
 import (
-	"bytes"
-	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"sync"
-	"sync/atomic"
-	"time"
+	"os"
+	"path/filepath"
 )
 
 var defaultStore *Store
 
-func Init() {
-	defaultStore = New()
+func Init(dataDir string) error {
+	var err error
+	defaultStore, err = New(dataDir)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetDefault() *Store {
@@ -23,8 +25,8 @@ func GetDefault() *Store {
 }
 
 type Store struct {
-	idx uint32
-	st  sync.Map
+	idx     uint32
+	dataDir string
 }
 
 type IFile interface {
@@ -32,40 +34,58 @@ type IFile interface {
 	Open() io.ReadCloser
 }
 
-func New() *Store {
-	return &Store{idx: 10000}
+func New(dataDir string) (*Store, error) {
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, err
+	}
+	return &Store{idx: 10000, dataDir: dataDir}, nil
 }
 
 func (s *Store) Put(data []byte) (string, error) {
-	key := s.generateKey()
-	s.st.Store(key, data)
-	return key, nil
+	key := s.generateDataKey(data)
+	return key, s.persist(key, data)
 }
 
-func (s *Store) generateKey() string {
-	randData := make([]byte, 20)
-	_, _ = io.ReadAtLeast(rand.Reader, randData, len(randData))
-	sess := atomic.AddUint32(&s.idx, 1)
-	tsData := fmt.Sprintf("%d-%d", time.Now().UnixMilli(), sess)
+func (s *Store) persist(key string, data []byte) error {
+	dir, f := s.buildFileLocation(key)
+	if _, err := os.Stat(dir); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(f, data, 0644)
+}
+
+func (s *Store) buildFileLocation(key string) (string, string) {
+	p1 := key[:2]
+	p2 := key[2:4]
+	p3 := key[4:6]
+	dir := filepath.Join(s.dataDir, p1, p2, p3)
+	file := filepath.Join(dir, key)
+	return dir, file
+}
+
+func (s *Store) generateDataKey(data []byte) string {
 	m := sha1.New()
-	_, _ = m.Write([]byte(randData))
-	_, _ = m.Write([]byte(tsData))
+	_, _ = m.Write([]byte(fmt.Sprintf("%d", len(data))))
+	_, _ = m.Write(data)
 	res := m.Sum(nil)
 	return hex.EncodeToString(res)
 }
 
-func (s *Store) Get(key string) (io.ReadCloser, bool) {
-	if v, ok := s.st.Load(key); ok {
-		return io.NopCloser(bytes.NewReader(v.([]byte))), true
+func (s *Store) Get(key string) (io.ReadCloser, error) {
+	_, f := s.buildFileLocation(key)
+	rc, err := os.Open(f)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, false
+	return rc, nil
 }
 
 func (s *Store) GetData(key string) ([]byte, error) {
-	rc, ok := s.Get(key)
-	if !ok {
-		return nil, fmt.Errorf("key:%s no found", key)
+	rc, err := s.Get(key)
+	if err != nil {
+		return nil, fmt.Errorf("open io failed, key:%s, err:%w", key, err)
 	}
 	defer rc.Close()
 	return io.ReadAll(rc)

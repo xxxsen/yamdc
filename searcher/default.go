@@ -145,7 +145,7 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode http data failed, err:%w", err)
 	}
-	//重建图片url
+	//重建不规范的元数据
 	p.fixMeta(req, meta)
 	//将远程数据保存到本地, 并替换文件key
 	p.storeImageData(meta)
@@ -169,6 +169,7 @@ func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
 }
 
 func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.AvMeta) {
+	meta.Number = strings.ToUpper(meta.Number)
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	p.fixSingleURL(&meta.Cover.Name, prefix)
 	p.fixSingleURL(&meta.Poster.Name, prefix)

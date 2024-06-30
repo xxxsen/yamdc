@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/xxxsen/common/logger"
 	"go.uber.org/zap"
@@ -24,7 +25,7 @@ func main() {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
-	store.Init()
+	store.Init(filepath.Join(c.DataDir, "cache"))
 	ss, err := buildSearcher(c.Searchers, c.SearcherConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))

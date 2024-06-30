@@ -74,6 +74,6 @@ func Parse(str string) (*Info, error) {
 	for _, step := range steps {
 		number = step(rs, number)
 	}
-	rs.Number = number
+	rs.Number = strings.ToUpper(number)
 	return rs, nil
 }

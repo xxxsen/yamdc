@@ -124,20 +124,6 @@ func (c *Capture) processFileList(ctx context.Context, fcs []*model.FileContext)
 	return outErr
 }
 
-func (c *Capture) verifyMetaData(meta *model.AvMeta) error {
-	//检查基础字段是否都有数据
-	if len(meta.Number) == 0 {
-		return fmt.Errorf("no number")
-	}
-	if len(meta.Title) == 0 {
-		return fmt.Errorf("no title")
-	}
-	if meta.Cover == nil {
-		return fmt.Errorf("no cover")
-	}
-	return nil
-}
-
 func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	now := time.UnixMilli(fc.Meta.ReleaseDate)
 	date := now.Format(time.DateOnly)
@@ -165,9 +151,8 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 	if err != nil {
 		return fmt.Errorf("search number failed, number:%s, err:%w", fc.NumberInfo.Number, err)
 	}
-	//验证元信息
-	if err := c.verifyMetaData(meta); err != nil {
-		return fmt.Errorf("verify meta failed, err:%w", err)
+	if meta.Number != fc.NumberInfo.Number {
+		return fmt.Errorf("number not match, search:%s, file:%s", meta.Number, fc.NumberInfo.Number)
 	}
 	fc.Meta = meta
 	return nil
@@ -216,6 +201,23 @@ func (c *Capture) doExport(ctx context.Context, fc *model.FileContext) error {
 	return nil
 }
 
+func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error {
+	//全部处理完后必须要保证当前的元数据至少有title, number, cover, title
+	if len(fc.Meta.Title) == 0 {
+		return fmt.Errorf("no title")
+	}
+	if len(fc.Meta.Number) == 0 {
+		return fmt.Errorf("no number found")
+	}
+	if fc.Meta.Cover == nil || len(fc.Meta.Cover.Name) == 0 || len(fc.Meta.Cover.Key) == 0 {
+		return fmt.Errorf("invalid cover")
+	}
+	if fc.Meta.Poster == nil || len(fc.Meta.Poster.Name) == 0 || len(fc.Meta.Poster.Key) == 0 {
+		return fmt.Errorf("invalid poster")
+	}
+	return nil
+}
+
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
 	steps := []struct {
 		name string
@@ -223,6 +225,7 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 	}{
 		{"search", c.doSearch},
 		{"process", c.doProcess},
+		{"metaverify", c.doMetaVerify},
 		{"naming", c.doNaming},
 		{"savedata", c.doSaveData},
 		{"nfo", c.doExport},
