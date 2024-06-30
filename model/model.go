@@ -22,9 +22,11 @@ type Image struct {
 }
 
 type ExtInfo struct {
-	Number    string
-	IsMultiCD bool
-	CDNumber  int
+	Number            string
+	IsMultiCD         bool
+	CDNumber          int
+	IsChineseSubtitle bool //是否有中文字幕
+	IsUncensorNumber  bool //是否为步兵
 }
 
 type FileContext struct {

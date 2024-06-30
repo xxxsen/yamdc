@@ -8,7 +8,7 @@ import (
 
 type IProcessor interface {
 	Name() string
-	Process(ctx context.Context, meta *model.AvMeta) error
+	Process(ctx context.Context, meta *model.FileContext) error
 	IsOptional() bool
 }
 

@@ -195,7 +195,7 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 
 func (c *Capture) doProcess(ctx context.Context, fc *model.FileContext) error {
 	//执行处理流程, 用于补齐数据或者数据转换
-	if err := c.c.Processor.Process(ctx, fc.Meta); err != nil {
+	if err := c.c.Processor.Process(ctx, fc); err != nil {
 		return fmt.Errorf("process meta failed, err:%w", err)
 	}
 	return nil

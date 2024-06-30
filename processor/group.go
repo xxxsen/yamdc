@@ -20,9 +20,9 @@ func (g *group) Name() string {
 	return "group"
 }
 
-func (g *group) Process(ctx context.Context, meta *model.AvMeta) error {
+func (g *group) Process(ctx context.Context, fc *model.FileContext) error {
 	for _, p := range g.ps {
-		err := p.Process(ctx, meta)
+		err := p.Process(ctx, fc)
 		if err == nil {
 			continue
 		}

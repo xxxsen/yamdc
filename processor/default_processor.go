@@ -14,7 +14,7 @@ func (p *defaultProcessor) Name() string {
 	return "default"
 }
 
-func (p *defaultProcessor) Process(ctx context.Context, meta *model.AvMeta) error {
+func (p *defaultProcessor) Process(ctx context.Context, fc *model.FileContext) error {
 	return nil
 }
 
