@@ -115,12 +115,12 @@ func (p *DefaultSearcher) decorateImageRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultSearcher) buildCacheKey(number string) string {
+func (p *DefaultSearcher) buildMetaCacheKey(number string) string {
 	return fmt.Sprintf("avc:search:cache:%s:%s", p.name, strings.ToUpper(number))
 }
 
 func (p *DefaultSearcher) readMetaFromCache(number string) (*model.AvMeta, error) {
-	raw, err := store.GetDefault().GetDataWithNamingKey(p.buildCacheKey(number))
+	raw, err := store.GetDefault().GetData(p.buildMetaCacheKey(number))
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (p *DefaultSearcher) readMetaFromCache(number string) (*model.AvMeta, error
 }
 
 func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
-	key := p.buildCacheKey(number)
+	key := p.buildMetaCacheKey(number)
 	raw, err := json.Marshal(meta)
 	if err != nil {
 		return

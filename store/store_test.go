@@ -19,7 +19,7 @@ func TestStore(t *testing.T) {
 	{
 		err = GetDefault().PutWithNamingKey("aaa-bbb", []byte("hihi"))
 		assert.NoError(t, err)
-		data, err := GetDefault().GetDataWithNamingKey("aaa-bbb")
+		data, err := GetDefault().GetData("aaa-bbb")
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("hihi"), data)
 	}

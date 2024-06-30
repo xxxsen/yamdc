@@ -2,8 +2,10 @@ package store
 
 import (
 	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,7 +45,39 @@ func New(dataDir string) (*Store, error) {
 
 func (s *Store) Put(data []byte) (string, error) {
 	key := s.generateDataKey(data)
-	return key, s.persist(key, data)
+	return s.paddingWithChecksum(key), s.persist(key, data)
+}
+
+func (s *Store) crcStr(key string) string {
+	crc := crc32.ChecksumIEEE([]byte(key))
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint32(buf, crc)
+	return hex.EncodeToString(buf)[:8]
+}
+
+func (s *Store) paddingWithChecksum(key string) string {
+	crc := s.crcStr(key)
+	return fmt.Sprintf("S:%s:%s:E", crc, key)
+}
+
+func (s *Store) tryDecodeInternalKey(key string) (string, bool) {
+	if len(key) < 14 {
+		return "", false
+	}
+	if !(key[0] == 'S' && key[len(key)-1] == 'E') {
+		return "", false
+	}
+	key = key[2 : len(key)-2]
+	if key[8] != ':' {
+		return "", false
+	}
+	crc := key[:8]
+	realkey := key[8+1:]
+	calcCrc := s.crcStr(realkey)
+	if calcCrc != crc {
+		return "", false
+	}
+	return realkey, true
 }
 
 func (s *Store) wrapNamingKey(key string) []byte {
@@ -83,12 +117,12 @@ func (s *Store) generateDataKey(data []byte) string {
 }
 
 func (s *Store) GetData(key string) ([]byte, error) {
-	_, f := s.buildFileLocation(key)
+	internalKey, ok := s.tryDecodeInternalKey(key)
+	if !ok {
+		internalKey = s.generateDataKey(s.wrapNamingKey(key))
+	}
+
+	_, f := s.buildFileLocation(internalKey)
 	raw, err := os.ReadFile(f)
 	return raw, err
-}
-
-func (s *Store) GetDataWithNamingKey(key string) ([]byte, error) {
-	key = s.generateDataKey(s.wrapNamingKey(key))
-	return s.GetData(key)
 }
