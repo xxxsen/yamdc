@@ -5,6 +5,7 @@ import (
 	"av-capture/store"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,7 +115,37 @@ func (p *DefaultSearcher) decorateImageRequest(req *http.Request) error {
 	return nil
 }
 
+func (p *DefaultSearcher) buildCacheKey(number string) string {
+	return fmt.Sprintf("avc:search:cache:%s:%s", p.name, strings.ToUpper(number))
+}
+
+func (p *DefaultSearcher) readMetaFromCache(number string) (*model.AvMeta, error) {
+	raw, err := store.GetDefault().GetDataWithNamingKey(p.buildCacheKey(number))
+	if err != nil {
+		return nil, err
+	}
+	meta := &model.AvMeta{}
+	if err := json.Unmarshal(raw, meta); err != nil {
+		return nil, err
+	}
+	logutil.GetLogger(context.Background()).Debug("read meta from cache succ", zap.String("number", number))
+	return meta, nil
+}
+
+func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
+	key := p.buildCacheKey(number)
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		return
+	}
+	_ = store.GetDefault().PutWithNamingKey(key, raw)
+}
+
 func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
+	if m, err := p.readMetaFromCache(number); err == nil {
+		return m, nil
+	}
+
 	uri := p.opt.OnMakeRequest(number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {
@@ -152,6 +183,7 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err := p.verifyMeta(meta); err != nil {
 		return nil, fmt.Errorf("verify meta failed, err:%w", err)
 	}
+	p.writeMetaToCache(number, meta)
 	return meta, nil
 }
 
