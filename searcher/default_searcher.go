@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
-	"os"
 	"strings"
 	"time"
 
@@ -173,7 +172,6 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read body failed, err:%w", err)
 	}
-	os.WriteFile(fmt.Sprintf("test_data_%s", number), data, 0666)
 	meta, err := p.opt.OnDecodeHTTPData(data)
 	if err != nil {
 		return nil, fmt.Errorf("decode http data failed, err:%w", err)
