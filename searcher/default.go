@@ -2,7 +2,7 @@ package searcher
 
 import (
 	"av-capture/model"
-	"av-capture/searcher/meta"
+	"av-capture/store"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -20,7 +20,7 @@ import (
 type OnHTTPClientInitFunc func(client *http.Client) *http.Client
 type OnMakeRequestFunc func(number string) string
 type OnDecorateRequestFunc func(req *http.Request) error
-type OnDecodeHTTPDataFunc func(data []byte) (*meta.AvMeta, error)
+type OnDecodeHTTPDataFunc func(data []byte) (*model.AvMeta, error)
 type OnDecorateMediaRequestFunc func(req *http.Request) error
 
 type DefaultSearcher struct {
@@ -145,15 +145,18 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode http data failed, err:%w", err)
 	}
+	//重建图片url
+	p.fixMeta(req, meta)
+	//将远程数据保存到本地, 并替换文件key
+	p.storeImageData(meta)
 	if err := p.verifyMeta(meta); err != nil {
 		return nil, fmt.Errorf("verify meta failed, err:%w", err)
 	}
-	p.fixMeta(req, meta)
-	return p.renderAvMetaToModelAvMeta(meta), nil
+	return meta, nil
 }
 
-func (p *DefaultSearcher) verifyMeta(meta *meta.AvMeta) error {
-	if len(meta.Cover) == 0 {
+func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
+	if meta.Cover == nil || len(meta.Cover.Name) == 0 {
 		return fmt.Errorf("no cover")
 	}
 	if len(meta.Number) == 0 {
@@ -165,12 +168,12 @@ func (p *DefaultSearcher) verifyMeta(meta *meta.AvMeta) error {
 	return nil
 }
 
-func (p *DefaultSearcher) fixMeta(req *http.Request, meta *meta.AvMeta) {
+func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.AvMeta) {
 	prefix := req.URL.Scheme + "://" + req.URL.Host
-	p.fixSingleURL(&meta.Cover, prefix)
-	p.fixSingleURL(&meta.Poster, prefix)
+	p.fixSingleURL(&meta.Cover.Name, prefix)
+	p.fixSingleURL(&meta.Poster.Name, prefix)
 	for i := 0; i < len(meta.SampleImages); i++ {
-		p.fixSingleURL(&meta.SampleImages[i], prefix)
+		p.fixSingleURL(&meta.SampleImages[i].Name, prefix)
 	}
 }
 
@@ -180,51 +183,61 @@ func (p *DefaultSearcher) fixSingleURL(input *string, prefix string) {
 	}
 }
 
-func (p *DefaultSearcher) renderAvMetaToModelAvMeta(in *meta.AvMeta) *model.AvMeta {
-	out := &model.AvMeta{
-		Number:      in.Number,
-		Title:       in.Title,
-		Actors:      in.Actors,
-		ReleaseDate: in.ReleaseDate,
-		Duration:    in.Duration,
-		Studio:      in.Studio,
-		Label:       in.Label,
-		Series:      in.Series,
-		Genres:      in.Genres,
-	}
+func (p *DefaultSearcher) storeImageData(in *model.AvMeta) {
 	images := make([]string, 0, len(in.SampleImages)+2)
-	images = append(images, in.Cover, in.Poster)
-	images = append(images, in.SampleImages...)
-	imageDataList := p.fetchImageDatas(images)
-	out.Cover = imageDataList[0]
-	out.Poster = imageDataList[1]
-	imageDataList = imageDataList[2:]
-	for _, item := range imageDataList {
-		if item == nil {
-			continue
-		}
-		out.SampleImages = append(out.SampleImages, item)
+	if in.Cover != nil {
+		images = append(images, in.Cover.Name)
 	}
-	return out
+	if in.Poster != nil {
+		images = append(images, in.Poster.Name)
+	}
+	for _, item := range in.SampleImages {
+		images = append(images, item.Name)
+	}
+	imageDataMap := p.saveRemoteURLData(images)
+	if in.Cover != nil {
+		in.Cover.Key = imageDataMap[in.Cover.Name]
+		//如果没有成功下载到数据, 那么直接置空
+		if len(in.Cover.Key) == 0 {
+			in.Cover = nil
+		}
+	}
+	if in.Poster != nil {
+		in.Poster.Key = imageDataMap[in.Poster.Name]
+		if len(in.Poster.Key) == 0 {
+			in.Poster = nil
+		}
+	}
+	rebuildSampleList := make([]*model.File, 0, len(in.SampleImages))
+	for _, item := range in.SampleImages {
+		item.Key = imageDataMap[item.Name]
+		rebuildSampleList = append(rebuildSampleList, item)
+	}
+	in.SampleImages = rebuildSampleList
 }
 
-func (p *DefaultSearcher) fetchImageDatas(urls []string) []*model.Image {
-	rs := make([]*model.Image, len(urls))
-	for idx, url := range urls {
+func (p *DefaultSearcher) saveRemoteURLData(urls []string) map[string]string {
+	rs := make(map[string]string, len(urls))
+	for _, url := range urls {
 		if len(url) == 0 {
 			continue
 		}
+		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
 		data, err := p.fetchImageData(url)
 		if err != nil {
-			logutil.GetLogger(context.Background()).Error("fetch image data failed", zap.Error(err), zap.String("url", url))
+			logger.Error("fetch image data failed", zap.Error(err))
 			continue
 		}
-		rs[idx] = data
+		key, err := store.GetDefault().Put(data)
+		if err != nil {
+			logger.Error("put image data to store failed", zap.Error(err))
+		}
+		rs[url] = key
 	}
 	return rs
 }
 
-func (p *DefaultSearcher) fetchImageData(url string) (*model.Image, error) {
+func (p *DefaultSearcher) fetchImageData(url string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)
@@ -249,9 +262,5 @@ func (p *DefaultSearcher) fetchImageData(url string) (*model.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read url data failed, err:%w", err)
 	}
-	dst := &model.Image{
-		Name: url,
-		Data: data,
-	}
-	return dst, nil
+	return data, nil
 }

@@ -13,22 +13,14 @@ type AvMeta struct {
 	Label        string   //发行商
 	Series       string   //系列
 	Genres       []string //分类, tag
-	Cover        *Image   //封面
-	Poster       *Image   //海报
-	SampleImages []*Image //样品图
+	Cover        *File    //封面
+	Poster       *File    //海报
+	SampleImages []*File  //样品图
 }
 
-type Image struct {
+type File struct {
 	Name string
-	Data []byte
-}
-
-type ExtInfo struct {
-	Number            string
-	IsMultiCD         bool
-	CDNumber          int
-	IsChineseSubtitle bool //是否有中文字幕
-	IsUncensorNumber  bool //是否为步兵
+	Key  string
 }
 
 type FileContext struct {

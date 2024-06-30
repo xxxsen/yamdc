@@ -1,7 +1,7 @@
 package decoder
 
 import (
-	"av-capture/searcher/meta"
+	"av-capture/model"
 	"bytes"
 	"strings"
 
@@ -56,7 +56,7 @@ func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) 
 	return c.DefaultStringListProcessor(rs)
 }
 
-func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*meta.AvMeta, error) {
+func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*model.AvMeta, error) {
 	node, err := htmlquery.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -89,9 +89,9 @@ func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 	return c
 }
 
-func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*meta.AvMeta, error) {
+func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.AvMeta, error) {
 	c := d.applyOpts(opts...)
-	meta := &meta.AvMeta{
+	meta := &model.AvMeta{
 		Number:       c.OnNumberParse(d.decodeSingle(c, node, d.NumberExpr)),
 		Title:        c.OnTitleParse(d.decodeSingle(c, node, d.TitleExpr)),
 		Plot:         c.OnPlotParse(d.decodeSingle(c, node, d.PlotExpr)),
@@ -102,9 +102,15 @@ func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*meta.AvMeta
 		Label:        c.OnLabelParse(d.decodeSingle(c, node, d.LabelExpr)),
 		Series:       c.OnSeriesParse(d.decodeSingle(c, node, d.SeriesExpr)),
 		Genres:       c.OnGenreListParse(d.decodeMulti(c, node, d.GenreListExpr)),
-		Cover:        c.OnCoverParse(d.decodeSingle(c, node, d.CoverExpr)),
-		Poster:       c.OnPosterParse(d.decodeSingle(c, node, d.PosterExpr)),
-		SampleImages: c.OnSampleImageListParse(d.decodeMulti(c, node, d.SampleImageListExpr)),
+		Cover:        &model.File{Name: c.OnCoverParse(d.decodeSingle(c, node, d.CoverExpr))},
+		Poster:       &model.File{Name: c.OnPosterParse(d.decodeSingle(c, node, d.PosterExpr))},
+		SampleImages: nil,
+	}
+	samples := c.OnSampleImageListParse(d.decodeMulti(c, node, d.SampleImageListExpr))
+	for _, item := range samples {
+		meta.SampleImages = append(meta.SampleImages, &model.File{
+			Name: item,
+		})
 	}
 	return meta, nil
 }

@@ -5,6 +5,7 @@ import (
 	"av-capture/config"
 	"av-capture/processor"
 	"av-capture/searcher"
+	"av-capture/store"
 	"context"
 	"flag"
 	"fmt"
@@ -23,6 +24,7 @@ func main() {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
+	store.Init()
 	ss, err := buildSearcher(c.Searchers, c.SearcherConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))

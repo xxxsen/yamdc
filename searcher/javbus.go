@@ -1,8 +1,8 @@
 package searcher
 
 import (
+	"av-capture/model"
 	"av-capture/searcher/decoder"
-	"av-capture/searcher/meta"
 	"av-capture/searcher/utils"
 	"net/http"
 )
@@ -34,7 +34,7 @@ func (p *javbus) decorateRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *javbus) onDataDecode(data []byte) (*meta.AvMeta, error) {
+func (p *javbus) onDataDecode(data []byte) (*model.AvMeta, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="row movie"]/div[@class="col-md-3 info"]/p[span[contains(text(),'識別碼:')]]/span[2]/text()`,
 		TitleExpr:           `/html/head/title`,

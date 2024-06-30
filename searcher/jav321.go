@@ -1,8 +1,8 @@
 package searcher
 
 import (
+	"av-capture/model"
 	"av-capture/searcher/decoder"
-	"av-capture/searcher/meta"
 	"av-capture/searcher/utils"
 	"strings"
 )
@@ -20,7 +20,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (s *jav321) onDecodeHTTPDate(data []byte) (*meta.AvMeta, error) {
+func (s *jav321) onDecodeHTTPDate(data []byte) (*model.AvMeta, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,

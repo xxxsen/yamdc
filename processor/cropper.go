@@ -3,6 +3,7 @@ package processor
 import (
 	"av-capture/image"
 	"av-capture/model"
+	"av-capture/store"
 	"context"
 	"fmt"
 
@@ -35,13 +36,21 @@ func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) er
 	if fc.NumberInfo.IsUncensorMovie { //如果为步兵, 则使用人脸识别
 		cutter = image.CutImageWithFaceRec
 	}
-	res, err := cutter(fc.Meta.Cover.Data)
+	data, err := store.GetDefault().GetData(fc.Meta.Cover.Key)
+	if err != nil {
+		return fmt.Errorf("get cover data failed, err:%w, key:%s", err, fc.Meta.Cover.Key)
+	}
+	res, err := cutter(data)
 	if err != nil {
 		return fmt.Errorf("cut poster image failed, err:%w", err)
 	}
-	fc.Meta.Poster = &model.Image{
+	key, err := store.GetDefault().Put(res)
+	if err != nil {
+		return fmt.Errorf("save cutted poster data failed, err:%w", err)
+	}
+	fc.Meta.Poster = &model.File{
 		Name: "./poster.jpg",
-		Data: res,
+		Key:  key,
 	}
 	return nil
 }

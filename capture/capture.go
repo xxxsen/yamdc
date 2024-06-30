@@ -5,6 +5,7 @@ import (
 	"av-capture/nfo"
 	"av-capture/number"
 	"av-capture/processor"
+	"av-capture/store"
 	"av-capture/utils"
 	"context"
 	"fmt"
@@ -254,7 +255,7 @@ func (c *Capture) renameMetaField(fc *model.FileContext) error {
 }
 
 func (c *Capture) saveMediaData(fc *model.FileContext) error {
-	images := make([]*model.Image, 0, len(fc.Meta.SampleImages)+2)
+	images := make([]*model.File, 0, len(fc.Meta.SampleImages)+2)
 	if fc.Meta.Cover != nil {
 		images = append(images, fc.Meta.Cover)
 	}
@@ -264,8 +265,15 @@ func (c *Capture) saveMediaData(fc *model.FileContext) error {
 	images = append(images, fc.Meta.SampleImages...)
 	for _, image := range images {
 		target := filepath.Join(fc.SaveDir, image.Name)
-		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("target", target))
-		if err := os.WriteFile(target, image.Data, 0644); err != nil {
+		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
+
+		data, err := store.GetDefault().GetData(image.Key)
+		if err != nil {
+			logger.Error("read image data failed", zap.Error(err))
+			return err
+		}
+
+		if err := os.WriteFile(target, data, 0644); err != nil {
 			logger.Error("write image failed", zap.Error(err))
 			return err
 		}
