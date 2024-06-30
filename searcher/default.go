@@ -145,8 +145,24 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode http data failed, err:%w", err)
 	}
+	if err := p.verifyMeta(meta); err != nil {
+		return nil, fmt.Errorf("verify meta failed, err:%w", err)
+	}
 	p.fixMeta(req, meta)
 	return p.renderAvMetaToModelAvMeta(meta), nil
+}
+
+func (p *DefaultSearcher) verifyMeta(meta *meta.AvMeta) error {
+	if len(meta.Cover) == 0 {
+		return fmt.Errorf("no cover")
+	}
+	if len(meta.Number) == 0 {
+		return fmt.Errorf("no number")
+	}
+	if len(meta.Title) == 0 {
+		return fmt.Errorf("no title")
+	}
+	return nil
 }
 
 func (p *DefaultSearcher) fixMeta(req *http.Request, meta *meta.AvMeta) {

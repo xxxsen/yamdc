@@ -25,7 +25,7 @@ func (g *group) Search(number string) (*model.AvMeta, error) {
 	for _, s := range g.ss {
 		meta, err := s.Search(number)
 		if err != nil {
-			logutil.GetLogger(context.Background()).Error("search fail", zap.String("searcher", s.Name()))
+			logutil.GetLogger(context.Background()).Error("search fail", zap.String("searcher", s.Name()), zap.Error(err))
 			lastErr = err
 			continue
 		}
