@@ -156,7 +156,16 @@ func normalizeImage(data []byte) (image.Image, error) {
 	return img, nil
 }
 
-func CutImage(data []byte, rect image.Rectangle) ([]byte, error) {
-	//TODO: finish it
-	return nil, nil
+func CutCensoredImage(data []byte) ([]byte, error) {
+	img, err := normalizeImage(data)
+	if err != nil {
+		return nil, err
+	}
+	if img.Bounds().Dx() > img.Bounds().Dy() { //横屏
+		middle := img.Bounds().Dx() //直接取最大值, 由底层函数自行扩展即可
+		return cutHorizontalImage(img, middle, defaultAspectRatio)
+	}
+	//正常不应该出现骑兵封面为竖屏的
+	//另一方面, 正常人像应该是上面, 所以从上开始截取
+	return cutVerticalImage(img, 0, defaultAspectRatio)
 }

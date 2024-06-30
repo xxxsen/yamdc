@@ -44,3 +44,15 @@ func TestCutImageWithFaceRec(t *testing.T) {
 		assert.NoError(t, err)
 	}
 }
+
+func TestCutCensoredImage(t *testing.T) {
+	err := Init("../.vscode/tests/models")
+	assert.NoError(t, err)
+	datas := getTestImageDatas()
+	for idx, data := range datas {
+		raw, err := CutCensoredImage(data)
+		assert.NoError(t, err)
+		err = os.WriteFile(fmt.Sprintf("../.vscode/tests_out/test_censored_%d.jpg", idx+1), raw, 0644)
+		assert.NoError(t, err)
+	}
+}
