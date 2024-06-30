@@ -21,7 +21,8 @@ import (
 )
 
 type OnHTTPClientInitFunc func(client *http.Client) *http.Client
-type OnMakeRequestFunc func(number string) string
+type OnMakeRequestFunc func(number string) (*http.Request, error)
+type OnHandleHTTPRequestFunc func(client *http.Client, req *http.Request) (*http.Response, error)
 type OnDecorateRequestFunc func(req *http.Request) error
 type OnDecodeHTTPDataFunc func(data []byte) (*model.AvMeta, error)
 type OnDecorateMediaRequestFunc func(req *http.Request) error
@@ -38,6 +39,7 @@ type DefaultSearchOption struct {
 	OnDecorateRequest      OnDecorateRequestFunc
 	OnDecodeHTTPData       OnDecodeHTTPDataFunc
 	OnDecorateMediaRequest OnDecorateMediaRequestFunc
+	OnHandleHTTPRequest    OnHandleHTTPRequestFunc
 }
 
 func NewDefaultSearcher(name string, opt *DefaultSearchOption) (ISearcher, error) {
@@ -63,11 +65,16 @@ func NewDefaultSearcher(name string, opt *DefaultSearchOption) (ISearcher, error
 	if opt.OnHTTPClientInit != nil {
 		client = opt.OnHTTPClientInit(client)
 	}
-	return &DefaultSearcher{
+	ss := &DefaultSearcher{
 		name:   name,
 		client: client,
 		opt:    opt,
-	}, nil
+	}
+	if opt.OnHandleHTTPRequest == nil {
+		opt.OnHandleHTTPRequest = ss.handleHTTPRequest
+	}
+
+	return ss, nil
 }
 
 func (p *DefaultSearcher) Name() string {
@@ -143,6 +150,10 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 	_ = store.GetDefault().PutWithNamingKey(key, raw)
 }
 
+func (p *DefaultSearcher) handleHTTPRequest(client *http.Client, req *http.Request) (*http.Response, error) {
+	return p.client.Do(req)
+}
+
 func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if option.GetSwitchConfig().EnableMetaCache {
 		if m, err := p.readMetaFromCache(number); err == nil {
@@ -150,15 +161,14 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 		}
 	}
 
-	uri := p.opt.OnMakeRequest(number)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := p.opt.OnMakeRequest(number)
 	if err != nil {
 		return nil, fmt.Errorf("make http request failed, err:%w", err)
 	}
 	if err := p.decorateRequest(req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
 	}
-	rsp, err := p.client.Do(req)
+	rsp, err := p.opt.OnHandleHTTPRequest(p.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed, err:%w", err)
 	}

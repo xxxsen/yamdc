@@ -10,9 +10,9 @@ import (
 type javbus struct {
 }
 
-func (p *javbus) makeRequest(number string) string {
-	return "https://www.javbus.com/" + number
-
+func (p *javbus) makeRequest(number string) (*http.Request, error) {
+	url := "https://www.javbus.com/" + number
+	return http.NewRequest(http.MethodGet, url, nil)
 }
 
 func (p *javbus) decorateRequest(req *http.Request) error {

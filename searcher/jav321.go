@@ -4,15 +4,17 @@ import (
 	"av-capture/model"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
+	"net/http"
 	"strings"
 )
 
 type jav321 struct {
 }
 
-func (s *jav321) onMakeRequest(number string) string {
-	number = strings.ReplaceAll(number, "-", "00")
-	return "https://www.jav321.com/video/" + number
+func (s *jav321) onMakeRequest(number string) (*http.Request, error) {
+	url := "https://www.jav321.com/video/" + number
+	//TODO: jav321的逻辑比较特殊, 先进行一次搜索, 然后根据搜索的结果进行二次跳转, 需要进行特殊处理
+	return http.NewRequest(http.MethodGet, url, nil)
 }
 
 func (s *jav321) defaultStringProcessor(v string) string {
