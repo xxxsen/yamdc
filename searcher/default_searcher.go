@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"av-capture/model"
+	"av-capture/option"
 	"av-capture/store"
 	"compress/gzip"
 	"context"
@@ -143,8 +144,10 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 }
 
 func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
-	if m, err := p.readMetaFromCache(number); err == nil {
-		return m, nil
+	if option.GetSwitchConfig().EnableMetaCache {
+		if m, err := p.readMetaFromCache(number); err == nil {
+			return m, nil
+		}
 	}
 
 	uri := p.opt.OnMakeRequest(number)
@@ -257,7 +260,7 @@ func (p *DefaultSearcher) saveRemoteURLData(urls []string) map[string]string {
 		}
 		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
 		key := p.buildURLCacheKey(url)
-		if store.GetDefault().IsCacheExist(key) {
+		if option.GetSwitchConfig().EnableMediaCache && store.GetDefault().IsCacheExist(key) {
 			rs[url] = key
 			continue
 		}
