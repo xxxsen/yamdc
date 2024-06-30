@@ -22,6 +22,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/xxxsen/common v0.1.8
+	golang.org/x/image v0.18.0
 	golang.org/x/net v0.26.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

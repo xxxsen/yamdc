@@ -73,6 +73,9 @@ func (c *Capture) readFileList() ([]*model.FileContext, error) {
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			return nil
+		}
 		if !utils.IsVideoFile(path) {
 			return nil
 		}

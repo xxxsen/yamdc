@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	_ "image/gif"
 	"image/jpeg"
+	_ "image/png"
 	"math"
 	"sync"
+
+	_ "golang.org/x/image/bmp"
 
 	"github.com/Kagami/go-face"
 )
@@ -134,6 +138,14 @@ func imageToBytes(img image.Image) ([]byte, error) {
 		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func TranscodeToJpeg(data []byte) ([]byte, error) {
+	img, err := normalizeImage(data)
+	if err != nil {
+		return nil, err
+	}
+	return imageToBytes(img)
 }
 
 func normalizeImage(data []byte) (image.Image, error) {

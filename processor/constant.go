@@ -1,5 +1,6 @@
 package processor
 
 const (
-	PsPosterCropper = "poster_cropper"
+	PsPosterCropper  = "poster_cropper"
+	PsTranscodeImage = "transcode_image"
 )
