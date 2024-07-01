@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/common/trace"
 	"go.uber.org/zap"
 )
 
@@ -156,7 +157,7 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 		return fmt.Errorf("search number failed, number:%s, err:%w", fc.NumberInfo.Number, err)
 	}
 	if meta.Number != fc.NumberInfo.Number {
-		return fmt.Errorf("number not match, search:%s, file:%s", meta.Number, fc.NumberInfo.Number)
+		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.NumberInfo.Number))
 	}
 	fc.Meta = meta
 	return nil
@@ -223,6 +224,7 @@ func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error
 }
 
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
+	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.NumberInfo.Number)
 	steps := []struct {
 		name string
 		fn   fcProcessFunc
