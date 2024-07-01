@@ -1,7 +1,8 @@
-package searcher
+package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/searcher"
 	"av-capture/store"
 	"compress/gzip"
 	"context"
@@ -19,60 +20,37 @@ import (
 	"go.uber.org/zap"
 )
 
-type OnHTTPClientInitFunc func(client *http.Client) *http.Client
-type OnMakeRequestFunc func(number string) (*http.Request, error)
-type OnHandleHTTPRequestFunc func(client *http.Client, req *http.Request) (*http.Response, error)
-type OnDecorateRequestFunc func(req *http.Request) error
-type OnDecodeHTTPDataFunc func(data []byte) (*model.AvMeta, error)
-type OnDecorateMediaRequestFunc func(req *http.Request) error
-
 type DefaultSearcher struct {
 	name   string
 	client *http.Client
-	opt    *DefaultSearchOption
+	plg    IPlugin
 }
 
-type DefaultSearchOption struct {
-	OnHTTPClientInit       OnHTTPClientInitFunc
-	OnMakeRequest          OnMakeRequestFunc
-	OnDecorateRequest      OnDecorateRequestFunc
-	OnDecodeHTTPData       OnDecodeHTTPDataFunc
-	OnDecorateMediaRequest OnDecorateMediaRequestFunc
-	OnHandleHTTPRequest    OnHandleHTTPRequestFunc
+func MustNewDefaultSearcher(name string, plg IPlugin) searcher.ISearcher {
+	s, err := NewDefaultSearcher(name, plg)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
-func NewDefaultSearcher(name string, opt *DefaultSearchOption) (ISearcher, error) {
-	if opt == nil {
-		return nil, fmt.Errorf("invalid plugin opt")
-	}
-	if opt.OnMakeRequest == nil {
-		return nil, fmt.Errorf("invalid make request func")
-	}
-	if opt.OnDecodeHTTPData == nil {
-		return nil, fmt.Errorf("invalid decode http data func")
+func NewDefaultSearcher(name string, plg IPlugin) (searcher.ISearcher, error) {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	client = plg.OnHTTPClientInit(client)
 	if client.Jar == nil {
 		client.Jar = jar
-	}
-	if opt.OnHTTPClientInit != nil {
-		client = opt.OnHTTPClientInit(client)
 	}
 	ss := &DefaultSearcher{
 		name:   name,
 		client: client,
-		opt:    opt,
+		plg:    plg,
 	}
-	if opt.OnHandleHTTPRequest == nil {
-		opt.OnHandleHTTPRequest = ss.handleHTTPRequest
-	}
-
 	return ss, nil
 }
 
@@ -99,11 +77,9 @@ func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, er
 	}
 }
 
-func (p *DefaultSearcher) decorateRequest(req *http.Request) error {
-	if p.opt.OnDecorateRequest != nil {
-		if err := p.opt.OnDecorateRequest(req); err != nil {
-			return err
-		}
+func (p *DefaultSearcher) decorateRequest(ctx *PluginContext, req *http.Request) error {
+	if err := p.plg.OnDecorateRequest(ctx, req); err != nil {
+		return err
 	}
 	if err := p.setDefaultHttpOptions(req); err != nil {
 		return err
@@ -111,11 +87,9 @@ func (p *DefaultSearcher) decorateRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultSearcher) decorateImageRequest(req *http.Request) error {
-	if p.opt.OnDecorateMediaRequest != nil {
-		if err := p.opt.OnDecorateMediaRequest(req); err != nil {
-			return err
-		}
+func (p *DefaultSearcher) decorateImageRequest(ctx *PluginContext, req *http.Request) error {
+	if err := p.plg.OnDecorateMediaRequest(ctx, req); err != nil {
+		return err
 	}
 	if err := p.setDefaultHttpOptions(req); err != nil {
 		return err
@@ -149,23 +123,24 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 	_ = store.GetDefault().PutWithNamingKey(key, raw)
 }
 
-func (p *DefaultSearcher) handleHTTPRequest(client *http.Client, req *http.Request) (*http.Response, error) {
-	return p.client.Do(req)
-}
-
-func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
-	if m, err := p.readMetaFromCache(number); err == nil {
-		return m, nil
+func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvMeta, error) {
+	// disable cache
+	// if m, err := p.readMetaFromCache(number); err == nil {
+	// 	return m, nil
+	// }
+	pctx := NewPluginContext(ctx)
+	if err := p.plg.OnPrecheck(pctx, number); err != nil {
+		return nil, fmt.Errorf("precheck not pass, err:%w", err)
 	}
 
-	req, err := p.opt.OnMakeRequest(number)
+	req, err := p.plg.OnMakeHTTPRequest(pctx, number)
 	if err != nil {
 		return nil, fmt.Errorf("make http request failed, err:%w", err)
 	}
-	if err := p.decorateRequest(req); err != nil {
+	if err := p.decorateRequest(pctx, req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
 	}
-	rsp, err := p.opt.OnHandleHTTPRequest(p.client, req)
+	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.client, req)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed, err:%w", err)
 	}
@@ -182,14 +157,14 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read body failed, err:%w", err)
 	}
-	meta, err := p.opt.OnDecodeHTTPData(data)
+	meta, err := p.plg.OnDecodeHTTPData(pctx, data)
 	if err != nil {
 		return nil, fmt.Errorf("decode http data failed, err:%w", err)
 	}
 	//重建不规范的元数据
 	p.fixMeta(req, meta)
 	//将远程数据保存到本地, 并替换文件key
-	p.storeImageData(meta)
+	p.storeImageData(pctx, meta)
 	if err := p.verifyMeta(meta); err != nil {
 		return nil, fmt.Errorf("verify meta failed, err:%w", err)
 	}
@@ -232,7 +207,7 @@ func (p *DefaultSearcher) fixSingleURL(req *http.Request, input *string, prefix 
 	}
 }
 
-func (p *DefaultSearcher) storeImageData(in *model.AvMeta) {
+func (p *DefaultSearcher) storeImageData(ctx *PluginContext, in *model.AvMeta) {
 	images := make([]string, 0, len(in.SampleImages)+2)
 	if in.Cover != nil {
 		images = append(images, in.Cover.Name)
@@ -243,7 +218,7 @@ func (p *DefaultSearcher) storeImageData(in *model.AvMeta) {
 	for _, item := range in.SampleImages {
 		images = append(images, item.Name)
 	}
-	imageDataMap := p.saveRemoteURLData(images)
+	imageDataMap := p.saveRemoteURLData(ctx, images)
 	if in.Cover != nil {
 		in.Cover.Key = imageDataMap[in.Cover.Name]
 		//如果没有成功下载到数据, 那么直接置空
@@ -265,7 +240,7 @@ func (p *DefaultSearcher) storeImageData(in *model.AvMeta) {
 	in.SampleImages = rebuildSampleList
 }
 
-func (p *DefaultSearcher) saveRemoteURLData(urls []string) map[string]string {
+func (p *DefaultSearcher) saveRemoteURLData(ctx *PluginContext, urls []string) map[string]string {
 	rs := make(map[string]string, len(urls))
 	for _, url := range urls {
 		if len(url) == 0 {
@@ -277,7 +252,7 @@ func (p *DefaultSearcher) saveRemoteURLData(urls []string) map[string]string {
 			rs[url] = key
 			continue
 		}
-		data, err := p.fetchImageData(url)
+		data, err := p.fetchImageData(ctx, url)
 		if err != nil {
 			logger.Error("fetch image data failed", zap.Error(err))
 			continue
@@ -299,12 +274,12 @@ func (p *DefaultSearcher) buildURLCacheKey(url string) string {
 	return key
 }
 
-func (p *DefaultSearcher) fetchImageData(url string) ([]byte, error) {
+func (p *DefaultSearcher) fetchImageData(ctx *PluginContext, url string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)
 	}
-	if err := p.decorateImageRequest(req); err != nil {
+	if err := p.decorateImageRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decode request failed, err:%w", err)
 	}
 	rsp, err := p.client.Do(req)

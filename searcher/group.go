@@ -20,10 +20,10 @@ func (g *group) Name() string {
 	return "group"
 }
 
-func (g *group) Search(number string) (*model.AvMeta, error) {
+func (g *group) Search(ctx context.Context, number string) (*model.AvMeta, error) {
 	var lastErr error
 	for _, s := range g.ss {
-		meta, err := s.Search(number)
+		meta, err := s.Search(ctx, number)
 		if err != nil {
 			logutil.GetLogger(context.Background()).Error("search fail", zap.String("searcher", s.Name()), zap.Error(err))
 			lastErr = err

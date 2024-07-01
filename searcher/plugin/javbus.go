@@ -1,21 +1,23 @@
-package searcher
+package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/searcher"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
 )
 
 type javbus struct {
+	DefaultPlugin
 }
 
-func (p *javbus) makeRequest(number string) (*http.Request, error) {
+func (p *javbus) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
 	url := "https://www.javbus.com/" + number
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 
-func (p *javbus) decorateRequest(req *http.Request) error {
+func (p *javbus) OnDecorateRequest(ctx *PluginContext, req *http.Request) error {
 	req.AddCookie(&http.Cookie{
 		Name:  "existmag",
 		Value: "mag",
@@ -34,7 +36,7 @@ func (p *javbus) decorateRequest(req *http.Request) error {
 	return nil
 }
 
-func (p *javbus) onDataDecode(data []byte) (*model.AvMeta, error) {
+func (p *javbus) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="row movie"]/div[@class="col-md-3 info"]/p[span[contains(text(),'識別碼:')]]/span[2]/text()`,
 		TitleExpr:           `/html/head/title`,
@@ -65,20 +67,6 @@ func (p *javbus) onDataDecode(data []byte) (*model.AvMeta, error) {
 	return rs, nil
 }
 
-func createJavbusPlugin(args interface{}) (ISearcher, error) {
-	jav := &javbus{}
-	plg, err := NewDefaultSearcher(SSJavBus, &DefaultSearchOption{
-		OnMakeRequest:     jav.makeRequest,
-		OnDecorateRequest: jav.decorateRequest,
-		OnDecodeHTTPData:  jav.onDataDecode,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return plg, nil
-
-}
-
 func init() {
-	Register(SSJavBus, createJavbusPlugin)
+	searcher.Register(MustNewDefaultSearcher(SSJavBus, &javbus{}))
 }

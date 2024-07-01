@@ -3,6 +3,7 @@ package main
 import (
 	"av-capture/capture"
 	"av-capture/config"
+	"av-capture/image"
 	"av-capture/processor"
 	"av-capture/searcher"
 	"av-capture/store"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/xxxsen/common/logger"
 	"go.uber.org/zap"
+
+	_ "av-capture/searcher/plugin"
 )
 
 var conf = flag.String("config", "./config.json", "config file")
@@ -26,6 +29,9 @@ func main() {
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 	store.Init(filepath.Join(c.DataDir, "cache"))
+	if err := image.Init(c.ModelDir); err != nil {
+		logkit.Fatal("init image recognizer failed", zap.Error(err))
+	}
 	ss, err := buildSearcher(c.Searchers, c.SearcherConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
@@ -57,16 +63,11 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IPro
 }
 
 func buildSearcher(ss []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
-	def := make(map[string]interface{})
 	rs := make([]searcher.ISearcher, 0, len(ss))
 	for _, s := range ss {
-		data, ok := m[s]
+		sr, ok := searcher.Get(s)
 		if !ok {
-			data = def
-		}
-		sr, err := searcher.MakeSearcher(s, data)
-		if err != nil {
-			return nil, fmt.Errorf("make searcher failed, name:%s, err:%w", s, err)
+			return nil, fmt.Errorf("searcher not found, name:%s", s)
 		}
 		rs = append(rs, sr)
 	}

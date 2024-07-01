@@ -2,26 +2,25 @@ package searcher
 
 import (
 	"av-capture/model"
-	"fmt"
+	"context"
 )
 
 type ISearcher interface {
 	Name() string
-	Search(number string) (*model.AvMeta, error)
+	Search(ctx context.Context, number string) (*model.AvMeta, error)
 }
 
 type CreatorFunc func(args interface{}) (ISearcher, error)
 
-var mp = make(map[string]CreatorFunc)
+var mp = make(map[string]ISearcher)
 
-func Register(name string, fn CreatorFunc) {
-	mp[name] = fn
+func Register(ss ISearcher) {
+	mp[ss.Name()] = ss
 }
 
-func MakeSearcher(name string, args interface{}) (ISearcher, error) {
-	cr, ok := mp[name]
-	if !ok {
-		return nil, fmt.Errorf("plugin:%s not found", name)
+func Get(name string) (ISearcher, bool) {
+	if v, ok := mp[name]; ok {
+		return v, true
 	}
-	return cr(args)
+	return nil, false
 }

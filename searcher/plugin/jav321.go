@@ -1,7 +1,8 @@
-package searcher
+package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/searcher"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
@@ -11,9 +12,10 @@ import (
 )
 
 type jav321 struct {
+	DefaultPlugin
 }
 
-func (s *jav321) onMakeRequest(number string) (*http.Request, error) {
+func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
 	data := url.Values{}
 	data.Set("sn", number)
 	body := data.Encode()
@@ -31,7 +33,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (s *jav321) onDecodeHTTPDate(data []byte) (*model.AvMeta, error) {
+func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,
@@ -48,7 +50,7 @@ func (s *jav321) onDecodeHTTPDate(data []byte) (*model.AvMeta, error) {
 		SampleImageListExpr: `//div[@class="col-md-3"]/div[@class="col-xs-12 col-md-12"]/p/a/img/@src`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithDefaultStringProcessor(s.defaultStringProcessor),
+		decoder.WithDefaultStringProcessor(p.defaultStringProcessor),
 		decoder.WithReleaseDateParser(func(v string) int64 {
 			rs, _ := utils.ToTimestamp(v)
 			return rs
@@ -64,14 +66,6 @@ func (s *jav321) onDecodeHTTPDate(data []byte) (*model.AvMeta, error) {
 	return rs, nil
 }
 
-func createJav321Plugin(args interface{}) (ISearcher, error) {
-	jav := &jav321{}
-	return NewDefaultSearcher(SSJav321, &DefaultSearchOption{
-		OnMakeRequest:    jav.onMakeRequest,
-		OnDecodeHTTPData: jav.onDecodeHTTPDate,
-	})
-}
-
 func init() {
-	Register(SSJav321, createJav321Plugin)
+	searcher.Register(MustNewDefaultSearcher(SSJav321, &jav321{}))
 }

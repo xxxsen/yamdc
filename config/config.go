@@ -11,6 +11,7 @@ type Config struct {
 	ScanDir         string                 `json:"scan_dir"`
 	SaveDir         string                 `json:"save_dir"`
 	DataDir         string                 `json:"data_dir"`
+	ModelDir        string                 `json:"model_dir"`
 	Naming          string                 `json:"naming"`
 	SearcherConfig  map[string]interface{} `json:"searcher_config"`
 	ProcessorConfig map[string]interface{} `json:"processor_config"`

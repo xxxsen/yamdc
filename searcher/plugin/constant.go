@@ -1,4 +1,4 @@
-package searcher
+package plugin
 
 const (
 	SSJavBus = "javbus"

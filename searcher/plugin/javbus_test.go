@@ -1,7 +1,8 @@
-package searcher
+package plugin
 
 import (
 	"bytes"
+	"context"
 	"log"
 	"os"
 	"testing"
@@ -11,9 +12,9 @@ import (
 )
 
 func TestJavbus(t *testing.T) {
-	p, err := createJavbusPlugin(map[string]interface{}{})
+	p, err := NewDefaultSearcher(SSJavBus, &javbus{})
 	assert.NoError(t, err)
-	res, err := p.Search("BANK-090")
+	res, err := p.Search(context.Background(), "BANK-090")
 	assert.NoError(t, err)
 	_ = res
 }
