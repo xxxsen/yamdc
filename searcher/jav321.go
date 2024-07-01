@@ -5,6 +5,8 @@ import (
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -12,9 +14,16 @@ type jav321 struct {
 }
 
 func (s *jav321) onMakeRequest(number string) (*http.Request, error) {
-	url := "https://www.jav321.com/video/" + number
-	//TODO: jav321的逻辑比较特殊, 先进行一次搜索, 然后根据搜索的结果进行二次跳转, 需要进行特殊处理
-	return http.NewRequest(http.MethodGet, url, nil)
+	data := url.Values{}
+	data.Set("sn", number)
+	body := data.Encode()
+	req, err := http.NewRequest(http.MethodPost, "https://www.jav321.com/search", strings.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	return req, nil
 }
 
 func (s *jav321) defaultStringProcessor(v string) string {
