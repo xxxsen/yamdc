@@ -214,16 +214,21 @@ func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
 func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.AvMeta) {
 	meta.Number = strings.ToUpper(meta.Number)
 	prefix := req.URL.Scheme + "://" + req.URL.Host
-	p.fixSingleURL(&meta.Cover.Name, prefix)
-	p.fixSingleURL(&meta.Poster.Name, prefix)
+	p.fixSingleURL(req, &meta.Cover.Name, prefix)
+	p.fixSingleURL(req, &meta.Poster.Name, prefix)
 	for i := 0; i < len(meta.SampleImages); i++ {
-		p.fixSingleURL(&meta.SampleImages[i].Name, prefix)
+		p.fixSingleURL(req, &meta.SampleImages[i].Name, prefix)
 	}
 }
 
-func (p *DefaultSearcher) fixSingleURL(input *string, prefix string) {
+func (p *DefaultSearcher) fixSingleURL(req *http.Request, input *string, prefix string) {
+	if strings.HasPrefix(*input, "//") {
+		*input = req.URL.Scheme + ":" + *input
+		return
+	}
 	if strings.HasPrefix(*input, "/") {
 		*input = prefix + *input
+		return
 	}
 }
 

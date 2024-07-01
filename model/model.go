@@ -16,6 +16,7 @@ type AvMeta struct {
 	Cover        *File    `json:"cover"`         //封面
 	Poster       *File    `json:"poster"`        //海报
 	SampleImages []*File  `json:"sample_images"` //样品图
+	Director     string   `json:"director"`      //导演
 	ExtInfo      ExtInfo  `json:"ext_info"`
 }
 
