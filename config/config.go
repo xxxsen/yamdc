@@ -1,7 +1,6 @@
 package config
 
 import (
-	"av-capture/option"
 	"encoding/json"
 	"os"
 
@@ -18,7 +17,11 @@ type Config struct {
 	Searchers       []string               `json:"searchers"`
 	Processors      []string               `json:"processors"`
 	LogConfig       logger.LogConfig       `json:"log_config"`
-	SwitchConfig    option.SwitchConfig    `json:"switch_config"`
+	SwitchConfig    SwitchConfig           `json:"switch_config"`
+}
+
+type SwitchConfig struct {
+	EnableLinkMode bool `json:"enable_link_mode"`
 }
 
 func Parse(f string) (*Config, error) {

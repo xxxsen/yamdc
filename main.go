@@ -3,7 +3,6 @@ package main
 import (
 	"av-capture/capture"
 	"av-capture/config"
-	"av-capture/option"
 	"av-capture/processor"
 	"av-capture/searcher"
 	"av-capture/store"
@@ -27,7 +26,6 @@ func main() {
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 	store.Init(filepath.Join(c.DataDir, "cache"))
-	option.SetSwitchConfig(&c.SwitchConfig)
 	ss, err := buildSearcher(c.Searchers, c.SearcherConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
@@ -53,6 +51,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IPro
 		capture.WithSaveDir(c.SaveDir),
 		capture.WithSeacher(searcher.NewGroup(ss)),
 		capture.WithProcessor(processor.NewGroup(ps)),
+		capture.WithEnableLinkMode(c.SwitchConfig.EnableLinkMode),
 	)
 	return capture.New(opts...)
 }

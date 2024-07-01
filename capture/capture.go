@@ -8,6 +8,7 @@ import (
 	"av-capture/store"
 	"av-capture/utils"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -286,10 +287,31 @@ func (c *Capture) saveMediaData(fc *model.FileContext) error {
 		logger.Debug("write image succ")
 	}
 	movie := filepath.Join(fc.SaveDir, fc.SaveFileBase+fc.FileExt)
-	if err := os.Rename(fc.FullFilePath, movie); err != nil {
-		return fmt.Errorf("move movie to save dir failed, err:%w", err)
+	if err := c.moveMovie(fc, fc.FullFilePath, movie); err != nil {
+		return fmt.Errorf("move movie to dst dir failed, err:%w", err)
 	}
 	return nil
+}
+
+func (c *Capture) moveMovie(fc *model.FileContext, src string, dst string) error {
+	if c.c.LinkMode {
+		return c.moveMovieByLink(fc, src, dst)
+	}
+	return c.moveMovieDirect(fc, src, dst)
+}
+
+func (c *Capture) moveMovieByLink(_ *model.FileContext, src, dst string) error {
+	err := os.Symlink(src, dst)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil
+		}
+	}
+	return err
+}
+
+func (c *Capture) moveMovieDirect(_ *model.FileContext, src, dst string) error {
+	return os.Rename(src, dst)
 }
 
 func (c *Capture) exportNFOData(fc *model.FileContext) error {
