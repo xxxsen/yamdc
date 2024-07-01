@@ -16,6 +16,11 @@ type AvMeta struct {
 	Cover        *File    `json:"cover"`         //封面
 	Poster       *File    `json:"poster"`        //海报
 	SampleImages []*File  `json:"sample_images"` //样品图
+	ExtInfo      ExtInfo  `json:"ext_info"`
+}
+
+type ExtInfo struct {
+	ScrapeSource string `json:"scrape_source"`
 }
 
 type File struct {

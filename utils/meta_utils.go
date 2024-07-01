@@ -30,6 +30,7 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Director:      "",
 		Label:         m.Label,
 		Thumb:         "",
+		ScrapeSource:  m.ExtInfo.ScrapeSource,
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name

@@ -30,6 +30,7 @@ type Movie struct {
 	ID            string   `xml:"id,omitempty"`            //番号
 	Cover         string   `xml:"cover,omitempty"`         //封面
 	Fanart        string   `xml:"fanart,omitempty"`        //跟封面一致就好了
+	ScrapeSource  string   `xml:"scrape_source"`           //抓取来源
 }
 
 type Actor struct {

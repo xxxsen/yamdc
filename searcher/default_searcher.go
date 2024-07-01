@@ -193,6 +193,7 @@ func (p *DefaultSearcher) Search(number string) (*model.AvMeta, error) {
 	if err := p.verifyMeta(meta); err != nil {
 		return nil, fmt.Errorf("verify meta failed, err:%w", err)
 	}
+	meta.ExtInfo.ScrapeSource = p.name
 	p.writeMetaToCache(number, meta)
 	return meta, nil
 }
