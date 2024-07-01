@@ -27,7 +27,7 @@ func TestNumber(t *testing.T) {
 			IsMultiCD:       true,
 			MultiCDIndex:    2,
 		},
-		"052624_01-C-CD3.mp4": {
+		"052624_01-CD3-C.mp4": {
 			Number:            "052624_01",
 			IsUncensorMovie:   true,
 			IsMultiCD:         true,

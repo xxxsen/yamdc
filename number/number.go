@@ -13,8 +13,8 @@ var (
 )
 
 var defaultNumberResolveList = []numberResolveFunc{
-	resolveCDInfo,
 	resolveIsChineseSubTitle,
+	resolveCDInfo,
 	resolveIsUncensorMovie,
 }
 
