@@ -34,6 +34,13 @@ func TestNumber(t *testing.T) {
 			MultiCDIndex:      3,
 			IsChineseSubtitle: true,
 		},
+		"052624_01_cd3_c.mp4": {
+			Number:            "052624_01",
+			IsUncensorMovie:   true,
+			IsMultiCD:         true,
+			MultiCDIndex:      3,
+			IsChineseSubtitle: true,
+		},
 	}
 	for file, info := range checkList {
 		rs, err := ParseWithFileName(file)

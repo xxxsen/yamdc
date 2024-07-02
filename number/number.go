@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	defaultCDNumberParserRegexp = regexp.MustCompile(`^(.*)-[cC][dD](\d+)`)
+	defaultCDNumberParserRegexp = regexp.MustCompile(`^(.*)[-_][cC][dD](\d+)`)
 )
 
 var defaultNumberResolveList = []numberResolveFunc{
@@ -34,7 +34,8 @@ func resolveCDInfo(info *Info, str string) string {
 }
 
 func resolveIsChineseSubTitle(info *Info, str string) string {
-	if !(strings.HasSuffix(str, "-C") || strings.HasSuffix(str, "-c")) {
+	tmp := strings.ToLower(str)
+	if !(strings.HasSuffix(tmp, "_c") || strings.HasSuffix(tmp, "-c")) {
 		return str
 	}
 	info.IsChineseSubtitle = true
