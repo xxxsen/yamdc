@@ -93,7 +93,7 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 		SeriesExpr:          ``,
 		GenreListExpr:       `//a[@class='tag tagTag']/text()`,
 		CoverExpr:           `//div[@class='items_article_MainitemThumb']/span/img/@src`,
-		PosterExpr:          "",
+		PosterExpr:          `//div[@class='items_article_MainitemThumb']/span/img/@src`, //这东西就一张封面图, 直接当海报得了
 		SampleImageListExpr: `//ul[@class="items_article_SampleImagesArea"]/li/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,

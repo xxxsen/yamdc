@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
+type imageCutter func(data []byte) ([]byte, error)
+
 type posterProcessor struct {
 }
 
@@ -20,6 +22,17 @@ func createPosterProcessor(args interface{}) (IProcessor, error) {
 
 func (c *posterProcessor) Name() string {
 	return PsPosterCropper
+}
+
+func (c *posterProcessor) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
+	return func(data []byte) ([]byte, error) {
+		data, err := image.CutImageWithFaceRec(data)
+		if err == nil {
+			return data, nil
+		}
+		logutil.GetLogger(ctx).Warn("cut image with face rec failed, try use other cut method", zap.Error(err))
+		return fallback(data)
+	}
 }
 
 func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) error {
@@ -32,9 +45,9 @@ func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) er
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	cutter := image.CutCensoredImage   //默认情况下, 都按骑兵进行封面处理
-	if fc.NumberInfo.IsUncensorMovie { //如果为步兵, 则使用人脸识别
-		cutter = image.CutImageWithFaceRec
+	var cutter imageCutter = image.CutCensoredImage //默认情况下, 都按骑兵进行封面处理
+	if fc.NumberInfo.IsUncensorMovie {              //如果为步兵, 则使用人脸识别
+		cutter = c.wrapCutImageWithFaceRec(ctx, image.CutCensoredImage)
 	}
 	data, err := store.GetDefault().GetData(fc.Meta.Cover.Key)
 	if err != nil {
@@ -48,6 +61,7 @@ func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) er
 	if err != nil {
 		return fmt.Errorf("save cutted poster data failed, err:%w", err)
 	}
+	//TODO: 如果实在无法裁剪出有效的封面, 那么尝试取一张竖屏的, 或者直接使用骑兵的裁剪逻辑
 	fc.Meta.Poster = &model.File{
 		Name: "./poster.jpg",
 		Key:  key,
