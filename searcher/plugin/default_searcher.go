@@ -4,6 +4,7 @@ import (
 	"av-capture/model"
 	"av-capture/searcher"
 	"av-capture/store"
+	"compress/flate"
 	"compress/gzip"
 	"context"
 	"crypto/md5"
@@ -72,6 +73,8 @@ func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, er
 	switch rsp.Header.Get("Content-Encoding") {
 	case "gzip":
 		return gzip.NewReader(rsp.Body)
+	case "deflate":
+		return flate.NewReader(rsp.Body), nil
 	default:
 		return rsp.Body, nil
 	}
