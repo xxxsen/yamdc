@@ -1,7 +1,7 @@
 package processor
 
 const (
-	PsPosterCropper  = "poster_cropper"
-	PsTranscodeImage = "transcode_image"
-	PsTranslater     = "translater"
+	PsPosterCropper   = "poster_cropper"
+	PsImageTranscoder = "image_transcoder"
+	PsPlotTranslater  = "plot_translater"
 )

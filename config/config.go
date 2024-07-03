@@ -13,9 +13,9 @@ type Config struct {
 	DataDir         string                 `json:"data_dir"`
 	ModelDir        string                 `json:"model_dir"`
 	Naming          string                 `json:"naming"`
-	SearcherConfig  map[string]interface{} `json:"searcher_config"`
+	PluginConfig    map[string]interface{} `json:"plugin_config"`
 	ProcessorConfig map[string]interface{} `json:"processor_config"`
-	Searchers       []string               `json:"searchers"`
+	Plugins         []string               `json:"plugins"`
 	Processors      []string               `json:"processors"`
 	LogConfig       logger.LogConfig       `json:"log_config"`
 	SwitchConfig    SwitchConfig           `json:"switch_config"`

@@ -27,3 +27,9 @@ func MakeProcessor(name string, args interface{}) (IProcessor, error) {
 	}
 	return cr(args)
 }
+
+func ProcessorToCreator(p IProcessor) CreatorFunc {
+	return func(args interface{}) (IProcessor, error) {
+		return p, nil
+	}
+}

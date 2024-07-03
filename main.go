@@ -15,9 +15,10 @@ import (
 	"path/filepath"
 
 	"github.com/xxxsen/common/logger"
+	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 
-	_ "av-capture/searcher/plugin"
+	"av-capture/searcher/plugin"
 )
 
 var conf = flag.String("config", "./config.json", "config file")
@@ -38,7 +39,7 @@ func main() {
 	if err := image.Init(c.ModelDir); err != nil {
 		logkit.Fatal("init image recognizer failed", zap.Error(err))
 	}
-	ss, err := buildSearcher(c.Searchers, c.SearcherConfig)
+	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
 	}
@@ -68,30 +69,39 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IPro
 	return capture.New(opts...)
 }
 
-func buildSearcher(ss []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
-	rs := make([]searcher.ISearcher, 0, len(ss))
-	for _, s := range ss {
-		sr, ok := searcher.Get(s)
+func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
+	rs := make([]searcher.ISearcher, 0, len(plgs))
+	for _, name := range plgs {
+		args, ok := m[name]
 		if !ok {
-			return nil, fmt.Errorf("searcher not found, name:%s", s)
+			args = struct{}{}
 		}
+		plg, err := plugin.CreatePlugin(name, args)
+		if err != nil {
+			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
+		}
+		sr, err := searcher.NewDefaultSearcher(name, plg)
+		if err != nil {
+			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
+		}
+		logutil.GetLogger(context.Background()).Info("create search plugin succ", zap.String("plugin", name))
 		rs = append(rs, sr)
 	}
 	return rs, nil
 }
 
 func buildProcessor(ps []string, m map[string]interface{}) ([]processor.IProcessor, error) {
-	def := make(map[string]interface{})
 	rs := make([]processor.IProcessor, 0, len(ps))
-	for _, item := range ps {
-		data, ok := m[item]
+	for _, name := range ps {
+		data, ok := m[name]
 		if !ok {
-			data = def
+			data = struct{}{}
 		}
-		pr, err := processor.MakeProcessor(item, data)
+		pr, err := processor.MakeProcessor(name, data)
 		if err != nil {
-			return nil, fmt.Errorf("make processor failed, name:%s, err:%w", item, err)
+			return nil, fmt.Errorf("create processor failed, name:%s, err:%w", name, err)
 		}
+		logutil.GetLogger(context.Background()).Info("create processor succ", zap.String("processor", name))
 		rs = append(rs, pr)
 	}
 	return rs, nil

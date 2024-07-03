@@ -100,3 +100,25 @@ func (p *DefaultPlugin) defaultDecorate(_ *PluginContext, req *http.Request) {
 		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
 	}
 }
+
+type CreatorFunc func(args interface{}) (IPlugin, error)
+
+var mp = make(map[string]CreatorFunc)
+
+func Register(name string, fn CreatorFunc) {
+	mp[name] = fn
+}
+
+func CreatePlugin(name string, args interface{}) (IPlugin, error) {
+	cr, ok := mp[name]
+	if !ok {
+		return nil, fmt.Errorf("plugin:%s not found", name)
+	}
+	return cr(args)
+}
+
+func PluginToCreator(plg IPlugin) CreatorFunc {
+	return func(args interface{}) (IPlugin, error) {
+		return plg, nil
+	}
+}

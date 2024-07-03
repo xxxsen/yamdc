@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"av-capture/model"
-	"av-capture/searcher"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
@@ -67,5 +66,5 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 }
 
 func init() {
-	searcher.Register(MustNewDefaultSearcher(SSJav321, &jav321{}))
+	Register(SSJav321, PluginToCreator(&jav321{}))
 }

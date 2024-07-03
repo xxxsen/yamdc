@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"av-capture/model"
-	"av-capture/searcher"
 	"av-capture/searcher/decoder"
 	"context"
 	"fmt"
@@ -108,5 +107,5 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 }
 
 func init() {
-	searcher.Register(MustNewDefaultSearcher(SSFc2, &fc2{}))
+	Register(SSFc2, PluginToCreator(&fc2{}))
 }

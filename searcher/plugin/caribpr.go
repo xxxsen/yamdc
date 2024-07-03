@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"av-capture/model"
-	"av-capture/searcher"
 	"av-capture/searcher/decoder"
 	"av-capture/utils"
 	"context"
@@ -18,18 +17,18 @@ import (
 	"golang.org/x/text/transform"
 )
 
-type cariber struct {
+type caribpr struct {
 	DefaultPlugin
 }
 
-func (p *cariber) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
+func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
 	ctx.SetKey("number", number)
 	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }
 
-func (p *cariber) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
+func (p *caribpr) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		ts, err := utils.TimeStrToSecond(v)
 		if err != nil {
@@ -40,7 +39,7 @@ func (p *cariber) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
 	}
 }
 
-func (p *cariber) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
+func (p *caribpr) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		t, err := time.Parse(time.DateOnly, v)
 		if err != nil {
@@ -51,7 +50,7 @@ func (p *cariber) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc
 	}
 }
 
-func (p *cariber) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *caribpr) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	reader := transform.NewReader(strings.NewReader(string(data)), japanese.EUCJP.NewDecoder())
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -84,5 +83,5 @@ func (p *cariber) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMe
 }
 
 func init() {
-	searcher.Register(MustNewDefaultSearcher(SSCaribpr, &cariber{}))
+	Register(SSCaribpr, PluginToCreator(&caribpr{}))
 }

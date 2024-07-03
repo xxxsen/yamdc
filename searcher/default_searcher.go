@@ -1,8 +1,8 @@
-package plugin
+package searcher
 
 import (
 	"av-capture/model"
-	"av-capture/searcher"
+	"av-capture/searcher/plugin"
 	"av-capture/store"
 	"compress/flate"
 	"compress/gzip"
@@ -24,10 +24,10 @@ import (
 type DefaultSearcher struct {
 	name   string
 	client *http.Client
-	plg    IPlugin
+	plg    plugin.IPlugin
 }
 
-func MustNewDefaultSearcher(name string, plg IPlugin) searcher.ISearcher {
+func MustNewDefaultSearcher(name string, plg plugin.IPlugin) ISearcher {
 	s, err := NewDefaultSearcher(name, plg)
 	if err != nil {
 		panic(err)
@@ -35,7 +35,7 @@ func MustNewDefaultSearcher(name string, plg IPlugin) searcher.ISearcher {
 	return s
 }
 
-func NewDefaultSearcher(name string, plg IPlugin) (searcher.ISearcher, error) {
+func NewDefaultSearcher(name string, plg plugin.IPlugin) (ISearcher, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -80,7 +80,7 @@ func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, er
 	}
 }
 
-func (p *DefaultSearcher) decorateRequest(ctx *PluginContext, req *http.Request) error {
+func (p *DefaultSearcher) decorateRequest(ctx *plugin.PluginContext, req *http.Request) error {
 	if err := p.plg.OnDecorateRequest(ctx, req); err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (p *DefaultSearcher) decorateRequest(ctx *PluginContext, req *http.Request)
 	return nil
 }
 
-func (p *DefaultSearcher) decorateImageRequest(ctx *PluginContext, req *http.Request) error {
+func (p *DefaultSearcher) decorateImageRequest(ctx *plugin.PluginContext, req *http.Request) error {
 	if err := p.plg.OnDecorateMediaRequest(ctx, req); err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvM
 	// if m, err := p.readMetaFromCache(number); err == nil {
 	// 	return m, nil
 	// }
-	pctx := NewPluginContext(ctx)
+	pctx := plugin.NewPluginContext(ctx)
 	ok, err := p.plg.OnPrecheck(pctx, number)
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
@@ -225,7 +225,7 @@ func (p *DefaultSearcher) fixSingleURL(req *http.Request, input *string, prefix 
 	}
 }
 
-func (p *DefaultSearcher) storeImageData(ctx *PluginContext, in *model.AvMeta) {
+func (p *DefaultSearcher) storeImageData(ctx *plugin.PluginContext, in *model.AvMeta) {
 	images := make([]string, 0, len(in.SampleImages)+2)
 	if in.Cover != nil {
 		images = append(images, in.Cover.Name)
@@ -258,7 +258,7 @@ func (p *DefaultSearcher) storeImageData(ctx *PluginContext, in *model.AvMeta) {
 	in.SampleImages = rebuildSampleList
 }
 
-func (p *DefaultSearcher) saveRemoteURLData(ctx *PluginContext, urls []string) map[string]string {
+func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []string) map[string]string {
 	rs := make(map[string]string, len(urls))
 	for _, url := range urls {
 		if len(url) == 0 {
@@ -292,7 +292,7 @@ func (p *DefaultSearcher) buildURLCacheKey(url string) string {
 	return key
 }
 
-func (p *DefaultSearcher) fetchImageData(ctx *PluginContext, url string) ([]byte, error) {
+func (p *DefaultSearcher) fetchImageData(ctx *plugin.PluginContext, url string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)

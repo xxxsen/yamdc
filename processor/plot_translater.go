@@ -11,7 +11,7 @@ type translaterProcessor struct {
 }
 
 func (p *translaterProcessor) Name() string {
-	return PsTranslater
+	return PsPlotTranslater
 }
 
 func (p *translaterProcessor) Process(ctx context.Context, fc *model.FileContext) error {
@@ -28,4 +28,8 @@ func (p *translaterProcessor) Process(ctx context.Context, fc *model.FileContext
 
 func (p *translaterProcessor) IsOptional() bool {
 	return true
+}
+
+func init() {
+	Register(PsPlotTranslater, ProcessorToCreator(&translaterProcessor{}))
 }

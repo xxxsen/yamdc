@@ -19,7 +19,7 @@ func createTranscodeImageProcessor(args interface{}) (IProcessor, error) {
 }
 
 func (p *transcodeImageProcessor) Name() string {
-	return PsTranscodeImage
+	return PsImageTranscoder
 }
 
 func (p *transcodeImageProcessor) Process(ctx context.Context, meta *model.FileContext) error {
@@ -67,5 +67,5 @@ func (p *transcodeImageProcessor) IsOptional() bool {
 }
 
 func init() {
-	Register(PsTranscodeImage, createTranscodeImageProcessor)
+	Register(PsImageTranscoder, createTranscodeImageProcessor)
 }
