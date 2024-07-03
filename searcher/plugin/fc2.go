@@ -22,11 +22,8 @@ type fc2 struct {
 	DefaultPlugin
 }
 
-func (p *fc2) OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error) {
-	if !strings.HasPrefix(strings.ToLower(number.Number()), "fc2") {
-		return false, nil
-	}
-	return true, nil
+func (p *fc2) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
+	return number.IsFc2(n.Number()), nil
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
