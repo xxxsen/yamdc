@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"context"
 	"fmt"
 	"net/http"
@@ -41,8 +42,8 @@ func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{}
 
 type IPlugin interface {
 	OnHTTPClientInit(client *http.Client) *http.Client
-	OnPrecheckRequest(ctx *PluginContext, number string) (bool, error)
-	OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error)
+	OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error)
+	OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error)
 	OnDecorateRequest(ctx *PluginContext, req *http.Request) error
 	OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error)
 	OnPrecheckResponse(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error)
@@ -55,7 +56,7 @@ var _ IPlugin = &DefaultPlugin{}
 type DefaultPlugin struct {
 }
 
-func (p *DefaultPlugin) OnPrecheckRequest(ctx *PluginContext, number string) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error) {
 	return true, nil
 }
 
@@ -63,7 +64,7 @@ func (p *DefaultPlugin) OnHTTPClientInit(client *http.Client) *http.Client {
 	return client
 }
 
-func (p *DefaultPlugin) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
+func (p *DefaultPlugin) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	return nil, fmt.Errorf("no impl")
 }
 

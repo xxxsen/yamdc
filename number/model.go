@@ -1,6 +1,6 @@
 package number
 
-type Info struct {
+type Number struct {
 	Number            string
 	IsChineseSubtitle bool
 	IsMultiCD         bool

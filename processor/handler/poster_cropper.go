@@ -42,7 +42,7 @@ func (c *posterCropper) Handle(ctx context.Context, fc *model.FileContext) error
 		return nil
 	}
 	var cutter imageCutter = image.CutCensoredImage //默认情况下, 都按骑兵进行封面处理
-	if fc.NumberInfo.IsUncensorMovie {              //如果为步兵, 则使用人脸识别
+	if fc.Number.IsUncensorMovie {                  //如果为步兵, 则使用人脸识别
 		cutter = c.wrapCutImageWithFaceRec(ctx, image.CutCensoredImage)
 	}
 	data, err := store.GetDefault().GetData(fc.Meta.Cover.Key)

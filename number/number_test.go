@@ -7,7 +7,7 @@ import (
 )
 
 func TestNumber(t *testing.T) {
-	checkList := map[string]*Info{
+	checkList := map[string]*Number{
 		"HEYZO-3332.mp4": {
 			Number:          "HEYZO-3332",
 			IsUncensorMovie: true,

@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"context"
 
 	"github.com/xxxsen/common/logutil"
@@ -19,7 +20,7 @@ func (g *group) Name() string {
 	return "group"
 }
 
-func (g *group) Search(ctx context.Context, number string) (*model.AvMeta, bool, error) {
+func (g *group) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
 	var lastErr error
 	for _, s := range g.ss {
 		meta, found, err := s.Search(ctx, number)

@@ -18,7 +18,7 @@ var defaultNumberResolveList = []numberResolveFunc{
 	resolveIsUncensorMovie,
 }
 
-func resolveCDInfo(info *Info, str string) string {
+func resolveCDInfo(info *Number, str string) string {
 	matches := defaultCDNumberParserRegexp.FindStringSubmatch(str)
 	if len(matches) <= 2 {
 		return str
@@ -33,7 +33,7 @@ func resolveCDInfo(info *Info, str string) string {
 	return base
 }
 
-func resolveIsChineseSubTitle(info *Info, str string) string {
+func resolveIsChineseSubTitle(info *Number, str string) string {
 	tmp := strings.ToLower(str)
 	if !(strings.HasSuffix(tmp, "_c") || strings.HasSuffix(tmp, "-c")) {
 		return str
@@ -43,27 +43,27 @@ func resolveIsChineseSubTitle(info *Info, str string) string {
 	return base
 }
 
-func resolveIsUncensorMovie(info *Info, str string) string {
+func resolveIsUncensorMovie(info *Number, str string) string {
 	if IsUncensorMovie(str) {
 		info.IsUncensorMovie = true
 	}
 	return str
 }
 
-type numberResolveFunc func(info *Info, str string) string
+type numberResolveFunc func(info *Number, str string) string
 
-func ParseWithFileName(f string) (*Info, error) {
+func ParseWithFileName(f string) (*Number, error) {
 	filename := filepath.Base(f)
 	fileext := filepath.Ext(f)
 	filenoext := filename[:len(filename)-len(fileext)]
 	return Parse(filenoext)
 }
 
-func Parse(str string) (*Info, error) {
+func Parse(str string) (*Number, error) {
 	if len(str) == 0 {
 		return nil, fmt.Errorf("empty number str")
 	}
-	rs := &Info{
+	rs := &Number{
 		Number:            "",
 		IsChineseSubtitle: false,
 		IsMultiCD:         false,

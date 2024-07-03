@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
@@ -14,9 +15,9 @@ type jav321 struct {
 	DefaultPlugin
 }
 
-func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
+func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	data := url.Values{}
-	data.Set("sn", number)
+	data.Set("sn", number.Number)
 	body := data.Encode()
 	req, err := http.NewRequest(http.MethodPost, "https://www.jav321.com/search", strings.NewReader(body))
 	if err != nil {

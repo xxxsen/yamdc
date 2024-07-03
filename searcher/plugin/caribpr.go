@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"av-capture/searcher/decoder"
 	"av-capture/utils"
 	"context"
@@ -21,9 +22,9 @@ type caribpr struct {
 	DefaultPlugin
 }
 
-func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
-	ctx.SetKey("number", number)
-	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number)
+func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+	ctx.SetKey("number", number.Number)
+	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.Number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }

@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"av-capture/searcher/decoder"
 	"av-capture/searcher/utils"
 	"net/http"
@@ -11,8 +12,8 @@ type javbus struct {
 	DefaultPlugin
 }
 
-func (p *javbus) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
-	url := "https://www.javbus.com/" + number
+func (p *javbus) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+	url := "https://www.javbus.com/" + number.Number
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 

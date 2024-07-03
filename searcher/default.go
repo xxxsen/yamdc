@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"av-capture/model"
+	"av-capture/number"
 	"av-capture/searcher/plugin"
 	"av-capture/store"
 	"compress/flate"
@@ -126,7 +127,7 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 	_ = store.GetDefault().PutWithNamingKey(key, raw)
 }
 
-func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvMeta, bool, error) {
+func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
 	// disable cache
 	// if m, err := p.readMetaFromCache(number); err == nil {
 	// 	return m, nil
@@ -187,7 +188,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvM
 		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeSource = p.name
-	p.writeMetaToCache(number, meta)
+	p.writeMetaToCache(number.Number, meta)
 	return meta, true, nil
 }
 

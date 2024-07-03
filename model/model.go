@@ -37,5 +37,5 @@ type FileContext struct {
 	SaveFileBase string
 	SaveDir      string
 	Meta         *AvMeta
-	NumberInfo   *number.Info
+	Number       *number.Number
 }
