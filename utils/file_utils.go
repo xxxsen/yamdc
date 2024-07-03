@@ -8,7 +8,7 @@ import (
 func IsVideoFile(f string) bool {
 	ext := strings.ToLower(filepath.Ext(f))
 	switch ext {
-	case ".mp4", ".wav", ".avi", ".mkv", ".rmvb", ".m4a":
+	case ".mp4", ".wav", ".avi", ".mkv", ".rmvb", ".m4a", ".ts":
 		return true
 	default:
 		return false
