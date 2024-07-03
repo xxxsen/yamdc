@@ -7,7 +7,6 @@ import (
 	"av-capture/searcher/utils"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
@@ -105,7 +104,6 @@ func (p *avsox) trySearchByNumber(ctx *PluginContext, invoker HTTPInvoker, numbe
 }
 
 func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
-	os.WriteFile("test_data", data, 0644)
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//span[contains(text(),"识别码:")]/../span[2]/text()`,
 		TitleExpr:           `/html/body/div[2]/h3/text()`,
