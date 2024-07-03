@@ -28,8 +28,8 @@ func resolveCDInfo(info *Number, str string) string {
 		return str
 	}
 	base := matches[1]
-	info.IsMultiCD = true
-	info.MultiCDIndex = int(cdidx)
+	info.isMultiCD = true
+	info.multiCDIndex = int(cdidx)
 	return base
 }
 
@@ -38,14 +38,14 @@ func resolveIsChineseSubTitle(info *Number, str string) string {
 	if !(strings.HasSuffix(tmp, "_c") || strings.HasSuffix(tmp, "-c")) {
 		return str
 	}
-	info.IsChineseSubtitle = true
+	info.isChineseSubtitle = true
 	base := str[:len(str)-2]
 	return base
 }
 
 func resolveIsUncensorMovie(info *Number, str string) string {
 	if IsUncensorMovie(str) {
-		info.IsUncensorMovie = true
+		info.isUncensorMovie = true
 	}
 	return str
 }
@@ -64,17 +64,17 @@ func Parse(str string) (*Number, error) {
 		return nil, fmt.Errorf("empty number str")
 	}
 	rs := &Number{
-		Number:            "",
-		IsChineseSubtitle: false,
-		IsMultiCD:         false,
-		MultiCDIndex:      0,
-		IsUncensorMovie:   false,
+		number:            "",
+		isChineseSubtitle: false,
+		isMultiCD:         false,
+		multiCDIndex:      0,
+		isUncensorMovie:   false,
 	}
 	number := str
 	steps := defaultNumberResolveList
 	for _, step := range steps {
 		number = step(rs, number)
 	}
-	rs.Number = strings.ToUpper(number)
+	rs.number = strings.ToUpper(number)
 	return rs, nil
 }

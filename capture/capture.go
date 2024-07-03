@@ -63,9 +63,9 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
 	fc.Number = info
-	fc.SaveFileBase = fc.Number.Number
-	if fc.Number.IsMultiCD {
-		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.Number.MultiCDIndex), 10)
+	fc.SaveFileBase = fc.Number.Number()
+	if fc.Number.IsMultiCD() {
+		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.Number.MultiCDIndex()), 10)
 	}
 	return nil
 }
@@ -111,9 +111,9 @@ func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContex
 	logutil.GetLogger(ctx).Info("read movie file succ", zap.Int("count", len(fcs)))
 	for _, item := range fcs {
 		logutil.GetLogger(ctx).Info("file info",
-			zap.String("number", item.Number.Number),
-			zap.Bool("multi_cd", item.Number.IsMultiCD),
-			zap.Int("cd", item.Number.MultiCDIndex), zap.String("file", item.FileName))
+			zap.String("number", item.Number.Number()),
+			zap.Bool("multi_cd", item.Number.IsMultiCD()),
+			zap.Int("cd", item.Number.MultiCDIndex()), zap.String("file", item.FileName))
 	}
 }
 
@@ -144,7 +144,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	naming = strings.ReplaceAll(naming, NamingReleaseYear, year)
 	naming = strings.ReplaceAll(naming, NamingReleaseMonth, month)
 	naming = strings.ReplaceAll(naming, NamingActor, actor)
-	naming = strings.ReplaceAll(naming, NamingNumber, fc.Number.Number)
+	naming = strings.ReplaceAll(naming, NamingNumber, fc.Number.Number())
 	if len(naming) == 0 {
 		return fmt.Errorf("invalid naming")
 	}
@@ -161,8 +161,8 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 		return fmt.Errorf("search item not found")
 	}
 	c.paddingMetaTag(fc)
-	if meta.Number != fc.Number.Number {
-		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.Number))
+	if meta.Number != fc.Number.Number() {
+		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.Number()))
 	}
 	fc.Meta = meta
 	return nil
@@ -172,10 +172,10 @@ func (c *Capture) paddingMetaTag(fc *model.FileContext) {
 	if fc == nil || fc.Meta == nil {
 		return
 	}
-	if fc.Number.IsUncensorMovie {
+	if fc.Number.IsUncensorMovie() {
 		fc.Meta.Genres = append(fc.Meta.Genres, constant.TagUncensored)
 	}
-	if fc.Number.IsChineseSubtitle {
+	if fc.Number.IsChineseSubtitle() {
 		fc.Meta.Genres = append(fc.Meta.Genres, constant.TagChineseSubtitle)
 	}
 }
@@ -242,7 +242,7 @@ func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error
 }
 
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
-	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.Number)
+	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.Number())
 	steps := []struct {
 		name string
 		fn   fcProcessFunc

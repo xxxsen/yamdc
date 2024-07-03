@@ -188,7 +188,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeSource = p.name
-	p.writeMetaToCache(number.Number, meta)
+	p.writeMetaToCache(number.Number(), meta)
 	return meta, true, nil
 }
 

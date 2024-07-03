@@ -23,14 +23,14 @@ type fc2 struct {
 }
 
 func (p *fc2) OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error) {
-	if !strings.HasPrefix(strings.ToLower(number.Number), "fc2") {
+	if !strings.HasPrefix(strings.ToLower(number.Number()), "fc2") {
 		return false, nil
 	}
 	return true, nil
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
-	number := strings.ToLower(n.Number)
+	number := strings.ToLower(n.Number())
 	res := defaultFc2NumberParser.FindStringSubmatch(number)
 	if len(res) != 2 {
 		return nil, fmt.Errorf("unabe to decode number")

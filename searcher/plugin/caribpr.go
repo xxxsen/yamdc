@@ -23,8 +23,8 @@ type caribpr struct {
 }
 
 func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	ctx.SetKey("number", number.Number)
-	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.Number)
+	ctx.SetKey("number", number.Number())
+	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.Number())
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }
