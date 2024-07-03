@@ -21,7 +21,8 @@ type AvMeta struct {
 }
 
 type ExtInfo struct {
-	ScrapeSource string `json:"scrape_source"`
+	ScrapeSource   string `json:"scrape_source"`
+	TranslatedPlot string `json:"translated_plot"`
 }
 
 type File struct {

@@ -7,6 +7,7 @@ import (
 	"av-capture/processor"
 	"av-capture/searcher"
 	"av-capture/store"
+	"av-capture/translater"
 	"context"
 	"flag"
 	"fmt"
@@ -28,7 +29,12 @@ func main() {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
-	store.Init(filepath.Join(c.DataDir, "cache"))
+	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
+		logkit.Fatal("init store failed", zap.Error(err))
+	}
+	if err := translater.Init(); err != nil {
+		logkit.Fatal("init translater failed", zap.Error(err))
+	}
 	if err := image.Init(c.ModelDir); err != nil {
 		logkit.Fatal("init image recognizer failed", zap.Error(err))
 	}
