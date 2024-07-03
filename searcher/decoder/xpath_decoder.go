@@ -18,6 +18,7 @@ type XPathHtmlDecoder struct {
 	DurationExpr        string
 	StudioExpr          string
 	LabelExpr           string
+	DirectorExpr        string
 	SeriesExpr          string
 	GenreListExpr       string
 	CoverExpr           string
@@ -78,6 +79,7 @@ func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 		OnGenreListParse:           defaultStringListParser,
 		OnCoverParse:               defaultStringParser,
 		OnPosterParse:              defaultStringParser,
+		OnDirectorParse:            defaultStringParser,
 		OnSampleImageListParse:     defaultStringListParser,
 		DefaultStringProcessor:     defaultStringProcessor,
 		DefaultStringListProcessor: defaultStringListProcessor,
@@ -102,6 +104,7 @@ func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.AvMet
 		Label:        c.OnLabelParse(d.decodeSingle(c, node, d.LabelExpr)),
 		Series:       c.OnSeriesParse(d.decodeSingle(c, node, d.SeriesExpr)),
 		Genres:       c.OnGenreListParse(d.decodeMulti(c, node, d.GenreListExpr)),
+		Director:     c.OnDirectorParse(d.decodeSingle(c, node, d.DirectorExpr)),
 		Cover:        &model.File{Name: c.OnCoverParse(d.decodeSingle(c, node, d.CoverExpr))},
 		Poster:       &model.File{Name: c.OnPosterParse(d.decodeSingle(c, node, d.PosterExpr))},
 		SampleImages: nil,

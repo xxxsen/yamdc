@@ -5,4 +5,5 @@ const (
 	SSJav321  = "jav321"
 	SSFc2     = "fc2"
 	SSCaribpr = "caribpr"
+	SSJavhoo  = "javhoo"
 )

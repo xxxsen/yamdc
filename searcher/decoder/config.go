@@ -16,6 +16,7 @@ type config struct {
 	OnSeriesParse              StringParseFunc
 	OnGenreListParse           StringListParseFunc
 	OnCoverParse               StringParseFunc
+	OnDirectorParse            StringParseFunc
 	OnPosterParse              StringParseFunc
 	OnSampleImageListParse     StringListParseFunc
 	DefaultStringProcessor     StringParseFunc
@@ -131,5 +132,11 @@ func WithTitleParser(p StringParseFunc) Option {
 func WithNumberParser(p StringParseFunc) Option {
 	return func(c *config) {
 		c.OnNumberParse = p
+	}
+}
+
+func WithDirectorParser(p StringParseFunc) Option {
+	return func(c *config) {
+		c.OnDirectorParse = p
 	}
 }
