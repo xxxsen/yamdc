@@ -13,14 +13,14 @@ import (
 
 type imageCutter func(data []byte) ([]byte, error)
 
-type posterCropper struct {
+type posterCropHandler struct {
 }
 
-func (c *posterCropper) Name() string {
+func (c *posterCropHandler) Name() string {
 	return HPosterCropper
 }
 
-func (c *posterCropper) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
+func (c *posterCropHandler) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
 	return func(data []byte) ([]byte, error) {
 		data, err := image.CutImageWithFaceRec(data)
 		if err == nil {
@@ -31,7 +31,7 @@ func (c *posterCropper) wrapCutImageWithFaceRec(ctx context.Context, fallback im
 	}
 }
 
-func (c *posterCropper) Handle(ctx context.Context, fc *model.FileContext) error {
+func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("number", fc.Meta.Number))
 	if fc.Meta.Poster != nil { //仅处理没有海报的元数据
 		logger.Debug("poster exist, skip generate")
@@ -66,5 +66,5 @@ func (c *posterCropper) Handle(ctx context.Context, fc *model.FileContext) error
 }
 
 func init() {
-	Register(HPosterCropper, HandlerToCreator(&posterCropper{}))
+	Register(HPosterCropper, HandlerToCreator(&posterCropHandler{}))
 }
