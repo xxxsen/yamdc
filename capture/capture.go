@@ -155,7 +155,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 	meta, ok, err := c.c.Searcher.Search(ctx, fc.Number)
 	if err != nil {
-		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Number.Number, err)
+		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Number.Number(), err)
 	}
 	if !ok {
 		return fmt.Errorf("search item not found")
