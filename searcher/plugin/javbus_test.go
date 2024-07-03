@@ -14,8 +14,9 @@ import (
 func TestJavbus(t *testing.T) {
 	p, err := NewDefaultSearcher(SSJavBus, &javbus{})
 	assert.NoError(t, err)
-	res, err := p.Search(context.Background(), "BANK-090")
+	res, ok, err := p.Search(context.Background(), "BANK-090")
 	assert.NoError(t, err)
+	assert.True(t, ok)
 	_ = res
 }
 

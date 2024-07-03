@@ -33,7 +33,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
+func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,
@@ -61,9 +61,9 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		}),
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return rs, nil
+	return rs, true, nil
 }
 
 func init() {

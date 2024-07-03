@@ -126,54 +126,69 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 	_ = store.GetDefault().PutWithNamingKey(key, raw)
 }
 
-func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvMeta, error) {
+func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvMeta, bool, error) {
 	// disable cache
 	// if m, err := p.readMetaFromCache(number); err == nil {
 	// 	return m, nil
 	// }
 	pctx := NewPluginContext(ctx)
-	if err := p.plg.OnPrecheck(pctx, number); err != nil {
-		return nil, fmt.Errorf("precheck not pass, err:%w", err)
+	ok, err := p.plg.OnPrecheck(pctx, number)
+	if err != nil {
+		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
+	}
+	if !ok {
+		return nil, false, nil
 	}
 
 	req, err := p.plg.OnMakeHTTPRequest(pctx, number)
 	if err != nil {
-		return nil, fmt.Errorf("make http request failed, err:%w", err)
+		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
 	}
 	if err := p.decorateRequest(pctx, req); err != nil {
-		return nil, fmt.Errorf("decorate request failed, err:%w", err)
+		return nil, false, fmt.Errorf("decorate request failed, err:%w", err)
 	}
 	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.client, req)
 	if err != nil {
-		return nil, fmt.Errorf("do request failed, err:%w", err)
+		return nil, false, fmt.Errorf("do request failed, err:%w", err)
+	}
+	isSearchSucc, err := p.plg.OnPrecheckIsSearchSucc(pctx, req, rsp)
+	if err != nil {
+		return nil, false, fmt.Errorf("precheck responnse failed, err:%w", err)
+	}
+	if !isSearchSucc {
+		return nil, false, nil
 	}
 	if rsp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
+		return nil, false, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
 	}
 	defer rsp.Body.Close()
 	reader, err := p.getResponseBody(rsp)
 	if err != nil {
-		return nil, fmt.Errorf("determine reader failed, err:%w", err)
+		return nil, false, fmt.Errorf("determine reader failed, err:%w", err)
 	}
 	defer reader.Close()
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("read body failed, err:%w", err)
+		return nil, false, fmt.Errorf("read body failed, err:%w", err)
 	}
-	meta, err := p.plg.OnDecodeHTTPData(pctx, data)
+	meta, decodeSucc, err := p.plg.OnDecodeHTTPData(pctx, data)
 	if err != nil {
-		return nil, fmt.Errorf("decode http data failed, err:%w", err)
+		return nil, false, fmt.Errorf("decode http data failed, err:%w", err)
+	}
+	if !decodeSucc {
+		return nil, false, nil
 	}
 	//重建不规范的元数据
 	p.fixMeta(req, meta)
 	//将远程数据保存到本地, 并替换文件key
 	p.storeImageData(pctx, meta)
 	if err := p.verifyMeta(meta); err != nil {
-		return nil, fmt.Errorf("verify meta failed, err:%w", err)
+		logutil.GetLogger(ctx).Error("verify meta not pass, treat as not found", zap.Error(err), zap.String("plugin", p.name))
+		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeSource = p.name
 	p.writeMetaToCache(number, meta)
-	return meta, nil
+	return meta, true, nil
 }
 
 func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {

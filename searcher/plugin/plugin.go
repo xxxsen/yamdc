@@ -40,12 +40,13 @@ func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{}
 }
 
 type IPlugin interface {
-	OnPrecheck(ctx *PluginContext, number string) error
+	OnPrecheck(ctx *PluginContext, number string) (bool, error)
 	OnHTTPClientInit(client *http.Client) *http.Client
 	OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error)
 	OnDecorateRequest(ctx *PluginContext, req *http.Request) error
 	OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error)
-	OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error)
+	OnPrecheckIsSearchSucc(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error)
+	OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error)
 	OnDecorateMediaRequest(ctx *PluginContext, req *http.Request) error
 }
 
@@ -54,8 +55,8 @@ var _ IPlugin = &DefaultPlugin{}
 type DefaultPlugin struct {
 }
 
-func (p *DefaultPlugin) OnPrecheck(ctx *PluginContext, number string) error {
-	return nil
+func (p *DefaultPlugin) OnPrecheck(ctx *PluginContext, number string) (bool, error) {
+	return true, nil
 }
 
 func (p *DefaultPlugin) OnHTTPClientInit(client *http.Client) *http.Client {
@@ -71,12 +72,19 @@ func (p *DefaultPlugin) OnDecorateRequest(ctx *PluginContext, req *http.Request)
 	return nil
 }
 
+func (p *DefaultPlugin) OnPrecheckIsSearchSucc(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error) {
+	if rsp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	return true, nil
+}
+
 func (p *DefaultPlugin) OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error) {
 	return client.Do(req)
 }
 
-func (p *DefaultPlugin) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
-	return nil, fmt.Errorf("no impl")
+func (p *DefaultPlugin) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+	return nil, false, fmt.Errorf("no impl")
 }
 
 func (p *DefaultPlugin) OnDecorateMediaRequest(ctx *PluginContext, req *http.Request) error {

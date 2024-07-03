@@ -51,11 +51,11 @@ func (p *cariber) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc
 	}
 }
 
-func (p *cariber) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
+func (p *cariber) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	reader := transform.NewReader(strings.NewReader(string(data)), japanese.EUCJP.NewDecoder())
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode with eucjp charset, err:%w", err)
+		return nil, false, fmt.Errorf("unable to decode with eucjp charset, err:%w", err)
 	}
 	dec := decoder.XPathHtmlDecoder{
 		TitleExpr:           `//div[@class='movie-info']/div[@class='section is-wide']/div[@class='heading']/h1/text()`,
@@ -76,11 +76,11 @@ func (p *cariber) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMe
 		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx.GetContext())),
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	meta.Number = ctx.GetKeyOrDefault("number", "").(string)
 	meta.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", meta.Number)
-	return meta, nil
+	return meta, true, nil
 }
 
 func init() {

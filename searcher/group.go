@@ -3,7 +3,6 @@ package searcher
 import (
 	"av-capture/model"
 	"context"
-	"fmt"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -20,16 +19,22 @@ func (g *group) Name() string {
 	return "group"
 }
 
-func (g *group) Search(ctx context.Context, number string) (*model.AvMeta, error) {
+func (g *group) Search(ctx context.Context, number string) (*model.AvMeta, bool, error) {
 	var lastErr error
 	for _, s := range g.ss {
-		meta, err := s.Search(ctx, number)
+		meta, found, err := s.Search(ctx, number)
 		if err != nil {
 			logutil.GetLogger(context.Background()).Error("search fail", zap.String("searcher", s.Name()), zap.Error(err))
 			lastErr = err
 			continue
 		}
-		return meta, nil
+		if !found {
+			continue
+		}
+		return meta, true, nil
 	}
-	return nil, fmt.Errorf("not data found, last err:%w", lastErr)
+	if lastErr != nil {
+		return nil, false, lastErr
+	}
+	return nil, false, nil
 }

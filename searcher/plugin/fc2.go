@@ -22,11 +22,11 @@ type fc2 struct {
 	DefaultPlugin
 }
 
-func (p *fc2) OnPrecheck(ctx *PluginContext, number string) error {
+func (p *fc2) OnPrecheck(ctx *PluginContext, number string) (bool, error) {
 	if !strings.HasPrefix(strings.ToLower(number), "fc2") {
-		return fmt.Errorf("unsupport number type")
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error) {
@@ -81,7 +81,7 @@ func (p *fc2) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
 	}
 }
 
-func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, error) {
+func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          ``,
 		TitleExpr:           `/html/head/title/text()`,
@@ -101,10 +101,10 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx.GetContext())),
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	meta.Number = "FC2-" + ctx.GetKeyOrDefault("number", "").(string)
-	return meta, nil
+	return meta, true, nil
 }
 
 func init() {

@@ -153,9 +153,12 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 }
 
 func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
-	meta, err := c.c.Searcher.Search(ctx, fc.NumberInfo.Number)
+	meta, ok, err := c.c.Searcher.Search(ctx, fc.NumberInfo.Number)
 	if err != nil {
 		return fmt.Errorf("search number failed, number:%s, err:%w", fc.NumberInfo.Number, err)
+	}
+	if !ok {
+		return fmt.Errorf("search item not found")
 	}
 	c.paddingMetaTag(fc)
 	if meta.Number != fc.NumberInfo.Number {

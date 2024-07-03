@@ -7,7 +7,7 @@ import (
 
 type ISearcher interface {
 	Name() string
-	Search(ctx context.Context, number string) (*model.AvMeta, error)
+	Search(ctx context.Context, number string) (*model.AvMeta, bool, error)
 }
 
 type CreatorFunc func(args interface{}) (ISearcher, error)
