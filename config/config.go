@@ -25,12 +25,30 @@ type SwitchConfig struct {
 	EnableLinkMode bool `json:"enable_link_mode"`
 }
 
+func defaultConfig() *Config {
+	return &Config{
+		Plugins: []string{
+			"javbus",
+			"javhoo",
+			"jav321",
+			"caribpr",
+			"fc2",
+			"avsox",
+		},
+		Handlers: []string{
+			"poster_cropper",
+			"image_transcoder",
+			"plot_translater",
+		},
+	}
+}
+
 func Parse(f string) (*Config, error) {
 	raw, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}
-	c := &Config{}
+	c := defaultConfig()
 	if err := json.Unmarshal(raw, c); err != nil {
 		return nil, err
 	}

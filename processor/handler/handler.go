@@ -4,6 +4,7 @@ import (
 	"av-capture/model"
 	"context"
 	"fmt"
+	"sort"
 )
 
 type IHandler interface {
@@ -30,4 +31,12 @@ func HandlerToCreator(h IHandler) CreatorFunc {
 	return func(args interface{}) (IHandler, error) {
 		return h, nil
 	}
+}
+
+func Handlers() []string {
+	rs := make([]string, 0, len(mp))
+	for k := range mp {
+		rs = append(rs, k)
+	}
+	return sort.StringSlice(rs)
 }

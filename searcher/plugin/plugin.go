@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 )
 
 type PluginContext struct {
@@ -124,4 +125,12 @@ func PluginToCreator(plg IPlugin) CreatorFunc {
 	return func(args interface{}) (IPlugin, error) {
 		return plg, nil
 	}
+}
+
+func Plugins() []string {
+	rs := make([]string, 0, len(mp))
+	for k := range mp {
+		rs = append(rs, k)
+	}
+	return sort.StringSlice(rs)
 }

@@ -31,6 +31,17 @@ func main() {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
+
+	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
+	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
+	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
+	logkit.Info("current use handlers", zap.Strings("handlers", c.Handlers))
+	logkit.Info("use naming rule", zap.String("rule", c.Naming))
+	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
+	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
+	logkit.Info("use data dir", zap.String("dir", c.DataDir))
+	logkit.Info("current switch options", zap.Any("options", c.SwitchConfig))
+
 	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
 		logkit.Fatal("init store failed", zap.Error(err))
 	}
@@ -52,9 +63,12 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build capture runner failed", zap.Error(err))
 	}
+	logkit.Info("capture kit init succ, start scraping")
 	if err := cap.Run(context.Background()); err != nil {
-		logkit.Fatal("run capture logic failed", zap.Error(err))
+		logkit.Error("run capture kit failed", zap.Error(err))
+		return
 	}
+	logkit.Info("run capture kit finish, all file scrape succ")
 }
 
 func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
