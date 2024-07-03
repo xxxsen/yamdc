@@ -21,19 +21,14 @@ func (g *group) Name() string {
 }
 
 func (g *group) Process(ctx context.Context, fc *model.FileContext) error {
+	var lastErr error
 	for _, p := range g.ps {
 		err := p.Process(ctx, fc)
 		if err == nil {
 			continue
 		}
-		logutil.GetLogger(ctx).Error("process failed", zap.Error(err), zap.String("name", p.Name()), zap.Bool("optional", p.IsOptional()))
-		if !p.IsOptional() {
-			return err
-		}
+		logutil.GetLogger(ctx).Error("process failed", zap.Error(err), zap.String("name", p.Name()))
+		lastErr = err
 	}
-	return nil
-}
-
-func (g *group) IsOptional() bool {
-	return false
+	return lastErr
 }

@@ -1,4 +1,4 @@
-package processor
+package handler
 
 import (
 	"av-capture/image"
@@ -13,18 +13,14 @@ import (
 
 type imageCutter func(data []byte) ([]byte, error)
 
-type posterProcessor struct {
+type posterCropper struct {
 }
 
-func createPosterProcessor(args interface{}) (IProcessor, error) {
-	return &posterProcessor{}, nil
+func (c *posterCropper) Name() string {
+	return HPosterCropper
 }
 
-func (c *posterProcessor) Name() string {
-	return PsPosterCropper
-}
-
-func (c *posterProcessor) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
+func (c *posterCropper) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
 	return func(data []byte) ([]byte, error) {
 		data, err := image.CutImageWithFaceRec(data)
 		if err == nil {
@@ -35,7 +31,7 @@ func (c *posterProcessor) wrapCutImageWithFaceRec(ctx context.Context, fallback 
 	}
 }
 
-func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) error {
+func (c *posterCropper) Handle(ctx context.Context, fc *model.FileContext) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("number", fc.Meta.Number))
 	if fc.Meta.Poster != nil { //仅处理没有海报的元数据
 		logger.Debug("poster exist, skip generate")
@@ -69,10 +65,6 @@ func (c *posterProcessor) Process(ctx context.Context, fc *model.FileContext) er
 	return nil
 }
 
-func (c *posterProcessor) IsOptional() bool {
-	return false
-}
-
 func init() {
-	Register(PsPosterCropper, createPosterProcessor)
+	Register(HPosterCropper, HandlerToCreator(&posterCropper{}))
 }

@@ -183,7 +183,8 @@ func (c *Capture) paddingMetaTag(fc *model.FileContext) {
 func (c *Capture) doProcess(ctx context.Context, fc *model.FileContext) error {
 	//执行处理流程, 用于补齐数据或者数据转换
 	if err := c.c.Processor.Process(ctx, fc); err != nil {
-		return fmt.Errorf("process meta failed, err:%w", err)
+		//process 不作为关键路径, 一个meta能否可用取决于后续的verify逻辑
+		logutil.GetLogger(ctx).Error("process meta failed, go next", zap.Error(err))
 	}
 	return nil
 }

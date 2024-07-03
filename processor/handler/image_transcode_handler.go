@@ -1,4 +1,4 @@
-package processor
+package handler
 
 import (
 	"av-capture/image"
@@ -11,18 +11,14 @@ import (
 	"go.uber.org/zap"
 )
 
-type transcodeImageProcessor struct {
+type imageTranscodeHandler struct {
 }
 
-func createTranscodeImageProcessor(args interface{}) (IProcessor, error) {
-	return &transcodeImageProcessor{}, nil
+func (p *imageTranscodeHandler) Name() string {
+	return HImageTranscoder
 }
 
-func (p *transcodeImageProcessor) Name() string {
-	return PsImageTranscoder
-}
-
-func (p *transcodeImageProcessor) Process(ctx context.Context, meta *model.FileContext) error {
+func (p *imageTranscodeHandler) Handle(ctx context.Context, meta *model.FileContext) error {
 	meta.Meta.Cover = p.transcode(ctx, "cover", meta.Meta.Cover)
 	meta.Meta.Poster = p.transcode(ctx, "poster", meta.Meta.Poster)
 	rebuildSampleList := make([]*model.File, 0, len(meta.Meta.SampleImages))
@@ -35,7 +31,7 @@ func (p *transcodeImageProcessor) Process(ctx context.Context, meta *model.FileC
 	return nil
 }
 
-func (p *transcodeImageProcessor) transcode(ctx context.Context, name string, f *model.File) *model.File {
+func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *model.File) *model.File {
 	logger := logutil.GetLogger(ctx).With(zap.String("name", name))
 	if f == nil || len(f.Key) == 0 {
 		logger.Debug("no image found, skip transcode to jpeg logic")
@@ -62,10 +58,6 @@ func (p *transcodeImageProcessor) transcode(ctx context.Context, name string, f 
 	return f
 }
 
-func (p *transcodeImageProcessor) IsOptional() bool {
-	return false
-}
-
 func init() {
-	Register(PsImageTranscoder, createTranscodeImageProcessor)
+	Register(HImageTranscoder, HandlerToCreator(&imageTranscodeHandler{}))
 }

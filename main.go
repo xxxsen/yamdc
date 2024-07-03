@@ -5,6 +5,7 @@ import (
 	"av-capture/config"
 	"av-capture/image"
 	"av-capture/processor"
+	"av-capture/processor/handler"
 	"av-capture/searcher"
 	"av-capture/store"
 	"av-capture/translater"
@@ -43,7 +44,7 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
 	}
-	ps, err := buildProcessor(c.Processors, c.ProcessorConfig)
+	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
 	}
@@ -84,25 +85,26 @@ func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearche
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create search plugin succ", zap.String("plugin", name))
+		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name))
 		rs = append(rs, sr)
 	}
 	return rs, nil
 }
 
-func buildProcessor(ps []string, m map[string]interface{}) ([]processor.IProcessor, error) {
-	rs := make([]processor.IProcessor, 0, len(ps))
-	for _, name := range ps {
+func buildProcessor(hs []string, m map[string]interface{}) ([]processor.IProcessor, error) {
+	rs := make([]processor.IProcessor, 0, len(hs))
+	for _, name := range hs {
 		data, ok := m[name]
 		if !ok {
 			data = struct{}{}
 		}
-		pr, err := processor.MakeProcessor(name, data)
+		h, err := handler.CreateHandler(name, data)
 		if err != nil {
-			return nil, fmt.Errorf("create processor failed, name:%s, err:%w", name, err)
+			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create processor succ", zap.String("processor", name))
-		rs = append(rs, pr)
+		p := processor.NewProcessor(name, h)
+		logutil.GetLogger(context.Background()).Info("create processor succ", zap.String("handler", name))
+		rs = append(rs, p)
 	}
 	return rs, nil
 }
