@@ -9,7 +9,7 @@ import (
 func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
-		Plot:          "",
+		Plot:          m.Plot,
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
 		Title:         m.Title,
 		OriginalTitle: m.Title,
@@ -31,6 +31,9 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Label:         m.Label,
 		Thumb:         "",
 		ScrapeSource:  m.ExtInfo.ScrapeSource,
+	}
+	if len(m.ExtInfo.TranslatedPlot) != 0 {
+		mv.Plot = m.ExtInfo.TranslatedPlot
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name
