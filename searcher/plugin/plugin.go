@@ -40,12 +40,14 @@ func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{}
 	return def
 }
 
+type HTTPInvoker func(ctx *PluginContext, req *http.Request) (*http.Response, error)
+
 type IPlugin interface {
 	OnHTTPClientInit(client *http.Client) *http.Client
 	OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error)
 	OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error)
 	OnDecorateRequest(ctx *PluginContext, req *http.Request) error
-	OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error)
+	OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error)
 	OnPrecheckResponse(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error)
 	OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error)
 	OnDecorateMediaRequest(ctx *PluginContext, req *http.Request) error
@@ -80,8 +82,8 @@ func (p *DefaultPlugin) OnPrecheckResponse(ctx *PluginContext, req *http.Request
 	return true, nil
 }
 
-func (p *DefaultPlugin) OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error) {
-	return client.Do(req)
+func (p *DefaultPlugin) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
+	return invoker(ctx, req)
 }
 
 func (p *DefaultPlugin) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {

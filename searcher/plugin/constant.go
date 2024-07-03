@@ -6,4 +6,5 @@ const (
 	SSFc2     = "fc2"
 	SSCaribpr = "caribpr"
 	SSJavhoo  = "javhoo"
+	SSAvsox   = "avsox"
 )

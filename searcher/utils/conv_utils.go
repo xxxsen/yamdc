@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	defaultDurationRegexp = regexp.MustCompile(`^(\d+)(\s*\w+)$`)
+	defaultDurationRegexp = regexp.MustCompile(`\s*(\d+)\s*.+`)
 )
 
 func ToTimestamp(date string) (int64, error) {
@@ -20,23 +20,16 @@ func ToTimestamp(date string) (int64, error) {
 }
 
 func ToDuration(timeStr string) (int64, error) {
-	// Define a regular expression to match the time format
 	re := defaultDurationRegexp
 	matches := re.FindStringSubmatch(timeStr)
-
-	// If the input string doesn't match the expected format, return an error
-	if len(matches) != 3 {
+	if len(matches) <= 1 {
 		return 0, errors.New("invalid time format")
 	}
 
-	// Extract the number part and convert it to an integer
-	numberStr := matches[1]
-	number, err := strconv.Atoi(numberStr)
+	number, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return 0, err
 	}
-
-	// Convert the number of minutes to seconds
 	seconds := number * 60
 
 	return int64(seconds), nil

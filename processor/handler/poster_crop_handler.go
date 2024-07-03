@@ -22,9 +22,9 @@ func (c *posterCropHandler) Name() string {
 
 func (c *posterCropHandler) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
 	return func(data []byte) ([]byte, error) {
-		data, err := image.CutImageWithFaceRec(data)
+		rec, err := image.CutImageWithFaceRec(data)
 		if err == nil {
-			return data, nil
+			return rec, nil
 		}
 		logutil.GetLogger(ctx).Warn("cut image with face rec failed, try use other cut method", zap.Error(err))
 		return fallback(data)

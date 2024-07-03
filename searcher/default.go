@@ -4,15 +4,13 @@ import (
 	"av-capture/model"
 	"av-capture/number"
 	"av-capture/searcher/plugin"
+	"av-capture/searcher/utils"
 	"av-capture/store"
-	"compress/flate"
-	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
@@ -70,17 +68,6 @@ func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
 	return nil
 }
 
-func (p *DefaultSearcher) getResponseBody(rsp *http.Response) (io.ReadCloser, error) {
-	switch rsp.Header.Get("Content-Encoding") {
-	case "gzip":
-		return gzip.NewReader(rsp.Body)
-	case "deflate":
-		return flate.NewReader(rsp.Body), nil
-	default:
-		return rsp.Body, nil
-	}
-}
-
 func (p *DefaultSearcher) decorateRequest(ctx *plugin.PluginContext, req *http.Request) error {
 	if err := p.plg.OnDecorateRequest(ctx, req); err != nil {
 		return err
@@ -127,6 +114,13 @@ func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
 	_ = store.GetDefault().PutWithNamingKey(key, raw)
 }
 
+func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http.Request) (*http.Response, error) {
+	if err := p.decorateRequest(ctx, req); err != nil {
+		return nil, fmt.Errorf("decorate request failed, err:%w", err)
+	}
+	return p.client.Do(req)
+}
+
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
 	// disable cache
 	// if m, err := p.readMetaFromCache(number); err == nil {
@@ -140,15 +134,11 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	if !ok {
 		return nil, false, nil
 	}
-
 	req, err := p.plg.OnMakeHTTPRequest(pctx, number)
 	if err != nil {
 		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
 	}
-	if err := p.decorateRequest(pctx, req); err != nil {
-		return nil, false, fmt.Errorf("decorate request failed, err:%w", err)
-	}
-	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.client, req)
+	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.invokeHTTPRequest, req)
 	if err != nil {
 		return nil, false, fmt.Errorf("do request failed, err:%w", err)
 	}
@@ -163,12 +153,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
 	}
 	defer rsp.Body.Close()
-	reader, err := p.getResponseBody(rsp)
-	if err != nil {
-		return nil, false, fmt.Errorf("determine reader failed, err:%w", err)
-	}
-	defer reader.Close()
-	data, err := io.ReadAll(reader)
+	data, err := utils.ReadHTTPData(rsp)
 	if err != nil {
 		return nil, false, fmt.Errorf("read body failed, err:%w", err)
 	}
@@ -310,11 +295,7 @@ func (p *DefaultSearcher) fetchImageData(ctx *plugin.PluginContext, url string) 
 	if rsp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get url data http code not ok, code:%d", rsp.StatusCode)
 	}
-	reader, err := p.getResponseBody(rsp)
-	if err != nil {
-		return nil, fmt.Errorf("get response body failed, err:%w", err)
-	}
-	data, err := io.ReadAll(reader)
+	data, err := utils.ReadHTTPData(rsp)
 	if err != nil {
 		return nil, fmt.Errorf("read url data failed, err:%w", err)
 	}

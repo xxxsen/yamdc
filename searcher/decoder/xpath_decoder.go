@@ -34,7 +34,7 @@ func (d *XPathHtmlDecoder) decodeSingle(c *config, node *html.Node, expr string)
 	if res == nil {
 		return ""
 	}
-	return c.DefaultStringProcessor(strings.TrimSpace(htmlquery.InnerText(res)))
+	return c.DefaultStringProcessor(DecodeSingle(node, expr))
 }
 
 func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) []string {
@@ -42,19 +42,7 @@ func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) 
 	if len(expr) == 0 {
 		return rs
 	}
-	items := htmlquery.Find(node, expr)
-	for _, item := range items {
-		if item == nil {
-			continue
-		}
-		res := htmlquery.InnerText(item)
-		res = strings.TrimSpace(res)
-		if len(res) == 0 {
-			continue
-		}
-		rs = append(rs, res)
-	}
-	return c.DefaultStringListProcessor(rs)
+	return c.DefaultStringListProcessor(DecodeList(node, expr))
 }
 
 func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*model.AvMeta, error) {
@@ -116,4 +104,29 @@ func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.AvMet
 		})
 	}
 	return meta, nil
+}
+
+func DecodeList(node *html.Node, expr string) []string {
+	rs := make([]string, 0, 5)
+	items := htmlquery.Find(node, expr)
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		res := htmlquery.InnerText(item)
+		res = strings.TrimSpace(res)
+		if len(res) == 0 {
+			continue
+		}
+		rs = append(rs, res)
+	}
+	return rs
+}
+
+func DecodeSingle(node *html.Node, expr string) string {
+	res := htmlquery.FindOne(node, expr)
+	if res == nil {
+		return ""
+	}
+	return strings.TrimSpace(htmlquery.InnerText(res))
 }
