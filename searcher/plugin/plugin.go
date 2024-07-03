@@ -40,12 +40,12 @@ func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{}
 }
 
 type IPlugin interface {
-	OnPrecheck(ctx *PluginContext, number string) (bool, error)
 	OnHTTPClientInit(client *http.Client) *http.Client
+	OnPrecheckRequest(ctx *PluginContext, number string) (bool, error)
 	OnMakeHTTPRequest(ctx *PluginContext, number string) (*http.Request, error)
 	OnDecorateRequest(ctx *PluginContext, req *http.Request) error
 	OnHandleHTTPRequest(ctx *PluginContext, client *http.Client, req *http.Request) (*http.Response, error)
-	OnPrecheckIsSearchSucc(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error)
+	OnPrecheckResponse(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error)
 	OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error)
 	OnDecorateMediaRequest(ctx *PluginContext, req *http.Request) error
 }
@@ -55,7 +55,7 @@ var _ IPlugin = &DefaultPlugin{}
 type DefaultPlugin struct {
 }
 
-func (p *DefaultPlugin) OnPrecheck(ctx *PluginContext, number string) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckRequest(ctx *PluginContext, number string) (bool, error) {
 	return true, nil
 }
 
@@ -72,7 +72,7 @@ func (p *DefaultPlugin) OnDecorateRequest(ctx *PluginContext, req *http.Request)
 	return nil
 }
 
-func (p *DefaultPlugin) OnPrecheckIsSearchSucc(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckResponse(ctx *PluginContext, req *http.Request, rsp *http.Response) (bool, error) {
 	if rsp.StatusCode == http.StatusNotFound {
 		return false, nil
 	}

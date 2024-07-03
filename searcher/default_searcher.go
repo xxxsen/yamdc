@@ -132,7 +132,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvM
 	// 	return m, nil
 	// }
 	pctx := plugin.NewPluginContext(ctx)
-	ok, err := p.plg.OnPrecheck(pctx, number)
+	ok, err := p.plg.OnPrecheckRequest(pctx, number)
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
 	}
@@ -151,7 +151,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number string) (*model.AvM
 	if err != nil {
 		return nil, false, fmt.Errorf("do request failed, err:%w", err)
 	}
-	isSearchSucc, err := p.plg.OnPrecheckIsSearchSucc(pctx, req, rsp)
+	isSearchSucc, err := p.plg.OnPrecheckResponse(pctx, req, rsp)
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck responnse failed, err:%w", err)
 	}

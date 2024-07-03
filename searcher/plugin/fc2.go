@@ -21,7 +21,7 @@ type fc2 struct {
 	DefaultPlugin
 }
 
-func (p *fc2) OnPrecheck(ctx *PluginContext, number string) (bool, error) {
+func (p *fc2) OnPrecheckRequest(ctx *PluginContext, number string) (bool, error) {
 	if !strings.HasPrefix(strings.ToLower(number), "fc2") {
 		return false, nil
 	}
