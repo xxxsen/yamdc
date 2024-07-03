@@ -19,14 +19,14 @@ func (p *javhoo) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *javhoo) onParseDuration(ctx context.Context) decoder.NumberParseFunc {
+func (p *javhoo) onParseDuration(_ context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		rs, _ := utils.ToDuration(v)
 		return rs
 	}
 }
 
-func (p *javhoo) onParseReleaseDate(ctx context.Context) decoder.NumberParseFunc {
+func (p *javhoo) onParseReleaseDate(_ context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		rs, _ := utils.ToTimestamp(v)
 		return rs
