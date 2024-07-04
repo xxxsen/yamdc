@@ -25,44 +25,44 @@ func GetExtName(f string, def string) string {
 	return def
 }
 
-func Move(source, destination string) error {
-	err := os.Rename(source, destination)
+func Move(srcFile, dstFile string) error {
+	err := os.Rename(srcFile, dstFile)
 	if err != nil && strings.Contains(err.Error(), "invalid cross-device link") {
-		return moveCrossDevice(source, destination)
+		return moveCrossDevice(srcFile, dstFile)
 	}
 	return err
 }
 
-func moveCrossDevice(source, destination string) error {
-	dstTemp := destination + ".tempfile"
-	src, err := os.Open(source)
+func moveCrossDevice(srcFile, dstFile string) error {
+	dstFileTemp := dstFile + ".tempfile"
+	src, err := os.Open(srcFile)
 	if err != nil {
-		return fmt.Errorf("open src:%s failed, err:%w", source, err)
+		return fmt.Errorf("open src:%s failed, err:%w", srcFile, err)
 	}
 	defer src.Close()
-	dst, err := os.Create(dstTemp)
+	dst, err := os.Create(dstFileTemp)
 	if err != nil {
-		return fmt.Errorf("create dst:%s failed, err:%w", dstTemp, err)
+		return fmt.Errorf("create dst:%s failed, err:%w", dstFileTemp, err)
 	}
 	defer dst.Close()
 	_, err = io.Copy(dst, src)
 	if err != nil {
 		return fmt.Errorf("copy src to dst failed, err:%w", err)
 	}
-	fi, err := os.Stat(source)
+	fi, err := os.Stat(srcFile)
 	if err != nil {
-		_ = os.Remove(dstTemp)
+		_ = os.Remove(dstFileTemp)
 		return fmt.Errorf("stat source failed, err:%w", err)
 	}
-	err = os.Chmod(dstTemp, fi.Mode())
+	err = os.Chmod(dstFileTemp, fi.Mode())
 	if err != nil {
-		_ = os.Remove(dstTemp)
+		_ = os.Remove(dstFileTemp)
 		return fmt.Errorf("chown dst failed, err:%w", err)
 	}
-	if err := os.Rename(dstTemp, destination); err != nil {
-		_ = os.Remove(dstTemp)
+	if err := os.Rename(dstFileTemp, dstFile); err != nil {
+		_ = os.Remove(dstFileTemp)
 		return fmt.Errorf("rename dst temp to dst failed, err:%w", err)
 	}
-	os.Remove(source)
+	os.Remove(srcFile)
 	return nil
 }
