@@ -20,4 +20,4 @@ curl https://github.com/Kagami/go-face-testdata/raw/master/models/shape_predicto
 curl https://github.com/Kagami/go-face-testdata/raw/master/models/dlib_face_recognition_resnet_model_v1.dat -L -o "$SAVEDIR/dlib_face_recognition_resnet_model_v1.dat"
 curl https://github.com/Kagami/go-face-testdata/raw/master/models/mmod_human_face_detector.dat -L -o "$SAVEDIR/mmod_human_face_detector.dat"
 
-echo "model file download succ"
+echo "model files download succ"
