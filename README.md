@@ -39,7 +39,7 @@ services:
 
 需要挂载扫描目录(/scandir), 存储目录(/savedir), 数据目录(/datadir)和配置目录(/config), 这几个目录在自己的配置文件中指定。
 
-配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/savedir`下。
+配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/scrape/savedir`下。
 
 **NOTE: 程序依赖go-face进行人脸识别, 以用于识别图片中的人脸并进行截图, 这个库需要有对应的模型文件, 可以通过项目目录下的`scripts/download_models.sh`进行下载, 程序会将模型下载到`models`目录, 之后将该目录移动到数据目录(`/datadir`)下即可**
 
