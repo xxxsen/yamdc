@@ -11,7 +11,6 @@ type Config struct {
 	ScanDir       string                 `json:"scan_dir"`
 	SaveDir       string                 `json:"save_dir"`
 	DataDir       string                 `json:"data_dir"`
-	ModelDir      string                 `json:"model_dir"`
 	Naming        string                 `json:"naming"`
 	PluginConfig  map[string]interface{} `json:"plugin_config"`
 	HandlerConfig map[string]interface{} `json:"handler_config"`
