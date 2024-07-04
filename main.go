@@ -42,6 +42,9 @@ func main() {
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
 	logkit.Info("current switch options", zap.Any("options", c.SwitchConfig))
 
+	if err := precheckDir(c); err != nil {
+		logkit.Fatal("precheck dir failed", zap.Error(err))
+	}
 	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
 		logkit.Fatal("init store failed", zap.Error(err))
 	}
@@ -121,4 +124,17 @@ func buildProcessor(hs []string, m map[string]interface{}) ([]processor.IProcess
 		rs = append(rs, p)
 	}
 	return rs, nil
+}
+
+func precheckDir(c *config.Config) error {
+	if len(c.DataDir) == 0 {
+		return fmt.Errorf("no data dir")
+	}
+	if len(c.ScanDir) == 0 {
+		return fmt.Errorf("no scan dir")
+	}
+	if len(c.SaveDir) == 0 {
+		return fmt.Errorf("no save dir")
+	}
+	return nil
 }
