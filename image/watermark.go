@@ -13,6 +13,7 @@ type Watermark int
 const (
 	WMChineseSubtitle Watermark = 1
 	WMUncensored      Watermark = 2
+	WM4K              Watermark = 3
 )
 
 const (
@@ -62,6 +63,8 @@ func selectWatermarkResource(w Watermark) ([]byte, bool) {
 		out = resource.ResIMGSubtitle
 	case WMUncensored:
 		out = resource.ResIMGUncensored
+	case WM4K:
+		out = resource.ResIMG4K
 	default:
 		break
 	}

@@ -42,6 +42,7 @@ func TestWatermarkWithRes(t *testing.T) {
 	raw, err := AddWatermarkFromBytes(data, []Watermark{
 		WMChineseSubtitle,
 		WMUncensored,
+		WM4K,
 	})
 	assert.NoError(t, err)
 	err = os.WriteFile(filepath.Join(os.TempDir(), "fill_watermark_with_res.jpeg"), raw, 0644)
