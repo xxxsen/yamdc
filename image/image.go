@@ -20,7 +20,7 @@ const (
 	defaultAspectRatio = float64(70.3) / 100
 )
 
-func cutHorizontalImage(img image.Image, center int, aspectRatio float64) ([]byte, error) {
+func cutHorizontalImage(img image.Image, center int, aspectRatio float64) (image.Image, error) {
 	//使用脸中心的横坐标, 以这个横坐标往2边扩展, 直到裁剪出来的海报满足宽高比
 	cropWidth := int(float64(img.Bounds().Dy()) * aspectRatio)
 	rightWidthEnd := center + cropWidth/2
@@ -43,10 +43,10 @@ func cutHorizontalImage(img image.Image, center int, aspectRatio float64) ([]byt
 	croppedImg := img.(interface {
 		SubImage(r image.Rectangle) image.Image
 	}).SubImage(rect)
-	return imageToBytes(croppedImg)
+	return croppedImg, nil
 }
 
-func cutVerticalImage(img image.Image, center int, aspectRatio float64) ([]byte, error) {
+func cutVerticalImage(img image.Image, center int, aspectRatio float64) (image.Image, error) {
 	//使用脸中心的纵坐标, 以这个纵坐标往2边扩展, 直到裁剪出来的海报满足宽高比
 	cropHeight := int(float64(img.Bounds().Dx()) / aspectRatio)
 	bottomHeightEnd := center + cropHeight/2
@@ -69,10 +69,10 @@ func cutVerticalImage(img image.Image, center int, aspectRatio float64) ([]byte,
 	croppedImg := img.(interface {
 		SubImage(r image.Rectangle) image.Image
 	}).SubImage(rect)
-	return imageToBytes(croppedImg)
+	return croppedImg, nil
 }
 
-func cutSquareImage(img image.Image, center int, aspectRtio float64) ([]byte, error) {
+func cutSquareImage(img image.Image, center int, aspectRtio float64) (image.Image, error) {
 	width := int(float64(img.Bounds().Dy()) * aspectRtio)
 	halfWidth := width / 2
 	cropLeft := center - halfWidth
@@ -84,11 +84,11 @@ func cutSquareImage(img image.Image, center int, aspectRtio float64) ([]byte, er
 	croppedImg := img.(interface {
 		SubImage(r image.Rectangle) image.Image
 	}).SubImage(rect)
-	return imageToBytes(croppedImg)
+	return croppedImg, nil
 }
 
-func CutImageWithFaceRec(data []byte) ([]byte, error) {
-	img, err := normalizeImage(data)
+func CutImageWithFaceRec(img image.Image) (image.Image, error) {
+	data, err := toJpegData(img)
 	if err != nil {
 		return nil, err
 	}
@@ -99,59 +99,38 @@ func CutImageWithFaceRec(data []byte) ([]byte, error) {
 	if len(fs) == 0 {
 		return nil, fmt.Errorf("no face found")
 	}
-	m := face.FindMaxFace(fs)
+	selectedFace := face.FindMaxFace(fs)
 	if img.Bounds().Dx() < img.Bounds().Dy() {
 		//如果图片宽高比小于预期, 那么这里需要按竖屏图进行裁剪
-		return cutVerticalImage(img, m.Rectangle.Dy()/2, defaultAspectRatio)
+		return cutVerticalImage(img, selectedFace.Rectangle.Dy()/2, defaultAspectRatio)
 	} else if img.Bounds().Dx() > img.Bounds().Dy() {
-		return cutHorizontalImage(img, m.Rectangle.Dx()/2, defaultAspectRatio)
+		return cutHorizontalImage(img, selectedFace.Rectangle.Dx()/2, defaultAspectRatio)
 	} else {
-		return cutSquareImage(img, m.Rectangle.Dx()/2, defaultAspectRatio)
+		return cutSquareImage(img, selectedFace.Rectangle.Dx()/2, defaultAspectRatio)
 	}
-
 }
 
-func imageToBytes(img image.Image) ([]byte, error) {
-	buf := bytes.Buffer{}
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
+func CutImageWithFaceRecFromBytes(data []byte) ([]byte, error) {
+	img, err := LoadImage(data)
+	if err != nil {
+		return nil, err
 	}
-	return buf.Bytes(), nil
+	cutted, err := CutImageWithFaceRec(img)
+	if err != nil {
+		return nil, err
+	}
+	return WriteImageToBytes(cutted)
 }
 
 func TranscodeToJpeg(data []byte) ([]byte, error) {
-	img, err := normalizeImage(data)
+	img, err := LoadImage(data)
 	if err != nil {
 		return nil, err
 	}
-	return imageToBytes(img)
+	return toJpegData(img)
 }
 
-func normalizeImage(data []byte) (image.Image, error) {
-	//将data的image转换成jpg
-	img, typ, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("deocode image failed, err:%w", err)
-	}
-	if typ == "jpeg" {
-		return img, nil
-	}
-	buf := bytes.Buffer{}
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
-	}
-	img, _, err = image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("invalid image data, err:%w", err)
-	}
-	return img, nil
-}
-
-func CutCensoredImage(data []byte) ([]byte, error) {
-	img, err := normalizeImage(data)
-	if err != nil {
-		return nil, err
-	}
+func CutCensoredImage(img image.Image) (image.Image, error) {
 	if img.Bounds().Dx() > img.Bounds().Dy() { //横屏
 		middle := img.Bounds().Dx() //直接取最大值, 由底层函数自行扩展即可
 		return cutHorizontalImage(img, middle, defaultAspectRatio)
@@ -162,6 +141,38 @@ func CutCensoredImage(data []byte) ([]byte, error) {
 	} else {
 		return cutSquareImage(img, img.Bounds().Dx()/2, defaultAspectRatio)
 	}
+}
+
+func LoadImage(data []byte) (image.Image, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func toJpegData(img image.Image) ([]byte, error) {
+	buf := bytes.Buffer{}
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func WriteImageToBytes(img image.Image) ([]byte, error) {
+	return toJpegData(img)
+}
+
+func CutCensoredImageFromBytes(data []byte) ([]byte, error) {
+	img, err := LoadImage(data)
+	if err != nil {
+		return nil, err
+	}
+	newImg, err := CutCensoredImage(img)
+	if err != nil {
+		return nil, err
+	}
+	return WriteImageToBytes(newImg)
 }
 
 func fillImage(img *image.RGBA, c color.RGBA) {

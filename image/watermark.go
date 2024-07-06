@@ -73,11 +73,7 @@ func selectWatermarkResource(w Watermark) ([]byte, bool) {
 	return rs, true
 }
 
-func AddWatermark(data []byte, wmTags []Watermark) ([]byte, error) {
-	img, err := normalizeImage(data)
-	if err != nil {
-		return nil, err
-	}
+func AddWatermark(img image.Image, wmTags []Watermark) (image.Image, error) {
 	wms := make([]image.Image, 0, len(wmTags))
 	for _, tag := range wmTags {
 		res, ok := selectWatermarkResource(tag)
@@ -94,5 +90,17 @@ func AddWatermark(data []byte, wmTags []Watermark) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("add water mark failed, err:%w", err)
 	}
-	return imageToBytes(output)
+	return output, nil
+}
+
+func AddWatermarkFromBytes(data []byte, wmTags []Watermark) ([]byte, error) {
+	img, err := LoadImage(data)
+	if err != nil {
+		return nil, err
+	}
+	newImg, err := AddWatermark(img, wmTags)
+	if err != nil {
+		return nil, err
+	}
+	return WriteImageToBytes(newImg)
 }

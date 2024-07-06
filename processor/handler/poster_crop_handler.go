@@ -22,7 +22,7 @@ func (c *posterCropHandler) Name() string {
 
 func (c *posterCropHandler) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
 	return func(data []byte) ([]byte, error) {
-		rec, err := image.CutImageWithFaceRec(data)
+		rec, err := image.CutImageWithFaceRecFromBytes(data)
 		if err == nil {
 			return rec, nil
 		}
@@ -41,9 +41,9 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	var cutter imageCutter = image.CutCensoredImage //默认情况下, 都按骑兵进行封面处理
-	if fc.Number.IsUncensorMovie() {                //如果为步兵, 则使用人脸识别
-		cutter = c.wrapCutImageWithFaceRec(ctx, image.CutCensoredImage)
+	var cutter imageCutter = image.CutCensoredImageFromBytes //默认情况下, 都按骑兵进行封面处理
+	if fc.Number.IsUncensorMovie() {                         //如果为步兵, 则使用人脸识别
+		cutter = c.wrapCutImageWithFaceRec(ctx, image.CutCensoredImageFromBytes)
 	}
 	data, err := store.GetDefault().GetData(fc.Meta.Cover.Key)
 	if err != nil {

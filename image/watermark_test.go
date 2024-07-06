@@ -39,7 +39,7 @@ func TestWatermark(t *testing.T) {
 func TestWatermarkWithRes(t *testing.T) {
 	data, err := MakeColorImageData(image.Rect(0, 0, 380, 540), color.RGBA{0, 0, 0, 255})
 	assert.NoError(t, err)
-	raw, err := AddWatermark(data, []Watermark{
+	raw, err := AddWatermarkFromBytes(data, []Watermark{
 		WMChineseSubtitle,
 		WMUncensored,
 	})
