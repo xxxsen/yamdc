@@ -17,17 +17,27 @@ var defaultUncensorPrefix = []string{
 	"MKBD",
 	"H4610",
 	"H0930",
-	"MD",
+	"MD-",
+	"SMD-",
+	"SSDV-",
+	"CCDV-",
+	"LLDV-",
+	"DRC-",
+	"MXX-",
+	"DSAM-",
 }
 
 var defaultUncensorRegexp = []*regexp.Regexp{
 	regexp.MustCompile(`^\d+[-|_]\d+$`),
 	regexp.MustCompile(`^N\d+$`),
 	regexp.MustCompile(`^K\d+$`),
+	regexp.MustCompile(`^KB\d+$`),
+	regexp.MustCompile(`^C\d+-KI\d+$`),
 }
 
 func IsUncensorMovie(str string) bool {
 	str = strings.ToUpper(str)
+	str = strings.ReplaceAll(str, "_", "-")
 	for _, prefix := range defaultUncensorPrefix {
 		if strings.HasPrefix(str, prefix) {
 			return true

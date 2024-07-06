@@ -18,11 +18,17 @@ func TestCheck(t *testing.T) {
 		"010111-222",
 		"H4610-Ki1111",
 		"MKD-12345",
+		"fc2-ppv-12345",
+		"1pon-123",
+		"smd-1234",
+		"kb2134",
+		"c0930-ki240528",
 	}
 	falseList := []string{
 		"YMDS-164",
 		"MBRBI-002",
 		"LUKE-036",
+		"SMDY-123",
 	}
 	for _, item := range trueList {
 		assert.True(t, IsUncensorMovie(item))
