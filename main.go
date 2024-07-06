@@ -3,7 +3,7 @@ package main
 import (
 	"av-capture/capture"
 	"av-capture/config"
-	"av-capture/image"
+	"av-capture/face"
 	"av-capture/processor"
 	"av-capture/processor/handler"
 	"av-capture/searcher"
@@ -51,8 +51,8 @@ func main() {
 	if err := translater.Init(); err != nil {
 		logkit.Fatal("init translater failed", zap.Error(err))
 	}
-	if err := image.Init(filepath.Join(c.DataDir, "models")); err != nil {
-		logkit.Fatal("init image recognizer failed", zap.Error(err))
+	if err := face.Init(filepath.Join(c.DataDir, "models")); err != nil {
+		logkit.Fatal("init face recognizer failed", zap.Error(err))
 	}
 	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
 	if err != nil {

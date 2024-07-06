@@ -1,64 +1,24 @@
 package image
 
 import (
+	"av-capture/face"
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
 	"math"
-	"sync"
+
+	"golang.org/x/image/draw"
 
 	_ "golang.org/x/image/bmp"
-
-	"github.com/Kagami/go-face"
 )
-
-var once sync.Once
-var recInst *face.Recognizer
 
 const (
 	defaultAspectRatio = float64(70.3) / 100
 )
-
-func Init(modelDir string) error {
-	var err error
-	once.Do(func() {
-		recInst, err = face.NewRecognizer(modelDir)
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func SearchFaces(data []byte) ([]face.Face, error) {
-	fces, err := recInst.RecognizeCNN(data)
-	if err != nil {
-		return nil, err
-	}
-	if len(fces) == 0 {
-		fces, err = recInst.Recognize(data)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return fces, nil
-}
-
-func findMaxFace(fs []face.Face) face.Face {
-	var maxArea int
-	var m face.Face
-	for _, f := range fs {
-		p := f.Rectangle.Size()
-		if area := p.X * p.Y; area > maxArea {
-			m = f
-			maxArea = area
-		}
-	}
-	return m
-}
 
 func cutHorizontalImage(img image.Image, center int, aspectRatio float64) ([]byte, error) {
 	//使用脸中心的横坐标, 以这个横坐标往2边扩展, 直到裁剪出来的海报满足宽高比
@@ -132,14 +92,14 @@ func CutImageWithFaceRec(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fs, err := SearchFaces(data)
+	fs, err := face.SearchFaces(data)
 	if err != nil {
 		return nil, err
 	}
 	if len(fs) == 0 {
 		return nil, fmt.Errorf("no face found")
 	}
-	m := findMaxFace(fs)
+	m := face.FindMaxFace(fs)
 	if img.Bounds().Dx() < img.Bounds().Dy() {
 		//如果图片宽高比小于预期, 那么这里需要按竖屏图进行裁剪
 		return cutVerticalImage(img, m.Rectangle.Dy()/2, defaultAspectRatio)
@@ -202,4 +162,35 @@ func CutCensoredImage(data []byte) ([]byte, error) {
 	} else {
 		return cutSquareImage(img, img.Bounds().Dx()/2, defaultAspectRatio)
 	}
+}
+
+func fillImage(img *image.RGBA, c color.RGBA) {
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			img.Set(x, y, c)
+		}
+	}
+}
+
+func MakeColorImage(rect image.Rectangle, rgb color.RGBA) image.Image {
+	img := image.NewRGBA(rect)
+	fillImage(img, rgb)
+	return img
+}
+
+func MakeColorImageData(rect image.Rectangle, rgb color.RGBA) ([]byte, error) {
+	img := MakeColorImage(rect, rgb)
+	buf := bytes.Buffer{}
+	err := jpeg.Encode(&buf, img, nil)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func Scale(src image.Image, frame image.Rectangle) image.Image {
+	dst := image.NewRGBA(frame)
+	draw.NearestNeighbor.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+	return dst
 }
