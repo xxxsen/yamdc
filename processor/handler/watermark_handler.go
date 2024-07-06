@@ -22,6 +22,9 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 		return fmt.Errorf("load poster key failed, key:%s", fc.Meta.Poster.Key)
 	}
 	tags := make([]image.Watermark, 0, 5)
+	if fc.Number.Is4K() {
+		tags = append(tags, image.WM4K)
+	}
 	if fc.Number.IsUncensorMovie() {
 		tags = append(tags, image.WMUncensored)
 	}
