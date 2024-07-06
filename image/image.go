@@ -134,7 +134,7 @@ func CutCensoredImage(img image.Image) (image.Image, error) {
 	if img.Bounds().Dx() > img.Bounds().Dy() { //横屏
 		middle := img.Bounds().Dx() //直接取最大值, 由底层函数自行扩展即可
 		return cutHorizontalImage(img, middle, defaultAspectRatio)
-	} else if img.Bounds().Dx() > img.Bounds().Dy() {
+	} else if img.Bounds().Dx() < img.Bounds().Dy() {
 		//正常不应该出现骑兵封面为竖屏的
 		//另一方面, 正常人像应该是上面, 所以从上开始截取
 		return cutVerticalImage(img, 0, defaultAspectRatio)
