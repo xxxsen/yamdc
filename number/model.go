@@ -6,6 +6,7 @@ type Number struct {
 	isMultiCD         bool
 	multiCDIndex      int
 	isUncensorMovie   bool
+	is4k              bool
 }
 
 func (n *Number) Number() string {
@@ -26,4 +27,8 @@ func (n *Number) MultiCDIndex() int {
 
 func (n *Number) IsUncensorMovie() bool {
 	return n.isUncensorMovie
+}
+
+func (n *Number) Is4K() bool {
+	return n.is4k
 }

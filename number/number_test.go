@@ -41,6 +41,21 @@ func TestNumber(t *testing.T) {
 			multiCDIndex:      3,
 			isChineseSubtitle: true,
 		},
+		"k0009-c_cd1-4k.mp4": {
+			number:            "K0009",
+			isUncensorMovie:   true,
+			isMultiCD:         true,
+			multiCDIndex:      1,
+			isChineseSubtitle: true,
+			is4k:              true,
+		},
+		"n001-Cd1-4k.mp4": {
+			number:          "N001",
+			isUncensorMovie: true,
+			isMultiCD:       true,
+			multiCDIndex:    1,
+			is4k:            true,
+		},
 	}
 	for file, info := range checkList {
 		rs, err := ParseWithFileName(file)
@@ -50,5 +65,6 @@ func TestNumber(t *testing.T) {
 		assert.Equal(t, info.IsMultiCD(), rs.IsMultiCD())
 		assert.Equal(t, info.MultiCDIndex(), rs.MultiCDIndex())
 		assert.Equal(t, info.IsUncensorMovie(), rs.IsUncensorMovie())
+		assert.Equal(t, info.Is4K(), rs.Is4K())
 	}
 }

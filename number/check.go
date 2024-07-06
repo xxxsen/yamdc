@@ -22,6 +22,7 @@ var defaultUncensorPrefix = []string{
 var defaultUncensorRegexp = []*regexp.Regexp{
 	regexp.MustCompile(`^\d+[-|_]\d+$`),
 	regexp.MustCompile(`^n\d+$`),
+	regexp.MustCompile(`^k\d+$`),
 }
 
 func IsUncensorMovie(str string) bool {
