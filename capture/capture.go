@@ -64,6 +64,12 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 	}
 	fc.Number = info
 	fc.SaveFileBase = fc.Number.Number()
+	if fc.Number.Is4K() {
+		fc.SaveFileBase += "-4K"
+	}
+	if fc.Number.IsChineseSubtitle() {
+		fc.SaveFileBase += "-C"
+	}
 	if fc.Number.IsMultiCD() {
 		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.Number.MultiCDIndex()), 10)
 	}
