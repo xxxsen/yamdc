@@ -56,6 +56,16 @@ func TestNumber(t *testing.T) {
 			multiCDIndex:    1,
 			is4k:            true,
 		},
+		"c-4k.mp4": {
+			number:            "C",
+			isChineseSubtitle: false,
+			is4k:              true,
+		},
+		"-c-4k.mp4": {
+			number:            "",
+			isChineseSubtitle: true,
+			is4k:              true,
+		},
 	}
 	for file, info := range checkList {
 		rs, err := ParseWithFileName(file)
