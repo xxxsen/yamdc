@@ -6,15 +6,14 @@ import (
 	"av-capture/store"
 	"context"
 	"fmt"
+
+	"github.com/xxxsen/common/logutil"
 )
 
 type watermark struct {
 }
 
 func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
-	if !fc.Number.IsChineseSubtitle() {
-		return nil
-	}
 	if fc.Meta.Poster == nil || len(fc.Meta.Poster.Key) == 0 {
 		return nil
 	}
@@ -28,6 +27,10 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	}
 	if fc.Number.IsChineseSubtitle() {
 		tags = append(tags, image.WMChineseSubtitle)
+	}
+	if len(tags) == 0 {
+		logutil.GetLogger(ctx).Debug("no watermark tag found, skip watermark proc")
+		return nil
 	}
 	newData, err := image.AddWatermarkFromBytes(data, tags)
 	if err != nil {
