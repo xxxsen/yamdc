@@ -30,7 +30,7 @@ func extractSuffix(str string) (string, bool) {
 }
 
 func tryResolveSuffix(info *Number, suffix string) bool {
-	normalizedSuffix := strings.ToLower(suffix[1:])
+	normalizedSuffix := strings.ToUpper(suffix[1:])
 	for _, resolver := range defaultSuffixResolverList {
 		if resolver(info, normalizedSuffix) {
 			return true
@@ -53,7 +53,7 @@ func resolveSuffixInfo(info *Number, str string) string {
 }
 
 func resolveCDInfo(info *Number, str string) bool {
-	if !strings.HasPrefix(str, "cd") {
+	if !strings.HasPrefix(str, "CD") {
 		return false
 	}
 	strNum := str[2:]
@@ -67,7 +67,7 @@ func resolveCDInfo(info *Number, str string) bool {
 }
 
 func resolve4K(info *Number, str string) bool {
-	if str != "4k" {
+	if str != "4K" {
 		return false
 	}
 	info.is4k = true
@@ -75,7 +75,7 @@ func resolve4K(info *Number, str string) bool {
 }
 
 func resolveIsChineseSubTitle(info *Number, str string) bool {
-	if str != "c" {
+	if str != "C" {
 		return false
 	}
 	info.isChineseSubtitle = true
