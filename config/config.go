@@ -36,6 +36,7 @@ func defaultConfig() *Config {
 		},
 		Handlers: []string{
 			"poster_cropper",
+			"duration_fixer",
 			"image_transcoder",
 			"plot_translater",
 		},
