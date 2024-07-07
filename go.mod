@@ -14,6 +14,8 @@ require (
 	golang.org/x/text v0.16.0
 )
 
+replace github.com/Kagami/go-face => github.com/xxxsen/go-face v0.0.1
+
 require (
 	github.com/antchfx/xpath v1.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
