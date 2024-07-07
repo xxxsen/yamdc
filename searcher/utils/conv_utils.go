@@ -19,6 +19,13 @@ func ToTimestamp(date string) (int64, error) {
 	return t.UnixMilli(), nil
 }
 
+func ToTimestampOrDefault(date string, def int64) int64 {
+	if v, err := ToTimestamp(date); err == nil {
+		return v
+	}
+	return def
+}
+
 func ToDuration(timeStr string) (int64, error) {
 	re := defaultDurationRegexp
 	matches := re.FindStringSubmatch(timeStr)

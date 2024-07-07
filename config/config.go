@@ -29,6 +29,7 @@ func defaultConfig() *Config {
 		Plugins: []string{
 			"javbus",
 			"javhoo",
+			"airav",
 			"jav321",
 			"caribpr",
 			"fc2",

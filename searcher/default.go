@@ -21,10 +21,10 @@ import (
 )
 
 type DefaultSearcher struct {
-	name   string
-	ua     string
-	client *http.Client
-	plg    plugin.IPlugin
+	name    string
+	ua      string
+	invoker plugin.HTTPInvoker
+	plg     plugin.IPlugin
 }
 
 func MustNewDefaultSearcher(name string, plg plugin.IPlugin) ISearcher {
@@ -43,15 +43,13 @@ func NewDefaultSearcher(name string, plg plugin.IPlugin) (ISearcher, error) {
 	if err != nil {
 		return nil, err
 	}
-	client = plg.OnHTTPClientInit(client)
-	if client.Jar == nil {
-		client.Jar = jar
-	}
+	client.Jar = jar
+
 	ss := &DefaultSearcher{
-		name:   name,
-		client: client,
-		plg:    plg,
-		ua:     useragent.Select(),
+		name:    name,
+		invoker: plg.OnHTTPClientInit(client), //生成基础client并调用插件进行初始化。
+		plg:     plg,
+		ua:      useragent.Select(),
 	}
 	return ss, nil
 }
@@ -94,7 +92,7 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http
 	if err := p.decorateRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
 	}
-	return p.client.Do(req)
+	return p.invoker(ctx, req)
 }
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
@@ -164,8 +162,12 @@ func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
 func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.AvMeta) {
 	meta.Number = strings.ToUpper(meta.Number)
 	prefix := req.URL.Scheme + "://" + req.URL.Host
-	p.fixSingleURL(req, &meta.Cover.Name, prefix)
-	p.fixSingleURL(req, &meta.Poster.Name, prefix)
+	if meta.Cover != nil {
+		p.fixSingleURL(req, &meta.Cover.Name, prefix)
+	}
+	if meta.Poster != nil {
+		p.fixSingleURL(req, &meta.Poster.Name, prefix)
+	}
 	for i := 0; i < len(meta.SampleImages); i++ {
 		p.fixSingleURL(req, &meta.SampleImages[i].Name, prefix)
 	}
@@ -257,7 +259,7 @@ func (p *DefaultSearcher) fetchImageData(ctx *plugin.PluginContext, url string) 
 	if err := p.decorateImageRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decode request failed, err:%w", err)
 	}
-	rsp, err := p.client.Do(req)
+	rsp, err := p.invoker(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("get url data failed, err:%w", err)
 	}

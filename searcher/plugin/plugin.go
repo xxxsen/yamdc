@@ -44,7 +44,7 @@ func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{}
 type HTTPInvoker func(ctx *PluginContext, req *http.Request) (*http.Response, error)
 
 type IPlugin interface {
-	OnHTTPClientInit(client *http.Client) *http.Client
+	OnHTTPClientInit(client *http.Client) HTTPInvoker
 	OnPrecheckRequest(ctx *PluginContext, number *number.Number) (bool, error)
 	OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error)
 	OnDecorateRequest(ctx *PluginContext, req *http.Request) error
@@ -63,8 +63,10 @@ func (p *DefaultPlugin) OnPrecheckRequest(ctx *PluginContext, number *number.Num
 	return true, nil
 }
 
-func (p *DefaultPlugin) OnHTTPClientInit(client *http.Client) *http.Client {
-	return client
+func (p *DefaultPlugin) OnHTTPClientInit(client *http.Client) HTTPInvoker {
+	return func(ctx *PluginContext, req *http.Request) (*http.Response, error) {
+		return client.Do(req)
+	}
 }
 
 func (p *DefaultPlugin) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {

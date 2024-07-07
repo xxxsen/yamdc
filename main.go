@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 
 	"av-capture/searcher/plugin"
+	_ "av-capture/searcher/plugin/airav"
 )
 
 var conf = flag.String("config", "./config.json", "config file")

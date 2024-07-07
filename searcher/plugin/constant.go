@@ -7,4 +7,5 @@ const (
 	SSCaribpr = "caribpr"
 	SSJavhoo  = "javhoo"
 	SSAvsox   = "avsox"
+	SSAirav   = "airav"
 )
