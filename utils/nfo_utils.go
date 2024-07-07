@@ -3,6 +3,7 @@ package utils
 import (
 	"av-capture/model"
 	"av-capture/nfo"
+	"fmt"
 	"time"
 )
 
@@ -25,15 +26,15 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Genres:        m.Genres,
 		Studio:        m.Studio,
 		Maker:         m.Studio,
-		Art:           nfo.Art{}, //TODO:
+		Art:           nfo.Art{},
 		Mpaa:          "JP-18+",
 		Director:      "",
 		Label:         m.Label,
 		Thumb:         "",
 		ScrapeSource:  m.ExtInfo.ScrapeSource,
 	}
-	if len(m.ExtInfo.TranslatedPlot) != 0 {
-		mv.Plot = m.ExtInfo.TranslatedPlot
+	if len(m.ExtInfo.TranslatedPlot) != 0 { //jellyfin中不认<br />, <p> 等html标签, 直接把翻译数据填充到后面好了。
+		mv.Plot = m.Plot + fmt.Sprintf("[翻译:%s]", m.ExtInfo.TranslatedPlot)
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name
