@@ -102,9 +102,9 @@ func CutImageWithFaceRec(img image.Image) (image.Image, error) {
 	selectedFace := face.FindMaxFace(fs)
 	if img.Bounds().Dx() < img.Bounds().Dy() {
 		//如果图片宽高比小于预期, 那么这里需要按竖屏图进行裁剪
-		return cutVerticalImage(img, selectedFace.Rectangle.Dy()/2, defaultAspectRatio)
+		return cutVerticalImage(img, selectedFace.Rectangle.Min.Y+selectedFace.Rectangle.Dy()/2, defaultAspectRatio)
 	} else if img.Bounds().Dx() > img.Bounds().Dy() {
-		return cutHorizontalImage(img, selectedFace.Rectangle.Dx()/2, defaultAspectRatio)
+		return cutHorizontalImage(img, selectedFace.Rectangle.Min.X+selectedFace.Rectangle.Dx()/2, defaultAspectRatio)
 	} else {
 		return cutSquareImage(img, selectedFace.Rectangle.Dx()/2, defaultAspectRatio)
 	}
