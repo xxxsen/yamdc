@@ -6,10 +6,10 @@ import (
 	"av-capture/searcher/plugin"
 	"av-capture/searcher/utils"
 	"av-capture/store"
+	"av-capture/useragent"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -22,6 +22,7 @@ import (
 
 type DefaultSearcher struct {
 	name   string
+	ua     string
 	client *http.Client
 	plg    plugin.IPlugin
 }
@@ -50,6 +51,7 @@ func NewDefaultSearcher(name string, plg plugin.IPlugin) (ISearcher, error) {
 		name:   name,
 		client: client,
 		plg:    plg,
+		ua:     useragent.Select(),
 	}
 	return ss, nil
 }
@@ -60,7 +62,7 @@ func (p *DefaultSearcher) Name() string {
 
 func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
 	if len(req.UserAgent()) == 0 {
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0")
+		req.Header.Set("User-Agent", p.ua)
 	}
 	if len(req.Referer()) == 0 {
 		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
@@ -88,32 +90,6 @@ func (p *DefaultSearcher) decorateImageRequest(ctx *plugin.PluginContext, req *h
 	return nil
 }
 
-func (p *DefaultSearcher) buildMetaCacheKey(number string) string {
-	return fmt.Sprintf("avc:search:cache:%s:%s", p.name, strings.ToUpper(number))
-}
-
-func (p *DefaultSearcher) readMetaFromCache(number string) (*model.AvMeta, error) {
-	raw, err := store.GetDefault().GetData(p.buildMetaCacheKey(number))
-	if err != nil {
-		return nil, err
-	}
-	meta := &model.AvMeta{}
-	if err := json.Unmarshal(raw, meta); err != nil {
-		return nil, err
-	}
-	logutil.GetLogger(context.Background()).Debug("read meta from cache succ", zap.String("number", number))
-	return meta, nil
-}
-
-func (p *DefaultSearcher) writeMetaToCache(number string, meta *model.AvMeta) {
-	key := p.buildMetaCacheKey(number)
-	raw, err := json.Marshal(meta)
-	if err != nil {
-		return
-	}
-	_ = store.GetDefault().PutWithNamingKey(key, raw)
-}
-
 func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http.Request) (*http.Response, error) {
 	if err := p.decorateRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
@@ -122,10 +98,6 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http
 }
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
-	// disable cache
-	// if m, err := p.readMetaFromCache(number); err == nil {
-	// 	return m, nil
-	// }
 	pctx := plugin.NewPluginContext(ctx)
 	ok, err := p.plg.OnPrecheckRequest(pctx, number)
 	if err != nil {
@@ -173,7 +145,6 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeSource = p.name
-	p.writeMetaToCache(number.Number(), meta)
 	return meta, true, nil
 }
 

@@ -72,7 +72,6 @@ func (p *DefaultPlugin) OnMakeHTTPRequest(ctx *PluginContext, number *number.Num
 }
 
 func (p *DefaultPlugin) OnDecorateRequest(ctx *PluginContext, req *http.Request) error {
-	p.defaultDecorate(ctx, req)
 	return nil
 }
 
@@ -92,17 +91,7 @@ func (p *DefaultPlugin) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*mode
 }
 
 func (p *DefaultPlugin) OnDecorateMediaRequest(ctx *PluginContext, req *http.Request) error {
-	p.defaultDecorate(ctx, req)
 	return nil
-}
-
-func (p *DefaultPlugin) defaultDecorate(_ *PluginContext, req *http.Request) {
-	if len(req.UserAgent()) == 0 {
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0")
-	}
-	if len(req.Referer()) == 0 {
-		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
-	}
 }
 
 type CreatorFunc func(args interface{}) (IPlugin, error)
