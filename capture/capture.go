@@ -1,7 +1,6 @@
 package capture
 
 import (
-	"av-capture/constant"
 	"av-capture/model"
 	"av-capture/nfo"
 	"av-capture/number"
@@ -166,24 +165,11 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 	if !ok {
 		return fmt.Errorf("search item not found")
 	}
-	c.paddingMetaTag(fc)
 	if meta.Number != fc.Number.Number() {
 		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.Number()))
 	}
 	fc.Meta = meta
 	return nil
-}
-
-func (c *Capture) paddingMetaTag(fc *model.FileContext) {
-	if fc == nil || fc.Meta == nil {
-		return
-	}
-	if fc.Number.IsUncensorMovie() {
-		fc.Meta.Genres = append(fc.Meta.Genres, constant.TagUncensored)
-	}
-	if fc.Number.IsChineseSubtitle() {
-		fc.Meta.Genres = append(fc.Meta.Genres, constant.TagChineseSubtitle)
-	}
 }
 
 func (c *Capture) doProcess(ctx context.Context, fc *model.FileContext) error {

@@ -6,4 +6,5 @@ const (
 	HImageTranscoder = "image_transcoder"
 	HPlotTranslater  = "plot_translater"
 	HWatermakrMaker  = "watermark_maker"
+	HTagPadder       = "tag_padder"
 )
