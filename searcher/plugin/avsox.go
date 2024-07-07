@@ -97,7 +97,7 @@ func (p *avsox) trySearchByNumber(ctx *PluginContext, invoker HTTPInvoker, numbe
 	if len(res) == 0 {
 		return "", false, fmt.Errorf("no search item found")
 	}
-	if len(res) > 5 { //5个以内, 认为其还是ok的, 避免部分番号就是有重复的
+	if len(res) > 1 {
 		return "", false, fmt.Errorf("too much search item, cnt:%d", len(res))
 	}
 	return res[0], true, nil
