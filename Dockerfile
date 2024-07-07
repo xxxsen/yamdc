@@ -9,6 +9,6 @@ FROM alpine:3.12
 
 COPY --from=0 /build/av-capture /bin/
 
-RUN apk add ffmpeg
+RUN apk add --no-cache ffmpeg
 
 ENTRYPOINT [ "/bin/av-capture" ]
