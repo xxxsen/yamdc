@@ -30,8 +30,6 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 	}()
 	cmd := exec.Command(p.cmd, "-i", "pipe:0", "-vf", "format=yuv420p", "-f", "image2", dstFile)
 	cmd.Stdin = bytes.NewReader(data)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
 	err := cmd.Run()
 	if err != nil {
 		return nil, fmt.Errorf("call ffmpeg to conv failed, err:%w", err)

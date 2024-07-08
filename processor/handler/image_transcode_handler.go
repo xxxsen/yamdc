@@ -1,17 +1,20 @@
 package handler
 
 import (
+	"av-capture/ffmpeg"
 	"av-capture/image"
 	"av-capture/model"
 	"av-capture/store"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
 
 type imageTranscodeHandler struct {
+	ffmpegInst *ffmpeg.FFMpeg
 }
 
 func (p *imageTranscodeHandler) Name() string {
@@ -44,7 +47,15 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 		return f //不丢弃, 后续处理的时候报错, 方便发现问题
 	}
 	raw, err := image.TranscodeToJpeg(data)
-	if err != nil { //出现异常的, 都直接把图片丢掉, 这种通常是格式不对
+	if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && p.ffmpegInst != nil {
+		data, err = p.ffmpegInst.ConvertToYuv420pJpegFromBytes(ctx, data)
+		if err != nil {
+			logger.Error("use ffmpeg to correct invalid image data failed", zap.Error(err))
+			return nil
+		}
+		raw, err = image.TranscodeToJpeg(data)
+	}
+	if err != nil {
 		logger.Error("unable to convert image to jpeg format", zap.Error(err))
 		return nil
 	}
@@ -58,6 +69,15 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 	return f
 }
 
+func createImageTranscodeHandler(args interface{}) (IHandler, error) {
+	ffmpegInst, err := ffmpeg.NewFFMpeg()
+	if err != nil {
+		logutil.GetLogger(context.Background()).Error("unable to create ffmpeg instance, will not able to use some feature", zap.Error(err))
+		ffmpegInst = nil
+	}
+	return &imageTranscodeHandler{ffmpegInst: ffmpegInst}, nil
+}
+
 func init() {
-	Register(HImageTranscoder, HandlerToCreator(&imageTranscodeHandler{}))
+	Register(HImageTranscoder, createImageTranscodeHandler)
 }

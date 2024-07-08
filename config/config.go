@@ -36,11 +36,11 @@ func defaultConfig() *Config {
 			"avsox",
 		},
 		Handlers: []string{
+			"image_transcoder",
 			"poster_cropper",
 			"watermark_maker",
 			"tag_padder",
 			"duration_fixer",
-			"image_transcoder",
 			"plot_translater",
 		},
 	}

@@ -57,7 +57,6 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 	if err != nil {
 		return fmt.Errorf("save cutted poster data failed, err:%w", err)
 	}
-	//TODO: 如果实在无法裁剪出有效的封面, 那么尝试取一张竖屏的, 或者直接使用骑兵的裁剪逻辑
 	fc.Meta.Poster = &model.File{
 		Name: "./poster.jpg",
 		Key:  key,
