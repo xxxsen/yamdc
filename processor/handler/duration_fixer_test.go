@@ -16,7 +16,6 @@ func TestDurationFixer(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll(tmpVideo)
 	}()
-	//ffmpeg -f lavfi -i color=c=black:s=320x240:d=10 -an -vcodec libx264 empty_video.mp4
 	cmd := exec.Command("ffmpeg", []string{"-f", "lavfi", "-i", "color=c=black:s=320x240:d=10", "-an", "-vcodec", "libx264", tmpVideo, "-y"}...)
 	err := cmd.Run()
 	assert.NoError(t, err)
@@ -25,7 +24,8 @@ func TestDurationFixer(t *testing.T) {
 		FullFilePath: tmpVideo,
 		Meta:         &model.AvMeta{},
 	}
-	h := &durationFixer{}
+	h, err := CreateHandler(HDurationFixer, nil)
+	assert.NoError(t, err)
 	err = h.Handle(context.Background(), fc)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), fc.Meta.Duration)
