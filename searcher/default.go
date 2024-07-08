@@ -12,10 +12,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"net/http/cookiejar"
 	"strings"
-	"time"
 
+	"github.com/imroc/req/v3"
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
@@ -35,19 +34,23 @@ func MustNewDefaultSearcher(name string, plg plugin.IPlugin) ISearcher {
 	return s
 }
 
-func NewDefaultSearcher(name string, plg plugin.IPlugin) (ISearcher, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+func defaultInvoker() plugin.HTTPInvoker {
+	client := req.NewClient()
+	client.ImpersonateChrome()
+	client.SetRedirectPolicy(req.SameDomainRedirectPolicy())
+	return func(ctx *plugin.PluginContext, req *http.Request) (*http.Response, error) {
+		return client.RoundTrip(req)
 	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-	client.Jar = jar
+}
 
+func NewDefaultSearcher(name string, plg plugin.IPlugin) (ISearcher, error) {
+	invoker := plg.OnHTTPClientInit()
+	if invoker == nil {
+		invoker = defaultInvoker()
+	}
 	ss := &DefaultSearcher{
 		name:    name,
-		invoker: plg.OnHTTPClientInit(client), //生成基础client并调用插件进行初始化。
+		invoker: invoker,
 		plg:     plg,
 		ua:      useragent.Select(),
 	}

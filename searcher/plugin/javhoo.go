@@ -60,7 +60,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	return meta, false, nil
+	return meta, true, nil
 }
 
 func init() {

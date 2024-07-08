@@ -10,25 +10,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/imroc/req/v3"
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
 
 type airav struct {
 	plugin.DefaultPlugin
-}
-
-func (p *airav) OnHTTPClientInit(origin *http.Client) plugin.HTTPInvoker {
-	client := req.NewClient()
-	client.ImpersonateChrome()
-	return func(ctx *plugin.PluginContext, request *http.Request) (*http.Response, error) {
-		rsp, err := client.RoundTrip(request)
-		if err != nil {
-			return nil, err
-		}
-		return rsp, nil
-	}
 }
 
 func (p *airav) OnMakeHTTPRequest(ctx *plugin.PluginContext, number *number.Number) (*http.Request, error) {
