@@ -1,12 +1,6 @@
 package capture
 
 import (
-	"av-capture/model"
-	"av-capture/nfo"
-	"av-capture/number"
-	"av-capture/processor"
-	"av-capture/store"
-	"av-capture/utils"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +10,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"yamdc/model"
+	"yamdc/nfo"
+	"yamdc/number"
+	"yamdc/processor"
+	"yamdc/store"
+	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/common/trace"

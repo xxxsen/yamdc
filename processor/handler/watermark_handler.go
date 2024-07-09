@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"av-capture/image"
-	"av-capture/model"
-	"av-capture/store"
 	"context"
 	"fmt"
+	"yamdc/image"
+	"yamdc/model"
+	"yamdc/store"
 
 	"github.com/xxxsen/common/logutil"
 )

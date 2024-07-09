@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"av-capture/constant"
-	"av-capture/model"
-	"av-capture/utils"
 	"context"
+	"yamdc/constant"
+	"yamdc/model"
+	"yamdc/utils"
 )
 
 type tagPadder struct{}

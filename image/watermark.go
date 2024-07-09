@@ -1,11 +1,11 @@
 package image
 
 import (
-	"av-capture/image/resource"
 	"bytes"
 	"fmt"
 	"image"
 	"image/draw"
+	"yamdc/image/resource"
 )
 
 type Watermark int

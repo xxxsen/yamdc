@@ -1,8 +1,8 @@
 package processor
 
 import (
-	"av-capture/model"
 	"context"
+	"yamdc/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

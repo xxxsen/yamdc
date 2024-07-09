@@ -1,15 +1,15 @@
 package plugin
 
 import (
-	"av-capture/model"
-	"av-capture/number"
-	"av-capture/searcher/decoder"
-	"av-capture/searcher/utils"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"yamdc/model"
+	"yamdc/number"
+	"yamdc/searcher/decoder"
+	"yamdc/searcher/utils"
 )
 
 type jav321 struct {

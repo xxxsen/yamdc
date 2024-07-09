@@ -1,4 +1,4 @@
-av-capture
+yamdc
 ===
 
 由于原先的MovieDataCapture作者把工具闭源了, 只能自己写一个了。
@@ -12,9 +12,9 @@ av-capture
 ```yaml
 version: "3.1"
 services:
-  av-capture:
-    image: xxxsen/av-capture:latest
-    container_name: av-capture
+  yamdc:
+    image: xxxsen/yamdc:latest
+    container_name: yamdc
     user: "1000:1000" #指定uid/gid, 根据需要修改
     volumes:
       - /data/scrape/scandir:/scandir

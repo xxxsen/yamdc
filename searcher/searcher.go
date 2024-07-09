@@ -1,9 +1,9 @@
 package searcher
 
 import (
-	"av-capture/model"
-	"av-capture/number"
 	"context"
+	"yamdc/model"
+	"yamdc/number"
 )
 
 type ISearcher interface {

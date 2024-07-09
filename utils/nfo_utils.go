@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"av-capture/model"
-	"av-capture/nfo"
 	"fmt"
 	"time"
+	"yamdc/model"
+	"yamdc/nfo"
 )
 
 func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {

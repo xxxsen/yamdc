@@ -1,26 +1,26 @@
 package main
 
 import (
-	"av-capture/capture"
-	"av-capture/config"
-	"av-capture/face"
-	"av-capture/processor"
-	"av-capture/processor/handler"
-	"av-capture/searcher"
-	"av-capture/store"
-	"av-capture/translater"
 	"context"
 	"flag"
 	"fmt"
 	"log"
 	"path/filepath"
+	"yamdc/capture"
+	"yamdc/config"
+	"yamdc/face"
+	"yamdc/processor"
+	"yamdc/processor/handler"
+	"yamdc/searcher"
+	"yamdc/store"
+	"yamdc/translater"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 
-	"av-capture/searcher/plugin"
-	_ "av-capture/searcher/plugin/airav"
+	"yamdc/searcher/plugin"
+	_ "yamdc/searcher/plugin/airav"
 )
 
 var conf = flag.String("config", "./config.json", "config file")

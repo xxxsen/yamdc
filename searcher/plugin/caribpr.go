@@ -1,16 +1,16 @@
 package plugin
 
 import (
-	"av-capture/model"
-	"av-capture/number"
-	"av-capture/searcher/decoder"
-	"av-capture/utils"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+	"yamdc/model"
+	"yamdc/number"
+	"yamdc/searcher/decoder"
+	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

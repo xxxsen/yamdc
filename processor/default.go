@@ -1,9 +1,9 @@
 package processor
 
 import (
-	"av-capture/model"
-	"av-capture/processor/handler"
 	"context"
+	"yamdc/model"
+	"yamdc/processor/handler"
 )
 
 var DefaultProcessor IProcessor = &defaultProcessor{}

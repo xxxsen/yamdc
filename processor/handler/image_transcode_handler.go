@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"av-capture/ffmpeg"
-	"av-capture/image"
-	"av-capture/model"
-	"av-capture/store"
 	"context"
 	"fmt"
 	"strings"
+	"yamdc/ffmpeg"
+	"yamdc/image"
+	"yamdc/model"
+	"yamdc/store"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

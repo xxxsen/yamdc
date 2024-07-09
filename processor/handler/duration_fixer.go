@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"av-capture/ffmpeg"
-	"av-capture/model"
 	"context"
+	"yamdc/ffmpeg"
+	"yamdc/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

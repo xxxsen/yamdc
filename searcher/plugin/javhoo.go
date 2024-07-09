@@ -1,13 +1,13 @@
 package plugin
 
 import (
-	"av-capture/model"
-	"av-capture/number"
-	"av-capture/searcher/decoder"
-	"av-capture/searcher/utils"
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/model"
+	"yamdc/number"
+	"yamdc/searcher/decoder"
+	"yamdc/searcher/utils"
 )
 
 type javhoo struct {

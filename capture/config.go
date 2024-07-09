@@ -1,8 +1,8 @@
 package capture
 
 import (
-	"av-capture/processor"
-	"av-capture/searcher"
+	"yamdc/processor"
+	"yamdc/searcher"
 )
 
 const (

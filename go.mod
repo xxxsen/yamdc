@@ -1,4 +1,4 @@
-module av-capture
+module yamdc
 
 go 1.21
 

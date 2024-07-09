@@ -1,18 +1,18 @@
 package searcher
 
 import (
-	"av-capture/model"
-	"av-capture/number"
-	"av-capture/searcher/plugin"
-	"av-capture/searcher/utils"
-	"av-capture/store"
-	"av-capture/useragent"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strings"
+	"yamdc/model"
+	"yamdc/number"
+	"yamdc/searcher/plugin"
+	"yamdc/searcher/utils"
+	"yamdc/store"
+	"yamdc/useragent"
 
 	"github.com/imroc/req/v3"
 	"github.com/xxxsen/common/logutil"

@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"av-capture/constant"
-	"av-capture/model"
-	"av-capture/number"
 	"context"
 	"testing"
+	"yamdc/constant"
+	"yamdc/model"
+	"yamdc/number"
 
 	"github.com/stretchr/testify/assert"
 )

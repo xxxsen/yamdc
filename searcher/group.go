@@ -1,9 +1,9 @@
 package searcher
 
 import (
-	"av-capture/model"
-	"av-capture/number"
 	"context"
+	"yamdc/model"
+	"yamdc/number"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

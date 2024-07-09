@@ -1,6 +1,6 @@
 package model
 
-import "av-capture/number"
+import "yamdc/number"
 
 type AvMeta struct {
 	Number       string   `json:"number"`        //番号

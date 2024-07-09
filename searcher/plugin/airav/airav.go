@@ -1,14 +1,14 @@
 package airav
 
 import (
-	"av-capture/model"
-	"av-capture/number"
-	"av-capture/searcher/plugin"
-	"av-capture/searcher/utils"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"yamdc/model"
+	"yamdc/number"
+	"yamdc/searcher/plugin"
+	"yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

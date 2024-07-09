@@ -1,12 +1,12 @@
 package plugin
 
 import (
-	"av-capture/model"
-	"av-capture/number"
 	"context"
 	"fmt"
 	"net/http"
 	"sort"
+	"yamdc/model"
+	"yamdc/number"
 )
 
 type PluginContext struct {

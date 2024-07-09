@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"av-capture/model"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"yamdc/model"
 
 	"github.com/stretchr/testify/assert"
 )

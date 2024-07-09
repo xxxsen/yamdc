@@ -1,7 +1,6 @@
 package image
 
 import (
-	"av-capture/face"
 	"bytes"
 	"fmt"
 	"image"
@@ -10,6 +9,7 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"math"
+	"yamdc/face"
 
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"

@@ -1,9 +1,9 @@
 package decoder
 
 import (
-	"av-capture/model"
 	"bytes"
 	"strings"
+	"yamdc/model"
 
 	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html"

@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"av-capture/model"
-	"av-capture/translater"
 	"context"
 	"fmt"
+	"yamdc/model"
+	"yamdc/translater"
 )
 
 type plotTranslaterHandler struct {

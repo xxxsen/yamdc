@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"av-capture/model"
 	"context"
 	"fmt"
 	"sort"
+	"yamdc/model"
 )
 
 type IHandler interface {
