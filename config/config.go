@@ -34,6 +34,7 @@ func defaultConfig() *Config {
 			"jav321",
 			"caribpr",
 			"fc2",
+			"freejavbt",
 			"avsox",
 		},
 		Handlers: []string{
