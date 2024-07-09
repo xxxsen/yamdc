@@ -9,11 +9,12 @@ import (
 	"yamdc/capture"
 	"yamdc/config"
 	"yamdc/face"
+	"yamdc/ffmpeg"
 	"yamdc/processor"
 	"yamdc/processor/handler"
 	"yamdc/searcher"
 	"yamdc/store"
-	"yamdc/translater"
+	"yamdc/translator"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -33,6 +34,19 @@ func main() {
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 
+	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
+		logkit.Fatal("init store failed", zap.Error(err))
+	}
+	if err := precheckDir(c); err != nil {
+		logkit.Fatal("precheck dir failed", zap.Error(err))
+	}
+	if err := translator.Init(); err != nil {
+		logkit.Error("init translater failed", zap.Error(err))
+	}
+	if err := face.Init(filepath.Join(c.DataDir, "models")); err != nil {
+		logkit.Error("init face recognizer failed", zap.Error(err))
+	}
+
 	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
 	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
@@ -42,19 +56,12 @@ func main() {
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
 	logkit.Info("current switch options", zap.Any("options", c.SwitchConfig))
+	logkit.Info("check current feature list")
+	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
+	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
+	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
+	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
 
-	if err := precheckDir(c); err != nil {
-		logkit.Fatal("precheck dir failed", zap.Error(err))
-	}
-	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
-		logkit.Fatal("init store failed", zap.Error(err))
-	}
-	if err := translater.Init(); err != nil {
-		logkit.Fatal("init translater failed", zap.Error(err))
-	}
-	if err := face.Init(filepath.Join(c.DataDir, "models")); err != nil {
-		logkit.Fatal("init face recognizer failed", zap.Error(err))
-	}
 	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))

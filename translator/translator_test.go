@@ -1,4 +1,4 @@
-package translater
+package translator
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 func TestTranslate(t *testing.T) {
 	err := Init()
 	assert.NoError(t, err)
-	res, err := GetDefault().Translate("hello world", "auto", "zh")
+	res, err := Translate("hello world", "auto", "zh")
 	assert.NoError(t, err)
 	t.Logf("result:%s", res)
 }

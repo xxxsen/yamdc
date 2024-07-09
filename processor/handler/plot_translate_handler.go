@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"yamdc/model"
-	"yamdc/translater"
+	"yamdc/translator"
 )
 
 type plotTranslaterHandler struct {
@@ -18,7 +18,10 @@ func (p *plotTranslaterHandler) Handle(ctx context.Context, fc *model.FileContex
 	if len(fc.Meta.Plot) == 0 {
 		return nil
 	}
-	res, err := translater.GetDefault().Translate(fc.Meta.Plot, "auto", "zh")
+	if !translator.IsTranslatorEnabled() {
+		return nil
+	}
+	res, err := translator.Translate(fc.Meta.Plot, "auto", "zh")
 	if err != nil {
 		return fmt.Errorf("translate plot failed, err:%w", err)
 	}

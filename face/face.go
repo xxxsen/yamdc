@@ -21,6 +21,10 @@ func Init(modelDir string) error {
 	return nil
 }
 
+func IsFaceRecognizeEnabled() bool {
+	return recInst != nil
+}
+
 func getRecInst() (*face.Recognizer, bool) {
 	if recInst == nil {
 		return nil, false
