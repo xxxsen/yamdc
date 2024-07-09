@@ -37,7 +37,6 @@ func MustNewDefaultSearcher(name string, plg plugin.IPlugin) ISearcher {
 func defaultInvoker() plugin.HTTPInvoker {
 	client := req.NewClient()
 	client.ImpersonateChrome()
-	client.SetRedirectPolicy(req.SameDomainRedirectPolicy())
 	return func(ctx *plugin.PluginContext, req *http.Request) (*http.Response, error) {
 		return client.RoundTrip(req)
 	}
