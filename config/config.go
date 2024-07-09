@@ -8,16 +8,17 @@ import (
 )
 
 type Config struct {
-	ScanDir       string                 `json:"scan_dir"`
-	SaveDir       string                 `json:"save_dir"`
-	DataDir       string                 `json:"data_dir"`
-	Naming        string                 `json:"naming"`
-	PluginConfig  map[string]interface{} `json:"plugin_config"`
-	HandlerConfig map[string]interface{} `json:"handler_config"`
-	Plugins       []string               `json:"plugins"`
-	Handlers      []string               `json:"handlers"`
-	LogConfig     logger.LogConfig       `json:"log_config"`
-	SwitchConfig  SwitchConfig           `json:"switch_config"`
+	ScanDir        string                 `json:"scan_dir"`
+	SaveDir        string                 `json:"save_dir"`
+	DataDir        string                 `json:"data_dir"`
+	Naming         string                 `json:"naming"`
+	PluginConfig   map[string]interface{} `json:"plugin_config"`
+	HandlerConfig  map[string]interface{} `json:"handler_config"`
+	Plugins        []string               `json:"plugins"`
+	Handlers       []string               `json:"handlers"`
+	ExtraMediaExts []string               `json:"extra_media_exts"`
+	LogConfig      logger.LogConfig       `json:"log_config"`
+	SwitchConfig   SwitchConfig           `json:"switch_config"`
 }
 
 type SwitchConfig struct {

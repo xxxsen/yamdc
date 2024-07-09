@@ -27,10 +27,13 @@ const (
 	defaultExtraFanartDir = "extrafanart"
 )
 
+var defaultMediaSuffix = []string{".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi", ".mkv", ".rmvb", ".ts", ".mov", ".rm"}
+
 type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
 
 type Capture struct {
-	c *config
+	c      *config
+	extMap map[string]struct{}
 }
 
 func New(opts ...Option) (*Capture, error) {
@@ -50,7 +53,7 @@ func New(opts ...Option) (*Capture, error) {
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
 	}
-	return &Capture{c: c}, nil
+	return &Capture{c: c, extMap: utils.StringListToSet(utils.StringListToLower(append(c.ExtraMediaExtList, defaultMediaSuffix...)))}, nil
 }
 
 func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
@@ -75,6 +78,14 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 	return nil
 }
 
+func (c *Capture) isMediaFile(f string) bool {
+	ext := strings.ToLower(filepath.Ext(f))
+	if _, ok := c.extMap[ext]; ok {
+		return true
+	}
+	return false
+}
+
 func (c *Capture) readFileList() ([]*model.FileContext, error) {
 	fcs := make([]*model.FileContext, 0, 20)
 	err := filepath.Walk(c.c.ScanDir, func(path string, info fs.FileInfo, err error) error {
@@ -84,7 +95,7 @@ func (c *Capture) readFileList() ([]*model.FileContext, error) {
 		if info.IsDir() {
 			return nil
 		}
-		if !utils.IsVideoFile(path) {
+		if !c.isMediaFile(path) {
 			return nil
 		}
 		fc := &model.FileContext{FullFilePath: path}

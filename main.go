@@ -91,6 +91,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IPro
 		capture.WithSeacher(searcher.NewGroup(ss)),
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithEnableLinkMode(c.SwitchConfig.EnableLinkMode),
+		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 	)
 	return capture.New(opts...)
 }

@@ -18,12 +18,13 @@ const (
 )
 
 type config struct {
-	ScanDir   string
-	Searcher  searcher.ISearcher
-	Processor processor.IProcessor
-	SaveDir   string
-	Naming    string
-	LinkMode  bool
+	ScanDir           string
+	Searcher          searcher.ISearcher
+	Processor         processor.IProcessor
+	SaveDir           string
+	Naming            string
+	ExtraMediaExtList []string
+	LinkMode          bool
 }
 
 type Option func(c *config)
@@ -61,5 +62,11 @@ func WithNamingRule(r string) Option {
 func WithEnableLinkMode(v bool) Option {
 	return func(c *config) {
 		c.LinkMode = v
+	}
+}
+
+func WithExtraMediaExtList(lst []string) Option {
+	return func(c *config) {
+		c.ExtraMediaExtList = lst
 	}
 }
