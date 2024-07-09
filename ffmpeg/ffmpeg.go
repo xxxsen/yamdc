@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+var defaultFFMpeg *FFMpeg
+
+func init() {
+	inst, err := NewFFMpeg()
+	if err != nil {
+		return
+	}
+	defaultFFMpeg = inst
+}
+
+func IsFFMpegEnabled() bool {
+	return defaultFFMpeg != nil
+}
+
 type FFMpeg struct {
 	cmd string
 }
@@ -39,4 +53,8 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 		return nil, fmt.Errorf("unable to read converted data, err:%w", err)
 	}
 	return data, nil
+}
+
+func ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte) ([]byte, error) {
+	return defaultFFMpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
 }

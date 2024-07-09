@@ -8,6 +8,20 @@ import (
 	"strings"
 )
 
+var defaultFFProbe *FFProbe
+
+func init() {
+	inst, err := NewFFProbe()
+	if err != nil {
+		return
+	}
+	defaultFFProbe = inst
+}
+
+func IsFFProbeEnabled() bool {
+	return defaultFFProbe != nil
+}
+
 type FFProbe struct {
 	cmd string
 }
@@ -32,4 +46,8 @@ func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error
 		return 0, fmt.Errorf("parse video duration failed, duration:%s, err:%w", durationStr, err)
 	}
 	return duration, nil
+}
+
+func ReadDuration(ctx context.Context, file string) (float64, error) {
+	return defaultFFProbe.ReadDuration(ctx, file)
 }

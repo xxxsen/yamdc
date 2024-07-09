@@ -10,17 +10,16 @@ import (
 )
 
 type durationFixer struct {
-	ffprobeInst *ffmpeg.FFProbe
 }
 
 func (h *durationFixer) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Meta.Duration > 0 {
 		return nil
 	}
-	if h.ffprobeInst == nil {
+	if !ffmpeg.IsFFProbeEnabled() {
 		return nil
 	}
-	duration, err := h.ffprobeInst.ReadDuration(ctx, fc.FullFilePath)
+	duration, err := ffmpeg.ReadDuration(ctx, fc.FullFilePath)
 	if err != nil {
 		return err
 	}
@@ -29,17 +28,6 @@ func (h *durationFixer) Handle(ctx context.Context, fc *model.FileContext) error
 	return nil
 }
 
-func createDurationFixerHandler(args interface{}) (IHandler, error) {
-	ffprobeInst, err := ffmpeg.NewFFProbe()
-	if err != nil {
-		logutil.GetLogger(context.Background()).Error("unable to create ffprobe instance, will not able to fix invalid video duration", zap.Error(err))
-		ffprobeInst = nil
-	}
-	return &durationFixer{
-		ffprobeInst: ffprobeInst,
-	}, nil
-}
-
 func init() {
-	Register(HDurationFixer, createDurationFixerHandler)
+	Register(HDurationFixer, HandlerToCreator(&durationFixer{}))
 }
