@@ -33,12 +33,11 @@ func main() {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
-
-	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
-		logkit.Fatal("init store failed", zap.Error(err))
-	}
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
+	}
+	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
+		logkit.Fatal("init store failed", zap.Error(err))
 	}
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
