@@ -12,8 +12,11 @@ os="$1"
 arch="$2"
 filename="$3"
 output="${filename}-${os}-${arch}"
+bname="$output"
 if [ "$os" == "windows" ]; then 
-    output="$output.exe"
+    bname="$bname.exe"
 fi 
 
-CGO_LDFLAGS="-static" CGO_ENABLED=1 GOOS=${os} GOARCH=${arch} go build -a -tags netgo -ldflags '-w' -o ${output} ./
+CGO_LDFLAGS="-static" CGO_ENABLED=1 GOOS=${os} GOARCH=${arch} go build -a -tags netgo -ldflags '-w' -o ${bname} ./
+tar -czf "$output.tar.gz" "$bname"
+rm $bname
