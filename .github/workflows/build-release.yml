@@ -24,7 +24,7 @@ jobs:
 
     - name: Build
       run: |
-        ./scripts/install_deps.sh
+        ./scripts/install_deps.sh ${{matrix.go-os}}
         ./scripts/build_and_archive.sh ${{matrix.go-os}} ${{matrix.go-arch}} ${{secrets.DOCKER_IMAGE_NAME}}
 
     - name: Release
