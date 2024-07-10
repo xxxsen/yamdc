@@ -24,8 +24,8 @@ jobs:
 
     - name: Build
       run: |
-        ./install_deps.sh
-        ./build_and_archive.sh ${{matrix.go-os}} ${{matrix.go-arch}} ${{secrets.DOCKER_IMAGE_NAME}}
+        ./scripts/install_deps.sh
+        ./scripts/build_and_archive.sh ${{matrix.go-os}} ${{matrix.go-arch}} ${{secrets.DOCKER_IMAGE_NAME}}
 
     - name: Release
       uses: softprops/action-gh-release@v1
