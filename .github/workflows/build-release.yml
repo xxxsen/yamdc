@@ -24,7 +24,7 @@ jobs:
 
     - name: Build
       run: |
-        ./scripts/install_deps.sh ${{matrix.go-os}}
+        sudo apt-get install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg-turbo8-dev gfortran
         ./scripts/build_archive.sh ${{matrix.go-os}} ${{matrix.go-arch}} ${{secrets.DOCKER_IMAGE_NAME}}
 
     - name: Release
