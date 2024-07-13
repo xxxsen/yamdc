@@ -10,4 +10,5 @@ const (
 	SSAirav     = "airav"
 	SSFreeJavBt = "freejavbt"
 	SSJavDB     = "javdb"
+	SS18AV      = "18av"
 )

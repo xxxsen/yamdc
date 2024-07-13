@@ -35,6 +35,7 @@ func defaultConfig() *Config {
 			"jav321",
 			"caribpr",
 			"fc2",
+			"18av",
 			"freejavbt",
 			"avsox",
 		},

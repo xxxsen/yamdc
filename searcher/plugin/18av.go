@@ -10,6 +10,11 @@ import (
 )
 
 type av18 struct {
+	DefaultPlugin
+}
+
+func (p *av18) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
+	return number.IsFc2(n.Number()), nil
 }
 
 func (p *av18) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
@@ -53,6 +58,10 @@ func (p *av18) coverParser(in string) string {
 	return strings.ReplaceAll(in, " ", "")
 }
 
+func (p *av18) plotParser(in string) string {
+	return strings.TrimSpace(strings.TrimLeft(in, "简介："))
+}
+
 func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="px-0 flex-columns"]/div[@class="number"]/text()`,
@@ -72,6 +81,7 @@ func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 	}
 	meta, err := dec.DecodeHTML(data,
 		decoder.WithCoverParser(p.coverParser),
+		decoder.WithPlotParser(p.plotParser),
 		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
 		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
 	)
@@ -82,4 +92,8 @@ func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 		return nil, false, nil
 	}
 	return meta, true, nil
+}
+
+func init() {
+	Register(SS18AV, PluginToCreator(&av18{}))
 }
