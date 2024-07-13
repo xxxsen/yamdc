@@ -9,7 +9,6 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
-	"yamdc/searcher/utils"
 )
 
 type jav321 struct {
@@ -71,14 +70,8 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	}
 	rs, err := dec.DecodeHTML(data,
 		decoder.WithDefaultStringProcessor(p.defaultStringProcessor),
-		decoder.WithReleaseDateParser(func(v string) int64 {
-			rs, _ := utils.ToTimestamp(v)
-			return rs
-		}),
-		decoder.WithDurationParser(func(v string) int64 {
-			rs, _ := utils.ToDuration(v)
-			return rs
-		}),
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

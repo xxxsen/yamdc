@@ -1,13 +1,11 @@
 package plugin
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
-	"yamdc/searcher/utils"
 )
 
 type javhoo struct {
@@ -17,20 +15,6 @@ type javhoo struct {
 func (p *javhoo) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number.Number())
 	return http.NewRequest(http.MethodGet, uri, nil)
-}
-
-func (p *javhoo) onParseDuration(_ context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		rs, _ := utils.ToDuration(v)
-		return rs
-	}
-}
-
-func (p *javhoo) onParseReleaseDate(_ context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		rs, _ := utils.ToTimestamp(v)
-		return rs
-	}
 }
 
 func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
@@ -51,8 +35,8 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: `//div[@id="sample-box"]/div/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(p.onParseReleaseDate(ctx.GetContext())),
-		decoder.WithDurationParser(p.onParseDuration(ctx.GetContext())),
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

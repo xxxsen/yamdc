@@ -121,8 +121,8 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(p.doParseReleaseDate),
-		decoder.WithDurationParser(p.doParseDuration),
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
 		decoder.WithDefaultStringProcessor(strings.TrimSpace),
 	)
 	if err != nil {
@@ -132,16 +132,6 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		return nil, false, nil
 	}
 	return meta, true, nil
-}
-
-func (p *avsox) doParseDuration(v string) int64 {
-	rs, _ := utils.ToDuration(v)
-	return rs
-}
-
-func (p *avsox) doParseReleaseDate(v string) int64 {
-	rs, _ := utils.ToTimestamp(v)
-	return rs
 }
 
 func init() {

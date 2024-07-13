@@ -5,7 +5,6 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
-	"yamdc/searcher/utils"
 )
 
 type javbus struct {
@@ -52,14 +51,8 @@ func (p *javbus) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(func(v string) int64 {
-			rs, _ := utils.ToTimestamp(v)
-			return rs
-		}),
-		decoder.WithDurationParser(func(v string) int64 {
-			rs, _ := utils.ToDuration(v)
-			return rs
-		}),
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

@@ -75,7 +75,10 @@ func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		PosterExpr:          "",
 		SampleImageListExpr: `//div[@class="tile-images preview-images"]/a[@class="tile-item"]/@href`,
 	}
-	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(p.parseReleaseDate), decoder.WithDurationParser(p.parseDuration))
+	meta, err := dec.DecodeHTML(data,
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
+	)
 	if err != nil {
 		return nil, false, err
 	}

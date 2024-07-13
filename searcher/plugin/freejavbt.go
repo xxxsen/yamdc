@@ -5,7 +5,6 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
-	"yamdc/searcher/utils"
 )
 
 type freejavbt struct {
@@ -16,15 +15,6 @@ func (p *freejavbt) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number)
 	uri := "https://freejavbt.com/zh/" + number.Number()
 	ctx.SetKey("number", number.Number())
 	return http.NewRequest(http.MethodGet, uri, nil)
-}
-
-func (p *freejavbt) parseDuration(v string) int64 {
-	rs, _ := utils.ToDuration(v)
-	return rs
-}
-
-func (p *freejavbt) parseDate(v string) int64 {
-	return utils.ToTimestampOrDefault(v, 0)
 }
 
 func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
@@ -45,8 +35,8 @@ func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.Av
 		SampleImageListExpr: `//div[@class="preview"]/a/img/@data-src`,
 	}
 	res, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(p.parseDuration),
-		decoder.WithReleaseDateParser(p.parseDate),
+		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

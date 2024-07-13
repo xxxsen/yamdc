@@ -53,6 +53,9 @@ func HandleXPathTwoStepSearch(ctx *PluginContext, invoker HTTPInvoker, req *http
 				return nil, fmt.Errorf("result count not match, idx:%d, count:%d not match to idx:0, count:%d", i, len(xctx.Ps[i].Result), len(xctx.Ps[0].Result))
 			}
 		}
+		if len(xctx.Ps[0].Result) == 0 {
+			return nil, fmt.Errorf("no result found")
+		}
 	}
 	link, ok, err := xctx.LinkSelector(xctx.Ps)
 	if err != nil {
