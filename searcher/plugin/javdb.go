@@ -49,15 +49,6 @@ func (p *javdb) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req
 	})
 }
 
-func (p *javdb) parseDuration(in string) int64 {
-	rs, _ := utils.ToDuration(in)
-	return rs
-}
-
-func (p *javdb) parseReleaseDate(in string) int64 {
-	return utils.ToTimestampOrDefault(in, 0)
-}
-
 func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//a[@class="button is-white copy-to-clipboard"]/@data-clipboard-text`,
