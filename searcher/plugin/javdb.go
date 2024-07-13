@@ -7,10 +7,6 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/utils"
-
-	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/net/html"
 )
 
 type javdb struct {
@@ -24,46 +20,33 @@ func (p *javdb) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*h
 }
 
 func (p *javdb) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	rsp, err := invoker(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("read response failed, err:%w", err)
-	}
-	if rsp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("invalid status code:%d", rsp.StatusCode)
-	}
-	node, err := utils.ReadDataAsHTMLTree(rsp)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read rsp as node:%w", err)
-	}
-	link, ok := p.searchBestLink(ctx, ctx.GetKeyOrDefault("number", "").(string), node)
-	if !ok {
-		return nil, fmt.Errorf("unable to match best link number")
-	}
-	req, err = http.NewRequest(http.MethodGet, "https://javdb.com"+link, nil)
-	if err != nil {
-		return nil, fmt.Errorf("rebuild search result link failed, err:%w", err)
-	}
-	return invoker(ctx, req)
-}
-
-func (p *javdb) searchBestLink(ctx *PluginContext, originNumber string, node *html.Node) (string, bool) {
-	num := utils.NormalizeNumber(originNumber)
-	linklist := decoder.DecodeList(node, `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/@href`)
-	numberlist := decoder.DecodeList(node, `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/div[@class="video-title"]/strong`)
-	logutil.GetLogger(ctx.GetContext()).Debug("read link/number list succ",
-		zap.String("number", originNumber), zap.Int("link_count", len(linklist)), zap.Int("number_count", len(numberlist)))
-	if len(linklist) != len(numberlist) {
-		return "", false
-	}
-	for idx, number := range numberlist {
-		link := linklist[idx]
-		logutil.GetLogger(ctx.GetContext()).Debug("match best link succ",
-			zap.String("origin_number", originNumber), zap.String("link_number", number), zap.String("link", link))
-		if utils.NormalizeNumber(number) == num {
-			return link, true
-		}
-	}
-	return "", false
+	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
+		Ps: []*XPathPair{
+			{
+				Name:  "read-link",
+				XPath: `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/@href`,
+			},
+			{
+				Name:  "read-number",
+				XPath: `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/div[@class="video-title"]/strong`,
+			},
+		},
+		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+			linklist := ps[0].Result
+			numberlist := ps[1].Result
+			num := utils.NormalizeNumber(ctx.GetKeyOrDefault("number", "").(string))
+			for idx, number := range numberlist {
+				link := linklist[idx]
+				if utils.NormalizeNumber(number) == num {
+					return link, true, nil
+				}
+			}
+			return "", false, nil
+		},
+		ValidStatusCode:       []int{http.StatusOK},
+		CheckResultCountMatch: true,
+		LinkPrefix:            "https://javdb.com",
+	})
 }
 
 func (p *javdb) parseDuration(in string) int64 {
