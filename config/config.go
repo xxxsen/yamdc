@@ -31,6 +31,7 @@ func defaultConfig() *Config {
 			"javbus",
 			"javhoo",
 			"airav",
+			"javdb",
 			"jav321",
 			"caribpr",
 			"fc2",

@@ -100,7 +100,7 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = "FC2-" + ctx.GetKeyOrDefault("number", "").(string)
+	meta.Number = "FC2-PPV-" + ctx.GetKeyOrDefault("number", "").(string)
 	return meta, true, nil
 }
 

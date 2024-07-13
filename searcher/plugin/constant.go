@@ -9,4 +9,5 @@ const (
 	SSAvsox     = "avsox"
 	SSAirav     = "airav"
 	SSFreeJavBt = "freejavbt"
+	SSJavDB     = "javdb"
 )
