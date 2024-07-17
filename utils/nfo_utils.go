@@ -7,12 +7,19 @@ import (
 	"yamdc/nfo"
 )
 
+func buildDataWithTranslateInfo(origin string, translated string) string {
+	if len(translated) == 0 {
+		return origin
+	}
+	return fmt.Sprintf("%s [翻译:%s]", origin, translated)
+}
+
 func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
-		Plot:          m.Plot,
+		Plot:          buildDataWithTranslateInfo(m.Plot, m.ExtInfo.TranslateInfo.Data.TranslatedPlot),
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
-		Title:         m.Title,
+		Title:         buildDataWithTranslateInfo(m.Title, m.ExtInfo.TranslateInfo.Data.TranslatedTitle),
 		OriginalTitle: m.Title,
 		SortTitle:     m.Title,
 		Set:           m.Series,
@@ -35,9 +42,6 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 			ScrapeSource: m.ExtInfo.ScrapeSource,
 			ScrapeDate:   time.UnixMilli(m.ExtInfo.ScrapeDateTs).Format(time.DateOnly),
 		},
-	}
-	if len(m.ExtInfo.TranslatedPlot) != 0 { //jellyfin中不认<br />, <p> 等html标签, 直接把翻译数据填充到后面好了。
-		mv.Plot = m.Plot + fmt.Sprintf("[翻译:%s]", m.ExtInfo.TranslatedPlot)
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name
