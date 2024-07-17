@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/plugin"
@@ -145,6 +146,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeSource = p.name
+	meta.ExtInfo.ScrapeDateTs = time.Now().UnixMilli()
 	return meta, true, nil
 }
 

@@ -31,7 +31,10 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Director:      "",
 		Label:         m.Label,
 		Thumb:         "",
-		ScrapeSource:  m.ExtInfo.ScrapeSource,
+		ScrapeInfo: nfo.ScrapeInfo{
+			ScrapeSource: m.ExtInfo.ScrapeSource,
+			ScrapeDate:   time.UnixMilli(m.ExtInfo.ScrapeDateTs).Format(time.DateOnly),
+		},
 	}
 	if len(m.ExtInfo.TranslatedPlot) != 0 { //jellyfin中不认<br />, <p> 等html标签, 直接把翻译数据填充到后面好了。
 		mv.Plot = m.Plot + fmt.Sprintf("[翻译:%s]", m.ExtInfo.TranslatedPlot)

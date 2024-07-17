@@ -22,6 +22,7 @@ type AvMeta struct {
 
 type ExtInfo struct {
 	ScrapeSource   string `json:"scrape_source"`
+	ScrapeDateTs   int64  `json:"scrape_date_ts"`
 	TranslatedPlot string `json:"translated_plot"`
 }
 
