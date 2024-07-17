@@ -7,19 +7,19 @@ import (
 	"yamdc/nfo"
 )
 
-func buildDataWithTranslateInfo(origin string, translated string) string {
-	if len(translated) == 0 {
+func buildDataWithSingleTranslateItem(origin string, item *model.SingleTranslateItem) string {
+	if !item.Enable || len(item.TranslatedText) == 0 {
 		return origin
 	}
-	return fmt.Sprintf("%s [翻译:%s]", origin, translated)
+	return fmt.Sprintf("%s [翻译:%s]", origin, item.TranslatedText)
 }
 
 func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
-		Plot:          buildDataWithTranslateInfo(m.Plot, m.ExtInfo.TranslateInfo.Data.TranslatedPlot),
+		Plot:          buildDataWithSingleTranslateItem(m.Plot, &m.ExtInfo.TranslateInfo.Plot),
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
-		Title:         buildDataWithTranslateInfo(m.Title, m.ExtInfo.TranslateInfo.Data.TranslatedTitle),
+		Title:         buildDataWithSingleTranslateItem(m.Title, &m.ExtInfo.TranslateInfo.Title),
 		OriginalTitle: m.Title,
 		SortTitle:     m.Title,
 		Set:           m.Series,

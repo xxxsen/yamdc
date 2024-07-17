@@ -20,19 +20,14 @@ type AvMeta struct {
 	ExtInfo      ExtInfo  `json:"ext_info"`
 }
 
-type TranslateOption struct {
-	EnableTitleTranslate bool `json:"enable_title_translate"`
-	EnablePlotTranslate  bool `json:"enable_plot_translate"`
-}
-
-type TranslateData struct {
-	TranslatedTitle string `json:"translated_title"`
-	TranslatedPlot  string `json:"translated_plot"`
+type SingleTranslateItem struct {
+	Enable         bool   `json:"enable"`
+	TranslatedText string `json:"translated_text"`
 }
 
 type TranslateInfo struct {
-	Option TranslateOption
-	Data   TranslateData
+	Title SingleTranslateItem `json:"title"`
+	Plot  SingleTranslateItem `json:"plot"`
 }
 
 type ExtInfo struct {
