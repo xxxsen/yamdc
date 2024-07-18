@@ -19,7 +19,7 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		ID:            m.Number,
 		Plot:          buildDataWithSingleTranslateItem(m.Plot, &m.ExtInfo.TranslateInfo.Plot),
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
-		Title:         buildDataWithSingleTranslateItem(m.Title, &m.ExtInfo.TranslateInfo.Title),
+		Title:         m.Title,
 		OriginalTitle: m.Title,
 		SortTitle:     m.Title,
 		Set:           m.Series,
@@ -42,6 +42,9 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 			Source: m.ExtInfo.ScrapeInfo.Source,
 			Date:   time.UnixMilli(m.ExtInfo.ScrapeInfo.DateTs).Format(time.DateOnly),
 		},
+	}
+	if m.ExtInfo.TranslateInfo.Title.Enable && len(m.ExtInfo.TranslateInfo.Title.TranslatedText) > 0 {
+		mv.Title = m.ExtInfo.TranslateInfo.Title.TranslatedText
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name
