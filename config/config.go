@@ -45,7 +45,7 @@ func defaultConfig() *Config {
 			"watermark_maker",
 			"tag_padder",
 			"duration_fixer",
-			"plot_translater",
+			"translater",
 		},
 	}
 }

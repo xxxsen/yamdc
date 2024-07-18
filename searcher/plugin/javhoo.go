@@ -6,6 +6,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	putils "yamdc/searcher/utils"
 )
 
 type javhoo struct {
@@ -44,6 +45,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
+	putils.EnableDataTranslate(meta)
 	return meta, true, nil
 }
 

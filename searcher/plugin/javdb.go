@@ -76,6 +76,7 @@ func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
+	utils.EnableDataTranslate(meta)
 	return meta, true, nil
 }
 

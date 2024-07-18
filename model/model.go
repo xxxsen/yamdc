@@ -20,9 +20,24 @@ type AvMeta struct {
 	ExtInfo      ExtInfo  `json:"ext_info"`
 }
 
+type SingleTranslateItem struct {
+	Enable         bool   `json:"enable"`
+	TranslatedText string `json:"translated_text"`
+}
+
+type TranslateInfo struct {
+	Title SingleTranslateItem `json:"title"`
+	Plot  SingleTranslateItem `json:"plot"`
+}
+
+type ScrapeInfo struct {
+	Source string `json:"source"`
+	DateTs int64  `json:"date_ts"`
+}
+
 type ExtInfo struct {
-	ScrapeSource   string `json:"scrape_source"`
-	TranslatedPlot string `json:"translated_plot"`
+	ScrapeInfo    ScrapeInfo    `json:"scrape_info"`
+	TranslateInfo TranslateInfo `json:"translated_info"`
 }
 
 type File struct {

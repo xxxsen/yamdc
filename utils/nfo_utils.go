@@ -7,10 +7,17 @@ import (
 	"yamdc/nfo"
 )
 
+func buildDataWithSingleTranslateItem(origin string, item *model.SingleTranslateItem) string {
+	if !item.Enable || len(item.TranslatedText) == 0 {
+		return origin
+	}
+	return fmt.Sprintf("%s [翻译:%s]", origin, item.TranslatedText)
+}
+
 func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
-		Plot:          m.Plot,
+		Plot:          buildDataWithSingleTranslateItem(m.Plot, &m.ExtInfo.TranslateInfo.Plot),
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
 		Title:         m.Title,
 		OriginalTitle: m.Title,
@@ -31,10 +38,13 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Director:      "",
 		Label:         m.Label,
 		Thumb:         "",
-		ScrapeSource:  m.ExtInfo.ScrapeSource,
+		ScrapeInfo: nfo.ScrapeInfo{
+			Source: m.ExtInfo.ScrapeInfo.Source,
+			Date:   time.UnixMilli(m.ExtInfo.ScrapeInfo.DateTs).Format(time.DateOnly),
+		},
 	}
-	if len(m.ExtInfo.TranslatedPlot) != 0 { //jellyfin中不认<br />, <p> 等html标签, 直接把翻译数据填充到后面好了。
-		mv.Plot = m.Plot + fmt.Sprintf("[翻译:%s]", m.ExtInfo.TranslatedPlot)
+	if m.ExtInfo.TranslateInfo.Title.Enable && len(m.ExtInfo.TranslateInfo.Title.TranslatedText) > 0 {
+		mv.Title = m.ExtInfo.TranslateInfo.Title.TranslatedText
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name

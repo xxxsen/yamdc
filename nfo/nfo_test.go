@@ -2,6 +2,7 @@ package nfo
 
 import (
 	"bytes"
+	"encoding/xml"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 
 func TestReadWrite(t *testing.T) {
 	m := &Movie{
+		XMLName:       xml.Name{},
 		Plot:          "hello world, this is a test",
 		Dateadded:     "2022-01-02",
 		Title:         "hello world",
@@ -28,19 +30,17 @@ func TestReadWrite(t *testing.T) {
 		Art:           Art{Poster: "art_poster.jpg", Fanart: []string{"art_fanart_1", "art_fanart_2", "art_fanart_3"}},
 		Mpaa:          "JP-18+",
 		Director:      "hello_director",
-		Actors: []Actor{
-			{
-				Name:  "act_a",
-				Role:  "main",
-				Thumb: "act_a.jpg",
-			},
+		Actors:        []Actor{{Name: "act_a", Role: "main", Thumb: "act_a.jpg"}},
+		Poster:        "poster.jpg",
+		Thumb:         "thumb.jpg",
+		Label:         "hello_label",
+		ID:            "2022-01111",
+		Cover:         "cover.jpg",
+		Fanart:        "fanart.jpg",
+		ScrapeInfo: ScrapeInfo{
+			Source: "abc",
+			Date:   "2021-03-05",
 		},
-		Poster: "poster.jpg",
-		Thumb:  "thumb.jpg",
-		Label:  "hello_label",
-		ID:     "2022-01111",
-		Cover:  "cover.jpg",
-		Fanart: "fanart.jpg",
 	}
 	buf := bytes.NewBuffer(nil)
 	err := WriteMovie(buf, m)
