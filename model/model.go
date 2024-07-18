@@ -30,9 +30,13 @@ type TranslateInfo struct {
 	Plot  SingleTranslateItem `json:"plot"`
 }
 
+type ScrapeInfo struct {
+	Source string `json:"source"`
+	DateTs int64  `json:"date_ts"`
+}
+
 type ExtInfo struct {
-	ScrapeSource  string        `json:"scrape_source"`
-	ScrapeDateTs  int64         `json:"scrape_date_ts"`
+	ScrapeInfo    ScrapeInfo    `json:"scrape_info"`
 	TranslateInfo TranslateInfo `json:"translated_info"`
 }
 

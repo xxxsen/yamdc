@@ -145,8 +145,8 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		logutil.GetLogger(ctx).Error("verify meta not pass, treat as not found", zap.Error(err), zap.String("plugin", p.name))
 		return nil, false, nil
 	}
-	meta.ExtInfo.ScrapeSource = p.name
-	meta.ExtInfo.ScrapeDateTs = time.Now().UnixMilli()
+	meta.ExtInfo.ScrapeInfo.Source = p.name
+	meta.ExtInfo.ScrapeInfo.DateTs = time.Now().UnixMilli()
 	return meta, true, nil
 }
 

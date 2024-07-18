@@ -5,6 +5,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	putils "yamdc/searcher/utils"
 )
 
 type freejavbt struct {
@@ -42,6 +43,7 @@ func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.Av
 		return nil, false, err
 	}
 	res.Number = ctx.GetKeyOrDefault("number", "").(string)
+	putils.EnableDataTranslate(res)
 	return res, true, nil
 }
 

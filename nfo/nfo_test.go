@@ -38,8 +38,8 @@ func TestReadWrite(t *testing.T) {
 		Cover:         "cover.jpg",
 		Fanart:        "fanart.jpg",
 		ScrapeInfo: ScrapeInfo{
-			ScrapeSource: "abc",
-			ScrapeDate:   "2021-03-05",
+			Source: "abc",
+			Date:   "2021-03-05",
 		},
 	}
 	buf := bytes.NewBuffer(nil)

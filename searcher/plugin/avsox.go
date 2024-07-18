@@ -8,6 +8,7 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/utils"
+	putils "yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -131,6 +132,7 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
+	putils.EnableDataTranslate(meta)
 	return meta, true, nil
 }
 

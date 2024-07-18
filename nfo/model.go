@@ -34,8 +34,8 @@ type Movie struct {
 }
 
 type ScrapeInfo struct {
-	ScrapeSource string `xml:"scrape_source"`
-	ScrapeDate   string `xml:"scrape_date"`
+	Source string `xml:"source"`
+	Date   string `xml:"date"`
 }
 
 type Actor struct {

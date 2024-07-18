@@ -11,6 +11,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	putils "yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -101,6 +102,7 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 		return nil, false, err
 	}
 	meta.Number = "FC2-PPV-" + ctx.GetKeyOrDefault("number", "").(string)
+	putils.EnableDataTranslate(meta)
 	return meta, true, nil
 }
 

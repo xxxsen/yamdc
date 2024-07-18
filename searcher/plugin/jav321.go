@@ -9,6 +9,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	putils "yamdc/searcher/utils"
 )
 
 type jav321 struct {
@@ -76,6 +77,7 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	if err != nil {
 		return nil, false, err
 	}
+	putils.EnableDataTranslate(rs)
 	return rs, true, nil
 }
 

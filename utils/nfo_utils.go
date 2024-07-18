@@ -39,8 +39,8 @@ func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
 		Label:         m.Label,
 		Thumb:         "",
 		ScrapeInfo: nfo.ScrapeInfo{
-			ScrapeSource: m.ExtInfo.ScrapeSource,
-			ScrapeDate:   time.UnixMilli(m.ExtInfo.ScrapeDateTs).Format(time.DateOnly),
+			Source: m.ExtInfo.ScrapeInfo.Source,
+			Date:   time.UnixMilli(m.ExtInfo.ScrapeInfo.DateTs).Format(time.DateOnly),
 		},
 	}
 	if m.Poster != nil {

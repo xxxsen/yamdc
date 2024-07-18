@@ -10,6 +10,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	putils "yamdc/searcher/utils"
 	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -80,6 +81,7 @@ func (p *caribpr) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMe
 	}
 	meta.Number = ctx.GetKeyOrDefault("number", "").(string)
 	meta.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", meta.Number)
+	putils.EnableDataTranslate(meta)
 	return meta, true, nil
 }
 
