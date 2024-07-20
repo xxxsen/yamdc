@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"yamdc/client"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/plugin"
@@ -15,7 +16,6 @@ import (
 	"yamdc/store"
 	"yamdc/useragent"
 
-	"github.com/imroc/req/v3"
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
@@ -36,10 +36,9 @@ func MustNewDefaultSearcher(name string, plg plugin.IPlugin) ISearcher {
 }
 
 func defaultInvoker() plugin.HTTPInvoker {
-	client := req.NewClient()
-	client.ImpersonateChrome()
+	basicClient := client.NewClient()
 	return func(ctx *plugin.PluginContext, req *http.Request) (*http.Response, error) {
-		return client.RoundTrip(req)
+		return basicClient.Do(req)
 	}
 }
 
