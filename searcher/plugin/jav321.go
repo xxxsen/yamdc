@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,24 +28,24 @@ func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*
 	return req, nil
 }
 
-func (s *jav321) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	rsp, err := invoker(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if rsp.StatusCode != http.StatusMovedPermanently {
-		return nil, fmt.Errorf("number may not found, skip")
-	}
-	uri, err := rsp.Location()
-	if err != nil {
-		return nil, fmt.Errorf("read location failed, err:%w", err)
-	}
-	newReq, err := http.NewRequest(http.MethodGet, uri.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return invoker(ctx, newReq)
-}
+// func (s *jav321) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
+// 	rsp, err := invoker(ctx, req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if rsp.StatusCode != http.StatusMovedPermanently {
+// 		return nil, fmt.Errorf("number may not found, skip")
+// 	}
+// 	uri, err := rsp.Location()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("read location failed, err:%w", err)
+// 	}
+// 	newReq, err := http.NewRequest(http.MethodGet, uri.String(), nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return invoker(ctx, newReq)
+// }
 
 func (s *jav321) defaultStringProcessor(v string) string {
 	v = strings.Trim(v, ": \t")
