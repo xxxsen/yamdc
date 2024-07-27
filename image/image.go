@@ -62,8 +62,8 @@ func cutVerticalImage(img image.Image, center int, aspectRatio float64) (image.I
 		topHeightEnd = 0
 		bottomHeightEnd = bottomHeightEnd + offset
 	}
-	if bottomHeightEnd > img.Bounds().Dy() || topHeightEnd < 0 {
-		return nil, fmt.Errorf("invalid image")
+	if bottomHeightEnd > img.Bounds().Dy() { //fixme: Dx/aspectRatio的数值超过了图片的最大高度, 后续再看看咋优化。
+		bottomHeightEnd = img.Bounds().Dy()
 	}
 	rect := image.Rect(0, topHeightEnd, img.Bounds().Max.X, bottomHeightEnd)
 	croppedImg := img.(interface {
