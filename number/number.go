@@ -106,7 +106,7 @@ func Parse(str string) (*Number, error) {
 		return nil, fmt.Errorf("empty number str")
 	}
 	if strings.Contains(str, ".") {
-		return nil, fmt.Errorf("should not contain extname")
+		return nil, fmt.Errorf("should not contain extname, str:%s", str)
 	}
 	rs := &Number{
 		number:            "",
