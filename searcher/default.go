@@ -159,6 +159,9 @@ func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
 	if len(meta.Title) == 0 {
 		return fmt.Errorf("no title")
 	}
+	if meta.ReleaseDate == 0 {
+		return fmt.Errorf("no release_date")
+	}
 	return nil
 }
 
