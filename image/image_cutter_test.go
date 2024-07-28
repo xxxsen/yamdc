@@ -28,6 +28,9 @@ func TestCutFrame(t *testing.T) {
 		{dx: 70, dy: 120, dxCenter: 70, dyCenter: 0, rect: image.Rectangle{Min: image.Point{0, 0}, Max: image.Point{70, 100}}, gotErr: false},
 		{dx: 70, dy: 1000, dxCenter: 0, dyCenter: 0, rect: image.Rectangle{Min: image.Point{0, 0}, Max: image.Point{70, 100}}, gotErr: false},
 		{dx: 70, dy: 1000, dxCenter: 0, dyCenter: 100, rect: image.Rectangle{Min: image.Point{0, 50}, Max: image.Point{70, 150}}, gotErr: false},
+		//出错场景
+		{dx: 0, dy: 123, gotErr: true},
+		{dx: 123, dy: 0, gotErr: true},
 	}
 
 	for _, tst := range tests {

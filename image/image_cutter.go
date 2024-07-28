@@ -55,6 +55,12 @@ func determineCutFrameViaWidth(dx, dy int, dyCenter int, aspectRatio float64) (i
 
 // DetermineCutFrame 根据图片宽高及截取中心点, 计算出最终截图的边框
 func DetermineCutFrame(dx, dy int, dxCenter, dyCenter int, aspectRatio float64) (image.Rectangle, error) {
+	if dx == 0 || dy == 0 {
+		return image.Rectangle{}, fmt.Errorf("invalid image resolution")
+	}
+	if aspectRatio == 0 {
+		return image.Rectangle{}, fmt.Errorf("invalid aspectRatio")
+	}
 	if float64(dx)/float64(dy) > aspectRatio { //宽高比大于预期, 那么可以以高度来反算宽度
 		return determineCutFrameViaHeight(dx, dy, dxCenter, aspectRatio)
 	}
