@@ -72,6 +72,9 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 	if fc.Number.IsChineseSubtitle() {
 		fc.SaveFileBase += "-C"
 	}
+	if fc.Number.IsLeak() {
+		fc.SaveFileBase += "-LEAK"
+	}
 	if fc.Number.IsMultiCD() {
 		fc.SaveFileBase += "-CD" + strconv.FormatInt(int64(fc.Number.MultiCDIndex()), 10)
 	}

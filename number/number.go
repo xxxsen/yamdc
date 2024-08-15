@@ -14,6 +14,7 @@ var defaultSuffixResolverList = []suffixInfoResolveFunc{
 	resolveIsChineseSubTitle,
 	resolveCDInfo,
 	resolve4K,
+	resolveLeak,
 }
 
 var defaultNumberInfoResolverList = []numberInfoResolveFunc{
@@ -63,6 +64,14 @@ func resolveCDInfo(info *Number, str string) bool {
 	}
 	info.isMultiCD = true
 	info.multiCDIndex = int(num)
+	return true
+}
+
+func resolveLeak(info *Number, str string) bool {
+	if str != "LEAK" {
+		return false
+	}
+	info.isLeak = true
 	return true
 }
 

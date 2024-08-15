@@ -12,3 +12,6 @@ var ResIMGUncensored []byte
 
 //go:embed 4k.png
 var ResIMG4K []byte
+
+//go:embed leak.png
+var ResIMGLeak []byte

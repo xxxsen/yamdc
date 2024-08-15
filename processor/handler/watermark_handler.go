@@ -31,6 +31,9 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Number.IsChineseSubtitle() {
 		tags = append(tags, image.WMChineseSubtitle)
 	}
+	if fc.Number.IsLeak() {
+		tags = append(tags, image.WMLeak)
+	}
 	if len(tags) == 0 {
 		logutil.GetLogger(ctx).Debug("no watermark tag found, skip watermark proc")
 		return nil

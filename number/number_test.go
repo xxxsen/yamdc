@@ -66,6 +66,11 @@ func TestNumber(t *testing.T) {
 			isChineseSubtitle: true,
 			is4k:              true,
 		},
+		"abc-leak-c.mp4": {
+			number:            "ABC",
+			isLeak:            true,
+			isChineseSubtitle: true,
+		},
 	}
 	for file, info := range checkList {
 		rs, err := ParseWithFileName(file)

@@ -14,7 +14,21 @@ const (
 	WMChineseSubtitle Watermark = 1
 	WMUncensored      Watermark = 2
 	WM4K              Watermark = 3
+	WMLeak            Watermark = 4
 )
+
+var resMap = make(map[Watermark][]byte)
+
+func registerResource() {
+	resMap[WMChineseSubtitle] = resource.ResIMGSubtitle
+	resMap[WM4K] = resource.ResIMG4K
+	resMap[WMUncensored] = resource.ResIMGUncensored
+	resMap[WMLeak] = resource.ResIMGLeak
+}
+
+func init() {
+	registerResource()
+}
 
 const (
 	defaultMaxWaterMarkCount               = 4                    //最大的水印个数
@@ -57,18 +71,8 @@ func addWatermarkToImage(img image.Image, wms []image.Image) (image.Image, error
 }
 
 func selectWatermarkResource(w Watermark) ([]byte, bool) {
-	var out []byte
-	switch w {
-	case WMChineseSubtitle:
-		out = resource.ResIMGSubtitle
-	case WMUncensored:
-		out = resource.ResIMGUncensored
-	case WM4K:
-		out = resource.ResIMG4K
-	default:
-		break
-	}
-	if len(out) == 0 {
+	out, ok := resMap[w]
+	if !ok {
 		return nil, false
 	}
 	rs := make([]byte, len(out))
