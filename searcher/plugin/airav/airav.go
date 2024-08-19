@@ -19,7 +19,7 @@ type airav struct {
 }
 
 func (p *airav) OnMakeHTTPRequest(ctx *plugin.PluginContext, number *number.Number) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number.Number()), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number.GetNumber()), nil)
 	if err != nil {
 		return nil, err
 	}

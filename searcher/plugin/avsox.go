@@ -28,7 +28,7 @@ func (p *avsox) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*h
 
 func (p *avsox) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, _ *http.Request) (*http.Response, error) {
 	number := ctx.GetKeyOrDefault("number_info", nil).(*number.Number)
-	num := strings.ToUpper(number.Number())
+	num := strings.ToUpper(number.GetNumber())
 	if strings.Contains(num, "FC2") && !strings.Contains(num, "FC2-PPV") {
 		num = strings.ReplaceAll(num, "FC2", "FC2-PPV")
 	}

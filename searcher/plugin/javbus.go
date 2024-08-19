@@ -13,7 +13,7 @@ type javbus struct {
 }
 
 func (p *javbus) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	url := "https://www.javbus.com/" + number.Number()
+	url := "https://www.javbus.com/" + number.GetNumber()
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 

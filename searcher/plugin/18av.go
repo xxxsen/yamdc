@@ -14,12 +14,12 @@ type av18 struct {
 }
 
 func (p *av18) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
-	return number.IsFc2(n.Number()), nil
+	return number.IsFc2(n.GetNumber()), nil
 }
 
 func (p *av18) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number.Number())
-	ctx.SetKey("number", number.Number())
+	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number.GetNumber())
+	ctx.SetKey("number", number.GetNumber())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

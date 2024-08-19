@@ -64,7 +64,7 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
 	fc.Number = info
-	fc.SaveFileBase = fc.Number.Number()
+	fc.SaveFileBase = fc.Number.GetNumber()
 	fc.SaveFileBase = fc.Number.GenerateSuffix(fc.SaveFileBase)
 	return nil
 }
@@ -118,9 +118,9 @@ func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContex
 	logutil.GetLogger(ctx).Info("read movie file succ", zap.Int("count", len(fcs)))
 	for _, item := range fcs {
 		logutil.GetLogger(ctx).Info("file info",
-			zap.String("number", item.Number.Number()),
-			zap.Bool("multi_cd", item.Number.IsMultiCD()),
-			zap.Int("cd", item.Number.MultiCDIndex()), zap.String("file", item.FileName))
+			zap.String("number", item.Number.GetNumber()),
+			zap.Bool("multi_cd", item.Number.GetIsMultiCD()),
+			zap.Int("cd", item.Number.GetMultiCDIndex()), zap.String("file", item.FileName))
 	}
 }
 
@@ -151,7 +151,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	naming = strings.ReplaceAll(naming, NamingReleaseYear, year)
 	naming = strings.ReplaceAll(naming, NamingReleaseMonth, month)
 	naming = strings.ReplaceAll(naming, NamingActor, actor)
-	naming = strings.ReplaceAll(naming, NamingNumber, fc.Number.Number())
+	naming = strings.ReplaceAll(naming, NamingNumber, fc.Number.GetNumber())
 	if len(naming) == 0 {
 		return fmt.Errorf("invalid naming")
 	}
@@ -162,13 +162,13 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 	meta, ok, err := c.c.Searcher.Search(ctx, fc.Number)
 	if err != nil {
-		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Number.Number(), err)
+		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Number.GetNumber(), err)
 	}
 	if !ok {
 		return fmt.Errorf("search item not found")
 	}
-	if meta.Number != fc.Number.Number() {
-		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.Number()))
+	if meta.Number != fc.Number.GetNumber() {
+		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.GetNumber()))
 	}
 	fc.Meta = meta
 	return nil
@@ -236,7 +236,7 @@ func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error
 }
 
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
-	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.Number())
+	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.GetNumber())
 	steps := []struct {
 		name string
 		fn   fcProcessFunc

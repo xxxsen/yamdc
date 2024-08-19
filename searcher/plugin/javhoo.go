@@ -14,7 +14,7 @@ type javhoo struct {
 }
 
 func (p *javhoo) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number.Number())
+	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number.GetNumber())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
