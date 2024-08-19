@@ -54,7 +54,7 @@ func resolveSuffixInfo(info *Number, str string) string {
 }
 
 func resolveCDInfo(info *Number, str string) bool {
-	if !strings.HasPrefix(str, "CD") {
+	if !strings.HasPrefix(str, defaultSuffixMultiCD) {
 		return false
 	}
 	strNum := str[2:]
@@ -68,7 +68,7 @@ func resolveCDInfo(info *Number, str string) bool {
 }
 
 func resolveLeak(info *Number, str string) bool {
-	if str != "LEAK" {
+	if str != defaultSuffixLeak {
 		return false
 	}
 	info.isLeak = true
@@ -76,7 +76,7 @@ func resolveLeak(info *Number, str string) bool {
 }
 
 func resolve4K(info *Number, str string) bool {
-	if str != "4K" {
+	if str != defaultSuffix4K {
 		return false
 	}
 	info.is4k = true
@@ -84,7 +84,7 @@ func resolve4K(info *Number, str string) bool {
 }
 
 func resolveIsChineseSubTitle(info *Number, str string) bool {
-	if str != "C" {
+	if str != defaultSuffixChineseSubtitle {
 		return false
 	}
 	info.isChineseSubtitle = true

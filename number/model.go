@@ -42,16 +42,16 @@ func (n *Number) GetIsLeak() bool {
 
 func (n *Number) GenerateSuffix(base string) string {
 	if n.GetIs4K() {
-		base += "-4K"
+		base += "-" + defaultSuffix4K
 	}
 	if n.GetIsChineseSubtitle() {
-		base += "-C"
+		base += "-" + defaultSuffixChineseSubtitle
 	}
 	if n.GetIsLeak() {
-		base += "-LEAK"
+		base += "-" + defaultSuffixLeak
 	}
 	if n.GetIsMultiCD() {
-		base += "-CD" + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
+		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
 	}
 	return base
 }
