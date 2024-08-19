@@ -75,7 +75,7 @@ func TestNumber(t *testing.T) {
 	for file, info := range checkList {
 		rs, err := ParseWithFileName(file)
 		assert.NoError(t, err)
-		assert.Equal(t, info.GetNumber(), rs.GetNumber())
+		assert.Equal(t, info.GetNumberID(), rs.GetNumberID())
 		assert.Equal(t, info.GetIsChineseSubtitle(), rs.GetIsChineseSubtitle())
 		assert.Equal(t, info.GetIsMultiCD(), rs.GetIsMultiCD())
 		assert.Equal(t, info.GetMultiCDIndex(), rs.GetMultiCDIndex())

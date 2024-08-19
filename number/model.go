@@ -12,7 +12,7 @@ type Number struct {
 	isLeak            bool
 }
 
-func (n *Number) GetNumber() string {
+func (n *Number) GetNumberID() string {
 	return n.number
 }
 
@@ -54,4 +54,8 @@ func (n *Number) GenerateSuffix(base string) string {
 		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
 	}
 	return base
+}
+
+func (n *Number) GenerateFileName() string {
+	return n.GenerateSuffix(n.GetNumberID())
 }

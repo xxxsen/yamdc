@@ -24,11 +24,11 @@ type fc2 struct {
 }
 
 func (p *fc2) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
-	return number.IsFc2(n.GetNumber()), nil
+	return number.IsFc2(n.GetNumberID()), nil
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
-	number := strings.ToLower(n.GetNumber())
+	number := strings.ToLower(n.GetNumberID())
 	res := defaultFc2NumberParser.FindStringSubmatch(number)
 	if len(res) != 2 {
 		return nil, fmt.Errorf("unabe to decode number")

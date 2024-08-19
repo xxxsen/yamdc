@@ -13,8 +13,8 @@ type freejavbt struct {
 }
 
 func (p *freejavbt) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	uri := "https://freejavbt.com/zh/" + number.GetNumber()
-	ctx.SetKey("number", number.GetNumber())
+	uri := "https://freejavbt.com/zh/" + number.GetNumberID()
+	ctx.SetKey("number", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

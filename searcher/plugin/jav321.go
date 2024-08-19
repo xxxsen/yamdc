@@ -17,7 +17,7 @@ type jav321 struct {
 
 func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	data := url.Values{}
-	data.Set("sn", number.GetNumber())
+	data.Set("sn", number.GetNumberID())
 	body := data.Encode()
 	req, err := http.NewRequest(http.MethodPost, "https://www.jav321.com/search", strings.NewReader(body))
 	if err != nil {

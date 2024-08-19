@@ -14,8 +14,8 @@ type javdb struct {
 }
 
 func (p *javdb) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	ctx.SetKey("number", number.GetNumber())
-	link := fmt.Sprintf("https://javdb.com/search?q=%s&f=all", number.GetNumber())
+	ctx.SetKey("number", number.GetNumberID())
+	link := fmt.Sprintf("https://javdb.com/search?q=%s&f=all", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, link, nil)
 }
 

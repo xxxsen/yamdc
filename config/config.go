@@ -47,6 +47,10 @@ func defaultConfig() *Config {
 			"duration_fixer",
 			"translater",
 		},
+		LogConfig: logger.LogConfig{
+			Level:   "info",
+			Console: true,
+		},
 	}
 }
 
