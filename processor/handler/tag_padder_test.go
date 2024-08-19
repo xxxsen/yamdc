@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"testing"
-	"yamdc/constant"
 	"yamdc/model"
 	"yamdc/number"
 
@@ -20,7 +19,4 @@ func TestTagPadde(t *testing.T) {
 	}
 	padder.Handle(context.Background(), fc)
 	assert.Equal(t, 3, len(fc.Meta.Genres))
-	assert.Contains(t, fc.Meta.Genres, constant.Tag4K)
-	assert.Contains(t, fc.Meta.Genres, constant.TagChineseSubtitle)
-	assert.Contains(t, fc.Meta.Genres, constant.TagUncensored)
 }

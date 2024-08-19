@@ -6,3 +6,10 @@ const (
 	defaultSuffix4K              = "4K"
 	defaultSuffixMultiCD         = "CD"
 )
+
+const (
+	defaultTagUncensored      = "无码"
+	defaultTagChineseSubtitle = "中文字幕"
+	defaultTag4K              = "4K"
+	defaultTagLeak            = "无码流出"
+)

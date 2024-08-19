@@ -1,6 +1,8 @@
 package number
 
-import "strconv"
+import (
+	"strconv"
+)
 
 type Number struct {
 	number            string
@@ -54,6 +56,23 @@ func (n *Number) GenerateSuffix(base string) string {
 		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
 	}
 	return base
+}
+
+func (n *Number) GenerateTags() []string {
+	rs := make([]string, 0, 5)
+	if n.GetIsUncensorMovie() {
+		rs = append(rs, defaultTagUncensored)
+	}
+	if n.GetIsChineseSubtitle() {
+		rs = append(rs, defaultTagChineseSubtitle)
+	}
+	if n.GetIs4K() {
+		rs = append(rs, defaultTag4K)
+	}
+	if n.GetIsLeak() {
+		rs = append(rs, defaultTagLeak)
+	}
+	return rs
 }
 
 func (n *Number) GenerateFileName() string {
