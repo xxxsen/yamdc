@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-	"yamdc/image/resource"
+	"yamdc/resource"
 )
 
 type Watermark int
