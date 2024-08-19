@@ -1,5 +1,7 @@
 package number
 
+import "strconv"
+
 type Number struct {
 	number            string
 	isChineseSubtitle bool
@@ -36,4 +38,20 @@ func (n *Number) Is4K() bool {
 
 func (n *Number) IsLeak() bool {
 	return n.isLeak
+}
+
+func (n *Number) GenerateSuffix(base string) string {
+	if n.Is4K() {
+		base += "-4K"
+	}
+	if n.IsChineseSubtitle() {
+		base += "-C"
+	}
+	if n.IsLeak() {
+		base += "-LEAK"
+	}
+	if n.IsMultiCD() {
+		base += "-CD" + strconv.FormatInt(int64(n.MultiCDIndex()), 10)
+	}
+	return base
 }
