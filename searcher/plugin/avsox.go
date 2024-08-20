@@ -7,6 +7,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 	"yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -121,8 +122,8 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
 		decoder.WithDefaultStringProcessor(strings.TrimSpace),
 	)
 	if err != nil {

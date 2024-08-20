@@ -7,10 +7,15 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 )
 
 type tktube struct {
 	DefaultPlugin
+}
+
+func (p *tktube) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
+	return number.IsFc2(n.GetNumberID()), nil
 }
 
 func (p *tktube) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
@@ -66,8 +71,8 @@ func (p *tktube) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(DefaultHHMMSSDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

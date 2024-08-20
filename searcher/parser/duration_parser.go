@@ -1,7 +1,8 @@
-package plugin
+package parser
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"yamdc/searcher/decoder"
@@ -14,14 +15,21 @@ import (
 func DefaultHHMMSSDurationParser(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		res := strings.Split(v, ":")
-		if len(res) != 3 {
+		if len(res) > 3 {
 			logutil.GetLogger(ctx).Error("invalid time format", zap.String("data", v))
 			return 0
 		}
-		h, _ := strconv.ParseInt(strings.TrimSpace(res[0]), 10, 64)
-		m, _ := strconv.ParseInt(strings.TrimSpace(res[1]), 10, 64)
-		s, _ := strconv.ParseInt(strings.TrimSpace(res[2]), 10, 64)
-		return h*3600 + m*60 + s
+		var sec int64
+		for i := 0; i < len(res); i++ {
+			item := strings.TrimSpace(res[len(res)-i-1])
+			val, err := strconv.ParseInt(item, 10, 60)
+			if err != nil {
+				logutil.GetLogger(ctx).Error("invalid time format", zap.String("data", v))
+				return 0
+			}
+			sec += val * int64(math.Pow(60, float64(i)))
+		}
+		return sec
 	}
 }
 
@@ -30,17 +38,6 @@ func DefaultDurationParser(ctx context.Context) decoder.NumberParseFunc {
 		val, err := utils.ToDuration(v)
 		if err != nil {
 			logutil.GetLogger(ctx).Error("decode duration failed", zap.Error(err), zap.String("data", v))
-			return 0
-		}
-		return val
-	}
-}
-
-func DefaultReleaseDateParser(ctx context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		val, err := utils.ToTimestamp(v)
-		if err != nil {
-			logutil.GetLogger(ctx).Error("decode release date failed", zap.Error(err), zap.String("data", v))
 			return 0
 		}
 		return val

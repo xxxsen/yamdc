@@ -7,6 +7,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 )
 
 type av18 struct {
@@ -82,8 +83,8 @@ func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 	meta, err := dec.DecodeHTML(data,
 		decoder.WithCoverParser(p.coverParser),
 		decoder.WithPlotParser(p.plotParser),
-		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err
