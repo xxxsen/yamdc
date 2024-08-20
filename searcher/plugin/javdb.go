@@ -6,6 +6,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 	"yamdc/searcher/utils"
 )
 
@@ -67,8 +68,8 @@ func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		SampleImageListExpr: `//div[@class="tile-images preview-images"]/a[@class="tile-item"]/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

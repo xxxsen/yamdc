@@ -5,6 +5,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 	putils "yamdc/searcher/utils"
 )
 
@@ -36,8 +37,8 @@ func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.Av
 		SampleImageListExpr: `//div[@class="preview"]/a/img/@data-src`,
 	}
 	res, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

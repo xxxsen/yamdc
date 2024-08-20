@@ -6,6 +6,7 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/parser"
 	putils "yamdc/searcher/utils"
 )
 
@@ -36,8 +37,8 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: `//div[@id="sample-box"]/div/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
 	)
 	if err != nil {
 		return nil, false, err

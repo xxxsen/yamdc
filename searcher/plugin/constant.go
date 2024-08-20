@@ -11,4 +11,5 @@ const (
 	SSFreeJavBt = "freejavbt"
 	SSJavDB     = "javdb"
 	SS18AV      = "18av"
+	SSTKTube    = "tktube"
 )
