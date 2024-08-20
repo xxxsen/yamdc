@@ -37,6 +37,7 @@ func defaultConfig() *Config {
 			"fc2",
 			"18av",
 			"freejavbt",
+			"tktube",
 			"avsox",
 		},
 		Handlers: []string{
