@@ -257,7 +257,17 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 		}
 		log.Debug("step end")
 	}
-	logger.Info("process succ")
+	logger.Info("process succ",
+		zap.String("number_id", fc.Number.GetNumberID()),
+		zap.String("scrape_source", fc.Meta.ExtInfo.ScrapeInfo.Source),
+		zap.String("release_date", utils.FormatTimeToDate(fc.Meta.ReleaseDate)),
+		zap.Int("duration", int(fc.Meta.Duration)),
+		zap.Int("sample_img_cnt", len(fc.Meta.SampleImages)),
+		zap.Strings("genres", fc.Meta.Genres),
+		zap.Strings("actors", fc.Meta.Actors),
+		zap.String("title", fc.Meta.Title),
+		zap.String("plot", fc.Meta.Plot),
+	)
 	return nil
 }
 
