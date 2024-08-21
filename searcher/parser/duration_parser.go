@@ -2,14 +2,19 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"yamdc/searcher/decoder"
-	"yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
+)
+
+var (
+	defaultDurationRegexp = regexp.MustCompile(`\s*(\d+)\s*.+`)
 )
 
 func DefaultHHMMSSDurationParser(ctx context.Context) decoder.NumberParseFunc {
@@ -35,11 +40,27 @@ func DefaultHHMMSSDurationParser(ctx context.Context) decoder.NumberParseFunc {
 
 func DefaultDurationParser(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
-		val, err := utils.ToDuration(v)
+		val, err := toDuration(v)
 		if err != nil {
 			logutil.GetLogger(ctx).Error("decode duration failed", zap.Error(err), zap.String("data", v))
 			return 0
 		}
 		return val
 	}
+}
+
+func toDuration(timeStr string) (int64, error) {
+	re := defaultDurationRegexp
+	matches := re.FindStringSubmatch(timeStr)
+	if len(matches) <= 1 {
+		return 0, errors.New("invalid time format")
+	}
+
+	number, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, err
+	}
+	seconds := number * 60
+
+	return int64(seconds), nil
 }

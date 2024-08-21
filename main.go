@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"yamdc/capture"
 	"yamdc/config"
 	"yamdc/face"
 	"yamdc/ffmpeg"
+	"yamdc/number"
 	"yamdc/processor"
 	"yamdc/processor/handler"
 	"yamdc/searcher"
@@ -49,6 +51,9 @@ func main() {
 	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
 	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
+	for _, ct := range c.CategoryPlugins {
+		logkit.Info("-- cat plugins", zap.String("cat", ct.Name), zap.Strings("plugins", ct.Plugins))
+	}
 	logkit.Info("current use handlers", zap.Strings("handlers", c.Handlers))
 	logkit.Info("use naming rule", zap.String("rule", c.Naming))
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
@@ -65,11 +70,15 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
 	}
+	catSs, err := buildCatSearcher(c.CategoryPlugins, c.PluginConfig)
+	if err != nil {
+		logkit.Fatal("build cat searcher failed", zap.Error(err))
+	}
 	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
 	}
-	cap, err := buildCapture(c, ss, ps)
+	cap, err := buildCapture(c, ss, catSs, ps)
 	if err != nil {
 		logkit.Fatal("build capture runner failed", zap.Error(err))
 	}
@@ -81,18 +90,30 @@ func main() {
 	logkit.Info("run capture kit finish, all file scrape succ")
 }
 
-func buildCapture(c *config.Config, ss []searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
+func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[number.Category][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
 		capture.WithScanDir(c.ScanDir),
 		capture.WithSaveDir(c.SaveDir),
-		capture.WithSeacher(searcher.NewGroup(ss)),
+		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithEnableLinkMode(c.SwitchConfig.EnableLinkMode),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 	)
 	return capture.New(opts...)
+}
+
+func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (map[number.Category][]searcher.ISearcher, error) {
+	rs := make(map[number.Category][]searcher.ISearcher, len(cplgs))
+	for _, plg := range cplgs {
+		ss, err := buildSearcher(plg.Plugins, m)
+		if err != nil {
+			return nil, err
+		}
+		rs[number.Category(strings.ToUpper(plg.Name))] = ss
+	}
+	return rs, nil
 }
 
 func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {

@@ -23,10 +23,6 @@ type fc2 struct {
 	DefaultPlugin
 }
 
-func (p *fc2) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
-	return number.IsFc2(n.GetNumberID()), nil
-}
-
 func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
 	number := strings.ToLower(n.GetNumberID())
 	res := defaultFc2NumberParser.FindStringSubmatch(number)

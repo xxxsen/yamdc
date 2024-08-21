@@ -14,10 +14,6 @@ type av18 struct {
 	DefaultPlugin
 }
 
-func (p *av18) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
-	return number.IsFc2(n.GetNumberID()), nil
-}
-
 func (p *av18) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number.GetNumberID())
 	ctx.SetKey("number", number.GetNumberID())
