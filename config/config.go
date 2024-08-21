@@ -48,7 +48,7 @@ func defaultConfig() *Config {
 		},
 		CategoryPlugins: []CategoryPlugin{
 			//如果存在分配配置, 那么当番号被识别为特定分类的场景下, 将会使用分类插件直接查询
-			{Name: "fc2", Plugins: []string{"fc2", "18av", "freejavbt", "tktube", "avsox"}},
+			{Name: "FC2", Plugins: []string{"fc2", "18av", "freejavbt", "tktube", "avsox"}},
 		},
 		Handlers: []string{
 			"image_transcoder",

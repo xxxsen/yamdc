@@ -9,8 +9,8 @@ func (c Category) String() string {
 }
 
 const (
-	CatDefault Category = "default"
-	CatFC2     Category = "fc2"
+	CatDefault Category = "DEFAULT"
+	CatFC2     Category = "FC2"
 )
 
 func IsFc2(number string) bool {
