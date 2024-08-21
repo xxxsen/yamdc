@@ -7,8 +7,8 @@ import (
 	"strings"
 	"yamdc/model"
 	"yamdc/number"
+	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin"
-	"yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -46,7 +46,7 @@ func (p *airav) OnDecodeHTTPData(ctx *plugin.PluginContext, data []byte) (*model
 		Title:       result.Name,
 		Plot:        result.Description,
 		Actors:      p.readActors(&result),
-		ReleaseDate: utils.ToTimestampOrDefault(result.PublishDate, 0),
+		ReleaseDate: parser.DefaultReleaseDateParser(ctx.GetContext())(result.PublishDate),
 		Studio:      p.readStudio(&result),
 		Genres:      p.readGenres(&result),
 		Cover: &model.File{

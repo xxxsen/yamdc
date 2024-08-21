@@ -22,3 +22,20 @@ func TestHHMMSS(t *testing.T) {
 		assert.Equal(t, tst.sec, out)
 	}
 }
+
+func TestConv(t *testing.T) {
+	sts := []struct {
+		in  string
+		out int64
+	}{
+		{"47分钟", 47 * 60},
+		{" 10分钟", 600},
+		{"140分", 140 * 60},
+		{"117分鐘", 117 * 60},
+	}
+	for _, st := range sts {
+		out, err := toDuration(st.in)
+		assert.NoError(t, err)
+		assert.Equal(t, st.out, out)
+	}
+}
