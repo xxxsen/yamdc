@@ -14,10 +14,6 @@ type tktube struct {
 	DefaultPlugin
 }
 
-func (p *tktube) OnPrecheckRequest(ctx *PluginContext, n *number.Number) (bool, error) {
-	return number.IsFc2(n.GetNumberID()), nil
-}
-
 func (p *tktube) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
 	nid := strings.ReplaceAll(n.GetNumberID(), "-", "--")
 	ctx.SetKey("number", n.GetNumberID())
