@@ -5,17 +5,22 @@ import (
 )
 
 type Number struct {
-	number            string
+	numberId          string
 	isChineseSubtitle bool
 	isMultiCD         bool
 	multiCDIndex      int
 	isUncensorMovie   bool
 	is4k              bool
 	isLeak            bool
+	cats              []Category
+}
+
+func (n *Number) GetCategory() []Category {
+	return n.cats
 }
 
 func (n *Number) GetNumberID() string {
-	return n.number
+	return n.numberId
 }
 
 func (n *Number) GetIsChineseSubtitle() bool {

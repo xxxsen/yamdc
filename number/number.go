@@ -118,7 +118,7 @@ func Parse(str string) (*Number, error) {
 		return nil, fmt.Errorf("should not contain extname, str:%s", str)
 	}
 	rs := &Number{
-		number:            "",
+		numberId:          "",
 		isChineseSubtitle: false,
 		isMultiCD:         false,
 		multiCDIndex:      0,
@@ -126,8 +126,9 @@ func Parse(str string) (*Number, error) {
 	}
 	//提取后缀信息并对番号进行裁剪
 	number := resolveSuffixInfo(rs, str)
-	rs.number = strings.ToUpper(number)
+	rs.numberId = strings.ToUpper(number)
 	//通过番号直接填充信息(不进行裁剪)
 	resolveNumberInfo(rs, number)
+	rs.cats = DetermineCategory(rs.numberId)
 	return rs, nil
 }
