@@ -9,7 +9,8 @@ func (c Category) String() string {
 }
 
 const (
-	CatFC2 Category = "fc2"
+	CatDefault Category = "default"
+	CatFC2     Category = "fc2"
 )
 
 func IsFc2(number string) bool {
@@ -17,9 +18,9 @@ func IsFc2(number string) bool {
 	return strings.HasPrefix(number, "FC2")
 }
 
-func DetermineCategory(numberId string) []Category {
+func DetermineCategory(numberId string) Category {
 	if strings.HasPrefix(strings.ToUpper(numberId), "FC2") {
-		return []Category{CatFC2}
+		return CatFC2
 	}
-	return []Category{} //默认无分类
+	return CatDefault //默认无分类
 }

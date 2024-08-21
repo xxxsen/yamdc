@@ -21,11 +21,15 @@ func (g *group) Name() string {
 }
 
 func (g *group) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
+	return performGroupSearch(ctx, number, g.ss)
+}
+
+func performGroupSearch(ctx context.Context, number *number.Number, ss []ISearcher) (*model.AvMeta, bool, error) {
 	var lastErr error
-	for _, s := range g.ss {
+	for _, s := range ss {
+		logutil.GetLogger(ctx).Debug("search number", zap.String("plugin", s.Name()))
 		meta, found, err := s.Search(ctx, number)
 		if err != nil {
-			logutil.GetLogger(context.Background()).Error("search fail", zap.String("searcher", s.Name()), zap.Error(err))
 			lastErr = err
 			continue
 		}

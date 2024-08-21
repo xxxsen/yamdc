@@ -129,6 +129,6 @@ func Parse(str string) (*Number, error) {
 	rs.numberId = strings.ToUpper(number)
 	//通过番号直接填充信息(不进行裁剪)
 	resolveNumberInfo(rs, number)
-	rs.cats = DetermineCategory(rs.numberId)
+	rs.cat = DetermineCategory(rs.numberId)
 	return rs, nil
 }

@@ -12,11 +12,11 @@ type Number struct {
 	isUncensorMovie   bool
 	is4k              bool
 	isLeak            bool
-	cats              []Category
+	cat               Category
 }
 
-func (n *Number) GetCategory() []Category {
-	return n.cats
+func (n *Number) GetCategory() Category {
+	return n.cat
 }
 
 func (n *Number) GetNumberID() string {
