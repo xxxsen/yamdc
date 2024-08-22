@@ -40,7 +40,6 @@ func defaultConfig() *Config {
 			"javdb",
 			"jav321",
 			"caribpr",
-			"fc2",
 			"18av",
 			"freejavbt",
 			"tktube",
