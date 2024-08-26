@@ -1,5 +1,7 @@
 package decoder
 
+import "strconv"
+
 type StringParseFunc func(v string) string
 type StringListParseFunc func(v []string) []string
 type NumberParseFunc func(v string) int64
@@ -32,7 +34,8 @@ func defaultStringListParser(vs []string) []string {
 }
 
 func defaultNumberParser(v string) int64 {
-	return 0
+	res, _ := strconv.ParseInt(v, 10, 64)
+	return res
 }
 
 func defaultStringProcessor(v string) string {
