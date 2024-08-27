@@ -231,7 +231,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []st
 		}
 		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
 		key := p.buildURLCacheKey(url)
-		if store.GetDefault().IsCacheExist(key) {
+		if ok, _ := store.IsDataExist(ctx.GetContext(), key); ok {
 			rs[url] = key
 			continue
 		}
@@ -240,7 +240,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []st
 			logger.Error("fetch image data failed", zap.Error(err))
 			continue
 		}
-		err = store.GetDefault().PutWithNamingKey(key, data)
+		err = store.PutData(ctx.GetContext(), key, data)
 		if err != nil {
 			logger.Error("put image data to store failed", zap.Error(err))
 		}

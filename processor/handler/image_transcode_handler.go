@@ -40,7 +40,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 		return nil
 	}
 	logger = logger.With(zap.String("key", f.Key))
-	data, err := store.GetDefault().GetData(f.Key)
+	data, err := store.GetData(ctx, f.Key)
 	if err != nil {
 		logger.Debug("read key data failed", zap.Error(err))
 		return f //不丢弃, 后续处理的时候报错, 方便发现问题
@@ -58,7 +58,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 		logger.Error("unable to convert image to jpeg format", zap.Error(err))
 		return nil
 	}
-	key, err := store.GetDefault().Put(raw)
+	key, err := store.AnonymousPutData(ctx, raw)
 	if err != nil {
 		logger.Error("store transcoded image data failed", zap.Error(err))
 		return f //

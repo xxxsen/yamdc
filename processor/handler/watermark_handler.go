@@ -17,7 +17,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Meta.Poster == nil || len(fc.Meta.Poster.Key) == 0 {
 		return nil
 	}
-	data, err := store.GetDefault().GetData(fc.Meta.Poster.Key)
+	data, err := store.GetData(ctx, fc.Meta.Poster.Key)
 	if err != nil {
 		return fmt.Errorf("load poster key failed, key:%s", fc.Meta.Poster.Key)
 	}
@@ -42,7 +42,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if err != nil {
 		return fmt.Errorf("add watermark failed, err:%w", err)
 	}
-	key, err := store.GetDefault().Put(newData)
+	key, err := store.AnonymousPutData(ctx, newData)
 	if err != nil {
 		return fmt.Errorf("save watermarked image failed, err:%w", err)
 	}

@@ -38,9 +38,7 @@ func main() {
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
 	}
-	if err := store.Init(filepath.Join(c.DataDir, "cache")); err != nil {
-		logkit.Fatal("init store failed", zap.Error(err))
-	}
+	store.SetStorage(store.NewDiskStorage(filepath.Join(c.DataDir, "cache")))
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
 	}
