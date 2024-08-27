@@ -2,13 +2,12 @@ package searcher
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 	"yamdc/client"
+	"yamdc/hasher"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/plugin"
@@ -230,8 +229,8 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []st
 			continue
 		}
 		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
-		key := p.buildURLCacheKey(url)
-		if store.GetDefault().IsCacheExist(key) {
+		key := hasher.ToMD5(url)
+		if ok, _ := store.IsDataExist(ctx.GetContext(), key); ok {
 			rs[url] = key
 			continue
 		}
@@ -240,21 +239,13 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []st
 			logger.Error("fetch image data failed", zap.Error(err))
 			continue
 		}
-		err = store.GetDefault().PutWithNamingKey(key, data)
+		err = store.PutData(ctx.GetContext(), key, data)
 		if err != nil {
 			logger.Error("put image data to store failed", zap.Error(err))
 		}
 		rs[url] = key
 	}
 	return rs
-}
-
-func (p *DefaultSearcher) buildURLCacheKey(url string) string {
-	h := md5.New()
-	_, _ = h.Write([]byte(url))
-	hashsum := hex.EncodeToString(h.Sum(nil))
-	key := fmt.Sprintf("avc:search:cache:url:%s:%s", p.name, hashsum)
-	return key
 }
 
 func (p *DefaultSearcher) fetchImageData(ctx *plugin.PluginContext, url string) ([]byte, error) {

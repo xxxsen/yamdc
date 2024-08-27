@@ -203,7 +203,7 @@ func (c *Capture) doNaming(ctx context.Context, fc *model.FileContext) error {
 
 func (c *Capture) doSaveData(ctx context.Context, fc *model.FileContext) error {
 	//保存元数据并将影片移入指定目录
-	if err := c.saveMediaData(fc); err != nil {
+	if err := c.saveMediaData(ctx, fc); err != nil {
 		return fmt.Errorf("save meta data failed, err:%w", err)
 	}
 	return nil
@@ -284,7 +284,7 @@ func (c *Capture) renameMetaField(fc *model.FileContext) error {
 	return nil
 }
 
-func (c *Capture) saveMediaData(fc *model.FileContext) error {
+func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) error {
 	images := make([]*model.File, 0, len(fc.Meta.SampleImages)+2)
 	if fc.Meta.Cover != nil {
 		images = append(images, fc.Meta.Cover)
@@ -297,7 +297,7 @@ func (c *Capture) saveMediaData(fc *model.FileContext) error {
 		target := filepath.Join(fc.SaveDir, image.Name)
 		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
 
-		data, err := store.GetDefault().GetData(image.Key)
+		data, err := store.GetData(ctx, image.Key)
 		if err != nil {
 			logger.Error("read image data failed", zap.Error(err))
 			return err

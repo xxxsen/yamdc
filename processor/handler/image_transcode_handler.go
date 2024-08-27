@@ -40,28 +40,22 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 		return nil
 	}
 	logger = logger.With(zap.String("key", f.Key))
-	data, err := store.GetDefault().GetData(f.Key)
-	if err != nil {
-		logger.Debug("read key data failed", zap.Error(err))
-		return f //不丢弃, 后续处理的时候报错, 方便发现问题
-	}
-	raw, err := image.TranscodeToJpeg(data)
-	if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && ffmpeg.IsFFMpegEnabled() {
-		data, err = ffmpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
-		if err != nil {
-			logger.Error("use ffmpeg to correct invalid image data failed", zap.Error(err))
-			return nil
+
+	key, err := store.AnonymousDataRewrite(ctx, f.Key, func(ctx context.Context, data []byte) ([]byte, error) {
+		raw, err := image.TranscodeToJpeg(data)
+		if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && ffmpeg.IsFFMpegEnabled() {
+			data, err = ffmpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
+			if err != nil {
+				logger.Error("use ffmpeg to correct invalid image data failed", zap.Error(err))
+				return nil, err
+			}
+			raw, err = image.TranscodeToJpeg(data)
 		}
-		raw, err = image.TranscodeToJpeg(data)
-	}
+		return raw, err
+	})
 	if err != nil {
-		logger.Error("unable to convert image to jpeg format", zap.Error(err))
-		return nil
-	}
-	key, err := store.GetDefault().Put(raw)
-	if err != nil {
-		logger.Error("store transcoded image data failed", zap.Error(err))
-		return f //
+		logger.Error("transcoded image data failed", zap.Error(err))
+		return nil //
 	}
 	logger.Debug("transcode image succ", zap.String("new_key", key))
 	f.Key = key
