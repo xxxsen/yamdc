@@ -46,15 +46,9 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 	if fc.Number.GetIsUncensorMovie() && face.IsFaceRecognizeEnabled() { //如果为步兵, 则使用人脸识别(当然, 只有该特性能用的情况下才启用)
 		cutter = c.wrapCutImageWithFaceRec(ctx, image.CutCensoredImageFromBytes)
 	}
-	data, err := store.GetData(ctx, fc.Meta.Cover.Key)
-	if err != nil {
-		return fmt.Errorf("get cover data failed, err:%w, key:%s", err, fc.Meta.Cover.Key)
-	}
-	res, err := cutter(data)
-	if err != nil {
-		return fmt.Errorf("cut poster image failed, err:%w", err)
-	}
-	key, err := store.AnonymousPutData(ctx, res)
+	key, err := store.AnonymousDataRewrite(ctx, fc.Meta.Cover.Key, func(ctx context.Context, data []byte) ([]byte, error) {
+		return cutter(data)
+	})
 	if err != nil {
 		return fmt.Errorf("save cutted poster data failed, err:%w", err)
 	}

@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+type DataRewriteFunc func(ctx context.Context, data []byte) ([]byte, error)
+
 type IStorage interface {
 	GetData(ctx context.Context, key string) ([]byte, error)
 	PutData(ctx context.Context, key string, value []byte) error
@@ -40,4 +42,20 @@ func GetData(ctx context.Context, key string) ([]byte, error) {
 
 func IsDataExist(ctx context.Context, key string) (bool, error) {
 	return getDefaultInst().IsDataExist(ctx, key)
+}
+
+func AnonymousDataRewrite(ctx context.Context, key string, fn DataRewriteFunc) (string, error) {
+	raw, err := GetData(ctx, key)
+	if err != nil {
+		return key, err
+	}
+	newData, err := fn(ctx, raw)
+	if err != nil {
+		return key, err
+	}
+	newKey, err := AnonymousPutData(ctx, newData)
+	if err != nil {
+		return key, err
+	}
+	return newKey, nil
 }
