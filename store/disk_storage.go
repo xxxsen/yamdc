@@ -2,11 +2,10 @@ package store
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"yamdc/hasher"
 )
 
 type diskStorage struct {
@@ -17,14 +16,8 @@ func NewDiskStorage(dir string) IStorage {
 	return &diskStorage{dir: dir}
 }
 
-func (s *diskStorage) keyMd5(key string) string {
-	h := md5.New()
-	_, _ = h.Write([]byte(key))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func (s *diskStorage) generateStorePath(key string) string {
-	save := s.keyMd5(key)
+	save := hasher.ToMD5(key)
 	p1 := save[:2]
 	p2 := save[2:4]
 	p3 := save[4:6]
