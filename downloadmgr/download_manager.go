@@ -71,6 +71,7 @@ func (m *DownloadManager) Download(src string, dst string) error {
 	if err != nil {
 		return err
 	}
+	defer rc.Close()
 	if err := m.writeToFile(rc, dst); err != nil {
 		return err
 	}
