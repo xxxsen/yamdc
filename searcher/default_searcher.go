@@ -11,7 +11,6 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/plugin"
-	"yamdc/searcher/utils"
 	"yamdc/store"
 	"yamdc/useragent"
 
@@ -124,7 +123,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
 	}
 	defer rsp.Body.Close()
-	data, err := utils.ReadHTTPData(rsp)
+	data, err := client.ReadHTTPData(rsp)
 	if err != nil {
 		return nil, false, fmt.Errorf("read body failed, err:%w", err)
 	}
@@ -265,7 +264,7 @@ func (p *DefaultSearcher) fetchImageData(ctx *plugin.PluginContext, url string) 
 	if rsp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get url data http code not ok, code:%d", rsp.StatusCode)
 	}
-	data, err := utils.ReadHTTPData(rsp)
+	data, err := client.ReadHTTPData(rsp)
 	if err != nil {
 		return nil, fmt.Errorf("read url data failed, err:%w", err)
 	}
