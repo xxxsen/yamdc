@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"yamdc/capture"
+	"yamdc/client"
 	"yamdc/config"
+	"yamdc/dependency"
 	"yamdc/face"
 	"yamdc/ffmpeg"
 	"yamdc/number"
@@ -37,6 +39,9 @@ func main() {
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
+	}
+	if err := ensureDependencies(c.DataDir, c.Dependencies); err != nil {
+		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	store.SetStorage(store.NewDiskStorage(filepath.Join(c.DataDir, "cache")))
 	if err := translator.Init(); err != nil {
@@ -164,4 +169,15 @@ func precheckDir(c *config.Config) error {
 		return fmt.Errorf("no save dir")
 	}
 	return nil
+}
+
+func ensureDependencies(datadir string, cdeps []config.Dependency) error {
+	deps := make([]*dependency.Dependency, 0, len(cdeps))
+	for _, item := range cdeps {
+		deps = append(deps, &dependency.Dependency{
+			URL:    item.Link,
+			Target: filepath.Join(datadir, item.RelPath),
+		})
+	}
+	return dependency.Resolve(client.NewClient(), deps)
 }
