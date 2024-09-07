@@ -117,6 +117,7 @@ func Parse(str string) (*Number, error) {
 	if strings.Contains(str, ".") {
 		return nil, fmt.Errorf("should not contain extname, str:%s", str)
 	}
+	number := strings.ToUpper(str)
 	rs := &Number{
 		numberId:          "",
 		isChineseSubtitle: false,
@@ -124,11 +125,13 @@ func Parse(str string) (*Number, error) {
 		multiCDIndex:      0,
 		isUncensorMovie:   false,
 	}
+	//部分番号需要进行改写
+	number = rewriteNumber(number)
 	//提取后缀信息并对番号进行裁剪
-	number := resolveSuffixInfo(rs, str)
-	rs.numberId = strings.ToUpper(number)
+	number = resolveSuffixInfo(rs, number)
 	//通过番号直接填充信息(不进行裁剪)
 	resolveNumberInfo(rs, number)
+	rs.numberId = number
 	rs.cat = DetermineCategory(rs.numberId)
 	return rs, nil
 }
