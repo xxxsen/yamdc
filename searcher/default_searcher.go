@@ -228,7 +228,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx *plugin.PluginContext, urls []st
 			continue
 		}
 		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
-		key := hasher.ToMD5(url)
+		key := hasher.ToSha1(url)
 		if ok, _ := store.IsDataExist(ctx.GetContext(), key); ok {
 			rs[url] = key
 			continue

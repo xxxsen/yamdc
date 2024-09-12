@@ -2,8 +2,7 @@ package store
 
 import (
 	"context"
-
-	"github.com/google/uuid"
+	"yamdc/hasher"
 )
 
 type DataRewriteFunc func(ctx context.Context, data []byte) ([]byte, error)
@@ -29,7 +28,10 @@ func PutData(ctx context.Context, key string, value []byte) error {
 }
 
 func AnonymousPutData(ctx context.Context, value []byte) (string, error) {
-	key := uuid.NewString()
+	key := hasher.ToSha1Bytes(value)
+	if ok, _ := IsDataExist(ctx, key); ok {
+		return key, nil
+	}
 	if err := PutData(ctx, key, value); err != nil {
 		return "", err
 	}

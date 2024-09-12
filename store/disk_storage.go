@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"yamdc/hasher"
+
+	"github.com/google/uuid"
 )
 
 type diskStorage struct {
@@ -17,11 +19,9 @@ func NewDiskStorage(dir string) IStorage {
 }
 
 func (s *diskStorage) generateStorePath(key string) string {
-	save := hasher.ToMD5(key)
+	save := hasher.ToSha1(key)
 	p1 := save[:2]
-	p2 := save[2:4]
-	p3 := save[4:6]
-	return filepath.Join(s.dir, p1, p2, p3, save)
+	return filepath.Join(s.dir, p1, save)
 }
 
 func (s *diskStorage) GetData(ctx context.Context, key string) ([]byte, error) {
@@ -34,8 +34,13 @@ func (s *diskStorage) PutData(ctx context.Context, key string, value []byte) err
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create dir failed, err:%w", err)
 	}
-	if err := os.WriteFile(p, value, 0644); err != nil {
+	tempPath := filepath.Join(dir, "tmp."+uuid.NewString())
+	defer os.Remove(tempPath) //处理完, 删除临时文件
+	if err := os.WriteFile(tempPath, value, 0644); err != nil {
 		return fmt.Errorf("write data failed, err:%w", err)
+	}
+	if err := os.Rename(tempPath, p); err != nil {
+		return fmt.Errorf("rename failed, err:%w", err)
 	}
 	return nil
 }
