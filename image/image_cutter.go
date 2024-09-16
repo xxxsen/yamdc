@@ -1,6 +1,7 @@
 package image
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"math"
@@ -86,12 +87,12 @@ func CutCensoredImage(img image.Image) (image.Image, error) {
 	return CutImageViaRectangle(img, cutFrame)
 }
 
-func CutImageWithFaceRec(img image.Image) (image.Image, error) {
+func CutImageWithFaceRec(ctx context.Context, img image.Image) (image.Image, error) {
 	data, err := toJpegData(img)
 	if err != nil {
 		return nil, err
 	}
-	fs, err := face.SearchFaces(data)
+	fs, err := face.SearchFaces(ctx, data)
 	if err != nil {
 		return nil, err
 	}
@@ -110,12 +111,12 @@ func CutImageWithFaceRec(img image.Image) (image.Image, error) {
 	return CutImageViaRectangle(img, cutFrame)
 }
 
-func CutImageWithFaceRecFromBytes(data []byte) ([]byte, error) {
+func CutImageWithFaceRecFromBytes(ctx context.Context, data []byte) ([]byte, error) {
 	img, err := LoadImage(data)
 	if err != nil {
 		return nil, err
 	}
-	cutted, err := CutImageWithFaceRec(img)
+	cutted, err := CutImageWithFaceRec(ctx, img)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ func (c *posterCropHandler) Name() string {
 
 func (c *posterCropHandler) wrapCutImageWithFaceRec(ctx context.Context, fallback imageCutter) imageCutter {
 	return func(data []byte) ([]byte, error) {
-		rec, err := image.CutImageWithFaceRecFromBytes(data)
+		rec, err := image.CutImageWithFaceRecFromBytes(ctx, data)
 		if err == nil {
 			return rec, nil
 		}

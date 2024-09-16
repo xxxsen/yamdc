@@ -1,6 +1,7 @@
 package image
 
 import (
+	"context"
 	"image"
 	"io/fs"
 	"os"
@@ -63,7 +64,7 @@ func TestPigoRec(t *testing.T) {
 		raw, err := os.ReadFile(path)
 		assert.NoError(t, err)
 		total++
-		out, err := CutImageWithFaceRecFromBytes(raw)
+		out, err := CutImageWithFaceRecFromBytes(context.Background(), raw)
 		if err != nil {
 			return nil
 		}
@@ -96,7 +97,7 @@ func TestGoFaceRec(t *testing.T) {
 			raw, err := os.ReadFile(path)
 			assert.NoError(t, err)
 			total++
-			out, err := CutImageWithFaceRecFromBytes(raw)
+			out, err := CutImageWithFaceRecFromBytes(context.Background(), raw)
 			if err != nil {
 				return
 			}

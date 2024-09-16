@@ -2,6 +2,7 @@ package pigo
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"os"
 	"path/filepath"
@@ -35,7 +36,7 @@ func (w *pigoWrap) Name() string {
 	return face.NamePigo
 }
 
-func (w *pigoWrap) SearchFaces(data []byte) ([]image.Rectangle, error) {
+func (w *pigoWrap) SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error) {
 	img, err := pigo.DecodeImage(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

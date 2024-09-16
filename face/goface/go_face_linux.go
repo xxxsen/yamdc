@@ -4,6 +4,7 @@
 package goface
 
 import (
+	"context"
 	"image"
 	"yamdc/face"
 
@@ -14,7 +15,7 @@ type goFace struct {
 	recInst *goface.Recognizer
 }
 
-func (f *goFace) SearchFaces(data []byte) ([]image.Rectangle, error) {
+func (f *goFace) SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error) {
 	inst := f.recInst
 	fces, err := inst.RecognizeCNN(data)
 	if err != nil {

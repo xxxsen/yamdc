@@ -12,6 +12,8 @@ import (
 	"yamdc/config"
 	"yamdc/dependency"
 	"yamdc/face"
+	"yamdc/face/goface"
+	"yamdc/face/pigo"
 	"yamdc/ffmpeg"
 	"yamdc/number"
 	"yamdc/processor"
@@ -182,11 +184,26 @@ func ensureDependencies(datadir string, cdeps []config.Dependency) error {
 }
 
 func initFace(models string) error {
-	inst, err := face.NewGoFace(models)
-	if err != nil {
-		return err
+	impls := make([]face.IFaceRec, 0, 2)
+	faceRecCreator := []func() (face.IFaceRec, error){
+		func() (face.IFaceRec, error) {
+			return goface.NewGoFace(models)
+		},
+		func() (face.IFaceRec, error) {
+			return pigo.NewPigo(models)
+		},
 	}
-
-	face.SetFaceRec(inst)
+	for index, creator := range faceRecCreator {
+		impl, err := creator()
+		if err != nil {
+			logutil.GetLogger(context.Background()).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
+			continue
+		}
+		impls = append(impls, impl)
+	}
+	if len(impls) == 0 {
+		return fmt.Errorf("no face rec impl inited")
+	}
+	face.SetFaceRec(face.NewGroup(impls))
 	return nil
 }
