@@ -2,7 +2,14 @@ package image
 
 import (
 	"image"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
+	"yamdc/face"
+	"yamdc/face/goface"
+	"yamdc/face/pigo"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,4 +46,69 @@ func TestCutFrame(t *testing.T) {
 		assert.Equal(t, tst.gotErr, gotErr)
 		assert.Equal(t, tst.rect, rect)
 	}
+}
+
+func TestPigoRec(t *testing.T) {
+	os.RemoveAll("./testdata/output_pigo/")
+	os.MkdirAll("./testdata/output_pigo/", 0755)
+	pg, err := pigo.NewPigo("../.vscode/tests/models")
+	assert.NoError(t, err)
+	face.SetFaceRec(pg)
+	total := 0
+	count := 0
+	filepath.Walk("./testdata/input", func(path string, info fs.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		assert.NoError(t, err)
+		total++
+		out, err := CutImageWithFaceRecFromBytes(raw)
+		if err != nil {
+			return nil
+		}
+		count++
+		assert.NoError(t, err)
+		err = os.WriteFile("./testdata/output_pigo/"+filepath.Base(path), out, 0644)
+		assert.NoError(t, err)
+		return nil
+	})
+	t.Logf("total:%d, rec:%d", total, count)
+	//total:17, rec:15
+}
+
+func TestGoFaceRec(t *testing.T) {
+	os.RemoveAll("./testdata/output_goface/")
+	os.MkdirAll("./testdata/output_goface/", 0755)
+	pg, err := goface.NewGoFace("../.vscode/tests/models")
+	assert.NoError(t, err)
+	face.SetFaceRec(pg)
+	total := 0
+	count := 0
+	wg := sync.WaitGroup{}
+	filepath.Walk("./testdata/input", func(path string, info fs.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			raw, err := os.ReadFile(path)
+			assert.NoError(t, err)
+			total++
+			out, err := CutImageWithFaceRecFromBytes(raw)
+			if err != nil {
+				return
+			}
+			count++
+			assert.NoError(t, err)
+			err = os.WriteFile("./testdata/output_goface/"+filepath.Base(path), out, 0644)
+			assert.NoError(t, err)
+			return
+		}()
+		return nil
+	})
+	wg.Wait()
+	t.Logf("total:%d, rec:%d", total, count)
+	//total:17, rec:14
 }

@@ -40,6 +40,7 @@ replace github.com/Kagami/go-face => github.com/xxxsen/go-face v0.0.1
 require (
 	github.com/antchfx/xpath v1.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/esimov/pigo v1.4.6
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.6.0
 	github.com/imroc/req/v3 v3.43.7

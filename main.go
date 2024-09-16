@@ -47,10 +47,9 @@ func main() {
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
 	}
-	if err := face.Init(filepath.Join(c.DataDir, "models")); err != nil {
+	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
-
 	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
 	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
@@ -180,4 +179,14 @@ func ensureDependencies(datadir string, cdeps []config.Dependency) error {
 		})
 	}
 	return dependency.Resolve(client.NewClient(), deps)
+}
+
+func initFace(models string) error {
+	inst, err := face.NewGoFace(models)
+	if err != nil {
+		return err
+	}
+
+	face.SetFaceRec(inst)
+	return nil
 }
