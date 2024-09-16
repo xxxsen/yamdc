@@ -61,6 +61,9 @@ func TestPigoRec(t *testing.T) {
 		if info.IsDir() {
 			return nil
 		}
+		if err != nil {
+			return nil
+		}
 		raw, err := os.ReadFile(path)
 		assert.NoError(t, err)
 		total++
@@ -89,6 +92,9 @@ func TestGoFaceRec(t *testing.T) {
 	wg := sync.WaitGroup{}
 	filepath.Walk("./testdata/input", func(path string, info fs.FileInfo, err error) error {
 		if info.IsDir() {
+			return nil
+		}
+		if err != nil {
 			return nil
 		}
 		wg.Add(1)
