@@ -12,7 +12,7 @@ import (
 func TestTagPadde(t *testing.T) {
 	num, err := number.Parse("fc2-1234-c-4k")
 	assert.NoError(t, err)
-	padder := &tagPadder{}
+	padder := &tagPadderHandler{}
 	fc := &model.FileContext{
 		Number: num,
 		Meta:   &model.AvMeta{},

@@ -6,14 +6,14 @@ import (
 	"yamdc/utils"
 )
 
-type tagPadder struct{}
+type tagPadderHandler struct{}
 
-func (h *tagPadder) Handle(ctx context.Context, fc *model.FileContext) error {
+func (h *tagPadderHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	fc.Meta.Genres = append(fc.Meta.Genres, fc.Number.GenerateTags()...)
 	fc.Meta.Genres = utils.DedupStringList(fc.Meta.Genres)
 	return nil
 }
 
 func init() {
-	Register(HTagPadder, HandlerToCreator(&tagPadder{}))
+	Register(HTagPadder, HandlerToCreator(&tagPadderHandler{}))
 }
