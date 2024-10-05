@@ -7,4 +7,5 @@ const (
 	HTranslater      = "translater"
 	HWatermakrMaker  = "watermark_maker"
 	HTagPadder       = "tag_padder"
+	HNumberTitle     = "number_title"
 )
