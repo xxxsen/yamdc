@@ -9,10 +9,10 @@ import (
 	"go.uber.org/zap"
 )
 
-type durationFixer struct {
+type durationFixerHandler struct {
 }
 
-func (h *durationFixer) Handle(ctx context.Context, fc *model.FileContext) error {
+func (h *durationFixerHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Meta.Duration > 0 {
 		return nil
 	}
@@ -29,5 +29,5 @@ func (h *durationFixer) Handle(ctx context.Context, fc *model.FileContext) error
 }
 
 func init() {
-	Register(HDurationFixer, HandlerToCreator(&durationFixer{}))
+	Register(HDurationFixer, HandlerToCreator(&durationFixerHandler{}))
 }

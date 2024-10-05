@@ -9,7 +9,7 @@ require (
 	github.com/Kagami/go-face v0.0.0-20210630145111-0c14797b4d0e
 	github.com/antchfx/htmlquery v1.3.1
 	github.com/stretchr/testify v1.9.0
-	github.com/xxxsen/common v0.1.8
+	github.com/xxxsen/common v0.1.10
 	go.uber.org/zap v1.23.0
 	golang.org/x/image v0.18.0
 	golang.org/x/net v0.29.0
