@@ -77,6 +77,7 @@ func (p *njav) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
+	meta.Title = meta.Number + " " + meta.Title //将番号补齐到标题中, 避免jellyfin无法搜索
 	return meta, true, nil
 }
 
