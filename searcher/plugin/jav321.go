@@ -59,7 +59,6 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		return nil, false, err
 	}
 	putils.EnableDataTranslate(rs)
-	rs.Title = rs.Number + " " + rs.Title
 	return rs, true, nil
 }
 

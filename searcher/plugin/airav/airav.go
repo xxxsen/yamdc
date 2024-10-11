@@ -54,7 +54,6 @@ func (p *airav) OnDecodeHTTPData(ctx *plugin.PluginContext, data []byte) (*model
 		},
 		SampleImages: p.readSampleImages(&result),
 	}
-	avdata.Title = avdata.Number + " " + avdata.Title
 	return avdata, true, nil
 }
 
