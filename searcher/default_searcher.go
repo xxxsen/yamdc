@@ -18,6 +18,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	defaultPageSearchCacheExpire = 1 * time.Hour
+)
+
 type DefaultSearcher struct {
 	name    string
 	ua      string
@@ -95,19 +99,11 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http
 	return p.invoker(ctx, req)
 }
 
-func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
-	pctx := plugin.NewPluginContext(ctx)
-	pctx.SetNumberInfo(number)
-	ok, err := p.plg.OnPrecheckRequest(pctx, number)
-	if err != nil {
-		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
-	}
-	if !ok {
-		return nil, false, nil
-	}
-	req, err := p.plg.OnMakeHTTPRequest(pctx, number)
-	if err != nil {
-		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
+func (p *DefaultSearcher) onRetriveData(ctx context.Context, pctx *plugin.PluginContext, req *http.Request, number *number.Number) ([]byte, bool, error) {
+	key := p.name + ":" + number.GetNumberID()
+	if data, err := store.GetData(ctx, key); err == nil {
+		logutil.GetLogger(ctx).Debug("use search cache", zap.String("key", key), zap.Int("data_len", len(data)))
+		return data, true, nil
 	}
 	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.invokeHTTPRequest, req)
 	if err != nil {
@@ -127,6 +123,31 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	data, err := client.ReadHTTPData(rsp)
 	if err != nil {
 		return nil, false, fmt.Errorf("read body failed, err:%w", err)
+	}
+	_ = store.PutDataWithExpire(ctx, key, data, defaultPageSearchCacheExpire)
+	return data, true, nil
+}
+
+func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
+	pctx := plugin.NewPluginContext(ctx)
+	pctx.SetNumberInfo(number)
+	ok, err := p.plg.OnPrecheckRequest(pctx, number)
+	if err != nil {
+		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
+	}
+	if !ok {
+		return nil, false, nil
+	}
+	req, err := p.plg.OnMakeHTTPRequest(pctx, number)
+	if err != nil {
+		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
+	}
+	data, searchSucc, err := p.onRetriveData(ctx, pctx, req, number)
+	if err != nil {
+		return nil, false, err
+	}
+	if !searchSucc {
+		return nil, false, nil
 	}
 	meta, decodeSucc, err := p.plg.OnDecodeHTTPData(pctx, data)
 	if err != nil {
