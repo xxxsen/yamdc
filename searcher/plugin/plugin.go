@@ -9,6 +9,10 @@ import (
 	"yamdc/number"
 )
 
+const (
+	defaultNumberInfoKey = "plugin_ctx_number_info"
+)
+
 type PluginContext struct {
 	ctx    context.Context
 	attach map[string]interface{}
@@ -23,6 +27,17 @@ func NewPluginContext(ctx context.Context) *PluginContext {
 
 func (s *PluginContext) GetContext() context.Context {
 	return s.ctx
+}
+
+func (s *PluginContext) SetNumberInfo(v *number.Number) {
+	s.SetKey(defaultNumberInfoKey, v)
+}
+
+func (s *PluginContext) MustGetNumberInfo() *number.Number {
+	if v, ok := s.GetKey(defaultNumberInfoKey); ok {
+		return v.(*number.Number)
+	}
+	panic("number info not found")
 }
 
 func (s *PluginContext) SetKey(key string, val interface{}) {

@@ -97,6 +97,7 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
 	pctx := plugin.NewPluginContext(ctx)
+	pctx.SetNumberInfo(number)
 	ok, err := p.plg.OnPrecheckRequest(pctx, number)
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
