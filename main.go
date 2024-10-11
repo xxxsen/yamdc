@@ -47,7 +47,7 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
-	store.SetStorage(store.NewDiskStorage(filepath.Join(c.DataDir, "cache")))
+	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
 	}

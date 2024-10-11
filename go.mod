@@ -8,6 +8,7 @@ require (
 	github.com/Conight/go-googletrans v0.2.4
 	github.com/Kagami/go-face v0.0.0-20210630145111-0c14797b4d0e
 	github.com/antchfx/htmlquery v1.3.1
+	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/stretchr/testify v1.9.0
 	github.com/xxxsen/common v0.1.10
 	go.uber.org/zap v1.23.0

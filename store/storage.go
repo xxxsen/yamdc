@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 	"yamdc/hasher"
 )
 
@@ -9,7 +10,7 @@ type DataRewriteFunc func(ctx context.Context, data []byte) ([]byte, error)
 
 type IStorage interface {
 	GetData(ctx context.Context, key string) ([]byte, error)
-	PutData(ctx context.Context, key string, value []byte) error
+	PutData(ctx context.Context, key string, value []byte, expire time.Duration) error
 	IsDataExist(ctx context.Context, key string) (bool, error)
 }
 
@@ -24,7 +25,11 @@ func getDefaultInst() IStorage {
 }
 
 func PutData(ctx context.Context, key string, value []byte) error {
-	return getDefaultInst().PutData(ctx, key, value)
+	return PutDataWithExpire(ctx, key, value, time.Duration(0))
+}
+
+func PutDataWithExpire(ctx context.Context, key string, value []byte, expire time.Duration) error {
+	return getDefaultInst().PutData(ctx, key, value, expire)
 }
 
 func AnonymousPutData(ctx context.Context, value []byte) (string, error) {
