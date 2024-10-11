@@ -99,33 +99,30 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx *plugin.PluginContext, req *http
 	return p.invoker(ctx, req)
 }
 
-func (p *DefaultSearcher) onRetriveData(ctx context.Context, pctx *plugin.PluginContext, req *http.Request, number *number.Number) ([]byte, bool, error) {
+func (p *DefaultSearcher) onRetriveData(ctx context.Context, pctx *plugin.PluginContext, req *http.Request, number *number.Number) ([]byte, error) {
 	key := p.name + ":" + number.GetNumberID()
-	if data, err := store.GetData(ctx, key); err == nil {
-		logutil.GetLogger(ctx).Debug("use search cache", zap.String("key", key), zap.Int("data_len", len(data)))
-		return data, true, nil
-	}
-	rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.invokeHTTPRequest, req)
-	if err != nil {
-		return nil, false, fmt.Errorf("do request failed, err:%w", err)
-	}
-	isSearchSucc, err := p.plg.OnPrecheckResponse(pctx, req, rsp)
-	if err != nil {
-		return nil, false, fmt.Errorf("precheck responnse failed, err:%w", err)
-	}
-	if !isSearchSucc {
-		return nil, false, nil
-	}
-	if rsp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
-	}
-	defer rsp.Body.Close()
-	data, err := client.ReadHTTPData(rsp)
-	if err != nil {
-		return nil, false, fmt.Errorf("read body failed, err:%w", err)
-	}
-	_ = store.PutDataWithExpire(ctx, key, data, defaultPageSearchCacheExpire)
-	return data, true, nil
+	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, func() ([]byte, error) {
+		rsp, err := p.plg.OnHandleHTTPRequest(pctx, p.invokeHTTPRequest, req)
+		if err != nil {
+			return nil, fmt.Errorf("do request failed, err:%w", err)
+		}
+		isSearchSucc, err := p.plg.OnPrecheckResponse(pctx, req, rsp)
+		if err != nil {
+			return nil, fmt.Errorf("precheck responnse failed, err:%w", err)
+		}
+		if !isSearchSucc {
+			return nil, fmt.Errorf("no data found")
+		}
+		if rsp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
+		}
+		defer rsp.Body.Close()
+		data, err := client.ReadHTTPData(rsp)
+		if err != nil {
+			return nil, fmt.Errorf("read body failed, err:%w", err)
+		}
+		return data, nil
+	})
 }
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
@@ -142,12 +139,9 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	if err != nil {
 		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
 	}
-	data, searchSucc, err := p.onRetriveData(ctx, pctx, req, number)
+	data, err := p.onRetriveData(ctx, pctx, req, number)
 	if err != nil {
 		return nil, false, err
-	}
-	if !searchSucc {
-		return nil, false, nil
 	}
 	meta, decodeSucc, err := p.plg.OnDecodeHTTPData(pctx, data)
 	if err != nil {

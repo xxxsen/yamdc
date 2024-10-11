@@ -47,6 +47,20 @@ func GetData(ctx context.Context, key string) ([]byte, error) {
 	return getDefaultInst().GetData(ctx, key)
 }
 
+func LoadData(ctx context.Context, key string, expire time.Duration, cb func() ([]byte, error)) ([]byte, error) {
+	if v, err := GetData(ctx, key); err == nil {
+		return v, nil
+	}
+	data, err := cb()
+	if err != nil {
+		return nil, err
+	}
+	if err := PutDataWithExpire(ctx, key, data, expire); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 func IsDataExist(ctx context.Context, key string) (bool, error) {
 	return getDefaultInst().IsDataExist(ctx, key)
 }
