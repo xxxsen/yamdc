@@ -15,7 +15,6 @@ type freejavbt struct {
 
 func (p *freejavbt) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	uri := "https://freejavbt.com/zh/" + number.GetNumberID()
-	ctx.SetKey("number", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
@@ -43,7 +42,7 @@ func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.Av
 	if err != nil {
 		return nil, false, err
 	}
-	res.Number = ctx.GetKeyOrDefault("number", "").(string)
+	res.Number = ctx.MustGetNumberInfo().GetNumberID()
 	putils.EnableDataTranslate(res)
 	return res, true, nil
 }

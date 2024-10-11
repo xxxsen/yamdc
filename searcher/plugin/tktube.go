@@ -16,13 +16,12 @@ type tktube struct {
 
 func (p *tktube) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
 	nid := strings.ReplaceAll(n.GetNumberID(), "-", "--")
-	ctx.SetKey("number", n.GetNumberID())
 	uri := fmt.Sprintf("https://tktube.com/zh/search/%s/", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
 func (p *tktube) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	numberId := strings.ToUpper(ctx.GetKeyOrDefault("number", "").(string))
+	numberId := strings.ToUpper(ctx.MustGetNumberInfo().GetNumberID())
 	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
 		Ps: []*XPathPair{
 			{
@@ -73,7 +72,7 @@ func (p *tktube) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = ctx.GetKeyOrDefault("number", "").(string)
+	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
 	return meta, true, nil
 }
 

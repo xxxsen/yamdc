@@ -97,3 +97,7 @@ func TestCategory(t *testing.T) {
 		assert.Equal(t, 0, len(n.GetCategory()))
 	}
 }
+
+func TestAlnumber(t *testing.T) {
+	assert.Equal(t, "fc2ppv12345", GetCleanID("fc2-ppv_12345"))
+}

@@ -30,7 +30,6 @@ func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Req
 		return nil, fmt.Errorf("unabe to decode number")
 	}
 	number = res[1]
-	ctx.SetKey("number", number)
 	uri := "https://adult.contents.fc2.com/article/" + number + "/"
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
@@ -97,7 +96,7 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = "FC2-PPV-" + ctx.GetKeyOrDefault("number", "").(string)
+	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
 	putils.EnableDataTranslate(meta)
 	return meta, true, nil
 }

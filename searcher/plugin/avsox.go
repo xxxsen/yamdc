@@ -23,16 +23,12 @@ type avsox struct {
 }
 
 func (p *avsox) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	ctx.SetKey("number_info", number)
 	return http.NewRequest(http.MethodGet, "https://avsox.click", nil) //返回一个假的request
 }
 
 func (p *avsox) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, _ *http.Request) (*http.Response, error) {
-	number := ctx.GetKeyOrDefault("number_info", nil).(*number.Number)
+	number := ctx.MustGetNumberInfo()
 	num := strings.ToUpper(number.GetNumberID())
-	if strings.Contains(num, "FC2") && !strings.Contains(num, "FC2-PPV") {
-		num = strings.ReplaceAll(num, "FC2", "FC2-PPV")
-	}
 	tryList := p.generateTryList(num)
 	logger := logutil.GetLogger(ctx.GetContext()).With(zap.String("plugin", "avsox"))
 	logger.Debug("build try list succ", zap.Int("count", len(tryList)), zap.Strings("list", tryList))

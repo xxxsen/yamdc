@@ -24,7 +24,6 @@ type caribpr struct {
 }
 
 func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	ctx.SetKey("number", number.GetNumberID())
 	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.GetNumberID())
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
@@ -79,7 +78,7 @@ func (p *caribpr) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMe
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = ctx.GetKeyOrDefault("number", "").(string)
+	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
 	meta.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", meta.Number)
 	putils.EnableDataTranslate(meta)
 	return meta, true, nil

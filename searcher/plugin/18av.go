@@ -16,7 +16,6 @@ type av18 struct {
 
 func (p *av18) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number.GetNumberID())
-	ctx.SetKey("number", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
@@ -33,7 +32,7 @@ func (p *av18) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 			},
 		},
 		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
-			number := strings.ToUpper(ctx.GetKeyOrDefault("number", "").(string))
+			number := strings.ToUpper(ctx.MustGetNumberInfo().GetNumberID())
 			linkList := ps[0].Result
 			titleList := ps[1].Result
 			for idx, link := range linkList {

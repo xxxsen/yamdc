@@ -135,3 +135,15 @@ func Parse(str string) (*Number, error) {
 	rs.cat = DetermineCategory(rs.numberId)
 	return rs, nil
 }
+
+// GetCleanID 将番号中`-`, `_` 进行移除
+func GetCleanID(str string) string {
+	sb := strings.Builder{}
+	for _, c := range str {
+		if c == '-' || c == '_' {
+			continue
+		}
+		sb.WriteRune(c)
+	}
+	return sb.String()
+}

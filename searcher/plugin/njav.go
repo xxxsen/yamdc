@@ -17,13 +17,12 @@ type njav struct {
 func (p *njav) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
 	nid := number.GetNumberID()
 	nid = strings.ReplaceAll(nid, "_", "-") //将下划线替换为中划线
-	ctx.SetKey("number", nid)
 	uri := fmt.Sprintf("https://njavtv.com/cn/search/%s", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
 func (p *njav) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	numberId := strings.ToUpper(ctx.GetKeyOrDefault("number", "").(string))
+	cleanNumberId := strings.ToUpper(number.GetCleanID(ctx.MustGetNumberInfo().GetNumberID()))
 	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
 		Ps: []*XPathPair{
 			{
@@ -40,8 +39,8 @@ func (p *njav) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 			titles := ps[1].Result
 			for i, link := range links {
 				title := titles[i]
-				title = strings.ToUpper(title)
-				if strings.Contains(title, numberId) {
+				title = strings.ToUpper(number.GetCleanID(title))
+				if strings.Contains(title, cleanNumberId) {
 					return link, true, nil
 				}
 			}
@@ -77,7 +76,7 @@ func (p *njav) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	meta.Title = meta.Number + " " + meta.Title //将番号补齐到标题中, 避免jellyfin无法搜索
+	meta.Title = ctx.MustGetNumberInfo().GetNumberID() + " " + meta.Title //将番号补齐到标题中, 避免jellyfin无法搜索
 	return meta, true, nil
 }
 

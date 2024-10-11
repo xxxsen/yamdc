@@ -30,30 +30,23 @@ func (s *PluginContext) GetContext() context.Context {
 }
 
 func (s *PluginContext) SetNumberInfo(v *number.Number) {
-	s.SetKey(defaultNumberInfoKey, v)
+	s.setKey(defaultNumberInfoKey, v)
 }
 
 func (s *PluginContext) MustGetNumberInfo() *number.Number {
-	if v, ok := s.GetKey(defaultNumberInfoKey); ok {
+	if v, ok := s.getKey(defaultNumberInfoKey); ok {
 		return v.(*number.Number)
 	}
 	panic("number info not found")
 }
 
-func (s *PluginContext) SetKey(key string, val interface{}) {
+func (s *PluginContext) setKey(key string, val interface{}) {
 	s.attach[key] = val
 }
 
-func (s *PluginContext) GetKey(key string) (interface{}, bool) {
+func (s *PluginContext) getKey(key string) (interface{}, bool) {
 	v, ok := s.attach[key]
 	return v, ok
-}
-
-func (s *PluginContext) GetKeyOrDefault(key string, def interface{}) interface{} {
-	if v, ok := s.GetKey(key); ok {
-		return v
-	}
-	return def
 }
 
 type HTTPInvoker func(ctx *PluginContext, req *http.Request) (*http.Response, error)
