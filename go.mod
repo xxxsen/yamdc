@@ -11,7 +11,7 @@ require (
 	github.com/esimov/pigo v1.4.6
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/google/uuid v1.6.0
-	github.com/imroc/req/v3 v3.46.0
+	github.com/imroc/req/v3 v3.48.0
 	github.com/stretchr/testify v1.9.0
 	github.com/xxxsen/common v0.1.10
 	go.uber.org/zap v1.23.0
@@ -36,7 +36,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.47.0 // indirect
+	github.com/quic-go/quic-go v0.48.2 // indirect
 	github.com/refraction-networking/utls v1.6.7 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	go.uber.org/atomic v1.7.0 // indirect
