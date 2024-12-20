@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultPageSearchCacheExpire = 1 * time.Hour
+	defaultPageSearchCacheExpire = 30 * 24 * time.Hour
 )
 
 type DefaultSearcher struct {

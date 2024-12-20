@@ -17,6 +17,7 @@ import (
 	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/common/replacer"
 	"github.com/xxxsen/common/trace"
 	"go.uber.org/zap"
 )
@@ -137,20 +138,22 @@ func (c *Capture) processFileList(ctx context.Context, fcs []*model.FileContext)
 }
 
 func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
-	now := time.UnixMilli(fc.Meta.ReleaseDate)
-	date := now.Format(time.DateOnly)
-	year := fmt.Sprintf("%d", now.Year())
-	month := fmt.Sprintf("%d", now.Month())
+	ts := time.UnixMilli(fc.Meta.ReleaseDate)
+	date := ts.Format(time.DateOnly)
+	year := fmt.Sprintf("%d", ts.Year())
+	month := fmt.Sprintf("%d", ts.Month())
 	actor := "佚名"
 	if len(fc.Meta.Actors) > 0 {
 		actor = utils.BuildAuthorsName(fc.Meta.Actors, 256)
 	}
-	naming := c.c.Naming
-	naming = strings.ReplaceAll(naming, NamingReleaseDate, date)
-	naming = strings.ReplaceAll(naming, NamingReleaseYear, year)
-	naming = strings.ReplaceAll(naming, NamingReleaseMonth, month)
-	naming = strings.ReplaceAll(naming, NamingActor, actor)
-	naming = strings.ReplaceAll(naming, NamingNumber, fc.Number.GetNumberID())
+	m := map[string]interface{}{
+		NamingReleaseDate:  date,
+		NamingReleaseYear:  year,
+		NamingReleaseMonth: month,
+		NamingActor:        actor,
+		NamingNumber:       fc.Number.GetNumberID(),
+	}
+	naming := replacer.ReplaceByMap(c.c.Naming, m)
 	if len(naming) == 0 {
 		return fmt.Errorf("invalid naming")
 	}
