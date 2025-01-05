@@ -11,6 +11,7 @@ import (
 	"yamdc/client"
 	"yamdc/config"
 	"yamdc/dependency"
+	"yamdc/envflag"
 	"yamdc/face"
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
@@ -47,6 +48,12 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
+
+	if err := envflag.Init(); err != nil {
+		logkit.Fatal("init envflag failed", zap.Error(err))
+	}
+	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
+
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
@@ -104,7 +111,6 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[number.Ca
 		capture.WithSaveDir(c.SaveDir),
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
-		capture.WithEnableLinkMode(c.SwitchConfig.EnableLinkMode),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 	)
 	return capture.New(opts...)

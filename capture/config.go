@@ -24,7 +24,6 @@ type config struct {
 	SaveDir           string
 	Naming            string
 	ExtraMediaExtList []string
-	LinkMode          bool
 }
 
 type Option func(c *config)
@@ -56,12 +55,6 @@ func WithProcessor(p processor.IProcessor) Option {
 func WithNamingRule(r string) Option {
 	return func(c *config) {
 		c.Naming = r
-	}
-}
-
-func WithEnableLinkMode(v bool) Option {
-	return func(c *config) {
-		c.LinkMode = v
 	}
 }
 

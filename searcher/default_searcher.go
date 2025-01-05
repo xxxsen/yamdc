@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"yamdc/client"
+	"yamdc/envflag"
 	"yamdc/hasher"
 	"yamdc/model"
 	"yamdc/number"
@@ -102,7 +103,7 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx context.Context, req *http.Reque
 
 func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, number *number.Number) ([]byte, error) {
 	key := p.name + ":" + number.GetNumberID()
-	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, func() ([]byte, error) {
+	dataLoader := func() ([]byte, error) {
 		rsp, err := p.plg.OnHandleHTTPRequest(ctx, p.invokeHTTPRequest, req)
 		if err != nil {
 			return nil, fmt.Errorf("do request failed, err:%w", err)
@@ -123,7 +124,11 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 			return nil, fmt.Errorf("read body failed, err:%w", err)
 		}
 		return data, nil
-	})
+	}
+	if !envflag.IsEnableSearchMetaCache() {
+		return dataLoader()
+	}
+	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, dataLoader)
 }
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
