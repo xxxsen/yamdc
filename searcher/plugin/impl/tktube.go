@@ -1,6 +1,7 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,22 +9,27 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
+	"yamdc/searcher/plugin/twostep"
 )
 
 type tktube struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *tktube) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
+func (p *tktube) OnMakeHTTPRequest(ctx context.Context, n *number.Number) (*http.Request, error) {
 	nid := strings.ReplaceAll(n.GetNumberID(), "-", "--")
 	uri := fmt.Sprintf("https://tktube.com/zh/search/%s/", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *tktube) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	numberId := strings.ToUpper(ctx.MustGetNumberInfo().GetNumberID())
-	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
-		Ps: []*XPathPair{
+func (p *tktube) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
+	numberId := strings.ToUpper(meta.GetNumberId(ctx))
+	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, &twostep.XPathTwoStepContext{
+		Ps: []*twostep.XPathPair{
 			{
 				Name:  "links",
 				XPath: `//div[@id="list_videos_videos_list_search_result_items"]/div/a/@href`,
@@ -33,7 +39,7 @@ func (p *tktube) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, re
 				XPath: `//div[@id="list_videos_videos_list_search_result_items"]/div/a/strong[@class="title"]/text()`,
 			},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(ps []*twostep.XPathPair) (string, bool, error) {
 			links := ps[0].Result
 			names := ps[1].Result
 			for i := 0; i < len(links); i++ {
@@ -49,7 +55,7 @@ func (p *tktube) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, re
 	})
 }
 
-func (p *tktube) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		TitleExpr:           `//div[@class="headline"]/h1/text()`,
 		PlotExpr:            "",
@@ -65,17 +71,17 @@ func (p *tktube) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		PosterExpr:          "",
 		SampleImageListExpr: "",
 	}
-	meta, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+	res, err := dec.DecodeHTML(data,
+		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
-	return meta, true, nil
+	res.Number = meta.GetNumberId(ctx)
+	return res, true, nil
 }
 
 func init() {
-	Register(SSTKTube, PluginToCreator(&tktube{}))
+	factory.Register(constant.SSTKTube, factory.PluginToCreator(&tktube{}))
 }

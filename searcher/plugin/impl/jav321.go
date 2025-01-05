@@ -1,6 +1,7 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -9,14 +10,17 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
 	putils "yamdc/searcher/utils"
 )
 
 type jav321 struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *jav321) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	data := url.Values{}
 	data.Set("sn", number.GetNumberID())
 	body := data.Encode()
@@ -34,7 +38,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,
@@ -52,8 +56,8 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 	}
 	rs, err := dec.DecodeHTML(data,
 		decoder.WithDefaultStringProcessor(p.defaultStringProcessor),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
@@ -63,5 +67,5 @@ func (p *jav321) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 }
 
 func init() {
-	Register(SSJav321, PluginToCreator(&jav321{}))
+	factory.Register(constant.SSJav321, factory.PluginToCreator(&jav321{}))
 }

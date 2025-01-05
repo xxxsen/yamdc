@@ -1,6 +1,7 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,23 +9,28 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
+	"yamdc/searcher/plugin/twostep"
 )
 
 type njav struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *njav) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *njav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	nid := number.GetNumberID()
 	nid = strings.ReplaceAll(nid, "_", "-") //将下划线替换为中划线
 	uri := fmt.Sprintf("https://njavtv.com/cn/search/%s", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *njav) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	cleanNumberId := strings.ToUpper(number.GetCleanID(ctx.MustGetNumberInfo().GetNumberID()))
-	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
-		Ps: []*XPathPair{
+func (p *njav) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
+	cleanNumberId := strings.ToUpper(number.GetCleanID(meta.GetNumberId(ctx)))
+	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, &twostep.XPathTwoStepContext{
+		Ps: []*twostep.XPathPair{
 			{
 				Name:  "links",
 				XPath: `//div[@class="my-2 text-sm text-nord4 truncate"]/a[@class="text-secondary group-hover:text-primary"]/@href`,
@@ -34,7 +40,7 @@ func (p *njav) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 				XPath: `//div[@class="my-2 text-sm text-nord4 truncate"]/a[@class="text-secondary group-hover:text-primary"]/text()`,
 			},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(ps []*twostep.XPathPair) (string, bool, error) {
 			links := ps[0].Result
 			titles := ps[1].Result
 			for i, link := range links {
@@ -52,7 +58,7 @@ func (p *njav) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 
 }
 
-func (p *njav) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *njav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="text-secondary" and contains(span[text()], "番号:")]/span[@class="font-medium"]/text()`,
 		TitleExpr:           `//div[@class="text-secondary" and contains(span[text()], "标题:")]/span[@class="font-medium"]/text()`,
@@ -69,7 +75,7 @@ func (p *njav) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 		PosterExpr:          "",
 		SampleImageListExpr: "",
 	}
-	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())))
+	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)))
 	if err != nil {
 		return nil, false, err
 	}
@@ -80,5 +86,5 @@ func (p *njav) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 }
 
 func init() {
-	Register(SSNJav, PluginToCreator(&njav{}))
+	factory.Register(constant.SSNJav, factory.PluginToCreator(&njav{}))
 }

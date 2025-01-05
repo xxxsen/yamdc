@@ -26,8 +26,8 @@ import (
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 
-	"yamdc/searcher/plugin"
-	_ "yamdc/searcher/plugin/airav"
+	"yamdc/searcher/plugin/factory"
+	_ "yamdc/searcher/plugin/register"
 )
 
 var conf = flag.String("config", "./config.json", "config file")
@@ -54,7 +54,7 @@ func main() {
 	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
-	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
+	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
 	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
 	for _, ct := range c.CategoryPlugins {
@@ -129,7 +129,7 @@ func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearche
 		if !ok {
 			args = struct{}{}
 		}
-		plg, err := plugin.CreatePlugin(name, args)
+		plg, err := factory.CreatePlugin(name, args)
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
