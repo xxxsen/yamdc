@@ -1,25 +1,29 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
 	putils "yamdc/searcher/utils"
 )
 
 type javhoo struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *javhoo) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="project_info"]/p/span[@class="categories"]/text()`,
 		TitleExpr:           `//header[@class="article-header"]/h1[@class="article-title"]/text()`,
@@ -37,8 +41,8 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: `//div[@id="sample-box"]/div/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
@@ -51,5 +55,5 @@ func (p *javhoo) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 }
 
 func init() {
-	Register(SSJavhoo, PluginToCreator(&javhoo{}))
+	factory.Register(constant.SSJavhoo, factory.PluginToCreator(&javhoo{}))
 }

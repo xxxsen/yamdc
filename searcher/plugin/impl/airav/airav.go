@@ -1,6 +1,7 @@
 package airav
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,17 +9,19 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/parser"
-	"yamdc/searcher/plugin"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
 
 type airav struct {
-	plugin.DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *airav) OnMakeHTTPRequest(ctx *plugin.PluginContext, number *number.Number) (*http.Request, error) {
+func (p *airav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number.GetNumberID()), nil)
 	if err != nil {
 		return nil, err
@@ -26,7 +29,7 @@ func (p *airav) OnMakeHTTPRequest(ctx *plugin.PluginContext, number *number.Numb
 	return req, nil
 }
 
-func (p *airav) OnDecodeHTTPData(ctx *plugin.PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	vdata := &VideoData{}
 	if err := json.Unmarshal(data, vdata); err != nil {
 		return nil, false, fmt.Errorf("decode json data failed, err:%w", err)
@@ -38,7 +41,7 @@ func (p *airav) OnDecodeHTTPData(ctx *plugin.PluginContext, data []byte) (*model
 		return nil, false, nil
 	}
 	if vdata.Count > 1 {
-		logutil.GetLogger(ctx.GetContext()).Warn("more than one result, may cause data mismatch", zap.Int("count", vdata.Count))
+		logutil.GetLogger(ctx).Warn("more than one result, may cause data mismatch", zap.Int("count", vdata.Count))
 	}
 	result := vdata.Result
 	avdata := &model.AvMeta{
@@ -46,7 +49,7 @@ func (p *airav) OnDecodeHTTPData(ctx *plugin.PluginContext, data []byte) (*model
 		Title:       result.Name,
 		Plot:        result.Description,
 		Actors:      p.readActors(&result),
-		ReleaseDate: parser.DefaultReleaseDateParser(ctx.GetContext())(result.PublishDate),
+		ReleaseDate: parser.DefaultReleaseDateParser(ctx)(result.PublishDate),
 		Studio:      p.readStudio(&result),
 		Genres:      p.readGenres(&result),
 		Cover: &model.File{
@@ -91,5 +94,5 @@ func (p *airav) readActors(result *Result) []string {
 }
 
 func init() {
-	plugin.Register(plugin.SSAirav, plugin.PluginToCreator(&airav{}))
+	factory.Register(constant.SSAirav, factory.PluginToCreator(&airav{}))
 }

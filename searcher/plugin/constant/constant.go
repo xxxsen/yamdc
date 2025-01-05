@@ -1,4 +1,4 @@
-package plugin
+package constant
 
 const (
 	SSJavBus    = "javbus"

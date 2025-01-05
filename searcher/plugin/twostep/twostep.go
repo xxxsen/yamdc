@@ -1,9 +1,11 @@
-package plugin
+package twostep
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/utils"
 )
 
@@ -32,7 +34,7 @@ func isCodeInValidStatusCodeList(lst []int, code int) bool {
 	return false
 }
 
-func HandleXPathTwoStepSearch(ctx *PluginContext, invoker HTTPInvoker, req *http.Request, xctx *XPathTwoStepContext) (*http.Response, error) {
+func HandleXPathTwoStepSearch(ctx context.Context, invoker api.HTTPInvoker, req *http.Request, xctx *XPathTwoStepContext) (*http.Response, error) {
 	rsp, err := invoker(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("step search failed, err:%w", err)

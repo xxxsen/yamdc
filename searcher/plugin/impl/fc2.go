@@ -1,4 +1,4 @@
-package plugin
+package impl
 
 import (
 	"context"
@@ -11,6 +11,10 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
 	putils "yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -20,10 +24,10 @@ import (
 var defaultFc2NumberParser = regexp.MustCompile(`^fc2.*?(\d+)$`)
 
 type fc2 struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *fc2) OnMakeHTTPRequest(ctx *PluginContext, n *number.Number) (*http.Request, error) {
+func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n *number.Number) (*http.Request, error) {
 	number := strings.ToLower(n.GetNumberID())
 	res := defaultFc2NumberParser.FindStringSubmatch(number)
 	if len(res) != 2 {
@@ -74,7 +78,7 @@ func (p *fc2) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
 	}
 }
 
-func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *fc2) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          ``,
 		TitleExpr:           `/html/head/title/text()`,
@@ -89,18 +93,18 @@ func (p *fc2) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, 
 		PosterExpr:          `//div[@class='items_article_MainitemThumb']/span/img/@src`, //这东西就一张封面图, 直接当海报得了
 		SampleImageListExpr: `//ul[@class="items_article_SampleImagesArea"]/li/a/@href`,
 	}
-	meta, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(p.decodeDuration(ctx.GetContext())),
-		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx.GetContext())),
+	metadata, err := dec.DecodeHTML(data,
+		decoder.WithDurationParser(p.decodeDuration(ctx)),
+		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
-	putils.EnableDataTranslate(meta)
-	return meta, true, nil
+	metadata.Number = meta.GetNumberId(ctx)
+	putils.EnableDataTranslate(metadata)
+	return metadata, true, nil
 }
 
 func init() {
-	Register(SSFc2, PluginToCreator(&fc2{}))
+	factory.Register(constant.SSFc2, factory.PluginToCreator(&fc2{}))
 }

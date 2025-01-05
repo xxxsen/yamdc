@@ -1,4 +1,4 @@
-package plugin
+package impl
 
 import (
 	"context"
@@ -10,6 +10,10 @@ import (
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
 	putils "yamdc/searcher/utils"
 	"yamdc/utils"
 
@@ -20,10 +24,10 @@ import (
 )
 
 type caribpr struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *caribpr) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.GetNumberID())
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
@@ -51,7 +55,7 @@ func (p *caribpr) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc
 	}
 }
 
-func (p *caribpr) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	reader := transform.NewReader(strings.NewReader(string(data)), japanese.EUCJP.NewDecoder())
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -71,19 +75,19 @@ func (p *caribpr) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMe
 		PosterExpr:          ``,
 		SampleImageListExpr: `//div[@class='movie-gallery']/div[@class='section is-wide']/div[2]/div[@class='grid-item']/div/a/@href`,
 	}
-	meta, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(p.decodeDuration(ctx.GetContext())),
-		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx.GetContext())),
+	metadata, err := dec.DecodeHTML(data,
+		decoder.WithDurationParser(p.decodeDuration(ctx)),
+		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
 	}
-	meta.Number = ctx.MustGetNumberInfo().GetNumberID()
-	meta.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", meta.Number)
-	putils.EnableDataTranslate(meta)
-	return meta, true, nil
+	metadata.Number = meta.GetNumberId(ctx)
+	metadata.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", metadata.Number)
+	putils.EnableDataTranslate(metadata)
+	return metadata, true, nil
 }
 
 func init() {
-	Register(SSCaribpr, PluginToCreator(&caribpr{}))
+	factory.Register(constant.SSCaribpr, factory.PluginToCreator(&caribpr{}))
 }

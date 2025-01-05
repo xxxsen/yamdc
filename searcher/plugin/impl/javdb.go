@@ -1,27 +1,33 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
+	"yamdc/searcher/plugin/twostep"
 	"yamdc/searcher/utils"
 )
 
 type javdb struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *javdb) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *javdb) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	link := fmt.Sprintf("https://javdb.com/search?q=%s&f=all", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, link, nil)
 }
 
-func (p *javdb) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	return HandleXPathTwoStepSearch(ctx, invoker, req, &XPathTwoStepContext{
-		Ps: []*XPathPair{
+func (p *javdb) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
+	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, &twostep.XPathTwoStepContext{
+		Ps: []*twostep.XPathPair{
 			{
 				Name:  "read-link",
 				XPath: `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/@href`,
@@ -31,10 +37,10 @@ func (p *javdb) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req
 				XPath: `//div[@class="movie-list h cols-4 vcols-8"]/div[@class="item"]/a/div[@class="video-title"]/strong`,
 			},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(ps []*twostep.XPathPair) (string, bool, error) {
 			linklist := ps[0].Result
 			numberlist := ps[1].Result
-			num := number.GetCleanID(ctx.MustGetNumberInfo().GetNumberID())
+			num := number.GetCleanID(meta.GetNumberId(ctx))
 			for idx, numberItem := range numberlist {
 				link := linklist[idx]
 				if number.GetCleanID(numberItem) == num {
@@ -49,7 +55,7 @@ func (p *javdb) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req
 	})
 }
 
-func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *javdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//a[@class="button is-white copy-to-clipboard"]/@data-clipboard-text`,
 		TitleExpr:           `//h2[@class="title is-4"]/strong[@class="current-title"]`,
@@ -67,8 +73,8 @@ func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		SampleImageListExpr: `//div[@class="tile-images preview-images"]/a[@class="tile-item"]/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
@@ -81,5 +87,5 @@ func (p *javdb) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 }
 
 func init() {
-	Register(SSJavDB, PluginToCreator(&javdb{}))
+	factory.Register(constant.SSJavDB, factory.PluginToCreator(&javdb{}))
 }

@@ -1,6 +1,7 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,6 +9,10 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
 	"yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -19,18 +24,17 @@ const (
 )
 
 type avsox struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *avsox) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *avsox) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	return http.NewRequest(http.MethodGet, "https://avsox.click", nil) //返回一个假的request
 }
 
-func (p *avsox) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, _ *http.Request) (*http.Response, error) {
-	number := ctx.MustGetNumberInfo()
-	num := strings.ToUpper(number.GetNumberID())
+func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, _ *http.Request) (*http.Response, error) {
+	num := strings.ToUpper(meta.GetNumberId(ctx))
 	tryList := p.generateTryList(num)
-	logger := logutil.GetLogger(ctx.GetContext()).With(zap.String("plugin", "avsox"))
+	logger := logutil.GetLogger(ctx).With(zap.String("plugin", "avsox"))
 	logger.Debug("build try list succ", zap.Int("count", len(tryList)), zap.Strings("list", tryList))
 	var link string
 	var ok bool
@@ -70,7 +74,7 @@ func (p *avsox) generateTryList(num string) []string {
 	return tryList
 }
 
-func (p *avsox) trySearchByNumber(ctx *PluginContext, invoker HTTPInvoker, number string) (string, bool, error) {
+func (p *avsox) trySearchByNumber(ctx context.Context, invoker api.HTTPInvoker, number string) (string, bool, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://avsox.click/cn/search/%s", number), nil)
 	if err != nil {
 		return "", false, err
@@ -100,7 +104,7 @@ func (p *avsox) trySearchByNumber(ctx *PluginContext, invoker HTTPInvoker, numbe
 	return res[0], true, nil
 }
 
-func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//span[contains(text(),"识别码:")]/../span[2]/text()`,
 		TitleExpr:           `/html/body/div[2]/h3/text()`,
@@ -118,8 +122,8 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 		decoder.WithDefaultStringProcessor(strings.TrimSpace),
 	)
 	if err != nil {
@@ -133,5 +137,5 @@ func (p *avsox) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta
 }
 
 func init() {
-	Register(SSAvsox, PluginToCreator(&avsox{}))
+	factory.Register(constant.SSAvsox, factory.PluginToCreator(&avsox{}))
 }

@@ -1,24 +1,29 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
 	putils "yamdc/searcher/utils"
 )
 
 type freejavbt struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *freejavbt) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	uri := "https://freejavbt.com/zh/" + number.GetNumberID()
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          "",
 		TitleExpr:           `//h1[@class="text-white"]/strong/text()`,
@@ -36,17 +41,17 @@ func (p *freejavbt) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.Av
 		SampleImageListExpr: `//div[@class="preview"]/a/img/@data-src`,
 	}
 	res, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
 	}
-	res.Number = ctx.MustGetNumberInfo().GetNumberID()
+	res.Number = meta.GetNumberId(ctx)
 	putils.EnableDataTranslate(res)
 	return res, true, nil
 }
 
 func init() {
-	Register(SSFreeJavBt, PluginToCreator(&freejavbt{}))
+	factory.Register(constant.SSFreeJavBt, factory.PluginToCreator(&freejavbt{}))
 }

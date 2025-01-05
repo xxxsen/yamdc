@@ -1,6 +1,7 @@
-package plugin
+package impl
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,20 +9,25 @@ import (
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
+	"yamdc/searcher/plugin/meta"
+	"yamdc/searcher/plugin/twostep"
 )
 
 type av18 struct {
-	DefaultPlugin
+	api.DefaultPlugin
 }
 
-func (p *av18) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
+func (p *av18) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
 	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number.GetNumberID())
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *av18) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
-	xctx := &XPathTwoStepContext{
-		Ps: []*XPathPair{
+func (p *av18) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
+	xctx := &twostep.XPathTwoStepContext{
+		Ps: []*twostep.XPathPair{
 			{
 				Name:  "read-link",
 				XPath: `//div[@class="content flex-columns small px-2"]/span[@class="title"]/a/@href`,
@@ -31,8 +37,8 @@ func (p *av18) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 				XPath: `//div[@class="content flex-columns small px-2"]/span[@class="title"]/a/text()`,
 			},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
-			number := strings.ToUpper(ctx.MustGetNumberInfo().GetNumberID())
+		LinkSelector: func(ps []*twostep.XPathPair) (string, bool, error) {
+			number := strings.ToUpper(meta.GetNumberId(ctx))
 			linkList := ps[0].Result
 			titleList := ps[1].Result
 			for idx, link := range linkList {
@@ -47,7 +53,7 @@ func (p *av18) OnHandleHTTPRequest(ctx *PluginContext, invoker HTTPInvoker, req 
 		CheckResultCountMatch: true,
 		LinkPrefix:            "https://18av.me/cn",
 	}
-	return HandleXPathTwoStepSearch(ctx, invoker, req, xctx)
+	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, xctx)
 }
 
 func (p *av18) coverParser(in string) string {
@@ -58,7 +64,7 @@ func (p *av18) plotParser(in string) string {
 	return strings.TrimSpace(strings.TrimLeft(in, "简介："))
 }
 
-func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *av18) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="px-0 flex-columns"]/div[@class="number"]/text()`,
 		TitleExpr:           `//div[@class="d-flex px-3 py-2 name col bg-w"]/h1[@class="h4 b"]/text()`,
@@ -78,8 +84,8 @@ func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 	meta, err := dec.DecodeHTML(data,
 		decoder.WithCoverParser(p.coverParser),
 		decoder.WithPlotParser(p.plotParser),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
@@ -91,5 +97,5 @@ func (p *av18) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta,
 }
 
 func init() {
-	Register(SS18AV, PluginToCreator(&av18{}))
+	factory.Register(constant.SS18AV, factory.PluginToCreator(&av18{}))
 }

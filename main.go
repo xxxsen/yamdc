@@ -11,6 +11,7 @@ import (
 	"yamdc/client"
 	"yamdc/config"
 	"yamdc/dependency"
+	"yamdc/envflag"
 	"yamdc/face"
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
@@ -26,8 +27,8 @@ import (
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 
-	"yamdc/searcher/plugin"
-	_ "yamdc/searcher/plugin/airav"
+	"yamdc/searcher/plugin/factory"
+	_ "yamdc/searcher/plugin/register"
 )
 
 var conf = flag.String("config", "./config.json", "config file")
@@ -47,6 +48,12 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
+
+	if err := envflag.Init(); err != nil {
+		logkit.Fatal("init envflag failed", zap.Error(err))
+	}
+	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
+
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := translator.Init(); err != nil {
 		logkit.Error("init translater failed", zap.Error(err))
@@ -54,7 +61,7 @@ func main() {
 	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
-	logkit.Info("support plugins", zap.Strings("plugins", plugin.Plugins()))
+	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
 	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
 	for _, ct := range c.CategoryPlugins {
@@ -104,7 +111,6 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[number.Ca
 		capture.WithSaveDir(c.SaveDir),
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
-		capture.WithEnableLinkMode(c.SwitchConfig.EnableLinkMode),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 	)
 	return capture.New(opts...)
@@ -129,7 +135,7 @@ func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearche
 		if !ok {
 			args = struct{}{}
 		}
-		plg, err := plugin.CreatePlugin(name, args)
+		plg, err := factory.CreatePlugin(name, args)
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}

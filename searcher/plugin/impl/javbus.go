@@ -1,24 +1,33 @@
-package plugin
+package impl
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
+	"yamdc/searcher/plugin/api"
+	"yamdc/searcher/plugin/constant"
+	"yamdc/searcher/plugin/factory"
 	putils "yamdc/searcher/utils"
 )
 
-type javbus struct {
-	DefaultPlugin
+var defaultJavBusDomainList = []string{
+	"www.javbus.com",
 }
 
-func (p *javbus) OnMakeHTTPRequest(ctx *PluginContext, number *number.Number) (*http.Request, error) {
-	url := "https://www.javbus.com/" + number.GetNumberID()
+type javbus struct {
+	api.DefaultPlugin
+}
+
+func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
+	url := fmt.Sprintf("https://%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number.GetNumberID())
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 
-func (p *javbus) OnDecorateRequest(ctx *PluginContext, req *http.Request) error {
+func (p *javbus) OnDecorateRequest(ctx context.Context, req *http.Request) error {
 	req.AddCookie(&http.Cookie{
 		Name:  "existmag",
 		Value: "mag",
@@ -37,7 +46,7 @@ func (p *javbus) OnDecorateRequest(ctx *PluginContext, req *http.Request) error 
 	return nil
 }
 
-func (p *javbus) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMeta, bool, error) {
+func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="row movie"]/div[@class="col-md-3 info"]/p[span[contains(text(),'識別碼:')]]/span[2]/text()`,
 		TitleExpr:           `//div[@class="container"]/h3`,
@@ -54,8 +63,8 @@ func (p *javbus) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx.GetContext())),
-		decoder.WithDurationParser(parser.DefaultDurationParser(ctx.GetContext())),
+		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err
@@ -65,5 +74,5 @@ func (p *javbus) OnDecodeHTTPData(ctx *PluginContext, data []byte) (*model.AvMet
 }
 
 func init() {
-	Register(SSJavBus, PluginToCreator(&javbus{}))
+	factory.Register(constant.SSJavBus, factory.PluginToCreator(&javbus{}))
 }
