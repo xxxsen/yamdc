@@ -29,12 +29,22 @@ func (h *tagPadderHandler) generateNumberPrefixTag(fc *model.FileContext) (strin
 	return sb.String(), true
 }
 
+func (h *tagPadderHandler) rewriteOrAppendTag(fc *model.AvMeta, tagname string) {
+	for idx, item := range fc.Genres {
+		if strings.EqualFold(item, tagname) {
+			fc.Genres[idx] = tagname
+			return
+		}
+	}
+	fc.Genres = append(fc.Genres, tagname)
+}
+
 func (h *tagPadderHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	//提取番号特有的tag
 	fc.Meta.Genres = append(fc.Meta.Genres, fc.Number.GenerateTags()...)
 	//提取番号前缀作为tag
 	if tag, ok := h.generateNumberPrefixTag(fc); ok {
-		fc.Meta.Genres = append(fc.Meta.Genres, tag)
+		h.rewriteOrAppendTag(fc.Meta, tag)
 	}
 	fc.Meta.Genres = utils.DedupStringList(fc.Meta.Genres)
 	return nil
