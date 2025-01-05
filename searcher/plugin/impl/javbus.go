@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
@@ -13,12 +14,16 @@ import (
 	putils "yamdc/searcher/utils"
 )
 
+var defaultJavBusDomainList = []string{
+	"www.javbus.com",
+}
+
 type javbus struct {
 	api.DefaultPlugin
 }
 
 func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	url := "https://www.javbus.com/" + number.GetNumberID()
+	url := fmt.Sprintf("https://%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number.GetNumberID())
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 
