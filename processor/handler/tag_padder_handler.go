@@ -30,11 +30,15 @@ func (h *tagPadderHandler) generateNumberPrefixTag(fc *model.FileContext) (strin
 }
 
 func (h *tagPadderHandler) rewriteOrAppendTag(fc *model.AvMeta, tagname string) {
+	isContained := false
 	for idx, item := range fc.Genres {
 		if strings.EqualFold(item, tagname) {
 			fc.Genres[idx] = tagname
-			return
+			isContained = true
 		}
+	}
+	if isContained {
+		return
 	}
 	fc.Genres = append(fc.Genres, tagname)
 }
