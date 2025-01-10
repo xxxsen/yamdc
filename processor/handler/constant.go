@@ -8,4 +8,5 @@ const (
 	HWatermakrMaker  = "watermark_maker"
 	HTagPadder       = "tag_padder"
 	HNumberTitle     = "number_title"
+	HActorSpliter    = "actor_spliter"
 )
