@@ -20,6 +20,8 @@ require (
 	golang.org/x/text v0.21.0
 )
 
+require github.com/mitchellh/mapstructure v1.5.0 // indirect
+
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/antchfx/xpath v1.3.0 // indirect
@@ -32,7 +34,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.9
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/onsi/ginkgo/v2 v2.20.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

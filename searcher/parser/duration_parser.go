@@ -17,9 +17,18 @@ var (
 	defaultDurationRegexp = regexp.MustCompile(`\s*(\d+)\s*.+`)
 )
 
+func cleanTimeSequence(res string) []string {
+	list := strings.Split(res, ":")
+	rs := make([]string, 0, len(list))
+	for _, item := range list {
+		rs = append(rs, strings.TrimSpace(item))
+	}
+	return rs
+}
+
 func DefaultHHMMSSDurationParser(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
-		res := strings.Split(v, ":")
+		res := cleanTimeSequence(v)
 		if len(res) > 3 {
 			logutil.GetLogger(ctx).Error("invalid time format", zap.String("data", v))
 			return 0
