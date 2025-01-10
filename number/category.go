@@ -19,8 +19,19 @@ func IsFc2(number string) bool {
 }
 
 func DetermineCategory(numberId string) Category {
-	if strings.HasPrefix(strings.ToUpper(numberId), "FC2") {
+	if IsFc2(numberId) {
 		return CatFC2
 	}
 	return CatDefault //默认无分类
+}
+
+func DecodeFc2ValID(n string) (string, bool) {
+	if !IsFc2(n) {
+		return "", false
+	}
+	idx := strings.LastIndex(n, "-")
+	if idx < 0 {
+		return "", false
+	}
+	return n[idx+1:], true
 }
