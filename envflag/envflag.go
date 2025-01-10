@@ -17,7 +17,7 @@ func GetFlag() *EnvFlag {
 
 func Init() error {
 	fg := &EnvFlag{}
-	if err := envconfig.Process("exec_flag", fg); err != nil {
+	if err := envconfig.Process("yamdc", fg); err != nil {
 		return err
 	}
 	defaultInst = fg
