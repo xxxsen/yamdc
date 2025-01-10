@@ -14,4 +14,5 @@ const (
 	SSTKTube    = "tktube"
 	SSNJav      = "njav"
 	SSFc2PPVDB  = "fc2ppvdb"
+	SSMissav    = "missav"
 )

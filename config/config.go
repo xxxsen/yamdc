@@ -48,6 +48,7 @@ func defaultConfig() *Config {
 			"caribpr",
 			"18av",
 			"njav",
+			"missav",
 			"freejavbt",
 			"tktube",
 			"avsox",
