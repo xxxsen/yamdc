@@ -114,6 +114,8 @@ func Parse(str string) (*Number, error) {
 	if len(str) == 0 {
 		return nil, fmt.Errorf("empty number str")
 	}
+	// 配置 : 在提取number前,需要替换或者忽略的正则,即匹配到了就会先将其移除后才会去匹配number,比如一些广告字段或者域名
+	str = replaceWithRegexes(str)
 	if strings.Contains(str, ".") {
 		return nil, fmt.Errorf("should not contain extname, str:%s", str)
 	}

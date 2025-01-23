@@ -1,9 +1,13 @@
 package number
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
+	"yamdc/config"
+
+	"github.com/dlclark/regexp2"
 )
 
 var defaultRewriteList = []iNumberRewriter{
@@ -80,4 +84,26 @@ func rewriteNumber(str string) string {
 		str = rewriter.Rewrite(str)
 	}
 	return str
+}
+
+/* 读取配置RegexesToReplace,用来替换或者移除无关字段 */
+func replaceWithRegexes(str string) string {
+	cfg := config.GetConfig()
+	newStr := str
+	for _, regex_to_replace := range cfg.RegexesToReplace {
+		// 使用三方regex2 才能 前瞻/后顾断言
+		re, err := regexp2.Compile(regex_to_replace[0], regexp2.None)
+		if err != nil {
+			fmt.Println("正则错误:", err)
+		}
+		repl := regex_to_replace[1]
+		// 打印替换后的字符串
+
+		newStr, err = re.Replace(newStr, repl, -1, -1)
+		if err != nil {
+			fmt.Println("替换错误:", err)
+		}
+
+	}
+	return newStr
 }

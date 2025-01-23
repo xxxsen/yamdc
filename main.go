@@ -35,7 +35,9 @@ var conf = flag.String("config", "./config.json", "config file")
 
 func main() {
 	flag.Parse()
-	c, err := config.Parse(*conf)
+	err := config.Init(*conf)
+	c := config.GetConfig()
+	// c, err := config.Parse(*conf)
 	if err != nil {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
@@ -69,6 +71,12 @@ func main() {
 	}
 	logkit.Info("current use handlers", zap.Strings("handlers", c.Handlers))
 	logkit.Info("use naming rule", zap.String("rule", c.Naming))
+	// 将二维字符串数组转换为一维，以便于日志打印
+	flattenedRegex := make([]string, 0)
+	for _, regexGroup := range c.RegexesToReplace {
+		flattenedRegex = append(flattenedRegex, regexGroup...)
+	}
+	logkit.Info("use ignore regex", zap.Strings("IgnoreRegex", flattenedRegex))
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
@@ -95,7 +103,8 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build capture runner failed", zap.Error(err))
 	}
-	logkit.Info("capture kit init succ, start scraping")
+	logkit.Info("capture kit init success, start scraping")
+	// 启动抓取
 	if err := cap.Run(context.Background()); err != nil {
 		logkit.Error("run capture kit failed", zap.Error(err))
 		return

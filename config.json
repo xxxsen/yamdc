@@ -1,0 +1,52 @@
+{
+    "data_dir": "./data",
+    "scan_dir": "/Volumes/v3/yamdc/scandir",
+    "save_dir": "/Volumes/v3/yamdc/savedir",
+    "naming": "${number}${suffix}",
+    "regexes_to_replace": [ // 下面是一个正则常用的替换例子,也能用于移除干扰字段 . (如果你的文件名非常标准,可注释下面配置)
+        [
+            "[-_~*#【】《》<> ]",
+            "-"
+        ], // 遇到 “[]”里的任意字符 会替换为 “-”
+        [
+            "(?:[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9].)+[a-zA-Z]{2,}",
+            ""
+        ], //移除域名 遇到 ([a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9].)+[a-zA-Z]{2,} 替换为 空字符 其实就是移除该字段
+        [
+            "[\u4e00-\u9fa5]*",
+            ""
+        ], //移除中文
+        [
+            "\b(SD|((F|U)|(Full|Ultra)[-_*. ~]?)?HD|BD|(blu[-_*. ~]?ray)|[hx]264|[hx]265|HEVC)\b",
+            ""
+        ], // 移除字母开头 清晰度相关度 字符 ,有极少的电影名字号本身就带清晰度如BD,如会影响刮削搜索关键词,就将其注释. 
+        [
+            "(?<!\\d)(4K|(1080[ip])|(720p)|(480p))",
+            ""
+        ], // 移除数字开头的 清晰度相关度 字符, 同上
+        [
+            "(?:-)(19[789]\\d|20\\d{2})(-?(0\\d|1[012])-?(0[1-9]|[12]\\d|3[01])?)?[-.]",
+            ""
+        ], // 移除日期字段() ,有极少的电影名字号本身就 日期,如会影响刮削搜索关键词,就将其注释
+        [
+            "JAV",
+            ""
+        ] // 其他无意义字段
+    ],
+    "log_config": {
+        "file": "yamdc.log",
+        "level": "debug",
+        "file_count": 5,
+        "file_size": 100,
+        "keep_days": 7,
+        "console": true
+    },
+    "plugins": [],
+    "handlers": [],
+    "dependencies": [],
+    "category_plugins": [],
+    "plugin_config": {},
+    "handler_config": {},
+    "switch_config": {},
+    "extra_media_exts": []
+}
