@@ -24,25 +24,22 @@ type Dependency struct {
 }
 
 type Config struct {
-	ScanDir string `json:"scan_dir"`
-	SaveDir string `json:"save_dir"`
-	DataDir string `json:"data_dir"`
-	Naming  string `json:"naming"`
-	//在提取number前,需要忽略的正则,即匹配到了就会先将其移除后才会去匹配,比如一些广告字段或者域名
-	RegexesToReplace [][]string             `json:"regexes_to_replace"`
-	PluginConfig     map[string]interface{} `json:"plugin_config"`
-	HandlerConfig    map[string]interface{} `json:"handler_config"`
-	Plugins          []string               `json:"plugins"`
-	CategoryPlugins  []CategoryPlugin       `json:"category_plugins"`
-	Handlers         []string               `json:"handlers"`
-	ExtraMediaExts   []string               `json:"extra_media_exts"`
-	LogConfig        logger.LogConfig       `json:"log_config"`
-	SwitchConfig     SwitchConfig           `json:"switch_config"`
-	Dependencies     []Dependency           `json:"dependencies"`
-}
 
-type SwitchConfig struct {
-	EnableLinkMode bool `json:"enable_link_mode"`
+	ScanDir         string                 `json:"scan_dir"`
+	SaveDir         string                 `json:"save_dir"`
+	DataDir         string                 `json:"data_dir"`
+	Naming          string                 `json:"naming"`
+  //在提取number前,需要忽略的正则,即匹配到了就会先将其移除后才会去匹配,比如一些广告字段或者域名
+	RegexesToReplace [][]string             `json:"regexes_to_replace"`
+	PluginConfig    map[string]interface{} `json:"plugin_config"`
+	HandlerConfig   map[string]interface{} `json:"handler_config"`
+	Plugins         []string               `json:"plugins"`
+	CategoryPlugins []CategoryPlugin       `json:"category_plugins"`
+	Handlers        []string               `json:"handlers"`
+	ExtraMediaExts  []string               `json:"extra_media_exts"`
+	LogConfig       logger.LogConfig       `json:"log_config"`
+	Dependencies    []Dependency           `json:"dependencies"`
+
 }
 
 func defaultConfig() *Config {
