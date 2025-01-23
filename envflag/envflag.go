@@ -7,8 +7,10 @@ import (
 var defaultInst = &EnvFlag{}
 
 type EnvFlag struct {
-	EnableSearchMetaCache bool `envconfig:"enable_search_meta_cache" default:"true"`
-	EnableLinkMode        bool `envconfig:"enable_link_mode"`
+	EnableSearchMetaCache    bool `envconfig:"enable_search_meta_cache" default:"true"`
+	EnableLinkMode           bool `envconfig:"enable_link_mode"`
+	EnableGoFaceRecognizer   bool `envconfig:"enable_go_face_recognizer" default:"true"`
+	EnablePigoFaceRecognizer bool `envconfig:"enable_pigo_face_recognizer" default:"true"`
 }
 
 func GetFlag() *EnvFlag {
@@ -30,4 +32,12 @@ func IsEnableSearchMetaCache() bool {
 
 func IsEnableLinkMode() bool {
 	return GetFlag().EnableLinkMode
+}
+
+func IsEnableGoFaceRecognizer() bool {
+	return GetFlag().EnableGoFaceRecognizer
+}
+
+func IsEnablePigoFaceRecognizer() bool {
+	return GetFlag().EnablePigoFaceRecognizer
 }

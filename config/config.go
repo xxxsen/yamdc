@@ -29,12 +29,7 @@ type Config struct {
 	Handlers        []string               `json:"handlers"`
 	ExtraMediaExts  []string               `json:"extra_media_exts"`
 	LogConfig       logger.LogConfig       `json:"log_config"`
-	SwitchConfig    SwitchConfig           `json:"switch_config"`
 	Dependencies    []Dependency           `json:"dependencies"`
-}
-
-type SwitchConfig struct {
-	EnableLinkMode bool `json:"enable_link_mode"`
 }
 
 func defaultConfig() *Config {

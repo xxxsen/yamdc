@@ -72,7 +72,7 @@ func main() {
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("current switch options", zap.Any("options", c.SwitchConfig))
+	logkit.Info("current switch options", zap.Any("options", envflag.GetFlag()))
 	logkit.Info("check current feature list")
 	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
@@ -193,13 +193,16 @@ func ensureDependencies(datadir string, cdeps []config.Dependency) error {
 
 func initFace(models string) error {
 	impls := make([]face.IFaceRec, 0, 2)
-	faceRecCreator := []func() (face.IFaceRec, error){
-		func() (face.IFaceRec, error) {
+	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
+	if envflag.IsEnableGoFaceRecognizer() {
+		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return goface.NewGoFace(models)
-		},
-		func() (face.IFaceRec, error) {
+		})
+	}
+	if envflag.IsEnablePigoFaceRecognizer() {
+		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return pigo.NewPigo(models)
-		},
+		})
 	}
 	for index, creator := range faceRecCreator {
 		impl, err := creator()
@@ -207,6 +210,7 @@ func initFace(models string) error {
 			logutil.GetLogger(context.Background()).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
 			continue
 		}
+		logutil.GetLogger(context.Background()).Info("use face recognizer", zap.String("name", impl.Name()))
 		impls = append(impls, impl)
 	}
 	if len(impls) == 0 {
