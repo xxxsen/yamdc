@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 	"yamdc/capture"
 	"yamdc/client"
 	"yamdc/config"
@@ -22,6 +23,7 @@ import (
 	"yamdc/searcher"
 	"yamdc/store"
 	"yamdc/translator"
+	"yamdc/translator/googletranslator"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -43,6 +45,9 @@ func main() {
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
 	}
+	if err := setupHTTPClient(c); err != nil {
+		logkit.Fatal("setup http client failed", zap.Error(err))
+	}
 	logkit.Info("check dependencies...")
 	if err := ensureDependencies(c.DataDir, c.Dependencies); err != nil {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
@@ -55,8 +60,8 @@ func main() {
 	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
 
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
-	if err := translator.Init(); err != nil {
-		logkit.Error("init translater failed", zap.Error(err))
+	if err := setupTranslator(c); err != nil {
+		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
 	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
@@ -72,7 +77,6 @@ func main() {
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("current switch options", zap.Any("options", envflag.GetFlag()))
 	logkit.Info("check current feature list")
 	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
@@ -188,7 +192,7 @@ func ensureDependencies(datadir string, cdeps []config.Dependency) error {
 			Target: filepath.Join(datadir, item.RelPath),
 		})
 	}
-	return dependency.Resolve(client.NewClient(), deps)
+	return dependency.Resolve(client.DefaultClient(), deps)
 }
 
 func initFace(models string) error {
@@ -217,5 +221,30 @@ func initFace(models string) error {
 		return fmt.Errorf("no face rec impl inited")
 	}
 	face.SetFaceRec(face.NewGroup(impls))
+	return nil
+}
+
+func setupHTTPClient(c *config.Config) error {
+	opts := make([]client.Option, 0, 4)
+	if c.NetworkConfig.Timeout > 0 {
+		opts = append(opts, client.WithTimeout(time.Duration(c.NetworkConfig.Timeout)*time.Second))
+	}
+	if pxy := c.NetworkConfig.Proxy; len(pxy) > 0 {
+		opts = append(opts, client.WithProxy(pxy))
+	}
+	clientImpl, err := client.NewClient(opts...)
+	if err != nil {
+		return err
+	}
+	client.SetDefault(clientImpl)
+	return nil
+}
+
+func setupTranslator(c *config.Config) error {
+	t, err := googletranslator.New(googletranslator.WithProxyUrl(c.NetworkConfig.Proxy))
+	if err != nil {
+		return err
+	}
+	translator.SetTranslator(t)
 	return nil
 }
