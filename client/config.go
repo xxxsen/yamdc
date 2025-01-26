@@ -3,10 +3,8 @@ package client
 import "time"
 
 type config struct {
-	timeout    time.Duration
-	socks5addr string
-	socks5user string
-	socks5pwd  string
+	timeout time.Duration
+	proxy   string
 }
 
 type Option func(c *config)
@@ -17,11 +15,9 @@ func WithTimeout(t time.Duration) Option {
 	}
 }
 
-func WithSocks5Proxy(addr string, user string, pwd string) Option {
+func WithProxy(link string) Option {
 	return func(c *config) {
-		c.socks5addr = addr
-		c.socks5user = user
-		c.socks5pwd = pwd
+		c.proxy = link
 	}
 }
 

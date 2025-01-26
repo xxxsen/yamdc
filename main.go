@@ -23,6 +23,7 @@ import (
 	"yamdc/searcher"
 	"yamdc/store"
 	"yamdc/translator"
+	"yamdc/translator/googletranslator"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -44,7 +45,6 @@ func main() {
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
 	}
-	//基于配置初始化客户端
 	if err := setupHTTPClient(c); err != nil {
 		logkit.Fatal("setup http client failed", zap.Error(err))
 	}
@@ -60,8 +60,8 @@ func main() {
 	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
 
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
-	if err := translator.Init(); err != nil {
-		logkit.Error("init translater failed", zap.Error(err))
+	if err := setupTranslator(c); err != nil {
+		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
 	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
@@ -229,13 +229,22 @@ func setupHTTPClient(c *config.Config) error {
 	if c.NetworkConfig.Timeout > 0 {
 		opts = append(opts, client.WithTimeout(time.Duration(c.NetworkConfig.Timeout)*time.Second))
 	}
-	if pxy := c.NetworkConfig.Proxy; len(pxy.Addr) > 0 {
-		opts = append(opts, client.WithSocks5Proxy(pxy.Addr, pxy.User, pxy.Password))
+	if pxy := c.NetworkConfig.Proxy; len(pxy) > 0 {
+		opts = append(opts, client.WithProxy(pxy))
 	}
 	clientImpl, err := client.NewClient(opts...)
 	if err != nil {
 		return err
 	}
 	client.SetDefault(clientImpl)
+	return nil
+}
+
+func setupTranslator(c *config.Config) error {
+	t, err := googletranslator.New(googletranslator.WithProxyUrl(c.NetworkConfig.Proxy))
+	if err != nil {
+		return err
+	}
+	translator.SetTranslator(t)
 	return nil
 }

@@ -1,14 +1,12 @@
 package client
 
 import (
-	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 
 	"github.com/imroc/req/v3"
-	"golang.org/x/net/proxy"
 )
 
 var defaultInst IHTTPClient
@@ -46,21 +44,12 @@ func NewClient(opts ...Option) (IHTTPClient, error) {
 		Jar:       jar,
 		Timeout:   c.timeout,
 	}
-	if len(c.socks5addr) > 0 {
-		var user *proxy.Auth
-		if len(c.socks5user) > 0 {
-			user = &proxy.Auth{
-				User:     c.socks5user,
-				Password: c.socks5pwd,
-			}
+	if len(c.proxy) > 0 {
+		proxyUrl, err := url.Parse(c.proxy)
+		if err != nil {
+			return nil, fmt.Errorf("parse proxy link failed, err:%w", err)
 		}
-		t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			dialer, err := proxy.SOCKS5("tcp", c.socks5addr, user, proxy.Direct)
-			if err != nil {
-				return nil, fmt.Errorf("make proxy connect failed, err:%w", err)
-			}
-			return dialer.Dial(network, addr)
-		}
+		t.Proxy = http.ProxyURL(proxyUrl) // set proxy
 	}
 	return &clientWrap{client: client}, nil
 }

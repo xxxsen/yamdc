@@ -24,8 +24,8 @@ type ProxyConfig struct {
 }
 
 type NetworkConfig struct {
-	Timeout int64       `json:"timeout"` //单位为秒
-	Proxy   ProxyConfig `json:"proxy"`   //仅支持socks5
+	Timeout int64  `json:"timeout"` //单位为秒
+	Proxy   string `json:"proxy"`
 }
 
 type Config struct {
