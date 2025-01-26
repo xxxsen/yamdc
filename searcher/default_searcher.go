@@ -40,7 +40,7 @@ func MustNewDefaultSearcher(name string, plg api.IPlugin) ISearcher {
 }
 
 func defaultInvoker() api.HTTPInvoker {
-	basicClient := client.NewClient()
+	basicClient := client.DefaultClient()
 	return func(ctx context.Context, req *http.Request) (*http.Response, error) {
 		return basicClient.Do(req)
 	}

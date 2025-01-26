@@ -17,6 +17,17 @@ type Dependency struct {
 	RelPath string `json:"rel_path"`
 }
 
+type ProxyConfig struct {
+	Addr     string `json:"addr"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+}
+
+type NetworkConfig struct {
+	Timeout int64       `json:"timeout"` //单位为秒
+	Proxy   ProxyConfig `json:"proxy"`   //仅支持socks5
+}
+
 type Config struct {
 	ScanDir         string                 `json:"scan_dir"`
 	SaveDir         string                 `json:"save_dir"`
@@ -30,6 +41,7 @@ type Config struct {
 	ExtraMediaExts  []string               `json:"extra_media_exts"`
 	LogConfig       logger.LogConfig       `json:"log_config"`
 	Dependencies    []Dependency           `json:"dependencies"`
+	NetworkConfig   NetworkConfig          `json:"network_config"`
 }
 
 func defaultConfig() *Config {
