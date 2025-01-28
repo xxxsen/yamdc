@@ -1,12 +1,17 @@
-package number
+package config
 
 import (
+	"strings"
 	"testing"
+	"yamdc/capture/ruleapi"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCheck(t *testing.T) {
+func TestNumberUncensorRule(t *testing.T) {
+	tester := ruleapi.NewRegexpTester()
+	err := tester.AddRules(sysNumberRule.NumberUncensorRules...)
+	assert.NoError(t, err)
 	trueList := []string{
 		"112214_292",
 		"112114-291",
@@ -31,9 +36,13 @@ func TestCheck(t *testing.T) {
 		"SMDY-123",
 	}
 	for _, item := range trueList {
-		assert.True(t, IsUncensorMovie(item))
+		item = strings.ToUpper(item)
+		ok, _ := tester.Test(item)
+		assert.True(t, ok)
 	}
 	for _, item := range falseList {
-		assert.False(t, IsUncensorMovie(item))
+		item = strings.ToUpper(item)
+		ok, _ := tester.Test(item)
+		assert.False(t, ok)
 	}
 }

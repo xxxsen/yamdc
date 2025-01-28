@@ -1,17 +1,6 @@
-package number
+package numberkit
 
 import "strings"
-
-type Category string
-
-func (c Category) String() string {
-	return string(c)
-}
-
-const (
-	CatDefault Category = "DEFAULT"
-	CatFC2     Category = "FC2"
-)
 
 func IsFc2(number string) bool {
 	number = strings.ToUpper(number)

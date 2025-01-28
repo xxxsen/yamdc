@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"yamdc/model"
 	"yamdc/number"
+	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -24,7 +25,7 @@ type fc2ppvdb struct {
 }
 
 func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid *number.Number) (*http.Request, error) {
-	vid, ok := number.DecodeFc2ValID(nid.GetNumberID())
+	vid, ok := numberkit.DecodeFc2ValID(nid.GetNumberID())
 	if !ok {
 		return nil, fmt.Errorf("unable to decode fc2 vid")
 	}
