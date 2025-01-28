@@ -143,10 +143,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	date := ts.Format(time.DateOnly)
 	year := fmt.Sprintf("%d", ts.Year())
 	month := fmt.Sprintf("%d", ts.Month())
-	actor := "佚名"
-	if len(fc.Meta.Actors) > 0 {
-		actor = utils.BuildAuthorsName(fc.Meta.Actors, 256)
-	}
+	actor := utils.BuildAuthorsName(fc.Meta.Actors)
 	m := map[string]interface{}{
 		NamingReleaseDate:  date,
 		NamingReleaseYear:  year,

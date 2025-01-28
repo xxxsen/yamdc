@@ -2,13 +2,26 @@ package utils
 
 import "bytes"
 
-func BuildAuthorsName(acts []string, maxLength int) string {
+const (
+	defaultNonActorName      = "佚名"
+	defaultMultiActorLimit   = 3
+	defaultMultiActorAsName  = "多人作品"
+	defaultMaxActorCharactor = 256
+)
+
+func BuildAuthorsName(acts []string) string {
+	if len(acts) == 0 {
+		return defaultNonActorName
+	}
+	if len(acts) >= defaultMultiActorLimit {
+		return defaultMultiActorAsName
+	}
 	buf := bytes.NewBuffer(nil)
 	for idx, item := range acts {
 		if idx != 0 {
 			buf.WriteString(",")
 		}
-		if buf.Len()+1+len(item) > maxLength {
+		if buf.Len()+1+len(item) > defaultMaxActorCharactor {
 			break
 		}
 		buf.WriteString(item)
