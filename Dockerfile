@@ -1,4 +1,4 @@
-FROM golang:1.22
+FROM golang:1.23
 
 RUN apt update && apt install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg62-turbo-dev gfortran -y 
 WORKDIR /build
