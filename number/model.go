@@ -4,19 +4,35 @@ import (
 	"strconv"
 )
 
+type externalField struct {
+	isUncensor bool
+	cat        string
+}
+
 type Number struct {
 	numberId          string
 	isChineseSubtitle bool
 	isMultiCD         bool
 	multiCDIndex      int
-	isUncensorMovie   bool
 	is4k              bool
 	isLeak            bool
-	cat               Category
+	extField          externalField
 }
 
-func (n *Number) GetCategory() Category {
-	return n.cat
+func (n *Number) SetExternalFieldUncensor(v bool) {
+	n.extField.isUncensor = v
+}
+
+func (n *Number) GetExternalFieldUncensor() bool {
+	return n.extField.isUncensor
+}
+
+func (n *Number) SetExternalFieldCategory(cat string) {
+	n.extField.cat = cat
+}
+
+func (n *Number) GetExternalFieldCategory() string {
+	return n.extField.cat
 }
 
 func (n *Number) GetNumberID() string {
@@ -33,10 +49,6 @@ func (n *Number) GetIsMultiCD() bool {
 
 func (n *Number) GetMultiCDIndex() int {
 	return n.multiCDIndex
-}
-
-func (n *Number) GetIsUncensorMovie() bool {
-	return n.isUncensorMovie
 }
 
 func (n *Number) GetIs4K() bool {
@@ -65,7 +77,7 @@ func (n *Number) GenerateSuffix(base string) string {
 
 func (n *Number) GenerateTags() []string {
 	rs := make([]string, 0, 5)
-	if n.GetIsUncensorMovie() {
+	if n.GetExternalFieldUncensor() {
 		rs = append(rs, defaultTagUncensored)
 	}
 	if n.GetIsChineseSubtitle() {

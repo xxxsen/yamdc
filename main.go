@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"yamdc/capture"
+	"yamdc/capture/ruleapi"
 	"yamdc/client"
 	"yamdc/config"
 	"yamdc/dependency"
@@ -17,7 +18,6 @@ import (
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
 	"yamdc/ffmpeg"
-	"yamdc/number"
 	"yamdc/processor"
 	"yamdc/processor/handler"
 	"yamdc/searcher"
@@ -49,7 +49,7 @@ func main() {
 		logkit.Fatal("setup http client failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies...")
-	if err := ensureDependencies(c.DataDir, c.Dependencies); err != nil {
+	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
@@ -63,7 +63,7 @@ func main() {
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
-	if err := initFace(filepath.Join(c.DataDir, "models")); err != nil {
+	if err := setupFace(filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
 	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
@@ -107,7 +107,20 @@ func main() {
 	logkit.Info("run capture kit finish, all file scrape succ")
 }
 
-func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[number.Category][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
+func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
+	numberUncensorRule, err := buildNumberUncensorRule(c)
+	if err != nil {
+		return nil, err
+	}
+	numberCategoryRule, err := buildNumberCategoryRule(c)
+	if err != nil {
+		return nil, err
+	}
+	numberRewriteRule, err := buildNumberRewriteRule(c)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
@@ -116,18 +129,21 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[number.Ca
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
+		capture.WithUncensorTester(numberUncensorRule),
+		capture.WithNumberCategorier(numberCategoryRule),
+		capture.WithNumberRewriter(numberRewriteRule),
 	)
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (map[number.Category][]searcher.ISearcher, error) {
-	rs := make(map[number.Category][]searcher.ISearcher, len(cplgs))
+func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (map[string][]searcher.ISearcher, error) {
+	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
 		ss, err := buildSearcher(plg.Plugins, m)
 		if err != nil {
 			return nil, err
 		}
-		rs[number.Category(strings.ToUpper(plg.Name))] = ss
+		rs[strings.ToUpper(plg.Name)] = ss
 	}
 	return rs, nil
 }
@@ -184,7 +200,7 @@ func precheckDir(c *config.Config) error {
 	return nil
 }
 
-func ensureDependencies(datadir string, cdeps []config.Dependency) error {
+func initDependencies(datadir string, cdeps []config.Dependency) error {
 	deps := make([]*dependency.Dependency, 0, len(cdeps))
 	for _, item := range cdeps {
 		deps = append(deps, &dependency.Dependency{
@@ -195,7 +211,7 @@ func ensureDependencies(datadir string, cdeps []config.Dependency) error {
 	return dependency.Resolve(client.DefaultClient(), deps)
 }
 
-func initFace(models string) error {
+func setupFace(models string) error {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
 	if envflag.IsEnableGoFaceRecognizer() {
@@ -247,4 +263,41 @@ func setupTranslator(c *config.Config) error {
 	}
 	translator.SetTranslator(t)
 	return nil
+}
+
+func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
+	t := ruleapi.NewRegexpTester()
+	//合并用户/默认规则
+	c.NumberUserRule.NumberUncensorRules = append(c.NumberUserRule.NumberUncensorRules,
+		c.NumberDefaultRule.NumberUncensorRules...)
+	if err := t.AddRules(c.NumberUserRule.NumberUncensorRules...); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
+	t := ruleapi.NewRegexpMatcher()
+	c.NumberUserRule.NumberCategoryRule = append(c.NumberUserRule.NumberCategoryRule, c.NumberDefaultRule.NumberCategoryRule...)
+	for _, item := range c.NumberUserRule.NumberCategoryRule {
+		if err := t.AddRules(ruleapi.RegexpMatchRule{
+			Regexp: item.Rules,
+			Match:  item.Category,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
+	t := ruleapi.NewRegexpRewriter()
+	c.NumberUserRule.NumberRewriteRules = append(c.NumberUserRule.NumberRewriteRules, c.NumberDefaultRule.NumberRewriteRules...)
+	for _, item := range c.NumberUserRule.NumberRewriteRules {
+		t.AddRules(ruleapi.RegexpRewriteRule{
+			Rule:    item.Rule,
+			Rewrite: item.Rewrite,
+		})
+	}
+	return t, nil
 }

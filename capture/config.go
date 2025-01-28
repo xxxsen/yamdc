@@ -1,6 +1,8 @@
 package capture
 
 import (
+	"fmt"
+	"yamdc/capture/ruleapi"
 	"yamdc/processor"
 	"yamdc/searcher"
 )
@@ -13,8 +15,8 @@ const (
 	NamingNumber       = "NUMBER"
 )
 
-const (
-	defaultNamingRule = NamingReleaseYear + "/" + NamingActor + "/" + NamingNumber
+var (
+	defaultNamingRule = fmt.Sprintf("{%s}/{%s}", NamingReleaseYear, NamingNumber)
 )
 
 type config struct {
@@ -24,6 +26,9 @@ type config struct {
 	SaveDir           string
 	Naming            string
 	ExtraMediaExtList []string
+	UncensorTester    ruleapi.ITester
+	NumberRewriter    ruleapi.IRewriter
+	NumberCategorier  ruleapi.IMatcher
 }
 
 type Option func(c *config)
@@ -61,5 +66,23 @@ func WithNamingRule(r string) Option {
 func WithExtraMediaExtList(lst []string) Option {
 	return func(c *config) {
 		c.ExtraMediaExtList = lst
+	}
+}
+
+func WithUncensorTester(t ruleapi.ITester) Option {
+	return func(c *config) {
+		c.UncensorTester = t
+	}
+}
+
+func WithNumberRewriter(t ruleapi.IRewriter) Option {
+	return func(c *config) {
+		c.NumberRewriter = t
+	}
+}
+
+func WithNumberCategorier(t ruleapi.IMatcher) Option {
+	return func(c *config) {
+		c.NumberCategorier = t
 	}
 }

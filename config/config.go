@@ -29,62 +29,48 @@ type NetworkConfig struct {
 	Proxy   string `json:"proxy"`
 }
 
+type NumberRewriteRule struct {
+	Rule    string `json:"rule"`
+	Rewrite string `json:"rewrite"`
+}
+
+type NumberCategoryRule struct {
+	Rules    []string `json:"rules"`
+	Category string   `json:"category"`
+}
+
+type NumberRule struct {
+	NumberUncensorRules []string             `json:"number_uncensor_rules"`
+	NumberRewriteRules  []NumberRewriteRule  `json:"number_rewrite_rules"`
+	NumberCategoryRule  []NumberCategoryRule `json:"number_category_rules"`
+}
+
 type Config struct {
-	ScanDir         string                 `json:"scan_dir"`
-	SaveDir         string                 `json:"save_dir"`
-	DataDir         string                 `json:"data_dir"`
-	Naming          string                 `json:"naming"`
-	PluginConfig    map[string]interface{} `json:"plugin_config"`
-	HandlerConfig   map[string]interface{} `json:"handler_config"`
-	Plugins         []string               `json:"plugins"`
-	CategoryPlugins []CategoryPlugin       `json:"category_plugins"`
-	Handlers        []string               `json:"handlers"`
-	ExtraMediaExts  []string               `json:"extra_media_exts"`
-	LogConfig       logger.LogConfig       `json:"log_config"`
-	Dependencies    []Dependency           `json:"dependencies"`
-	NetworkConfig   NetworkConfig          `json:"network_config"`
+	ScanDir           string                 `json:"scan_dir"`
+	SaveDir           string                 `json:"save_dir"`
+	DataDir           string                 `json:"data_dir"`
+	Naming            string                 `json:"naming"`
+	PluginConfig      map[string]interface{} `json:"plugin_config"`
+	HandlerConfig     map[string]interface{} `json:"handler_config"`
+	Plugins           []string               `json:"plugins"`
+	CategoryPlugins   []CategoryPlugin       `json:"category_plugins"`
+	Handlers          []string               `json:"handlers"`
+	ExtraMediaExts    []string               `json:"extra_media_exts"`
+	LogConfig         logger.LogConfig       `json:"log_config"`
+	Dependencies      []Dependency           `json:"dependencies"`
+	NetworkConfig     NetworkConfig          `json:"network_config"`
+	NumberDefaultRule NumberRule             `json:"number_default_rule"` //默认规则
+	NumberUserRule    NumberRule             `json:"number_user_rule"`    //用户自定义规则, 最终跟默认规则进行合并
 }
 
 func defaultConfig() *Config {
 	return &Config{
-		Plugins: []string{
-			"javbus",
-			"javhoo",
-			"airav",
-			"javdb",
-			"jav321",
-			"caribpr",
-			"18av",
-			"njav",
-			"missav",
-			"freejavbt",
-			"tktube",
-			"avsox",
-		},
-		CategoryPlugins: []CategoryPlugin{
-			//如果存在分配配置, 那么当番号被识别为特定分类的场景下, 将会使用分类插件直接查询
-			{Name: "FC2", Plugins: []string{"fc2", "18av", "njav", "freejavbt", "tktube", "avsox", "fc2ppvdb"}},
-		},
-		Handlers: []string{
-			"image_transcoder",
-			"poster_cropper",
-			"watermark_maker",
-			"actor_spliter",
-			"tag_padder",
-			"duration_fixer",
-			"number_title",
-			"translater",
-		},
-		LogConfig: logger.LogConfig{
-			Level:   "info",
-			Console: true,
-		},
-		Dependencies: []Dependency{
-			{Link: "https://github.com/Kagami/go-face-testdata/raw/master/models/shape_predictor_5_face_landmarks.dat", RelPath: "models/shape_predictor_5_face_landmarks.dat"},
-			{Link: "https://github.com/Kagami/go-face-testdata/raw/master/models/dlib_face_recognition_resnet_model_v1.dat", RelPath: "models/dlib_face_recognition_resnet_model_v1.dat"},
-			{Link: "https://github.com/Kagami/go-face-testdata/raw/master/models/mmod_human_face_detector.dat", RelPath: "models/mmod_human_face_detector.dat"},
-			{Link: "https://github.com/esimov/pigo/raw/master/cascade/facefinder", RelPath: "models/facefinder"},
-		},
+		Plugins:           sysPlugins,
+		CategoryPlugins:   sysCategoryPlugins,
+		Handlers:          sysHandler,
+		LogConfig:         sysLogConfig,
+		Dependencies:      sysDependencies,
+		NumberDefaultRule: sysNumberRule,
 	}
 }
 

@@ -61,10 +61,24 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
 	fileNoExt := fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+	//番号改写
+	fileNoExt, err := c.c.NumberRewriter.Rewrite(fileNoExt)
+	if err != nil {
+		return fmt.Errorf("rewrite number before parse failed, err:%w", err)
+	}
+	//番号解析
 	info, err := number.Parse(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
+	//规则测试
+	//是否无码
+	ok, _ := c.c.UncensorTester.Test(info.GetNumberID())
+	info.SetExternalFieldUncensor(ok)
+	//尝试分类
+	cat, _, _ := c.c.NumberCategorier.Match(info.GetNumberID())
+	info.SetExternalFieldCategory(cat)
+
 	fc.Number = info
 	fc.SaveFileBase = fc.Number.GenerateFileName()
 	return nil
