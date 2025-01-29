@@ -15,7 +15,7 @@ func TestSplitActor(t *testing.T) {
 	}
 	h := &actorSplitHandler{}
 	in := &model.FileContext{
-		Meta: &model.AvMeta{
+		Meta: &model.MovieMeta{
 			Actors: tests,
 		},
 	}

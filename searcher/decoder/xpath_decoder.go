@@ -45,7 +45,7 @@ func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) 
 	return c.DefaultStringListProcessor(DecodeList(node, expr))
 }
 
-func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*model.AvMeta, error) {
+func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*model.MovieMeta, error) {
 	node, err := htmlquery.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -79,9 +79,9 @@ func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 	return c
 }
 
-func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.AvMeta, error) {
+func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.MovieMeta, error) {
 	c := d.applyOpts(opts...)
-	meta := &model.AvMeta{
+	meta := &model.MovieMeta{
 		Number:       c.OnNumberParse(d.decodeSingle(c, node, d.NumberExpr)),
 		Title:        c.OnTitleParse(d.decodeSingle(c, node, d.TitleExpr)),
 		Plot:         c.OnPlotParse(d.decodeSingle(c, node, d.PlotExpr)),

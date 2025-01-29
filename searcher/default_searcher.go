@@ -131,16 +131,16 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, dataLoader)
 }
 
-func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
+func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
 	ctx = meta.SetNumberId(ctx, number.GetNumberID())
-	ok, err := p.plg.OnPrecheckRequest(ctx, number)
+	ok, err := p.plg.OnPrecheckRequest(ctx, number.GetNumberID())
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
 	}
 	if !ok {
 		return nil, false, nil
 	}
-	req, err := p.plg.OnMakeHTTPRequest(ctx, number)
+	req, err := p.plg.OnMakeHTTPRequest(ctx, number.GetNumberID())
 	if err != nil {
 		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
 	}
@@ -168,7 +168,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	return meta, true, nil
 }
 
-func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
+func (p *DefaultSearcher) verifyMeta(meta *model.MovieMeta) error {
 	if meta.Cover == nil || len(meta.Cover.Name) == 0 {
 		return fmt.Errorf("no cover")
 	}
@@ -184,7 +184,7 @@ func (p *DefaultSearcher) verifyMeta(meta *model.AvMeta) error {
 	return nil
 }
 
-func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.AvMeta) {
+func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.MovieMeta) {
 	meta.Number = strings.ToUpper(meta.Number)
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	if meta.Cover != nil {
@@ -209,7 +209,7 @@ func (p *DefaultSearcher) fixSingleURL(req *http.Request, input *string, prefix 
 	}
 }
 
-func (p *DefaultSearcher) storeImageData(ctx context.Context, in *model.AvMeta) {
+func (p *DefaultSearcher) storeImageData(ctx context.Context, in *model.MovieMeta) {
 	images := make([]string, 0, len(in.SampleImages)+2)
 	if in.Cover != nil {
 		images = append(images, in.Cover.Name)

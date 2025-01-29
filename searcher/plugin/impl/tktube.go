@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -20,8 +19,8 @@ type tktube struct {
 	api.DefaultPlugin
 }
 
-func (p *tktube) OnMakeHTTPRequest(ctx context.Context, n *number.Number) (*http.Request, error) {
-	nid := strings.ReplaceAll(n.GetNumberID(), "-", "--")
+func (p *tktube) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, error) {
+	nid := strings.ReplaceAll(n, "-", "--")
 	uri := fmt.Sprintf("https://tktube.com/zh/search/%s/", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
@@ -55,7 +54,7 @@ func (p *tktube) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoke
 	})
 }
 
-func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		TitleExpr:           `//div[@class="headline"]/h1/text()`,
 		PlotExpr:            "",

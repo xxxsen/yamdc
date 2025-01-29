@@ -29,7 +29,7 @@ func (h *tagPadderHandler) generateNumberPrefixTag(fc *model.FileContext) (strin
 	return sb.String(), true
 }
 
-func (h *tagPadderHandler) rewriteOrAppendTag(fc *model.AvMeta, tagname string) {
+func (h *tagPadderHandler) rewriteOrAppendTag(fc *model.MovieMeta, tagname string) {
 	isContained := false
 	for idx, item := range fc.Genres {
 		if strings.EqualFold(item, tagname) {

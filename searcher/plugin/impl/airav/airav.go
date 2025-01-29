@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
@@ -21,15 +20,15 @@ type airav struct {
 	api.DefaultPlugin
 }
 
-func (p *airav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number.GetNumberID()), nil)
+func (p *airav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number), nil)
 	if err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
-func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	vdata := &VideoData{}
 	if err := json.Unmarshal(data, vdata); err != nil {
 		return nil, false, fmt.Errorf("decode json data failed, err:%w", err)
@@ -44,7 +43,7 @@ func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMet
 		logutil.GetLogger(ctx).Warn("more than one result, may cause data mismatch", zap.Int("count", vdata.Count))
 	}
 	result := vdata.Result
-	avdata := &model.AvMeta{
+	avdata := &model.MovieMeta{
 		Number:      result.Barcode,
 		Title:       result.Name,
 		Plot:        result.Description,

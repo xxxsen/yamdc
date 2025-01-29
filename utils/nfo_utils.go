@@ -14,7 +14,7 @@ func buildDataWithSingleTranslateItem(origin string, item *model.SingleTranslate
 	return fmt.Sprintf("%s [翻译:%s]", origin, item.TranslatedText)
 }
 
-func ConvertMetaToMovieNFO(m *model.AvMeta) (*nfo.Movie, error) {
+func ConvertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
 		Plot:          buildDataWithSingleTranslateItem(m.Plot, &m.ExtInfo.TranslateInfo.Plot),

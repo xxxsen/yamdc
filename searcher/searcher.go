@@ -8,5 +8,5 @@ import (
 
 type ISearcher interface {
 	Name() string
-	Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error)
+	Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error)
 }

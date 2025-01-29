@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -26,8 +25,8 @@ type missav struct {
 	api.DefaultPlugin
 }
 
-func (p *missav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	link := fmt.Sprintf("https://%s/cn/search/%s", api.MustSelectDomain(defaultMissavDomains), number.GetNumberID())
+func (p *missav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	link := fmt.Sprintf("https://%s/cn/search/%s", api.MustSelectDomain(defaultMissavDomains), number)
 	return http.NewRequest(http.MethodGet, link, nil)
 }
 
@@ -61,7 +60,7 @@ func (p *missav) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoke
 	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, xctx)
 }
 
-func (p *missav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *missav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[span[contains(text(), "番号")]]/span[@class="font-medium"]/text()`,
 		TitleExpr:           `//div[@class="mt-4"]/h1[@class="text-base lg:text-lg text-nord6"]/text()`,

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -20,9 +19,9 @@ type jav321 struct {
 	api.DefaultPlugin
 }
 
-func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
+func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	data := url.Values{}
-	data.Set("sn", number.GetNumberID())
+	data.Set("sn", number)
 	body := data.Encode()
 	req, err := http.NewRequest(http.MethodPost, "https://www.jav321.com/search", strings.NewReader(body))
 	if err != nil {
@@ -38,7 +37,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,

@@ -21,7 +21,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Number.GetIs4K() {
 		tags = append(tags, image.WM4K)
 	}
-	if fc.Number.GetIsUncensorMovie() {
+	if fc.Number.GetExternalFieldUncensor() {
 		tags = append(tags, image.WMUncensored)
 	}
 	if fc.Number.GetIsChineseSubtitle() {

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
@@ -27,8 +26,8 @@ type caribpr struct {
 	api.DefaultPlugin
 }
 
-func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.GetNumberID())
+func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }
@@ -55,7 +54,7 @@ func (p *caribpr) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc
 	}
 }
 
-func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	reader := transform.NewReader(strings.NewReader(string(data)), japanese.EUCJP.NewDecoder())
 	data, err := io.ReadAll(reader)
 	if err != nil {
