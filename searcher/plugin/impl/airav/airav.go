@@ -29,7 +29,7 @@ func (p *airav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*
 	return req, nil
 }
 
-func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	vdata := &VideoData{}
 	if err := json.Unmarshal(data, vdata); err != nil {
 		return nil, false, fmt.Errorf("decode json data failed, err:%w", err)
@@ -44,7 +44,7 @@ func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMet
 		logutil.GetLogger(ctx).Warn("more than one result, may cause data mismatch", zap.Int("count", vdata.Count))
 	}
 	result := vdata.Result
-	avdata := &model.AvMeta{
+	avdata := &model.MovieMeta{
 		Number:      result.Barcode,
 		Title:       result.Name,
 		Plot:        result.Description,

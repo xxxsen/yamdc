@@ -23,7 +23,7 @@ func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="project_info"]/p/span[@class="categories"]/text()`,
 		TitleExpr:           `//header[@class="article-header"]/h1[@class="article-title"]/text()`,

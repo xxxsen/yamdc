@@ -2,7 +2,7 @@ package model
 
 import "yamdc/number"
 
-type AvMeta struct {
+type MovieMeta struct {
 	Number       string   `json:"number"`        //番号
 	Title        string   `json:"title"`         //标题
 	Plot         string   `json:"plot"`          //简介
@@ -51,6 +51,6 @@ type FileContext struct {
 	FileExt      string
 	SaveFileBase string
 	SaveDir      string
-	Meta         *AvMeta
+	Meta         *MovieMeta
 	Number       *number.Number
 }

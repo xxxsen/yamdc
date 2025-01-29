@@ -22,7 +22,7 @@ func (s *categorySearcher) Name() string {
 	return "category"
 }
 
-func (s *categorySearcher) Search(ctx context.Context, n *number.Number) (*model.AvMeta, bool, error) {
+func (s *categorySearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
 	cat := n.GetExternalFieldCategory()
 	//没分类, 那么使用主链进行查询
 	//存在分类, 但是分类对应的链没有配置, 则使用主链进行查询

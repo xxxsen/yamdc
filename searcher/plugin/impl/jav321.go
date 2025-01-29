@@ -38,7 +38,7 @@ func (s *jav321) defaultStringProcessor(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := &decoder.XPathHtmlDecoder{
 		NumberExpr:          `//b[contains(text(),"品番")]/following-sibling::node()`,
 		TitleExpr:           `/html/body/div[2]/div[1]/div[1]/div[1]/h3/text()`,

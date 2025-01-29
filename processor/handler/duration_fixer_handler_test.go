@@ -22,7 +22,7 @@ func TestDurationFixer(t *testing.T) {
 	defer filepath.Join(os.TempDir(), "temp_video.mp4")
 	fc := &model.FileContext{
 		FullFilePath: tmpVideo,
-		Meta:         &model.AvMeta{},
+		Meta:         &model.MovieMeta{},
 	}
 	h, err := CreateHandler(HDurationFixer, nil)
 	assert.NoError(t, err)

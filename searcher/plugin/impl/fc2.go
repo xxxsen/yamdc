@@ -78,7 +78,7 @@ func (p *fc2) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
 	}
 }
 
-func (p *fc2) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *fc2) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          ``,
 		TitleExpr:           `/html/head/title/text()`,

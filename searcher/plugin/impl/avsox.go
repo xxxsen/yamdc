@@ -104,7 +104,7 @@ func (p *avsox) trySearchByNumber(ctx context.Context, invoker api.HTTPInvoker, 
 	return res[0], true, nil
 }
 
-func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//span[contains(text(),"识别码:")]/../span[2]/text()`,
 		TitleExpr:           `/html/body/div[2]/h3/text()`,

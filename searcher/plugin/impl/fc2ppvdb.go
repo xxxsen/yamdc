@@ -37,7 +37,7 @@ func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid *number.Number) (*
 	return req, nil
 }
 
-func (p *fc2ppvdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *fc2ppvdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[contains(text(), "ID")]/span/text()`,
 		TitleExpr:           `//div[@class="w-full lg:pl-8 px-2 lg:w-3/5"]/h2/a/text()`,

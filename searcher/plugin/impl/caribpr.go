@@ -55,7 +55,7 @@ func (p *caribpr) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc
 	}
 }
 
-func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	reader := transform.NewReader(strings.NewReader(string(data)), japanese.EUCJP.NewDecoder())
 	data, err := io.ReadAll(reader)
 	if err != nil {

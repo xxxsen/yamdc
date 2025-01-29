@@ -64,7 +64,7 @@ func (p *av18) plotParser(in string) string {
 	return strings.TrimSpace(strings.TrimLeft(in, "简介："))
 }
 
-func (p *av18) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *av18) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="px-0 flex-columns"]/div[@class="number"]/text()`,
 		TitleExpr:           `//div[@class="d-flex px-3 py-2 name col bg-w"]/h1[@class="h4 b"]/text()`,

@@ -38,7 +38,7 @@ func (p *DefaultPlugin) OnHandleHTTPRequest(ctx context.Context, invoker HTTPInv
 	return invoker(ctx, req)
 }
 
-func (p *DefaultPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *DefaultPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	return nil, false, fmt.Errorf("no impl")
 }
 

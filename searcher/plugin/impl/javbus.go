@@ -46,7 +46,7 @@ func (p *javbus) OnDecorateRequest(ctx context.Context, req *http.Request) error
 	return nil
 }
 
-func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="row movie"]/div[@class="col-md-3 info"]/p[span[contains(text(),'識別碼:')]]/span[2]/text()`,
 		TitleExpr:           `//div[@class="container"]/h3`,

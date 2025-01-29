@@ -23,7 +23,7 @@ func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number *number.Number
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
-func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          "",
 		TitleExpr:           `//h1[@class="text-white"]/strong/text()`,

@@ -20,11 +20,11 @@ func (g *group) Name() string {
 	return "group"
 }
 
-func (g *group) Search(ctx context.Context, number *number.Number) (*model.AvMeta, bool, error) {
+func (g *group) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
 	return performGroupSearch(ctx, number, g.ss)
 }
 
-func performGroupSearch(ctx context.Context, number *number.Number, ss []ISearcher) (*model.AvMeta, bool, error) {
+func performGroupSearch(ctx context.Context, number *number.Number, ss []ISearcher) (*model.MovieMeta, bool, error) {
 	var lastErr error
 	for _, s := range ss {
 		logutil.GetLogger(ctx).Debug("search number", zap.String("plugin", s.Name()))

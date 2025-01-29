@@ -55,7 +55,7 @@ func (p *tktube) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoke
 	})
 }
 
-func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		TitleExpr:           `//div[@class="headline"]/h1/text()`,
 		PlotExpr:            "",

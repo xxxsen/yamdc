@@ -58,7 +58,7 @@ func (p *njav) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker,
 
 }
 
-func (p *njav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.AvMeta, bool, error) {
+func (p *njav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
 		NumberExpr:          `//div[@class="text-secondary" and contains(span[text()], "番号:")]/span[@class="font-medium"]/text()`,
 		TitleExpr:           `//div[@class="text-secondary" and contains(span[text()], "标题:")]/span[@class="font-medium"]/text()`,

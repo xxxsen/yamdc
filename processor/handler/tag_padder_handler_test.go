@@ -44,7 +44,7 @@ func TestTagPadde(t *testing.T) {
 		padder := &tagPadderHandler{}
 		fc := &model.FileContext{
 			Number: num,
-			Meta:   &model.AvMeta{},
+			Meta:   &model.MovieMeta{},
 		}
 		padder.Handle(context.Background(), fc)
 		assert.Equal(t, item.tagCount, len(fc.Meta.Genres))
