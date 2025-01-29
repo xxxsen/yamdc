@@ -30,13 +30,13 @@ var sysUncensorRule = []string{
 var sysRewriteRule = []NumberRewriteRule{ //rewrite 逻辑在number.Parse之前, 所以数据可能存在小写的情况, 需要特殊处理
 	{
 		Remark:  "format fc2",
-		Rule:    `(?i)^fc2[-|_]?(ppv)?[-|_](\d+)$`,
-		Rewrite: `FC2-PPV-$2`,
+		Rule:    `(?i)^fc2[-|_]?(ppv)?[-|_](\d+)([-|_].*)?$`, //需要处理后面的-C-CD1之类的字符串, 用正则出来起来真的麻烦...
+		Rewrite: `FC2-PPV-$2$3`,
 	},
 	{
 		Remark:  "format number like '234abc-123' to 'abc-123'",
-		Rule:    `^\d+([a-zA-Z]+[-|_]\d+)$`,
-		Rewrite: `$1`,
+		Rule:    `^\d+([a-zA-Z]+[-|_]\d+)([-|_].*)?$`,
+		Rewrite: `$1$2`,
 	},
 }
 

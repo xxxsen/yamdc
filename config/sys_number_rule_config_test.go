@@ -60,6 +60,18 @@ func TestFc2Rewrit(t *testing.T) {
 			out: "FC2-PPV-12345",
 		},
 		{
+			in:  "fc2ppv-12345-CD1",
+			out: "FC2-PPV-12345-CD1",
+		},
+		{
+			in:  "fc2ppv-12345-C-CD1",
+			out: "FC2-PPV-12345-C-CD1",
+		},
+		{
+			in:  "fc2ppv-123-asdasqwe2",
+			out: "FC2-PPV-123-asdasqwe2",
+		},
+		{
 			in:  "fc2",
 			out: "fc2",
 		},
@@ -70,6 +82,10 @@ func TestFc2Rewrit(t *testing.T) {
 		{
 			in:  "fc2-12345",
 			out: "FC2-PPV-12345",
+		},
+		{
+			in:  "fc2-123445-cd1",
+			out: "FC2-PPV-123445-cd1",
 		},
 		{
 			in:  "fc2ppv-123",
@@ -109,16 +125,20 @@ func TestNumberAlphaNumberRewrite(t *testing.T) {
 			out: "aaa-123434",
 		},
 		{
-			in:  "aaa-1234",
-			out: "aaa-1234",
+			in:  "aaa-1234-CD1",
+			out: "aaa-1234-CD1",
 		},
 		{
 			in:  "222aaa-22222_helloworld",
-			out: "222aaa-22222_helloworld",
+			out: "aaa-22222_helloworld",
 		},
 		{
 			in:  "123abc_1234",
 			out: "abc_1234",
+		},
+		{
+			in:  "123abc_123aaa",
+			out: "123abc_123aaa",
 		},
 	}
 	rewriter := ruleapi.NewRegexpRewriter()
