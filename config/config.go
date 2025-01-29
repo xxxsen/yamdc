@@ -30,11 +30,13 @@ type NetworkConfig struct {
 }
 
 type NumberRewriteRule struct {
+	Remark  string `json:"remark"`
 	Rule    string `json:"rule"`
 	Rewrite string `json:"rewrite"`
 }
 
 type NumberCategoryRule struct {
+	Remark   string   `json:"remark"`
 	Rules    []string `json:"rules"`
 	Category string   `json:"category"`
 }

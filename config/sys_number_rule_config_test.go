@@ -1,12 +1,16 @@
 package config
 
 import (
-	"strings"
 	"testing"
 	"yamdc/capture/ruleapi"
 
 	"github.com/stretchr/testify/assert"
 )
+
+type testRewritePair struct {
+	in  string
+	out string
+}
 
 func TestNumberUncensorRule(t *testing.T) {
 	tester := ruleapi.NewRegexpTester()
@@ -36,13 +40,98 @@ func TestNumberUncensorRule(t *testing.T) {
 		"SMDY-123",
 	}
 	for _, item := range trueList {
-		item = strings.ToUpper(item)
 		ok, _ := tester.Test(item)
 		assert.True(t, ok)
 	}
 	for _, item := range falseList {
-		item = strings.ToUpper(item)
 		ok, _ := tester.Test(item)
 		assert.False(t, ok)
+	}
+}
+
+func TestFc2Rewrit(t *testing.T) {
+	tests := []testRewritePair{
+		{
+			in:  "FC2-PPV-12345",
+			out: "FC2-PPV-12345",
+		},
+		{
+			in:  "fc2-ppv-12345",
+			out: "FC2-PPV-12345",
+		},
+		{
+			in:  "fc2",
+			out: "fc2",
+		},
+		{
+			in:  "aaa",
+			out: "aaa",
+		},
+		{
+			in:  "fc2-12345",
+			out: "FC2-PPV-12345",
+		},
+		{
+			in:  "fc2ppv-123",
+			out: "FC2-PPV-123",
+		},
+		{
+			in:  "fc2_ppv_1234",
+			out: "FC2-PPV-1234",
+		},
+		{
+			in:  "fc2ppv_1234",
+			out: "FC2-PPV-1234",
+		},
+	}
+
+	rewriter := ruleapi.NewRegexpRewriter()
+	for _, item := range sysNumberRule.NumberRewriteRules {
+		err := rewriter.AddRules(ruleapi.RegexpRewriteRule{
+			Rule:    item.Rule,
+			Rewrite: item.Rewrite,
+		})
+		assert.NoError(t, err)
+	}
+
+	for _, tst := range tests {
+		out, err := rewriter.Rewrite(tst.in)
+		assert.NoError(t, err)
+		assert.Equal(t, tst.out, out)
+	}
+
+}
+
+func TestNumberAlphaNumberRewrite(t *testing.T) {
+	tests := []testRewritePair{
+		{
+			in:  "123aaa-123434",
+			out: "aaa-123434",
+		},
+		{
+			in:  "aaa-1234",
+			out: "aaa-1234",
+		},
+		{
+			in:  "222aaa-22222_helloworld",
+			out: "222aaa-22222_helloworld",
+		},
+		{
+			in:  "123abc_1234",
+			out: "abc_1234",
+		},
+	}
+	rewriter := ruleapi.NewRegexpRewriter()
+	for _, item := range sysNumberRule.NumberRewriteRules {
+		err := rewriter.AddRules(ruleapi.RegexpRewriteRule{
+			Rule:    item.Rule,
+			Rewrite: item.Rewrite,
+		})
+		assert.NoError(t, err)
+	}
+	for _, tst := range tests {
+		out, err := rewriter.Rewrite(tst.in)
+		assert.NoError(t, err)
+		assert.Equal(t, tst.out, out)
 	}
 }

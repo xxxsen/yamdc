@@ -100,15 +100,15 @@ func Parse(str string) (*Number, error) {
 	if strings.Contains(str, ".") {
 		return nil, fmt.Errorf("should not contain extname, str:%s", str)
 	}
-	number := strings.ToUpper(str)
+	number := strings.ToUpper(str) //默认所有的番号都是大写的
 	rs := &Number{
 		numberId:          "",
 		isChineseSubtitle: false,
 		isMultiCD:         false,
 		multiCDIndex:      0,
 	}
-	//部分番号需要进行改写
-	number = rewriteNumber(number)
+	//部分番号需要进行改写, 改写逻辑提到外面去, number只做解析用
+
 	//提取后缀信息并对番号进行裁剪
 	number = resolveSuffixInfo(rs, number)
 	rs.numberId = number

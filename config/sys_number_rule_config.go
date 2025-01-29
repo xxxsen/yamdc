@@ -1,33 +1,44 @@
 package config
 
 var sysUncensorRule = []string{
-	`^\d+[-|_]\d+$`,
-	`^N\d+$`,
-	`^K\d+$`,
-	`^KB\d+$`,
-	`^C\d+-KI\d+$`,
-	`^1PON.*$`,
-	`^CARIB.*$`,
-	`^SM3D2DBD.*$`,
-	`^SMDV.*$`,
-	`^SKY.*$`,
-	`^HEY.*$`,
-	`^FC2.*$`,
-	`^MKD.*$`,
-	`^MKBD.*$`,
-	`^H4610.*$`,
-	`^H0930.*$`,
-	`^MD[-|_].*$`,
-	`^SMD[-|_].*$`,
-	`^SSDV[-|_].*$`,
-	`^CCDV[-|_].*$`,
-	`^LLDV[-|_].*$`,
-	`^DRC[-|_].*$`,
-	`^MXX[-|_].*$`,
-	`^DSAM[-|_].*$`,
+	`(?i)^\d+[-|_]\d+$`,
+	`(?i)^N\d+$`,
+	`(?i)^K\d+$`,
+	`(?i)^KB\d+$`,
+	`(?i)^C\d+-KI\d+$`,
+	`(?i)^1PON.*$`,
+	`(?i)^CARIB.*$`,
+	`(?i)^SM3D2DBD.*$`,
+	`(?i)^SMDV.*$`,
+	`(?i)^SKY.*$`,
+	`(?i)^HEY.*$`,
+	`(?i)^FC2.*$`,
+	`(?i)^MKD.*$`,
+	`(?i)^MKBD.*$`,
+	`(?i)^H4610.*$`,
+	`(?i)^H0930.*$`,
+	`(?i)^MD[-|_].*$`,
+	`(?i)^SMD[-|_].*$`,
+	`(?i)^SSDV[-|_].*$`,
+	`(?i)^CCDV[-|_].*$`,
+	`(?i)^LLDV[-|_].*$`,
+	`(?i)^DRC[-|_].*$`,
+	`(?i)^MXX[-|_].*$`,
+	`(?i)^DSAM[-|_].*$`,
 }
 
-var sysRewriteRule = []NumberRewriteRule{}
+var sysRewriteRule = []NumberRewriteRule{ //rewrite 逻辑在number.Parse之前, 所以数据可能存在小写的情况, 需要特殊处理
+	{
+		Remark:  "format fc2",
+		Rule:    `(?i)^fc2[-|_]?(ppv)?[-|_](\d+)$`,
+		Rewrite: `FC2-PPV-$2`,
+	},
+	{
+		Remark:  "format number like '234abc-123' to 'abc-123'",
+		Rule:    `^\d+([a-zA-Z]+[-|_]\d+)$`,
+		Rewrite: `$1`,
+	},
+}
 
 var sysCategoryRule = []NumberCategoryRule{
 	{
