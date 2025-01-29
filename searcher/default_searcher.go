@@ -156,7 +156,7 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 		return nil, false, nil
 	}
 	//重建不规范的元数据
-	p.fixMeta(req, meta)
+	p.fixMeta(ctx, req, meta)
 	//将远程数据保存到本地, 并替换文件key
 	p.storeImageData(ctx, meta)
 	if err := p.verifyMeta(meta); err != nil {
@@ -184,17 +184,17 @@ func (p *DefaultSearcher) verifyMeta(meta *model.MovieMeta) error {
 	return nil
 }
 
-func (p *DefaultSearcher) fixMeta(req *http.Request, meta *model.MovieMeta) {
-	meta.Number = strings.ToUpper(meta.Number)
+func (p *DefaultSearcher) fixMeta(ctx context.Context, req *http.Request, mvmeta *model.MovieMeta) {
+	mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的番号
 	prefix := req.URL.Scheme + "://" + req.URL.Host
-	if meta.Cover != nil {
-		p.fixSingleURL(req, &meta.Cover.Name, prefix)
+	if mvmeta.Cover != nil {
+		p.fixSingleURL(req, &mvmeta.Cover.Name, prefix)
 	}
-	if meta.Poster != nil {
-		p.fixSingleURL(req, &meta.Poster.Name, prefix)
+	if mvmeta.Poster != nil {
+		p.fixSingleURL(req, &mvmeta.Poster.Name, prefix)
 	}
-	for i := 0; i < len(meta.SampleImages); i++ {
-		p.fixSingleURL(req, &meta.SampleImages[i].Name, prefix)
+	for i := 0; i < len(mvmeta.SampleImages); i++ {
+		p.fixSingleURL(req, &mvmeta.SampleImages[i].Name, prefix)
 	}
 }
 
