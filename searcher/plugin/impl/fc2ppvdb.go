@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
@@ -24,8 +23,8 @@ type fc2ppvdb struct {
 	api.DefaultPlugin
 }
 
-func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid *number.Number) (*http.Request, error) {
-	vid, ok := numberkit.DecodeFc2ValID(nid.GetNumberID())
+func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid string) (*http.Request, error) {
+	vid, ok := numberkit.DecodeFc2ValID(nid)
 	if !ok {
 		return nil, fmt.Errorf("unable to decode fc2 vid")
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -18,8 +17,8 @@ type javhoo struct {
 	api.DefaultPlugin
 }
 
-func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number.GetNumberID())
+func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

@@ -133,14 +133,14 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
 	ctx = meta.SetNumberId(ctx, number.GetNumberID())
-	ok, err := p.plg.OnPrecheckRequest(ctx, number)
+	ok, err := p.plg.OnPrecheckRequest(ctx, number.GetNumberID())
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
 	}
 	if !ok {
 		return nil, false, nil
 	}
-	req, err := p.plg.OnMakeHTTPRequest(ctx, number)
+	req, err := p.plg.OnMakeHTTPRequest(ctx, number.GetNumberID())
 	if err != nil {
 		return nil, false, fmt.Errorf("make http request failed, err:%w", err)
 	}

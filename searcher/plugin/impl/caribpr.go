@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
@@ -27,8 +26,8 @@ type caribpr struct {
 	api.DefaultPlugin
 }
 
-func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number.GetNumberID())
+func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }

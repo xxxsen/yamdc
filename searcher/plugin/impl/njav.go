@@ -20,8 +20,8 @@ type njav struct {
 	api.DefaultPlugin
 }
 
-func (p *njav) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	nid := number.GetNumberID()
+func (p *njav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	nid := number
 	nid = strings.ReplaceAll(nid, "_", "-") //将下划线替换为中划线
 	uri := fmt.Sprintf("https://njavtv.com/cn/search/%s", nid)
 	return http.NewRequest(http.MethodGet, uri, nil)

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
@@ -29,8 +28,8 @@ type fc2 struct {
 	api.DefaultPlugin
 }
 
-func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n *number.Number) (*http.Request, error) {
-	nid, ok := numberkit.DecodeFc2ValID(n.GetNumberID())
+func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, error) {
+	nid, ok := numberkit.DecodeFc2ValID(n)
 	if !ok {
 		return nil, fmt.Errorf("unable to decode fc2 number")
 	}

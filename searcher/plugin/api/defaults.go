@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"yamdc/model"
-	"yamdc/number"
 )
 
 type DefaultPlugin struct {
 }
 
-func (p *DefaultPlugin) OnPrecheckRequest(ctx context.Context, number *number.Number) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
 	return true, nil
 }
 
@@ -19,7 +18,7 @@ func (p *DefaultPlugin) OnHTTPClientInit() HTTPInvoker {
 	return nil
 }
 
-func (p *DefaultPlugin) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
+func (p *DefaultPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	return nil, fmt.Errorf("no impl")
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"yamdc/model"
-	"yamdc/number"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
@@ -18,8 +17,8 @@ type freejavbt struct {
 	api.DefaultPlugin
 }
 
-func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number *number.Number) (*http.Request, error) {
-	uri := "https://freejavbt.com/zh/" + number.GetNumberID()
+func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	uri := "https://freejavbt.com/zh/" + number
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
