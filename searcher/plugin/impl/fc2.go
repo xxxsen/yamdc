@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"yamdc/model"
 	"yamdc/number"
+	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
@@ -21,20 +21,20 @@ import (
 	"go.uber.org/zap"
 )
 
-var defaultFc2NumberParser = regexp.MustCompile(`^fc2.*?(\d+)$`)
+var (
+	defaultFc2DomainList = []string{"adult.contents.fc2.com"}
+)
 
 type fc2 struct {
 	api.DefaultPlugin
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n *number.Number) (*http.Request, error) {
-	number := strings.ToLower(n.GetNumberID())
-	res := defaultFc2NumberParser.FindStringSubmatch(number)
-	if len(res) != 2 {
-		return nil, fmt.Errorf("unabe to decode number")
+	nid, ok := numberkit.DecodeFc2ValID(n.GetNumberID())
+	if !ok {
+		return nil, fmt.Errorf("unable to decode fc2 number")
 	}
-	number = res[1]
-	uri := "https://adult.contents.fc2.com/article/" + number + "/"
+	uri := fmt.Sprintf("https://%s/article/%s/", api.MustSelectDomain(defaultFc2DomainList), nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
