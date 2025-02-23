@@ -147,7 +147,7 @@ version: "3.1"
 {
     "scan_dir": "...",
     "network_config": {  //与scan_dir, save_dir, data_dir 这些配置在同级
-        "proxy": "socks5://1.2.3.4:1080", //设置socks代理
+        "proxy": "socks://1.2.3.4:1080", //设置socks代理
         "timeout": 60     //设置超时时间, 单位为秒
     }
 }
