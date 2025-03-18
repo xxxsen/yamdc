@@ -14,15 +14,19 @@ import (
 )
 
 var defaultJavBusDomainList = []string{
-	"www.javbus.com",
+	"https://www.javbus.com",
 }
 
 type javbus struct {
 	api.DefaultPlugin
 }
 
+func (p *javbus) OnGetHosts(ctx context.Context) []string {
+	return defaultJavBusDomainList
+}
+
 func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	url := fmt.Sprintf("https://%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
+	url := fmt.Sprintf("%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 

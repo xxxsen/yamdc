@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"context"
+	"fmt"
 	"yamdc/model"
 	"yamdc/number"
 
@@ -20,6 +21,10 @@ func NewCategorySearcher(def []ISearcher, cats map[string][]ISearcher) ISearcher
 
 func (s *categorySearcher) Name() string {
 	return "category"
+}
+
+func (s *categorySearcher) Check(ctx context.Context) error {
+	return fmt.Errorf("unable to perform check on category searcher")
 }
 
 func (s *categorySearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {

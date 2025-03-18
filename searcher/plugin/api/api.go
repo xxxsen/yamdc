@@ -9,6 +9,7 @@ import (
 type HTTPInvoker func(ctx context.Context, req *http.Request) (*http.Response, error)
 
 type IPlugin interface {
+	OnGetHosts(ctx context.Context) []string
 	OnPrecheckRequest(ctx context.Context, number string) (bool, error)
 	OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error)
 	OnDecorateRequest(ctx context.Context, req *http.Request) error
