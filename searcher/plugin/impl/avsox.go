@@ -23,15 +23,23 @@ const (
 	defaultAvsoxSearchExpr = `//*[@id="waterfall"]/div/a/@href`
 )
 
+var defaultAvSoxHostList = []string{
+	"https://avsox.click",
+}
+
 type avsox struct {
 	api.DefaultPlugin
 }
 
-func (p *avsox) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	return http.NewRequest(http.MethodGet, "https://avsox.click", nil) //返回一个假的request
+func (p *avsox) OnGetHosts(ctx context.Context) []string {
+	return defaultAvSoxHostList
 }
 
-func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, _ *http.Request) (*http.Response, error) {
+func (p *avsox) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+	return http.NewRequest(http.MethodGet, api.MustSelectDomain(defaultAvSoxHostList), nil) //返回一个假的request
+}
+
+func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, oriReq *http.Request) (*http.Response, error) {
 	num := strings.ToUpper(meta.GetNumberId(ctx))
 	tryList := p.generateTryList(num)
 	logger := logutil.GetLogger(ctx).With(zap.String("plugin", "avsox"))
@@ -40,7 +48,7 @@ func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker
 	var ok bool
 	var err error
 	for _, item := range tryList {
-		link, ok, err = p.trySearchByNumber(ctx, invoker, item)
+		link, ok, err = p.trySearchByNumber(ctx, oriReq, invoker, item)
 		if err != nil {
 			logger.Error("try search number failed", zap.Error(err), zap.String("number", item))
 			continue
@@ -74,8 +82,9 @@ func (p *avsox) generateTryList(num string) []string {
 	return tryList
 }
 
-func (p *avsox) trySearchByNumber(ctx context.Context, invoker api.HTTPInvoker, number string) (string, bool, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://avsox.click/cn/search/%s", number), nil)
+func (p *avsox) trySearchByNumber(ctx context.Context, oriReq *http.Request, invoker api.HTTPInvoker, number string) (string, bool, error) {
+	host := fmt.Sprintf("%s://%s", oriReq.URL.Scheme, oriReq.URL.Host)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/cn/search/%s", host, number), nil)
 	if err != nil {
 		return "", false, err
 	}

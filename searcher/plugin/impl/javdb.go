@@ -16,12 +16,20 @@ import (
 	"yamdc/searcher/plugin/twostep"
 )
 
+var defaultJavDBHostList = []string{
+	"https://javdb.com",
+}
+
 type javdb struct {
 	api.DefaultPlugin
 }
 
+func (p *javdb) OnGetHosts(ctx context.Context) []string {
+	return defaultJavDBHostList
+}
+
 func (p *javdb) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	link := fmt.Sprintf("https://javdb.com/search?q=%s&f=all", number)
+	link := fmt.Sprintf("%s/search?q=%s&f=all", api.MustSelectDomain(defaultJavDBHostList), number)
 	return http.NewRequest(http.MethodGet, link, nil)
 }
 
@@ -51,7 +59,7 @@ func (p *javdb) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker
 		},
 		ValidStatusCode:       []int{http.StatusOK},
 		CheckResultCountMatch: true,
-		LinkPrefix:            "https://javdb.com",
+		LinkPrefix:            fmt.Sprintf("%s://%s", req.URL.Scheme, req.URL.Host),
 	})
 }
 

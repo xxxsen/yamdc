@@ -13,12 +13,20 @@ import (
 	"yamdc/searcher/plugin/factory"
 )
 
+var defaultJavHooHostList = []string{
+	"https://www.javhoo.com",
+}
+
 type javhoo struct {
 	api.DefaultPlugin
 }
 
+func (p *javhoo) OnGetHosts(ctx context.Context) []string {
+	return defaultJavHooHostList
+}
+
 func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number)
+	uri := fmt.Sprintf("%s/av/%s", api.MustSelectDomain(defaultJavHooHostList), number)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

@@ -13,12 +13,21 @@ import (
 	"yamdc/searcher/plugin/meta"
 )
 
+var defaultFreeJavBtHostList = []string{
+	"https://freejavbt.com",
+}
+
 type freejavbt struct {
 	api.DefaultPlugin
 }
 
+func (p *freejavbt) OnGetHosts(ctx context.Context) []string {
+	return defaultFreeJavBtHostList
+}
+
 func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := "https://freejavbt.com/zh/" + number
+	host := api.MustSelectDomain(defaultFreeJavBtHostList)
+	uri := host + "/zh/" + number
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

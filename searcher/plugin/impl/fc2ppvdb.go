@@ -16,11 +16,15 @@ import (
 )
 
 var defaultFc2PPVDBDomains = []string{
-	"fc2ppvdb.com",
+	"https://fc2ppvdb.com",
 }
 
 type fc2ppvdb struct {
 	api.DefaultPlugin
+}
+
+func (p *fc2ppvdb) OnGetHosts(ctx context.Context) []string {
+	return defaultFc2PPVDBDomains
 }
 
 func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid string) (*http.Request, error) {
@@ -28,7 +32,7 @@ func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid string) (*http.Req
 	if !ok {
 		return nil, fmt.Errorf("unable to decode fc2 vid")
 	}
-	link := fmt.Sprintf("https://%s/articles/%s", api.MustSelectDomain(defaultFc2PPVDBDomains), vid)
+	link := fmt.Sprintf("%s/articles/%s", api.MustSelectDomain(defaultFc2PPVDBDomains), vid)
 	req, err := http.NewRequest(http.MethodGet, link, nil)
 	if err != nil {
 		return nil, err

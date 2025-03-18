@@ -15,13 +15,21 @@ import (
 	"yamdc/searcher/plugin/twostep"
 )
 
+var defaultTkTubeHostList = []string{
+	"https://tktube.com",
+}
+
 type tktube struct {
 	api.DefaultPlugin
 }
 
+func (p *tktube) OnGetHosts(ctx context.Context) []string {
+	return defaultTkTubeHostList
+}
+
 func (p *tktube) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, error) {
 	nid := strings.ReplaceAll(n, "-", "--")
-	uri := fmt.Sprintf("https://tktube.com/zh/search/%s/", nid)
+	uri := fmt.Sprintf("%s/zh/search/%s/", api.MustSelectDomain(defaultTkTubeHostList), nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

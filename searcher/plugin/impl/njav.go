@@ -16,14 +16,22 @@ import (
 	"yamdc/searcher/plugin/twostep"
 )
 
+var defaultNJavHostList = []string{
+	"https://njavtv.com",
+}
+
 type njav struct {
 	api.DefaultPlugin
+}
+
+func (p *njav) OnGetHosts(ctx context.Context) []string {
+	return defaultNJavHostList
 }
 
 func (p *njav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	nid := number
 	nid = strings.ReplaceAll(nid, "_", "-") //将下划线替换为中划线
-	uri := fmt.Sprintf("https://njavtv.com/cn/search/%s", nid)
+	uri := fmt.Sprintf("%s/cn/search/%s", api.MustSelectDomain(defaultNJavHostList), nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 

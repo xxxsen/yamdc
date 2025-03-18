@@ -17,7 +17,7 @@ import (
 
 var (
 	defaultMissavDomains = []string{
-		"missav.ws",
+		"https://missav.ws",
 	}
 )
 
@@ -25,8 +25,12 @@ type missav struct {
 	api.DefaultPlugin
 }
 
+func (p *missav) OnGetHosts(ctx context.Context) []string {
+	return defaultMissavDomains
+}
+
 func (p *missav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	link := fmt.Sprintf("https://%s/cn/search/%s", api.MustSelectDomain(defaultMissavDomains), number)
+	link := fmt.Sprintf("%s/cn/search/%s", api.MustSelectDomain(defaultMissavDomains), number)
 	return http.NewRequest(http.MethodGet, link, nil)
 }
 
