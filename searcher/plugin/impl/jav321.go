@@ -6,13 +6,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
 
 type jav321 struct {
@@ -61,7 +61,8 @@ func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if err != nil {
 		return nil, false, err
 	}
-	putils.EnableDataTranslate(rs)
+	rs.TitleLang = enum.MetaLangJa
+	rs.PlotLang = enum.MetaLangJa
 	return rs, true, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/number"
 	"yamdc/searcher/decoder"
@@ -13,7 +14,6 @@ import (
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
 	"yamdc/searcher/plugin/twostep"
-	"yamdc/searcher/utils"
 )
 
 type javdb struct {
@@ -82,7 +82,7 @@ func (p *javdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	utils.EnableDataTranslate(meta)
+	meta.TitleLang = enum.MetaLangJa
 	return meta, true, nil
 }
 

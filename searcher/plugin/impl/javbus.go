@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
 
 var defaultJavBusDomainList = []string{
@@ -72,7 +72,7 @@ func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if err != nil {
 		return nil, false, err
 	}
-	putils.EnableDataTranslate(rs)
+	rs.TitleLang = enum.MetaLangJa
 	return rs, true, nil
 }
 

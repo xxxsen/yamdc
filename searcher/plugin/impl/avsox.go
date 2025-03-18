@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
@@ -131,7 +132,7 @@ func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	utils.EnableDataTranslate(meta)
+	meta.TitleLang = enum.MetaLangJa
 	return meta, true, nil
 }
 

@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
@@ -10,7 +11,6 @@ import (
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	putils "yamdc/searcher/utils"
 )
 
 type freejavbt struct {
@@ -47,7 +47,7 @@ func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.M
 		return nil, false, err
 	}
 	res.Number = meta.GetNumberId(ctx)
-	putils.EnableDataTranslate(res)
+	res.TitleLang = enum.MetaLangJa
 	return res, true, nil
 }
 

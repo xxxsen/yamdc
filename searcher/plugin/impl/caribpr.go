@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	putils "yamdc/searcher/utils"
 	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -83,7 +83,8 @@ func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 	}
 	metadata.Number = meta.GetNumberId(ctx)
 	metadata.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", metadata.Number)
-	putils.EnableDataTranslate(metadata)
+	metadata.TitleLang = enum.MetaLangJa
+	metadata.PlotLang = enum.MetaLangJa
 	return metadata, true, nil
 }
 

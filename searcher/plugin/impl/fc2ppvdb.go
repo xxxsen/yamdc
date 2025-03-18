@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
@@ -12,7 +13,6 @@ import (
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	"yamdc/searcher/utils"
 )
 
 var defaultFc2PPVDBDomains = []string{
@@ -64,7 +64,7 @@ func (p *fc2ppvdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mo
 		return nil, false, nil
 	}
 	mdata.Number = meta.GetNumberId(ctx)
-	utils.EnableDataTranslate(mdata)
+	mdata.TitleLang = enum.MetaLangJa
 	return mdata, true, nil
 }
 

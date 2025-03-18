@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
@@ -14,7 +15,6 @@ import (
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	putils "yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -100,7 +100,7 @@ func (p *fc2) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMe
 		return nil, false, err
 	}
 	metadata.Number = meta.GetNumberId(ctx)
-	putils.EnableDataTranslate(metadata)
+	metadata.TitleLang = enum.MetaLangJa
 	return metadata, true, nil
 }
 

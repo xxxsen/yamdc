@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
 
 type javhoo struct {
@@ -49,7 +49,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	putils.EnableDataTranslate(meta)
+	meta.TitleLang = enum.MetaLangJa
 	return meta, true, nil
 }
 

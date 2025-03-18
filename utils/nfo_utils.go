@@ -1,23 +1,15 @@
 package utils
 
 import (
-	"fmt"
 	"time"
 	"yamdc/model"
 	"yamdc/nfo"
 )
 
-func buildDataWithSingleTranslateItem(origin string, item *model.SingleTranslateItem) string {
-	if !item.Enable || len(item.TranslatedText) == 0 {
-		return origin
-	}
-	return fmt.Sprintf("%s [翻译:%s]", origin, item.TranslatedText)
-}
-
 func ConvertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
-		Plot:          buildDataWithSingleTranslateItem(m.Plot, &m.ExtInfo.TranslateInfo.Plot),
+		Plot:          m.Plot,
 		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
 		Title:         m.Title,
 		OriginalTitle: m.Title,
@@ -43,8 +35,11 @@ func ConvertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 			Date:   time.UnixMilli(m.ExtInfo.ScrapeInfo.DateTs).Format(time.DateOnly),
 		},
 	}
-	if m.ExtInfo.TranslateInfo.Title.Enable && len(m.ExtInfo.TranslateInfo.Title.TranslatedText) > 0 {
-		mv.Title = m.ExtInfo.TranslateInfo.Title.TranslatedText
+	if len(m.TitleTranslated) > 0 {
+		mv.Title = m.TitleTranslated
+	}
+	if len(m.PlotTranslated) > 0 {
+		mv.Plot += " [翻译:" + m.PlotTranslated + "]"
 	}
 	if m.Poster != nil {
 		mv.Art.Poster = m.Poster.Name
