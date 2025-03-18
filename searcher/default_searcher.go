@@ -47,10 +47,7 @@ func defaultInvoker() api.HTTPInvoker {
 }
 
 func NewDefaultSearcher(name string, plg api.IPlugin) (ISearcher, error) {
-	invoker := plg.OnHTTPClientInit()
-	if invoker == nil {
-		invoker = defaultInvoker()
-	}
+	invoker := defaultInvoker()
 	ss := &DefaultSearcher{
 		name:    name,
 		invoker: invoker,
