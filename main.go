@@ -89,11 +89,11 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
 	}
-	tryTestSearcher(ss)
 	catSs, err := buildCatSearcher(c.CategoryPlugins, c.PluginConfig)
 	if err != nil {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
+	tryTestSearcher(ss, catSs)
 	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
@@ -151,15 +151,27 @@ func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (
 	return rs, nil
 }
 
-func tryTestSearcher(ss []searcher.ISearcher) {
+func tryTestSearcher(ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
 	if !envflag.IsEnableSearcherCheck() {
 		return
+	}
+	testMap := make(map[string]searcher.ISearcher)
+	for _, s := range ss {
+		testMap[s.Name()] = s
+	}
+	for _, catS := range catSs {
+		for _, item := range catS {
+			if _, ok := testMap[item.Name()]; ok {
+				continue
+			}
+			testMap[item.Name()] = item
+		}
 	}
 	wg, ctx := errgroup.WithContext(context.Background())
 	m := make(map[string]error, len(ss))
 	var lck sync.Mutex
 	logutil.GetLogger(ctx).Info("try test searhers...")
-	for _, s := range ss {
+	for _, s := range testMap {
 		s := s
 		wg.Go(func() error {
 			err := s.Check(ctx)
