@@ -12,9 +12,9 @@ require (
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/google/uuid v1.6.0
 	github.com/imroc/req/v3 v3.48.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
-	github.com/xxxsen/common v0.1.13
+	github.com/xxxsen/common v0.1.16
 	go.uber.org/zap v1.23.0
 	golang.org/x/image v0.18.0
 	golang.org/x/net v0.36.0
