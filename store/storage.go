@@ -14,6 +14,10 @@ type IStorage interface {
 	IsDataExist(ctx context.Context, key string) (bool, error)
 }
 
+func init() {
+	SetStorage(NewMemStorage())
+}
+
 var defaultInst IStorage
 
 func SetStorage(impl IStorage) {
