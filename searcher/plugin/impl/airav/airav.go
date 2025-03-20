@@ -16,12 +16,21 @@ import (
 	"go.uber.org/zap"
 )
 
+var defaultAirAvHostList = []string{
+	"https://www.airav.wiki",
+}
+
 type airav struct {
 	api.DefaultPlugin
 }
 
+func (p *airav) OnGetHosts(ctx context.Context) []string {
+	return defaultAirAvHostList
+}
+
 func (p *airav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://www.airav.wiki/api/video/barcode/%s?lng=zh-TW", number), nil)
+	domain := api.MustSelectDomain(defaultAirAvHostList)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/video/barcode/%s?lng=zh-TW", domain, number), nil)
 	if err != nil {
 		return nil, err
 	}

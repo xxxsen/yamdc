@@ -15,12 +15,21 @@ import (
 	"yamdc/searcher/plugin/twostep"
 )
 
+var default18AvHostList = []string{
+	"https://18av.me",
+}
+
 type av18 struct {
 	api.DefaultPlugin
 }
 
+func (p *av18) OnGetHosts(ctx context.Context) []string {
+	return default18AvHostList
+}
+
 func (p *av18) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := fmt.Sprintf("https://18av.me/cn/search.php?kw_type=key&kw=%s", number)
+	host := api.MustSelectDomain(default18AvHostList)
+	uri := fmt.Sprintf("%s/cn/search.php?kw_type=key&kw=%s", host, number)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
@@ -50,7 +59,7 @@ func (p *av18) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker,
 		},
 		ValidStatusCode:       []int{http.StatusOK},
 		CheckResultCountMatch: true,
-		LinkPrefix:            "https://18av.me/cn",
+		LinkPrefix:            fmt.Sprintf("%s://%s/cn", req.URL.Scheme, req.URL.Host),
 	}
 	return twostep.HandleXPathTwoStepSearch(ctx, invoker, req, xctx)
 }

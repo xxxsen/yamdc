@@ -2,28 +2,38 @@ package impl
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
+
+var defaultFreeJav321HostList = []string{
+	"https://www.jav321.com",
+}
 
 type jav321 struct {
 	api.DefaultPlugin
+}
+
+func (p *jav321) OnGetHosts(ctx context.Context) []string {
+	return defaultFreeJav321HostList
 }
 
 func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	data := url.Values{}
 	data.Set("sn", number)
 	body := data.Encode()
-	req, err := http.NewRequest(http.MethodPost, "https://www.jav321.com/search", strings.NewReader(body))
+	host := api.MustSelectDomain(defaultFreeJav321HostList)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/search", host), strings.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +71,8 @@ func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if err != nil {
 		return nil, false, err
 	}
-	putils.EnableDataTranslate(rs)
+	rs.TitleLang = enum.MetaLangJa
+	rs.PlotLang = enum.MetaLangJa
 	return rs, true, nil
 }
 

@@ -14,7 +14,6 @@ import (
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/meta"
 	"yamdc/store"
-	"yamdc/useragent"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -25,10 +24,9 @@ const (
 )
 
 type DefaultSearcher struct {
-	name    string
-	ua      string
-	invoker api.HTTPInvoker
-	plg     api.IPlugin
+	name string
+	cc   *config
+	plg  api.IPlugin
 }
 
 func MustNewDefaultSearcher(name string, plg api.IPlugin) ISearcher {
@@ -39,25 +37,46 @@ func MustNewDefaultSearcher(name string, plg api.IPlugin) ISearcher {
 	return s
 }
 
-func defaultInvoker() api.HTTPInvoker {
-	basicClient := client.DefaultClient()
-	return func(ctx context.Context, req *http.Request) (*http.Response, error) {
-		return basicClient.Do(req)
-	}
-}
-
-func NewDefaultSearcher(name string, plg api.IPlugin) (ISearcher, error) {
-	invoker := plg.OnHTTPClientInit()
-	if invoker == nil {
-		invoker = defaultInvoker()
-	}
+func NewDefaultSearcher(name string, plg api.IPlugin, opts ...Option) (ISearcher, error) {
+	cc := applyOpts(opts...)
 	ss := &DefaultSearcher{
-		name:    name,
-		invoker: invoker,
-		plg:     plg,
-		ua:      useragent.Select(),
+		name: name,
+		cc:   cc,
+		plg:  plg,
 	}
 	return ss, nil
+}
+
+func (p *DefaultSearcher) Check(ctx context.Context) error {
+	hosts := p.plg.OnGetHosts(ctx)
+	if len(hosts) == 0 {
+		return nil
+	}
+	for _, host := range hosts {
+		if err := p.checkOneRequest(ctx, host); err != nil {
+			return fmt.Errorf("check one request failed, host:%s, err:%w", host, err)
+		}
+	}
+	return nil
+}
+
+func (p *DefaultSearcher) checkOneRequest(ctx context.Context, host string) error {
+	req, err := http.NewRequest(http.MethodGet, host, nil)
+	if err != nil {
+		return fmt.Errorf("create request failed, err:%w", err)
+	}
+	if err := p.decorateRequest(ctx, req); err != nil {
+		return fmt.Errorf("decorate request failed, err:%w", err)
+	}
+	rsp, err := p.cc.cli.Do(req)
+	if err != nil {
+		return fmt.Errorf("do check request network failed, err:%w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("do check request status failed, status code:%d, status:%s", rsp.StatusCode, rsp.Status)
+	}
+	return nil
 }
 
 func (p *DefaultSearcher) Name() string {
@@ -65,9 +84,6 @@ func (p *DefaultSearcher) Name() string {
 }
 
 func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
-	if len(req.UserAgent()) == 0 {
-		req.Header.Set("User-Agent", p.ua)
-	}
 	if len(req.Referer()) == 0 {
 		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
 	}
@@ -98,7 +114,7 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx context.Context, req *http.Reque
 	if err := p.decorateRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
 	}
-	return p.invoker(ctx, req)
+	return p.cc.cli.Do(req)
 }
 
 func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, number *number.Number) ([]byte, error) {
@@ -276,7 +292,7 @@ func (p *DefaultSearcher) fetchImageData(ctx context.Context, url string) ([]byt
 	if err := p.decorateImageRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decode request failed, err:%w", err)
 	}
-	rsp, err := p.invoker(ctx, req)
+	rsp, err := p.cc.cli.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("get url data failed, err:%w", err)
 	}

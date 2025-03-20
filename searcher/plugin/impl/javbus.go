@@ -4,25 +4,29 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
 
 var defaultJavBusDomainList = []string{
-	"www.javbus.com",
+	"https://www.javbus.com",
 }
 
 type javbus struct {
 	api.DefaultPlugin
 }
 
+func (p *javbus) OnGetHosts(ctx context.Context) []string {
+	return defaultJavBusDomainList
+}
+
 func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	url := fmt.Sprintf("https://%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
+	url := fmt.Sprintf("%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
 	return http.NewRequest(http.MethodGet, url, nil)
 }
 
@@ -68,7 +72,7 @@ func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if err != nil {
 		return nil, false, err
 	}
-	putils.EnableDataTranslate(rs)
+	rs.TitleLang = enum.MetaLangJa
 	return rs, true, nil
 }
 

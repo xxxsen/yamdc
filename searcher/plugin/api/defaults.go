@@ -10,12 +10,12 @@ import (
 type DefaultPlugin struct {
 }
 
-func (p *DefaultPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
-	return true, nil
+func (p *DefaultPlugin) OnGetHosts(ctx context.Context) []string {
+	return []string{}
 }
 
-func (p *DefaultPlugin) OnHTTPClientInit() HTTPInvoker {
-	return nil
+func (p *DefaultPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
+	return true, nil
 }
 
 func (p *DefaultPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {

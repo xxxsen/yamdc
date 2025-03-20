@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/numberkit"
 	"yamdc/searcher/decoder"
@@ -14,18 +15,23 @@ import (
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	putils "yamdc/searcher/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
 
 var (
-	defaultFc2DomainList = []string{"adult.contents.fc2.com"}
+	defaultFc2DomainList = []string{
+		"https://adult.contents.fc2.com",
+	}
 )
 
 type fc2 struct {
 	api.DefaultPlugin
+}
+
+func (p *fc2) OnGetHosts(ctx context.Context) []string {
+	return defaultFc2DomainList
 }
 
 func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, error) {
@@ -33,7 +39,7 @@ func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, e
 	if !ok {
 		return nil, fmt.Errorf("unable to decode fc2 number")
 	}
-	uri := fmt.Sprintf("https://%s/article/%s/", api.MustSelectDomain(defaultFc2DomainList), nid)
+	uri := fmt.Sprintf("%s/article/%s/", api.MustSelectDomain(defaultFc2DomainList), nid)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
@@ -100,7 +106,7 @@ func (p *fc2) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMe
 		return nil, false, err
 	}
 	metadata.Number = meta.GetNumberId(ctx)
-	putils.EnableDataTranslate(metadata)
+	metadata.TitleLang = enum.MetaLangJa
 	return metadata, true, nil
 }
 

@@ -4,21 +4,29 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/parser"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
-	putils "yamdc/searcher/utils"
 )
+
+var defaultJavHooHostList = []string{
+	"https://www.javhoo.com",
+}
 
 type javhoo struct {
 	api.DefaultPlugin
 }
 
+func (p *javhoo) OnGetHosts(ctx context.Context) []string {
+	return defaultJavHooHostList
+}
+
 func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.javhoo.com/av/%s", number)
+	uri := fmt.Sprintf("%s/av/%s", api.MustSelectDomain(defaultJavHooHostList), number)
 	return http.NewRequest(http.MethodGet, uri, nil)
 }
 
@@ -49,7 +57,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	if len(meta.Number) == 0 {
 		return nil, false, nil
 	}
-	putils.EnableDataTranslate(meta)
+	meta.TitleLang = enum.MetaLangJa
 	return meta, true, nil
 }
 

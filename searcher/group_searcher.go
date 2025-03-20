@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"context"
+	"fmt"
 	"yamdc/model"
 	"yamdc/number"
 
@@ -22,6 +23,10 @@ func (g *group) Name() string {
 
 func (g *group) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
 	return performGroupSearch(ctx, number, g.ss)
+}
+
+func (g *group) Check(ctx context.Context) error {
+	return fmt.Errorf("unable to perform check on group searcher")
 }
 
 func performGroupSearch(ctx context.Context, number *number.Number, ss []ISearcher) (*model.MovieMeta, bool, error) {

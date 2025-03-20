@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
 	"yamdc/searcher/plugin/api"
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
-	putils "yamdc/searcher/utils"
 	"yamdc/utils"
 
 	"github.com/xxxsen/common/logutil"
@@ -22,12 +22,20 @@ import (
 	"golang.org/x/text/transform"
 )
 
+var defaultCaribprHostList = []string{
+	"https://www.caribbeancompr.com",
+}
+
 type caribpr struct {
 	api.DefaultPlugin
 }
 
+func (p *caribpr) OnGetHosts(ctx context.Context) []string {
+	return defaultCaribprHostList
+}
+
 func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/index.html", number)
+	uri := fmt.Sprintf("%s/moviepages/%s/index.html", api.MustSelectDomain(defaultCaribprHostList), number)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	return req, err
 }
@@ -82,8 +90,9 @@ func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 		return nil, false, err
 	}
 	metadata.Number = meta.GetNumberId(ctx)
-	metadata.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", metadata.Number)
-	putils.EnableDataTranslate(metadata)
+	metadata.Cover.Name = fmt.Sprintf("https://www.caribbeancompr.com/moviepages/%s/images/l_l.jpg", metadata.Number) //TODO: 看看能不能直接从元数据提取而不是直接拼链接
+	metadata.TitleLang = enum.MetaLangJa
+	metadata.PlotLang = enum.MetaLangJa
 	return metadata, true, nil
 }
 

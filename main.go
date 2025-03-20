@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"yamdc/capture"
 	"yamdc/capture/ruleapi"
@@ -28,6 +29,7 @@ import (
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"yamdc/searcher/plugin/factory"
 	_ "yamdc/searcher/plugin/register"
@@ -91,6 +93,7 @@ func main() {
 	if err != nil {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
+	tryTestSearcher(ss, catSs)
 	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
@@ -148,6 +151,50 @@ func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (
 	return rs, nil
 }
 
+func tryTestSearcher(ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
+	if !envflag.IsEnableSearcherCheck() {
+		return
+	}
+	testMap := make(map[string]searcher.ISearcher)
+	for _, s := range ss {
+		testMap[s.Name()] = s
+	}
+	for _, catS := range catSs {
+		for _, item := range catS {
+			if _, ok := testMap[item.Name()]; ok {
+				continue
+			}
+			testMap[item.Name()] = item
+		}
+	}
+	wg, ctx := errgroup.WithContext(context.Background())
+	m := make(map[string]error, len(ss))
+	var lck sync.Mutex
+	logutil.GetLogger(ctx).Info("try test searhers...")
+	for _, s := range testMap {
+		s := s
+		wg.Go(func() error {
+			err := s.Check(ctx)
+			lck.Lock()
+			defer lck.Unlock()
+			m[s.Name()] = err
+			return nil
+		})
+	}
+	if err := wg.Wait(); err != nil {
+		logutil.GetLogger(ctx).Error("test searcher internal err", zap.Error(err))
+		return
+	}
+	for name, err := range m {
+		if err != nil {
+			logutil.GetLogger(ctx).Error("-- test searher failed", zap.String("searcher", name), zap.Error(err))
+			continue
+		}
+		logutil.GetLogger(ctx).Info("-- test searcher succ", zap.String("searcher", name))
+	}
+
+}
+
 func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	for _, name := range plgs {
@@ -159,7 +206,7 @@ func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearche
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
-		sr, err := searcher.NewDefaultSearcher(name, plg)
+		sr, err := searcher.NewDefaultSearcher(name, plg, searcher.WithHTTPClient(client.DefaultClient()))
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}

@@ -9,4 +9,5 @@ import (
 type ISearcher interface {
 	Name() string
 	Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error)
+	Check(ctx context.Context) error
 }
