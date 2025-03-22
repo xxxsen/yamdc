@@ -5,9 +5,9 @@ var sysHandler = []string{
 	"poster_cropper",
 	"watermark_maker",
 	"actor_spliter",
-	"tag_padder",
 	"duration_fixer",
 	"number_title",
 	"translater",
 	"ai_tagger",
+	"tag_padder",
 }

@@ -13,6 +13,8 @@ var defaultSuffixResolverList = []suffixInfoResolveFunc{
 	resolveIsChineseSubTitle,
 	resolveCDInfo,
 	resolve4K,
+	resolve8K,
+	resolveVr,
 	resolveLeak,
 }
 
@@ -75,6 +77,22 @@ func resolve4K(info *Number, str string) bool {
 		return false
 	}
 	info.is4k = true
+	return true
+}
+
+func resolve8K(info *Number, str string) bool {
+	if str != defaultSuffix8K {
+		return false
+	}
+	info.is8k = true
+	return true
+}
+
+func resolveVr(info *Number, str string) bool {
+	if str != defaultSuffixVR {
+		return false
+	}
+	info.isVr = true
 	return true
 }
 

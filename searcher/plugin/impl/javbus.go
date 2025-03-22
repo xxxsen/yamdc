@@ -62,7 +62,7 @@ func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		GenreListExpr:       `//div[@class="row movie"]/div[@class="col-md-3 info"]/p/span[@class="genre"]/label[input[@name="gr_sel"]]/a/text()`,
 		CoverExpr:           `//div[@class="row movie"]/div[@class="col-md-9 screencap"]/a[@class="bigImage"]/@href`,
 		PosterExpr:          "",
-		PlotExpr:            `//meta[@name="description"]/@content`,
+		PlotExpr:            "",
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,

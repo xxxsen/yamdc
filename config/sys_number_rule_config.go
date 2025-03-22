@@ -25,6 +25,7 @@ var sysUncensorRule = []string{
 	`(?i)^DRC[-|_].*$`,
 	`(?i)^MXX[-|_].*$`,
 	`(?i)^DSAM[-|_].*$`,
+	`(?i)^JVR[-|_].*$`,
 }
 
 var sysRewriteRule = []NumberRewriteRule{ //rewrite 逻辑在number.Parse之前, 所以数据可能存在小写的情况, 需要特殊处理
