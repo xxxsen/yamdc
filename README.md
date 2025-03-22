@@ -154,3 +154,26 @@ version: "3.1"
     }
 }
 ```
+
+### AI能力
+
+目前支持使用AI来提供**标签提取**, **文本翻译**的能力。
+
+- 标签提取: 使用当前已有的标题、简介额外提取5个标签
+- 文本翻译: 用于替换谷歌翻译
+
+开启的方式如下
+
+```json
+{
+    "scan_dir": "...",
+    "ai_engine": {
+        "name": "gemini", //当前仅支持gemini, 不填则不开启
+        "args": {
+            "model": "gemini-2.0-flash", //按需填写, 仅测试2.0-flash, 其他的没测试
+            "key": "fill with your key here" //从这里获取 https://aistudio.google.com/app/apikey
+        }
+    }
+    //other config...
+}
+```

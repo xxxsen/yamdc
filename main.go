@@ -91,6 +91,7 @@ func main() {
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
 	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
 	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
+	logkit.Info("-- ai engine", zap.Bool("enable", aiengine.IsAIEngineEnabled()))
 
 	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
 	if err != nil {
