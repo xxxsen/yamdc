@@ -30,7 +30,7 @@ func (p *translaterHandler) translateSingle(ctx context.Context, name string, in
 	if len(in) == 0 {
 		return nil
 	}
-	if len(lang) == 0 || lang == enum.MetaLangZHTW || lang == enum.MetaLangZH {
+	if !p.isNeedTranslate(lang) {
 		return nil
 	}
 	res, err := store.LoadData(ctx, p.buildKey(in), defaultTranslateDataSaveTime, func() ([]byte, error) {
@@ -48,15 +48,22 @@ func (p *translaterHandler) translateSingle(ctx context.Context, name string, in
 	return nil
 }
 
+func (p *translaterHandler) isNeedTranslate(lang string) bool {
+	if len(lang) == 0 || lang == enum.MetaLangZHTW || lang == enum.MetaLangZH {
+		return false
+	}
+	return true
+}
+
 func (p *translaterHandler) translateArray(ctx context.Context, name string, in []string, lang string, out *[]string) error {
+	if !p.isNeedTranslate(lang) {
+		return nil
+	}
 	rs := make([]string, 0, len(in))
 	for _, item := range in {
 		var res string
 		if err := p.translateSingle(ctx, "dispatch-"+name+"-translate", item, lang, &res); err != nil {
 			return err
-		}
-		if len(res) == 0 {
-			continue
 		}
 		rs = append(rs, fmt.Sprintf("%s/%s", res, item))
 	}
