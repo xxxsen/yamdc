@@ -21,6 +21,12 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Number.GetIs4K() {
 		tags = append(tags, image.WM4K)
 	}
+	if fc.Number.GetIs8K() {
+		tags = append(tags, image.WM8K)
+	}
+	if fc.Number.GetIsVR() {
+		tags = append(tags, image.WMVR)
+	}
 	if fc.Number.GetExternalFieldUncensor() {
 		tags = append(tags, image.WMUncensored)
 	}

@@ -55,6 +55,9 @@ func (p *translaterHandler) translateArray(ctx context.Context, name string, in 
 		if err := p.translateSingle(ctx, "dispatch-"+name+"-translate", item, lang, &res); err != nil {
 			return err
 		}
+		if len(res) == 0 {
+			continue
+		}
 		rs = append(rs, fmt.Sprintf("%s/%s", res, item))
 	}
 	*out = rs

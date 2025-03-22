@@ -4,6 +4,8 @@ const (
 	defaultSuffixLeak            = "LEAK"
 	defaultSuffixChineseSubtitle = "C"
 	defaultSuffix4K              = "4K"
+	defaultSuffix8K              = "8K"
+	defaultSuffixVR              = "VR"
 	defaultSuffixMultiCD         = "CD"
 )
 

@@ -15,6 +15,8 @@ type Number struct {
 	isMultiCD         bool
 	multiCDIndex      int
 	is4k              bool
+	is8k              bool
+	isVr              bool
 	isLeak            bool
 	extField          externalField
 }
@@ -55,6 +57,14 @@ func (n *Number) GetIs4K() bool {
 	return n.is4k
 }
 
+func (n *Number) GetIs8K() bool {
+	return n.is8k
+}
+
+func (n *Number) GetIsVR() bool {
+	return n.isVr
+}
+
 func (n *Number) GetIsLeak() bool {
 	return n.isLeak
 }
@@ -62,6 +72,12 @@ func (n *Number) GetIsLeak() bool {
 func (n *Number) GenerateSuffix(base string) string {
 	if n.GetIs4K() {
 		base += "-" + defaultSuffix4K
+	}
+	if n.GetIs8K() {
+		base += "-" + defaultSuffix8K
+	}
+	if n.GetIsVR() {
+		base += "-" + defaultSuffixVR
 	}
 	if n.GetIsChineseSubtitle() {
 		base += "-" + defaultSuffixChineseSubtitle
@@ -85,6 +101,12 @@ func (n *Number) GenerateTags() []string {
 	}
 	if n.GetIs4K() {
 		rs = append(rs, defaultTag4K)
+	}
+	if n.GetIs8K() {
+		rs = append(rs, defaultSuffix8K)
+	}
+	if n.GetIsVR() {
+		rs = append(rs, defaultSuffixVR)
 	}
 	if n.GetIsLeak() {
 		rs = append(rs, defaultTagLeak)

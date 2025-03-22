@@ -15,6 +15,8 @@ const (
 	WMUncensored      Watermark = 2
 	WM4K              Watermark = 3
 	WMLeak            Watermark = 4
+	WM8K              Watermark = 5
+	WMVR              Watermark = 6
 )
 
 var resMap = make(map[Watermark][]byte)
@@ -24,6 +26,8 @@ func registerResource() {
 	resMap[WM4K] = resource.ResIMG4K
 	resMap[WMUncensored] = resource.ResIMGUncensored
 	resMap[WMLeak] = resource.ResIMGLeak
+	resMap[WM8K] = resource.ResIMG8K
+	resMap[WMVR] = resource.ResIMGVR
 }
 
 func init() {
