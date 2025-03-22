@@ -158,12 +158,19 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	year := fmt.Sprintf("%d", ts.Year())
 	month := fmt.Sprintf("%d", ts.Month())
 	actor := utils.BuildAuthorsName(fc.Meta.Actors)
+	title := utils.BuildTitle(fc.Meta.Title)
+	titleTranslated := utils.BuildTitle(fc.Meta.TitleTranslated)
+	if len(titleTranslated) == 0 {
+		titleTranslated = title
+	}
 	m := map[string]interface{}{
-		NamingReleaseDate:  date,
-		NamingReleaseYear:  year,
-		NamingReleaseMonth: month,
-		NamingActor:        actor,
-		NamingNumber:       fc.Number.GetNumberID(),
+		NamingReleaseDate:     date,
+		NamingReleaseYear:     year,
+		NamingReleaseMonth:    month,
+		NamingActor:           actor,
+		NamingNumber:          fc.Number.GetNumberID(),
+		NamingTitle:           title,
+		NamingTitleTranslated: titleTranslated,
 	}
 	naming := replacer.ReplaceByMap(c.c.Naming, m)
 	if len(naming) == 0 {

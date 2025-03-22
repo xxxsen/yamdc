@@ -97,7 +97,9 @@ CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -a -tags netgo -ldflags '-w' -o yam
 |scan_dir|扫描目录, 程序会扫描该目录并对其中的影片进行刮削|
 |save_dir|保存目录, 刮削成功的电影会被移动到该目录, 并按`naming`指定的命名规则进行命名|
 |data_dir|数据目录, 存储中间文件或者模型文件的|
-|naming|命名规则, 可用的命名标签如下:{DATE}, {YEAR}, {MONTH}, {NUMBER}, {ACTOR}|
+|naming|命名规则, 可用的命名标签如下:{DATE}, {YEAR}, {MONTH}, {NUMBER}, {ACTOR}, {TITLE}, {TITLE_TRANSLATED}|
+
+**NOTE: naming方式, 虽然提供了ACTOR/TITLE/TITLE_TRANSLATED, 但是并不推荐使用(可能会因为包含特殊字符或者长度超限制导致创建目录失败)。**
 
 工具并不会对番号进行清洗(各种奇奇怪怪的下载站都有自己的命名方式, 无脑清洗可能会导致得到预期外的番号), 用户自己需要对文件进行重命名。
 
