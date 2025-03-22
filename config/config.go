@@ -47,6 +47,11 @@ type NumberRule struct {
 	NumberCategoryRule  []NumberCategoryRule `json:"number_category_rules"`
 }
 
+type AIEngineConfig struct {
+	Name string      `json:"name"`
+	Args interface{} `json:"args"`
+}
+
 type Config struct {
 	ScanDir           string                 `json:"scan_dir"`
 	SaveDir           string                 `json:"save_dir"`
@@ -54,6 +59,7 @@ type Config struct {
 	Naming            string                 `json:"naming"`
 	PluginConfig      map[string]interface{} `json:"plugin_config"`
 	HandlerConfig     map[string]interface{} `json:"handler_config"`
+	AIEngine          AIEngineConfig         `json:"ai_engine"`
 	Plugins           []string               `json:"plugins"`
 	CategoryPlugins   []CategoryPlugin       `json:"category_plugins"`
 	Handlers          []string               `json:"handlers"`

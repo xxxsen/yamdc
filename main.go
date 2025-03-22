@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"yamdc/aiengine"
+	_ "yamdc/aiengine/gemini"
 	"yamdc/capture"
 	"yamdc/capture/ruleapi"
 	"yamdc/client"
@@ -61,6 +63,10 @@ func main() {
 		logkit.Fatal("init envflag failed", zap.Error(err))
 	}
 	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
+
+	if err := setupAIEngine(c); err != nil {
+		logkit.Fatal("setup ai engine failed", zap.Error(err))
+	}
 
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := setupTranslator(c); err != nil {
@@ -301,6 +307,19 @@ func setupHTTPClient(c *config.Config) error {
 		return err
 	}
 	client.SetDefault(clientImpl)
+	return nil
+}
+
+func setupAIEngine(c *config.Config) error {
+	if len(c.AIEngine.Name) == 0 {
+		logutil.GetLogger(context.Background()).Info("ai engine is disabled, skip init")
+		return nil
+	}
+	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args)
+	if err != nil {
+		return fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
+	}
+	aiengine.SetAIEngine(engine)
 	return nil
 }
 

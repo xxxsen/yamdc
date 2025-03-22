@@ -7,7 +7,6 @@ import (
 	"testing"
 	"yamdc/aiengine"
 	"yamdc/aiengine/gemini"
-	"yamdc/client"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -27,7 +26,7 @@ func init() {
 }
 
 func TestTranslator(t *testing.T) {
-	eng, err := gemini.NewGeminiEngine(gemini.WithKey(os.Getenv("GEMINI_KEY")), gemini.WithModel("gemini-2.0-flash"), gemini.WithClient(client.DefaultClient()))
+	eng, err := gemini.New(gemini.WithKey(os.Getenv("GEMINI_KEY")), gemini.WithModel("gemini-2.0-flash"))
 	assert.NoError(t, err)
 	aiengine.SetAIEngine(eng)
 	assert.NoError(t, err)

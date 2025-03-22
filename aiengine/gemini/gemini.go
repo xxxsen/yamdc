@@ -7,6 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"yamdc/aiengine"
+	"yamdc/client"
+
+	"github.com/xxxsen/common/utils"
+)
+
+const (
+	defaultGeminiEngineName = "gemini"
 )
 
 type geminiEngine struct {
@@ -14,7 +21,7 @@ type geminiEngine struct {
 }
 
 func (g *geminiEngine) Name() string {
-	return "gemini"
+	return defaultGeminiEngineName
 }
 
 func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[string]interface{}) (string, error) {
@@ -23,13 +30,13 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.c.model, g.c.key), bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.c.Model, g.c.Key), bytes.NewReader(raw))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	rsp, err := g.c.c.Do(req)
+	rsp, err := client.DefaultClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -53,16 +60,29 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	return res.Candidates[0].Content.Parts[0].Text, nil
 }
 
-func NewGeminiEngine(opts ...Option) (aiengine.IAIEngine, error) {
+func New(opts ...Option) (aiengine.IAIEngine, error) {
 	c := applyOpts(opts...)
-	if c.c == nil {
-		return nil, fmt.Errorf("client is nil")
-	}
-	if c.key == "" {
+	return newGeminiEngine(c)
+}
+
+func newGeminiEngine(c *config) (*geminiEngine, error) {
+	if c.Key == "" {
 		return nil, fmt.Errorf("key is empty")
 	}
-	if c.model == "" {
+	if c.Model == "" {
 		return nil, fmt.Errorf("model is empty")
 	}
 	return &geminiEngine{c: c}, nil
+}
+
+func createGeminiEngine(args interface{}) (aiengine.IAIEngine, error) {
+	c := &config{}
+	if err := utils.ConvStructJson(args, c); err != nil {
+		return nil, err
+	}
+	return newGeminiEngine(c)
+}
+
+func init() {
+	aiengine.Register(defaultGeminiEngineName, createGeminiEngine)
 }

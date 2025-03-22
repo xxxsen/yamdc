@@ -1,36 +1,27 @@
 package gemini
 
-import "yamdc/client"
-
 type config struct {
-	c     client.IHTTPClient
-	key   string
-	model string
+	Key   string `json:"key"`
+	Model string `json:"model"`
 }
 
 type Option func(*config)
 
-func WithClient(cli client.IHTTPClient) Option {
-	return func(c *config) {
-		c.c = cli
-	}
-}
-
 func WithKey(key string) Option {
 	return func(c *config) {
-		c.key = key
+		c.Key = key
 	}
 }
 
 func WithModel(model string) Option {
 	return func(c *config) {
-		c.model = model
+		c.Model = model
 	}
 }
 
 func applyOpts(opts ...Option) *config {
 	c := &config{
-		model: "gemini-2.0-flash",
+		Model: "gemini-2.0-flash",
 	}
 	for _, opt := range opts {
 		opt(c)
