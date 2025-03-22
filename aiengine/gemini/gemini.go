@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"yamdc/aiengine"
 	"yamdc/client"
 
@@ -54,10 +55,11 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	if len(res.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("no translate result part found")
 	}
-	if len(res.Candidates[0].Content.Parts[0].Text) == 0 {
+	content := strings.TrimSpace(res.Candidates[0].Content.Parts[0].Text)
+	if len(content) == 0 {
 		return "", fmt.Errorf("no translate result text found")
 	}
-	return res.Candidates[0].Content.Parts[0].Text, nil
+	return content, nil
 }
 
 func New(opts ...Option) (aiengine.IAIEngine, error) {

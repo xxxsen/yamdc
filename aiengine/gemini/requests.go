@@ -3,7 +3,12 @@ package gemini
 import "github.com/xxxsen/common/replacer"
 
 type Request struct {
-	Contents []Content `json:"contents"`
+	Contents         []Content        `json:"contents"`
+	GenerationConfig GenerationConfig `json:"generationConfig"`
+}
+
+type GenerationConfig struct {
+	Temperature float64 `json:"temperature"`
 }
 
 type Response struct {
@@ -51,5 +56,8 @@ func buildRequest(prompt string, m map[string]interface{}) *Request {
 	}
 	return &Request{
 		Contents: []Content{content},
+		GenerationConfig: GenerationConfig{
+			Temperature: 0,
+		},
 	}
 }

@@ -9,4 +9,5 @@ const (
 	HTagPadder       = "tag_padder"
 	HNumberTitle     = "number_title"
 	HActorSpliter    = "actor_spliter"
+	HAITagger        = "ai_tagger"
 )
