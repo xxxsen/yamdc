@@ -9,6 +9,8 @@ type Request struct {
 
 type GenerationConfig struct {
 	Temperature float64 `json:"temperature"`
+	TopK        int     `json:"topK"`
+	TopP        float64 `json:"topP"`
 }
 
 type Response struct {
@@ -58,6 +60,8 @@ func buildRequest(prompt string, m map[string]interface{}) *Request {
 		Contents: []Content{content},
 		GenerationConfig: GenerationConfig{
 			Temperature: 0,
+			TopK:        1,
+			TopP:        0.1,
 		},
 	}
 }

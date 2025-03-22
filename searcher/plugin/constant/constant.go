@@ -15,4 +15,5 @@ const (
 	SSNJav      = "njav"
 	SSFc2PPVDB  = "fc2ppvdb"
 	SSMissav    = "missav"
+	SSJvrPorn   = "jvrporn"
 )
