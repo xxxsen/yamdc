@@ -1,4 +1,4 @@
-package googletranslator
+package google
 
 import (
 	"context"
@@ -11,7 +11,7 @@ type googleTranslator struct {
 	t *gt.Translator
 }
 
-func New(opts ...Option) (translator.ITranslator, error) {
+func New(opts ...Option) translator.ITranslator {
 	c := &config{}
 	for _, opt := range opts {
 		opt(c)
@@ -21,7 +21,11 @@ func New(opts ...Option) (translator.ITranslator, error) {
 	})
 	return &googleTranslator{
 		t: t,
-	}, nil
+	}
+}
+
+func (t *googleTranslator) Name() string {
+	return "google"
 }
 
 func (t *googleTranslator) Translate(_ context.Context, wording, src, dst string) (string, error) {

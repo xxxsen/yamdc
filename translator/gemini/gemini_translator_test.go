@@ -32,8 +32,7 @@ func TestTranslator(t *testing.T) {
 	aiengine.SetAIEngine(eng)
 	assert.NoError(t, err)
 
-	tt, err := New()
-	assert.NoError(t, err)
+	tt := New()
 
 	res, err := tt.Translate(context.Background(), "hello world", "", "zh")
 	assert.NoError(t, err)

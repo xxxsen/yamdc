@@ -34,6 +34,10 @@ func (g *geminiTranslator) Translate(ctx context.Context, wording string, srclan
 	return res, nil
 }
 
-func New() (translator.ITranslator, error) {
-	return &geminiTranslator{}, nil
+func (g *geminiTranslator) Name() string {
+	return "gemini"
+}
+
+func New() translator.ITranslator {
+	return &geminiTranslator{}
 }

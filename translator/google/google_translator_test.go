@@ -1,4 +1,4 @@
-package googletranslator
+package google
 
 import (
 	"context"
@@ -9,10 +9,8 @@ import (
 )
 
 func TestTranslate(t *testing.T) {
-	impl, err := New()
-	assert.NoError(t, err)
+	impl := New()
 	translator.SetTranslator(impl)
-	assert.NoError(t, err)
 	res, err := translator.Translate(context.Background(), "hello world", "auto", "zh")
 	assert.NoError(t, err)
 	t.Logf("result:%s", res)

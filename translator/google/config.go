@@ -1,4 +1,4 @@
-package googletranslator
+package google
 
 type config struct {
 	proxy string

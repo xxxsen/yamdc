@@ -24,7 +24,8 @@ import (
 	"yamdc/searcher"
 	"yamdc/store"
 	"yamdc/translator"
-	"yamdc/translator/googletranslator"
+	"yamdc/translator/gemini"
+	"yamdc/translator/google"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -304,11 +305,12 @@ func setupHTTPClient(c *config.Config) error {
 }
 
 func setupTranslator(c *config.Config) error {
-	t, err := googletranslator.New(googletranslator.WithProxyUrl(c.NetworkConfig.Proxy))
-	if err != nil {
-		return err
-	}
-	translator.SetTranslator(t)
+	translator.SetTranslator(
+		translator.NewGroup(
+			gemini.New(),
+			google.New(google.WithProxyUrl(c.NetworkConfig.Proxy)),
+		),
+	)
 	return nil
 }
 
