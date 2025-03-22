@@ -8,11 +8,13 @@ import (
 )
 
 const (
-	NamingReleaseDate  = "DATE"
-	NamingReleaseYear  = "YEAR"
-	NamingReleaseMonth = "MONTH"
-	NamingActor        = "ACTOR"
-	NamingNumber       = "NUMBER"
+	NamingReleaseDate     = "DATE"
+	NamingReleaseYear     = "YEAR"
+	NamingReleaseMonth    = "MONTH"
+	NamingActor           = "ACTOR"
+	NamingNumber          = "NUMBER"
+	NamingTitle           = "TITLE"
+	NamingTitleTranslated = "TITLE_TRANSLATED"
 )
 
 var (

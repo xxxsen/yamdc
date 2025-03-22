@@ -3,10 +3,10 @@ package utils
 import "bytes"
 
 const (
-	defaultNonActorName      = "佚名"
-	defaultMultiActorLimit   = 3
-	defaultMultiActorAsName  = "多人作品"
-	defaultMaxActorCharactor = 256
+	defaultNonActorName     = "佚名"
+	defaultMultiActorLimit  = 3
+	defaultMultiActorAsName = "多人作品"
+	defaultMaxItemCharactor = 200
 )
 
 func BuildAuthorsName(acts []string) string {
@@ -21,10 +21,17 @@ func BuildAuthorsName(acts []string) string {
 		if idx != 0 {
 			buf.WriteString(",")
 		}
-		if buf.Len()+1+len(item) > defaultMaxActorCharactor {
+		if buf.Len()+1+len(item) > defaultMaxItemCharactor {
 			break
 		}
 		buf.WriteString(item)
 	}
 	return buf.String()
+}
+
+func BuildTitle(title string) string {
+	if len(title) > defaultMaxItemCharactor {
+		return title[:defaultMaxItemCharactor]
+	}
+	return title
 }

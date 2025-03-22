@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"yamdc/aiengine"
+	_ "yamdc/aiengine/gemini"
 	"yamdc/capture"
 	"yamdc/capture/ruleapi"
 	"yamdc/client"
@@ -24,7 +26,8 @@ import (
 	"yamdc/searcher"
 	"yamdc/store"
 	"yamdc/translator"
-	"yamdc/translator/googletranslator"
+	"yamdc/translator/gemini"
+	"yamdc/translator/google"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -61,6 +64,10 @@ func main() {
 	}
 	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
 
+	if err := setupAIEngine(c); err != nil {
+		logkit.Fatal("setup ai engine failed", zap.Error(err))
+	}
+
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
@@ -84,6 +91,7 @@ func main() {
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
 	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
 	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
+	logkit.Info("-- ai engine", zap.Bool("enable", aiengine.IsAIEngineEnabled()))
 
 	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
 	if err != nil {
@@ -303,12 +311,26 @@ func setupHTTPClient(c *config.Config) error {
 	return nil
 }
 
-func setupTranslator(c *config.Config) error {
-	t, err := googletranslator.New(googletranslator.WithProxyUrl(c.NetworkConfig.Proxy))
-	if err != nil {
-		return err
+func setupAIEngine(c *config.Config) error {
+	if len(c.AIEngine.Name) == 0 {
+		logutil.GetLogger(context.Background()).Info("ai engine is disabled, skip init")
+		return nil
 	}
-	translator.SetTranslator(t)
+	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args)
+	if err != nil {
+		return fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
+	}
+	aiengine.SetAIEngine(engine)
+	return nil
+}
+
+func setupTranslator(c *config.Config) error {
+	translator.SetTranslator(
+		translator.NewGroup(
+			gemini.New(),
+			google.New(google.WithProxyUrl(c.NetworkConfig.Proxy)),
+		),
+	)
 	return nil
 }
 

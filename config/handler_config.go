@@ -9,4 +9,5 @@ var sysHandler = []string{
 	"duration_fixer",
 	"number_title",
 	"translater",
+	"ai_tagger",
 }
