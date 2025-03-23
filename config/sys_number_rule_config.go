@@ -48,6 +48,12 @@ var sysCategoryRule = []NumberCategoryRule{
 		},
 		Category: "FC2",
 	},
+	{
+		Rules: []string{
+			"^JVR.*$",
+		},
+		Category: "JVR",
+	},
 }
 
 var sysNumberRule = NumberRule{

@@ -6,8 +6,8 @@ var sysHandler = []string{
 	"watermark_maker",
 	"actor_spliter",
 	"duration_fixer",
-	"number_title",
 	"translater",
+	"number_title",
 	"ai_tagger",
 	"tag_padder",
 }
