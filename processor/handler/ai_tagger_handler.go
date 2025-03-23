@@ -42,7 +42,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 	if len(fc.Meta.PlotTranslated) > 0 {
 		plot = fc.Meta.PlotTranslated
 	}
-	if len(title) < defaultMinTitleLengthForAITagging && len(plot) < defualtMinPlotLengthForAITagging {
+	if utf8.RuneCountInString(title) < defaultMinTitleLengthForAITagging && utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
 		return nil
 	}
 	res, err := aiengine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
