@@ -22,15 +22,17 @@ var (
 )
 
 type config struct {
-	ScanDir           string
-	Searcher          searcher.ISearcher
-	Processor         processor.IProcessor
-	SaveDir           string
-	Naming            string
-	ExtraMediaExtList []string
-	UncensorTester    ruleapi.ITester
-	NumberRewriter    ruleapi.IRewriter
-	NumberCategorier  ruleapi.IMatcher
+	ScanDir                string
+	Searcher               searcher.ISearcher
+	Processor              processor.IProcessor
+	SaveDir                string
+	Naming                 string
+	ExtraMediaExtList      []string
+	UncensorTester         ruleapi.ITester
+	NumberRewriter         ruleapi.IRewriter
+	NumberCategorier       ruleapi.IMatcher
+	DiscardTranslatedTitle bool
+	DiscardTranslatedPlot  bool
 }
 
 type Option func(c *config)
@@ -86,5 +88,17 @@ func WithNumberRewriter(t ruleapi.IRewriter) Option {
 func WithNumberCategorier(t ruleapi.IMatcher) Option {
 	return func(c *config) {
 		c.NumberCategorier = t
+	}
+}
+
+func WithTransalteTitleDiscard(v bool) Option {
+	return func(c *config) {
+		c.DiscardTranslatedTitle = v
+	}
+}
+
+func WithTranslatedPlotDiscard(v bool) Option {
+	return func(c *config) {
+		c.DiscardTranslatedPlot = v
 	}
 }
