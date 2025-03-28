@@ -256,6 +256,16 @@ func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error
 	return nil
 }
 
+func (c *Capture) doDataDiscard(ctx context.Context, fc *model.FileContext) error {
+	if c.c.DiscardTranslatedTitle {
+		fc.Meta.TitleTranslated = ""
+	}
+	if c.c.DiscardTranslatedPlot {
+		fc.Meta.PlotTranslated = ""
+	}
+	return nil
+}
+
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
 	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.GetNumberID())
 	steps := []struct {
@@ -267,6 +277,7 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 		{"metaverify", c.doMetaVerify},
 		{"naming", c.doNaming},
 		{"savedata", c.doSaveData},
+		{"datadiscard", c.doDataDiscard},
 		{"nfo", c.doExport},
 	}
 	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
@@ -288,7 +299,9 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 		zap.Strings("genres", fc.Meta.Genres),
 		zap.Strings("actors", fc.Meta.Actors),
 		zap.String("title", fc.Meta.Title),
+		zap.String("title_translated", fc.Meta.TitleTranslated),
 		zap.String("plot", fc.Meta.Plot),
+		zap.String("plot_translated", fc.Meta.PlotTranslated),
 	)
 	return nil
 }

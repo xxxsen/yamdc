@@ -143,6 +143,8 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithUncensorTester(numberUncensorRule),
 		capture.WithNumberCategorier(numberCategoryRule),
 		capture.WithNumberRewriter(numberRewriteRule),
+		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
+		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
 	)
 	return capture.New(opts...)
 }

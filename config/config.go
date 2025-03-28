@@ -52,6 +52,11 @@ type AIEngineConfig struct {
 	Args interface{} `json:"args"`
 }
 
+type TranslateConfig struct {
+	DiscardTranslatedTitle bool `json:"discard_translated_title"`
+	DiscardTranslatedPlot  bool `json:"discard_translated_plot"`
+}
+
 type Config struct {
 	ScanDir           string                 `json:"scan_dir"`
 	SaveDir           string                 `json:"save_dir"`
@@ -69,6 +74,7 @@ type Config struct {
 	NetworkConfig     NetworkConfig          `json:"network_config"`
 	NumberDefaultRule NumberRule             `json:"number_default_rule"` //默认规则
 	NumberUserRule    NumberRule             `json:"number_user_rule"`    //用户自定义规则, 最终跟默认规则进行合并
+	TranslateConfig   TranslateConfig        `json:"translate_config"`
 }
 
 func defaultConfig() *Config {
