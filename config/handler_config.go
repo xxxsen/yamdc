@@ -1,6 +1,7 @@
 package config
 
 var sysHandler = []string{
+	"hd_cover",
 	"image_transcoder",
 	"poster_cropper",
 	"watermark_maker",
