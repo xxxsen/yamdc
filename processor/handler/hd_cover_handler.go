@@ -14,6 +14,7 @@ import (
 
 const (
 	defaultHDCoverLinkTemplate = "https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/%s/%spl.jpg"
+	defaultMinCoverSize        = 20 * 1024 //20k
 )
 
 type highQualityCoverHandler struct {
@@ -41,6 +42,9 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 	raw, err := io.ReadAll(rsp.Body)
 	if err != nil {
 		return fmt.Errorf("read hd cover data failed, err:%w", err)
+	}
+	if len(raw) < defaultMinCoverSize {
+		return fmt.Errorf("skip hd cover, too small, size:%d", len(raw))
 	}
 	if _, err := image.LoadImage(raw); err != nil {
 		return fmt.Errorf("hd cover server return non-image data, err:%w", err)
