@@ -10,4 +10,5 @@ const (
 	HNumberTitle     = "number_title"
 	HActorSpliter    = "actor_spliter"
 	HAITagger        = "ai_tagger"
+	HHDCoverHandler  = "hd_cover"
 )
