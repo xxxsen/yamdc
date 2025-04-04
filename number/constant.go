@@ -17,4 +17,6 @@ const (
 	defaultTag4K              = "4K"
 	defaultTagLeak            = "无码流出"
 	defaultTagHack            = "破解"
+	defaultTag8K              = "8K"
+	defaultTagVR              = "VR"
 )

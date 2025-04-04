@@ -111,10 +111,10 @@ func (n *Number) GenerateTags() []string {
 		rs = append(rs, defaultTag4K)
 	}
 	if n.GetIs8K() {
-		rs = append(rs, defaultSuffix8K)
+		rs = append(rs, defaultTag8K)
 	}
 	if n.GetIsVR() {
-		rs = append(rs, defaultSuffixVR)
+		rs = append(rs, defaultTagVR)
 	}
 	if n.GetIsLeak() {
 		rs = append(rs, defaultTagLeak)
