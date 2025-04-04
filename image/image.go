@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
+	"os"
 
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
@@ -71,4 +72,12 @@ func Scale(src image.Image, frame image.Rectangle) image.Image {
 	dst := image.NewRGBA(frame)
 	draw.NearestNeighbor.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
 	return dst
+}
+
+func WriteImageToFile(dst string, img image.Image) error {
+	raw, err := WriteImageToBytes(img)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, raw, 0644)
 }

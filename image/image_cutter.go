@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultAspectRatio = float64(70) / 100
+	defaultAspectRatio = 2.0 / 3.0 //poster的宽高比实际为2:3
 )
 
 func determineCutFrameViaHeight(dx, dy int, dxCenter int, aspectRatio float64) (image.Rectangle, error) {
@@ -21,7 +21,7 @@ func determineCutFrameViaHeight(dx, dy int, dxCenter int, aspectRatio float64) (
 		cropWidthLeft = 0
 	}
 	if cropWidthRight > dx {
-		cropWidthLeft -= (cropWidthRight - dx)
+		cropWidthLeft -= cropWidthRight - dx
 		cropWidthRight = dx
 	}
 	if cropWidthLeft < 0 || cropWidthRight > dx {
@@ -42,7 +42,7 @@ func determineCutFrameViaWidth(dx, dy int, dyCenter int, aspectRatio float64) (i
 		cropHeightTop = 0
 	}
 	if cropHeightBottom > dy {
-		cropHeightTop -= (cropHeightBottom - dy)
+		cropHeightTop -= cropHeightBottom - dy
 		cropHeightBottom = dy
 	}
 	if cropHeightTop < 0 || cropHeightBottom > dy {
