@@ -33,7 +33,9 @@ func LoadImage(data []byte) (image.Image, error) {
 
 func toJpegData(img image.Image) ([]byte, error) {
 	buf := bytes.Buffer{}
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{
+		Quality: 100,
+	}); err != nil {
 		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
 	}
 	return buf.Bytes(), nil
