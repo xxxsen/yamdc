@@ -18,6 +18,7 @@ type Number struct {
 	is8k              bool
 	isVr              bool
 	isLeak            bool
+	isHack            bool
 	extField          externalField
 }
 
@@ -69,6 +70,10 @@ func (n *Number) GetIsLeak() bool {
 	return n.isLeak
 }
 
+func (n *Number) GetIsHack() bool {
+	return n.isHack
+}
+
 func (n *Number) GenerateSuffix(base string) string {
 	if n.GetIs4K() {
 		base += "-" + defaultSuffix4K
@@ -84,6 +89,9 @@ func (n *Number) GenerateSuffix(base string) string {
 	}
 	if n.GetIsLeak() {
 		base += "-" + defaultSuffixLeak
+	}
+	if n.GetIsHack() {
+		base += "-" + defaultSuffixHack2
 	}
 	if n.GetIsMultiCD() {
 		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
@@ -110,6 +118,9 @@ func (n *Number) GenerateTags() []string {
 	}
 	if n.GetIsLeak() {
 		rs = append(rs, defaultTagLeak)
+	}
+	if n.GetIsHack() {
+		rs = append(rs, defaultTagHack)
 	}
 	return rs
 }

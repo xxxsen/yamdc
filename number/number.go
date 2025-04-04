@@ -16,6 +16,7 @@ var defaultSuffixResolverList = []suffixInfoResolveFunc{
 	resolve8K,
 	resolveVr,
 	resolveLeak,
+	resolveHack,
 }
 
 func extractSuffix(str string) (string, bool) {
@@ -69,6 +70,14 @@ func resolveLeak(info *Number, str string) bool {
 		return false
 	}
 	info.isLeak = true
+	return true
+}
+
+func resolveHack(info *Number, str string) bool {
+	if str != defaultSuffixHack1 && str != defaultSuffixHack2 {
+		return false
+	}
+	info.isHack = true
 	return true
 }
 

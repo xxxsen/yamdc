@@ -113,6 +113,8 @@ CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -a -tags netgo -ldflags '-w' -o yam
 |-C|-|添加`字幕`到分类中并为封面添加水印|
 |-4K|-|添加`4K`到分类中并为封面添加水印|
 |-LEAK|-|为封面添加特定水印| 
+|-VR|-|添加vr水印|
+|-UC, -U|-|添加破解水印|
 
 ## 其他
 
