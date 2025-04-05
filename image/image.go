@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
+	"os"
 
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
@@ -32,7 +33,9 @@ func LoadImage(data []byte) (image.Image, error) {
 
 func toJpegData(img image.Image) ([]byte, error) {
 	buf := bytes.Buffer{}
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{
+		Quality: 100,
+	}); err != nil {
 		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
 	}
 	return buf.Bytes(), nil
@@ -71,4 +74,12 @@ func Scale(src image.Image, frame image.Rectangle) image.Image {
 	dst := image.NewRGBA(frame)
 	draw.NearestNeighbor.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
 	return dst
+}
+
+func WriteImageToFile(dst string, img image.Image) error {
+	raw, err := WriteImageToBytes(img)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, raw, 0644)
 }

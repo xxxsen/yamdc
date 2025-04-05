@@ -21,3 +21,6 @@ var ResIMG8K []byte
 
 //go:embed vr.png
 var ResIMGVR []byte
+
+//go:embed hack.png
+var ResIMGHack []byte

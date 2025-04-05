@@ -36,6 +36,9 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Number.GetIsLeak() {
 		tags = append(tags, image.WMLeak)
 	}
+	if fc.Number.GetIsHack() {
+		tags = append(tags, image.WMHack)
+	}
 	if len(tags) == 0 {
 		logutil.GetLogger(ctx).Debug("no watermark tag found, skip watermark proc")
 		return nil

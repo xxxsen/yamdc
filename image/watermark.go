@@ -17,6 +17,7 @@ const (
 	WMLeak            Watermark = 4
 	WM8K              Watermark = 5
 	WMVR              Watermark = 6
+	WMHack            Watermark = 7
 )
 
 var resMap = make(map[Watermark][]byte)
@@ -28,6 +29,7 @@ func registerResource() {
 	resMap[WMLeak] = resource.ResIMGLeak
 	resMap[WM8K] = resource.ResIMG8K
 	resMap[WMVR] = resource.ResIMGVR
+	resMap[WMHack] = resource.ResIMGHack
 }
 
 func init() {
@@ -35,7 +37,7 @@ func init() {
 }
 
 const (
-	defaultMaxWaterMarkCount               = 4                    //最大的水印个数
+	defaultMaxWaterMarkCount               = 6                    //最大的水印个数
 	defaultWaterMarkWidthToImageWidthRatio = float64(31.58) / 100 //水印与整张图片的宽度比, W(watermark)/W(image) = 0.3158
 	defaultWaterMarkWithToHeightRatio      = 2                    //水印本身的宽高比, W(watermark)/H(watermark) = 2
 	defaultWatermarkGapSize                = 10                   //2个水印之间的间隔
@@ -55,7 +57,6 @@ func addWatermarkToImage(img image.Image, wms []image.Image) (image.Image, error
 	watermarkHeight := watermarkWidth / 2
 	for i := 0; i < len(wms); i++ {
 		wm := Scale(wms[len(wms)-i-1], image.Rect(0, 0, watermarkWidth, watermarkHeight))
-
 		rect := image.Rectangle{
 			Min: image.Point{
 				X: img.Bounds().Dx() - watermarkWidth,
