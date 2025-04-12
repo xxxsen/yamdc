@@ -21,7 +21,6 @@ import (
 	"yamdc/config"
 	"yamdc/dependency"
 	"yamdc/dynscript"
-	"yamdc/envflag"
 	"yamdc/face"
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
@@ -51,6 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
+	rewriteEnvFlagToConfig(&c.SwitchConfig)
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 	if err := precheckDir(c); err != nil {
 		logkit.Fatal("precheck dir failed", zap.Error(err))
@@ -63,12 +63,7 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
-
-	if err := envflag.Init(); err != nil {
-		logkit.Fatal("init envflag failed", zap.Error(err))
-	}
-	logkit.Info("read env flags", zap.Any("flag", *envflag.GetFlag()))
-
+	logkit.Info("current switch config", zap.Any("switch", c.SwitchConfig))
 	if err := setupAIEngine(c); err != nil {
 		logkit.Fatal("setup ai engine failed", zap.Error(err))
 	}
@@ -77,7 +72,7 @@ func main() {
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
-	if err := setupFace(filepath.Join(c.DataDir, "models")); err != nil {
+	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
 	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
@@ -98,15 +93,15 @@ func main() {
 	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
 	logkit.Info("-- ai engine", zap.Bool("enable", aiengine.IsAIEngineEnabled()))
 
-	ss, err := buildSearcher(c.Plugins, c.PluginConfig)
+	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
 	if err != nil {
 		logkit.Fatal("build searcher failed", zap.Error(err))
 	}
-	catSs, err := buildCatSearcher(c.CategoryPlugins, c.PluginConfig)
+	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
 	if err != nil {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
-	tryTestSearcher(ss, catSs)
+	tryTestSearcher(c, ss, catSs)
 	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
@@ -150,14 +145,15 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithNumberRewriter(numberRewriteRule),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
 		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
+		capture.WithLinkMode(c.SwitchConfig.EnableLinkMode),
 	)
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (map[string][]searcher.ISearcher, error) {
+func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[string]interface{}) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
-		ss, err := buildSearcher(plg.Plugins, m)
+		ss, err := buildSearcher(c, plg.Plugins, m)
 		if err != nil {
 			return nil, err
 		}
@@ -166,8 +162,8 @@ func buildCatSearcher(cplgs []config.CategoryPlugin, m map[string]interface{}) (
 	return rs, nil
 }
 
-func tryTestSearcher(ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
-	if !envflag.IsEnableSearcherCheck() {
+func tryTestSearcher(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
+	if !c.SwitchConfig.EnableSearcherCheck {
 		return
 	}
 	testMap := make(map[string]searcher.ISearcher)
@@ -210,7 +206,7 @@ func tryTestSearcher(ss []searcher.ISearcher, catSs map[string][]searcher.ISearc
 
 }
 
-func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
+func buildSearcher(c *config.Config, plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	for _, name := range plgs {
 		args, ok := m[name]
@@ -221,7 +217,10 @@ func buildSearcher(plgs []string, m map[string]interface{}) ([]searcher.ISearche
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
-		sr, err := searcher.NewDefaultSearcher(name, plg, searcher.WithHTTPClient(client.DefaultClient()))
+		sr, err := searcher.NewDefaultSearcher(name, plg,
+			searcher.WithHTTPClient(client.DefaultClient()),
+			searcher.WithSearchCache(c.SwitchConfig.EnableSearchMetaCache),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
@@ -273,15 +272,15 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 	return dependency.Resolve(client.DefaultClient(), deps)
 }
 
-func setupFace(models string) error {
+func setupFace(c *config.Config, models string) error {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
-	if envflag.IsEnableGoFaceRecognizer() {
+	if c.SwitchConfig.EnablePigoFaceRecognizer {
 		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return goface.NewGoFace(models)
 		})
 	}
-	if envflag.IsEnablePigoFaceRecognizer() {
+	if c.SwitchConfig.EnablePigoFaceRecognizer {
 		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return pigo.NewPigo(models)
 		})
@@ -418,4 +417,17 @@ func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
 	return ruleapi.WrapFuncAsRewriter(func(res string) (string, error) {
 		return rewriter.Rewrite(context.Background(), res)
 	}), nil
+}
+
+func rewriteEnvFlagToConfig(c *config.SwitchConfig) {
+	//配置项均移到配置文件中, 不再使用环境变量
+	if os.Getenv("ENABLE_SEARCH_META_CACHE") == "false" {
+		c.EnableSearchMetaCache = false
+	}
+	if os.Getenv("ENABLE_GO_FACE_RECOGNIZER") == "false" {
+		c.EnableGoFaceRecognizer = false
+	}
+	if os.Getenv("ENABLE_PIGO_FACE_RECOGNIZER") == "false" {
+		c.EnableGoFaceRecognizer = false
+	}
 }

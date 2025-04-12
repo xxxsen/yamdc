@@ -56,6 +56,15 @@ type Config struct {
 	NetworkConfig   NetworkConfig          `json:"network_config"`
 	TranslateConfig TranslateConfig        `json:"translate_config"`
 	RuleConfig      RuleConfig             `json:"rule_config"`
+	SwitchConfig    SwitchConfig           `json:"switch_config"`
+}
+
+type SwitchConfig struct {
+	EnableSearchMetaCache    bool `json:"enable_search_meta_cache"`    //开启搜索缓存
+	EnableLinkMode           bool `json:"enable_link_mode"`            //测试场景下使用, 开启链接模式
+	EnableGoFaceRecognizer   bool `json:"enable_go_face_recognizer"`   //开启goface人脸识别
+	EnablePigoFaceRecognizer bool `json:"enable_pigo_face_recognizer"` //开启pigo人脸识别
+	EnableSearcherCheck      bool `json:"enable_searcher_check"`       //测试场景使用, 检查插件的目标域名是否还能访问
 }
 
 type LinkConfig struct {
@@ -77,6 +86,13 @@ func defaultConfig() *Config {
 		LogConfig:       sysLogConfig,
 		Dependencies:    sysDependencies,
 		RuleConfig:      sysRuleConfig,
+		SwitchConfig: SwitchConfig{
+			EnableSearchMetaCache:    true,
+			EnableLinkMode:           false,
+			EnableGoFaceRecognizer:   true,
+			EnablePigoFaceRecognizer: true,
+			EnableSearcherCheck:      false,
+		},
 	}
 }
 
