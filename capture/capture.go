@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"yamdc/envflag"
 	"yamdc/model"
 	"yamdc/nfo"
 	"yamdc/number"
@@ -352,7 +351,7 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 }
 
 func (c *Capture) moveMovie(fc *model.FileContext, src string, dst string) error {
-	if envflag.IsEnableLinkMode() {
+	if c.c.LinkMode {
 		return c.moveMovieByLink(fc, src, dst)
 	}
 	return c.moveMovieDirect(fc, src, dst)

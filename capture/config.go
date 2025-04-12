@@ -33,6 +33,7 @@ type config struct {
 	NumberCategorier       ruleapi.IMatcher
 	DiscardTranslatedTitle bool
 	DiscardTranslatedPlot  bool
+	LinkMode               bool
 }
 
 type Option func(c *config)
@@ -100,5 +101,11 @@ func WithTransalteTitleDiscard(v bool) Option {
 func WithTranslatedPlotDiscard(v bool) Option {
 	return func(c *config) {
 		c.DiscardTranslatedPlot = v
+	}
+}
+
+func WithLinkMode(v bool) Option {
+	return func(c *config) {
+		c.LinkMode = v
 	}
 }

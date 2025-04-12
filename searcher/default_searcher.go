@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 	"yamdc/client"
-	"yamdc/envflag"
 	"yamdc/hasher"
 	"yamdc/model"
 	"yamdc/number"
@@ -141,7 +140,7 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 		}
 		return data, nil
 	}
-	if !envflag.IsEnableSearchMetaCache() {
+	if !p.cc.searchCache {
 		return dataLoader()
 	}
 	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, dataLoader)

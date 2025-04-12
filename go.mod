@@ -15,10 +15,16 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
 	github.com/xxxsen/common v0.1.19
+	github.com/xxxsen/picker v0.0.3-beta.1.0.20250412054834-661722f74337
 	go.uber.org/zap v1.23.0
 	golang.org/x/image v0.18.0
 	golang.org/x/net v0.36.0
 	golang.org/x/text v0.22.0
+)
+
+require (
+	github.com/thoas/go-funk v0.9.3 // indirect
+	github.com/traefik/yaegi v0.16.1 // indirect
 )
 
 require (
@@ -32,7 +38,6 @@ require (
 	github.com/google/pprof v0.0.0-20240910150728-a0b0bb1d4134 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/klauspost/compress v1.18.0
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect

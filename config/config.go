@@ -29,62 +29,86 @@ type NetworkConfig struct {
 	Proxy   string `json:"proxy"`
 }
 
-type NumberRewriteRule struct {
-	Remark  string `json:"remark"`
-	Rule    string `json:"rule"`
-	Rewrite string `json:"rewrite"`
-}
-
-type NumberCategoryRule struct {
-	Remark   string   `json:"remark"`
-	Rules    []string `json:"rules"`
-	Category string   `json:"category"`
-}
-
-type NumberRule struct {
-	NumberUncensorRules []string             `json:"number_uncensor_rules"`
-	NumberRewriteRules  []NumberRewriteRule  `json:"number_rewrite_rules"`
-	NumberCategoryRule  []NumberCategoryRule `json:"number_category_rules"`
-}
-
 type AIEngineConfig struct {
 	Name string      `json:"name"`
 	Args interface{} `json:"args"`
 }
 
 type TranslateConfig struct {
-	DiscardTranslatedTitle bool `json:"discard_translated_title"`
-	DiscardTranslatedPlot  bool `json:"discard_translated_plot"`
+	Enable                 bool   `json:"enable"`
+	Engine                 string `json:"engine"`
+	DiscardTranslatedTitle bool   `json:"discard_translated_title"`
+	DiscardTranslatedPlot  bool   `json:"discard_translated_plot"`
+}
+
+type HandlerConfig struct {
+	Disable bool        `json:"disable"`
+	Data    interface{} `json:"data"`
+}
+
+type PluginConfig struct {
+	Disable bool        `json:"disable"`
+	Data    interface{} `json:"data"`
 }
 
 type Config struct {
-	ScanDir           string                 `json:"scan_dir"`
-	SaveDir           string                 `json:"save_dir"`
-	DataDir           string                 `json:"data_dir"`
-	Naming            string                 `json:"naming"`
-	PluginConfig      map[string]interface{} `json:"plugin_config"`
-	HandlerConfig     map[string]interface{} `json:"handler_config"`
-	AIEngine          AIEngineConfig         `json:"ai_engine"`
-	Plugins           []string               `json:"plugins"`
-	CategoryPlugins   []CategoryPlugin       `json:"category_plugins"`
-	Handlers          []string               `json:"handlers"`
-	ExtraMediaExts    []string               `json:"extra_media_exts"`
-	LogConfig         logger.LogConfig       `json:"log_config"`
-	Dependencies      []Dependency           `json:"dependencies"`
-	NetworkConfig     NetworkConfig          `json:"network_config"`
-	NumberDefaultRule NumberRule             `json:"number_default_rule"` //默认规则
-	NumberUserRule    NumberRule             `json:"number_user_rule"`    //用户自定义规则, 最终跟默认规则进行合并
-	TranslateConfig   TranslateConfig        `json:"translate_config"`
+	ScanDir         string                   `json:"scan_dir"`
+	SaveDir         string                   `json:"save_dir"`
+	DataDir         string                   `json:"data_dir"`
+	Naming          string                   `json:"naming"`
+	PluginConfig    map[string]PluginConfig  `json:"plugin_config"`
+	HandlerConfig   map[string]HandlerConfig `json:"handler_config"`
+	AIEngine        AIEngineConfig           `json:"ai_engine"`
+	Plugins         []string                 `json:"plugins"`
+	CategoryPlugins []CategoryPlugin         `json:"category_plugins"`
+	Handlers        []string                 `json:"handlers"`
+	ExtraMediaExts  []string                 `json:"extra_media_exts"`
+	LogConfig       logger.LogConfig         `json:"log_config"`
+	Dependencies    []Dependency             `json:"dependencies"`
+	NetworkConfig   NetworkConfig            `json:"network_config"`
+	TranslateConfig TranslateConfig          `json:"translate_config"`
+	RuleConfig      RuleConfig               `json:"rule_config"`
+	SwitchConfig    SwitchConfig             `json:"switch_config"`
+}
+
+type SwitchConfig struct {
+	EnableSearchMetaCache    bool `json:"enable_search_meta_cache"`    //开启搜索缓存
+	EnableLinkMode           bool `json:"enable_link_mode"`            //测试场景下使用, 开启链接模式
+	EnableGoFaceRecognizer   bool `json:"enable_go_face_recognizer"`   //开启goface人脸识别
+	EnablePigoFaceRecognizer bool `json:"enable_pigo_face_recognizer"` //开启pigo人脸识别
+	EnableSearcherCheck      bool `json:"enable_searcher_check"`       //测试场景使用, 检查插件的目标域名是否还能访问
+}
+
+type LinkConfig struct {
+	Type string `json:"type"`
+	Link string `json:"link"`
+}
+
+type RuleConfig struct {
+	NumberRewriter       LinkConfig `json:"number_rewriter"`
+	NumberCategorier     LinkConfig `json:"number_categorier"`
+	NumberUncensorTester LinkConfig `json:"number_uncensor_tester"`
 }
 
 func defaultConfig() *Config {
 	return &Config{
-		Plugins:           sysPlugins,
-		CategoryPlugins:   sysCategoryPlugins,
-		Handlers:          sysHandler,
-		LogConfig:         sysLogConfig,
-		Dependencies:      sysDependencies,
-		NumberDefaultRule: sysNumberRule,
+		Plugins:         sysPlugins,
+		CategoryPlugins: sysCategoryPlugins,
+		Handlers:        sysHandler,
+		LogConfig:       sysLogConfig,
+		Dependencies:    sysDependencies,
+		RuleConfig:      sysRuleConfig,
+		SwitchConfig: SwitchConfig{
+			EnableSearchMetaCache:    true,
+			EnableLinkMode:           false,
+			EnableGoFaceRecognizer:   true,
+			EnablePigoFaceRecognizer: true,
+			EnableSearcherCheck:      false,
+		},
+		TranslateConfig: TranslateConfig{
+			Enable: true,
+			Engine: "google",
+		},
 	}
 }
 
