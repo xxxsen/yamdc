@@ -27,7 +27,7 @@ const (
 	defaultExtraFanartDir = "extrafanart"
 )
 
-var defaultMediaSuffix = []string{".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi", ".mkv", ".rmvb", ".ts", ".mov", ".rm"}
+var defaultMediaSuffix = []string{".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi", ".mkv", ".rmvb", ".ts", ".mov", ".rm", ".strm"}
 
 type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
 
