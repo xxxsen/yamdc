@@ -374,7 +374,7 @@ func readIOStream(c *config.LinkConfig) ([]byte, error) {
 		return os.ReadFile(c.Link)
 	}
 	name := path.Base(c.Link)
-	cachedir := path.Join(os.TempDir(), "rule")
+	cachedir := path.Join(os.TempDir(), "yamdc-script")
 	cacheday := 7 * 24 * time.Hour
 	local := path.Join(cachedir, name)
 	st, err := os.Stat(local)
