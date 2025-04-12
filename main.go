@@ -30,7 +30,7 @@ import (
 	"yamdc/searcher"
 	"yamdc/store"
 	"yamdc/translator"
-	"yamdc/translator/gemini"
+	"yamdc/translator/ai"
 	"yamdc/translator/google"
 
 	"github.com/xxxsen/common/logger"
@@ -72,6 +72,7 @@ func main() {
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
+	logkit.Info("current use translator engine", zap.String("engine", c.TranslateConfig.Engine))
 	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
@@ -331,12 +332,24 @@ func setupAIEngine(c *config.Config) error {
 }
 
 func setupTranslator(c *config.Config) error {
-	translator.SetTranslator(
-		translator.NewGroup(
-			gemini.New(),
-			google.New(google.WithProxyUrl(c.NetworkConfig.Proxy)),
-		),
-	)
+	if !c.TranslateConfig.Enable {
+		return nil
+	}
+	translatorGetter := func() (translator.ITranslator, error) {
+		if strings.EqualFold(c.TranslateConfig.Engine, "google") {
+			return google.New(google.WithProxyUrl(c.NetworkConfig.Proxy)), nil
+		}
+		if strings.EqualFold(c.TranslateConfig.Engine, "ai") {
+			return ai.New(), nil
+		}
+		return nil, fmt.Errorf("unsupported translator engine: %s", c.TranslateConfig.Engine)
+	}
+	engine, err := translatorGetter()
+	if err != nil {
+		return err
+	}
+
+	translator.SetTranslator(engine)
 	return nil
 }
 

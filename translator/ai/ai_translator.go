@@ -1,4 +1,4 @@
-package gemini
+package ai
 
 import (
 	"context"
@@ -15,10 +15,10 @@ const (
 `
 )
 
-type geminiTranslator struct {
+type aiTranslator struct {
 }
 
-func (g *geminiTranslator) Translate(ctx context.Context, wording string, srclang string, dstlang string) (string, error) {
+func (g *aiTranslator) Translate(ctx context.Context, wording string, srclang string, dstlang string) (string, error) {
 	if !aiengine.IsAIEngineEnabled() {
 		return "", fmt.Errorf("ai engine not init yet")
 	}
@@ -34,10 +34,10 @@ func (g *geminiTranslator) Translate(ctx context.Context, wording string, srclan
 	return res, nil
 }
 
-func (g *geminiTranslator) Name() string {
-	return "gemini"
+func (g *aiTranslator) Name() string {
+	return "ai"
 }
 
 func New() translator.ITranslator {
-	return &geminiTranslator{}
+	return &aiTranslator{}
 }

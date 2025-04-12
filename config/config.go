@@ -35,8 +35,10 @@ type AIEngineConfig struct {
 }
 
 type TranslateConfig struct {
-	DiscardTranslatedTitle bool `json:"discard_translated_title"`
-	DiscardTranslatedPlot  bool `json:"discard_translated_plot"`
+	Enable                 bool   `json:"enable"`
+	Engine                 string `json:"engine"`
+	DiscardTranslatedTitle bool   `json:"discard_translated_title"`
+	DiscardTranslatedPlot  bool   `json:"discard_translated_plot"`
 }
 
 type Config struct {
@@ -92,6 +94,10 @@ func defaultConfig() *Config {
 			EnableGoFaceRecognizer:   true,
 			EnablePigoFaceRecognizer: true,
 			EnableSearcherCheck:      false,
+		},
+		TranslateConfig: TranslateConfig{
+			Enable: true,
+			Engine: "google",
 		},
 	}
 }
