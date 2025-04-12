@@ -151,7 +151,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[string]interface{}) (map[string][]searcher.ISearcher, error) {
+func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
 		ss, err := buildSearcher(c, plg.Plugins, m)
@@ -207,14 +207,22 @@ func tryTestSearcher(c *config.Config, ss []searcher.ISearcher, catSs map[string
 
 }
 
-func buildSearcher(c *config.Config, plgs []string, m map[string]interface{}) ([]searcher.ISearcher, error) {
+func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
+	defc := config.PluginConfig{
+		Disable: false,
+		Data:    map[string]interface{}{},
+	}
 	for _, name := range plgs {
-		args, ok := m[name]
+		plugc, ok := m[name]
 		if !ok {
-			args = struct{}{}
+			plugc = defc
 		}
-		plg, err := factory.CreatePlugin(name, args)
+		if plugc.Disable {
+			logutil.GetLogger(context.Background()).Info("plugin is disabled, skip create", zap.String("plugin", name))
+			continue
+		}
+		plg, err := factory.CreatePlugin(name, defc.Data)
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
@@ -231,14 +239,22 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]interface{}) ([
 	return rs, nil
 }
 
-func buildProcessor(hs []string, m map[string]interface{}) ([]processor.IProcessor, error) {
+func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
+	defc := config.HandlerConfig{
+		Disable: false,
+		Data:    map[string]interface{}{},
+	}
 	for _, name := range hs {
-		data, ok := m[name]
+		handlec, ok := m[name]
 		if !ok {
-			data = struct{}{}
+			handlec = defc
 		}
-		h, err := handler.CreateHandler(name, data)
+		if handlec.Disable {
+			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
+			continue
+		}
+		h, err := handler.CreateHandler(name, handlec.Data)
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}

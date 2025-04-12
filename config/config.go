@@ -41,24 +41,34 @@ type TranslateConfig struct {
 	DiscardTranslatedPlot  bool   `json:"discard_translated_plot"`
 }
 
+type HandlerConfig struct {
+	Disable bool        `json:"disable"`
+	Data    interface{} `json:"data"`
+}
+
+type PluginConfig struct {
+	Disable bool        `json:"disable"`
+	Data    interface{} `json:"data"`
+}
+
 type Config struct {
-	ScanDir         string                 `json:"scan_dir"`
-	SaveDir         string                 `json:"save_dir"`
-	DataDir         string                 `json:"data_dir"`
-	Naming          string                 `json:"naming"`
-	PluginConfig    map[string]interface{} `json:"plugin_config"`
-	HandlerConfig   map[string]interface{} `json:"handler_config"`
-	AIEngine        AIEngineConfig         `json:"ai_engine"`
-	Plugins         []string               `json:"plugins"`
-	CategoryPlugins []CategoryPlugin       `json:"category_plugins"`
-	Handlers        []string               `json:"handlers"`
-	ExtraMediaExts  []string               `json:"extra_media_exts"`
-	LogConfig       logger.LogConfig       `json:"log_config"`
-	Dependencies    []Dependency           `json:"dependencies"`
-	NetworkConfig   NetworkConfig          `json:"network_config"`
-	TranslateConfig TranslateConfig        `json:"translate_config"`
-	RuleConfig      RuleConfig             `json:"rule_config"`
-	SwitchConfig    SwitchConfig           `json:"switch_config"`
+	ScanDir         string                   `json:"scan_dir"`
+	SaveDir         string                   `json:"save_dir"`
+	DataDir         string                   `json:"data_dir"`
+	Naming          string                   `json:"naming"`
+	PluginConfig    map[string]PluginConfig  `json:"plugin_config"`
+	HandlerConfig   map[string]HandlerConfig `json:"handler_config"`
+	AIEngine        AIEngineConfig           `json:"ai_engine"`
+	Plugins         []string                 `json:"plugins"`
+	CategoryPlugins []CategoryPlugin         `json:"category_plugins"`
+	Handlers        []string                 `json:"handlers"`
+	ExtraMediaExts  []string                 `json:"extra_media_exts"`
+	LogConfig       logger.LogConfig         `json:"log_config"`
+	Dependencies    []Dependency             `json:"dependencies"`
+	NetworkConfig   NetworkConfig            `json:"network_config"`
+	TranslateConfig TranslateConfig          `json:"translate_config"`
+	RuleConfig      RuleConfig               `json:"rule_config"`
+	SwitchConfig    SwitchConfig             `json:"switch_config"`
 }
 
 type SwitchConfig struct {
