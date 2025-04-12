@@ -52,3 +52,51 @@ func TestNumberCategortier(t *testing.T) {
 		}
 	}
 }
+
+var liveNumberCategorierRule = `
+plugins:
+  - name: basci_categorier
+    define: |
+        cats := map[string][]*regexp.Regexp{
+            "FC2": []*regexp.Regexp{
+                regexp.MustCompile("(?i)^FC2.*$"),
+            },
+            "JVR": []*regexp.Regexp{
+                regexp.MustCompile("(?i)^JVR.*$"),
+            },
+        }
+    function: |
+        func(ctx context.Context, number string) (string, bool, error) {
+            for cat, ruleList := range cats {
+                for _, rule := range ruleList {
+                    if rule.MatchString(number) {
+                        return cat, true, nil
+                    }
+                }
+            }
+            return "", false, nil
+        }
+import:
+  - strings    
+  - regexp  
+`
+
+func TestLiveNumberCategorier(t *testing.T) {
+	ctr, err := NewNumberCategorier(liveNumberCategorierRule)
+	assert.NoError(t, err)
+	m := map[string]string{
+		"fc2-ppv-1234": "FC2",
+		"jvr-12345":    "JVR",
+		"qqqq":         "",
+		"HEYZO-12345":  "",
+	}
+	for k, v := range m {
+		res, matched, err := ctr.Category(context.Background(), k)
+		assert.NoError(t, err)
+		if matched {
+			assert.Equal(t, v, res)
+		} else {
+			assert.Equal(t, "", res)
+		}
+	}
+}

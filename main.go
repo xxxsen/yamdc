@@ -4,7 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,6 +20,7 @@ import (
 	"yamdc/client"
 	"yamdc/config"
 	"yamdc/dependency"
+	"yamdc/dynscript"
 	"yamdc/envflag"
 	"yamdc/face"
 	"yamdc/face/goface"
@@ -336,39 +341,79 @@ func setupTranslator(c *config.Config) error {
 	return nil
 }
 
-func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
-	t := ruleapi.NewRegexpTester()
-	//合并用户/默认规则
-	c.NumberUserRule.NumberUncensorRules = append(c.NumberUserRule.NumberUncensorRules,
-		c.NumberDefaultRule.NumberUncensorRules...)
-	if err := t.AddRules(c.NumberUserRule.NumberUncensorRules...); err != nil {
+func readIOStream(c *config.LinkConfig) ([]byte, error) {
+	if c.Type == "local" {
+		return os.ReadFile(c.Link)
+	}
+	name := path.Base(c.Link)
+	local := path.Join(c.CacheDir, name)
+	st, err := os.Stat(local)
+	if err == nil && st.ModTime().Add(time.Duration(c.CacheDay)*24*time.Hour).After(time.Now()) {
+		return os.ReadFile(c.Link)
+	}
+	req, err := http.NewRequest(http.MethodGet, c.Link, nil)
+	if err != nil {
 		return nil, err
 	}
-	return t, nil
+	rsp, err := client.DefaultClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http request failed, status code:%d", rsp.StatusCode)
+	}
+	raw, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(local, raw, 0644); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
+	rule, err := readIOStream(&c.RuleConfig.NumberUncensorTester)
+	if err != nil {
+		return nil, err
+	}
+	ck, err := dynscript.NewNumberUncensorChecker(string(rule))
+	if err != nil {
+		return nil, err
+	}
+	return ruleapi.WrapFuncAsTester(func(res string) (bool, error) {
+		return ck.IsMatch(context.Background(), res)
+	}), nil
 }
 
 func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
-	t := ruleapi.NewRegexpMatcher()
-	c.NumberUserRule.NumberCategoryRule = append(c.NumberUserRule.NumberCategoryRule, c.NumberDefaultRule.NumberCategoryRule...)
-	for _, item := range c.NumberUserRule.NumberCategoryRule {
-		if err := t.AddRules(ruleapi.RegexpMatchRule{
-			Regexp: item.Rules,
-			Match:  item.Category,
-		}); err != nil {
-			return nil, err
-		}
+	rule, err := readIOStream(&c.RuleConfig.NumberCategorier)
+	if err != nil {
+		return nil, err
 	}
-	return t, nil
+	cater, err := dynscript.NewNumberCategorier(string(rule))
+	if err != nil {
+		return nil, err
+	}
+	return ruleapi.WrapFuncAsMatcher(func(res string) (string, bool, error) {
+		return cater.Category(context.Background(), res)
+	}), nil
 }
 
 func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
-	t := ruleapi.NewRegexpRewriter()
-	c.NumberUserRule.NumberRewriteRules = append(c.NumberUserRule.NumberRewriteRules, c.NumberDefaultRule.NumberRewriteRules...)
-	for _, item := range c.NumberUserRule.NumberRewriteRules {
-		t.AddRules(ruleapi.RegexpRewriteRule{
-			Rule:    item.Rule,
-			Rewrite: item.Rewrite,
-		})
+	rule, err := readIOStream(&c.RuleConfig.NumberRewriter)
+	if err != nil {
+		return nil, err
 	}
-	return t, nil
+	rewriter, err := dynscript.NewNumberRewriter(string(rule))
+	if err != nil {
+		return nil, err
+	}
+	return ruleapi.WrapFuncAsRewriter(func(res string) (string, error) {
+		return rewriter.Rewrite(context.Background(), res)
+	}), nil
 }
