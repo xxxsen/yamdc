@@ -25,7 +25,7 @@ func (u *uncensorCheckerImpl) IsMatch(ctx context.Context, number string) (bool,
 			logutil.GetLogger(ctx).Error("get uncensor check plugin failed", zap.String("name", name), zap.Error(err))
 			continue
 		}
-		matched, err := f(context.Background(), number)
+		matched, err := f(ctx, number)
 		if err != nil {
 			logutil.GetLogger(ctx).Error("call uncensor check plugin failed", zap.String("name", name), zap.Error(err))
 			continue
