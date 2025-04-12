@@ -56,8 +56,13 @@ plugins:
             },
             {
                 Name: "format number like '234abc-123' to 'abc-123'",
-                Rule: regexp.MustCompile("^\\d+([a-zA-Z]+[-|_]\\d+)([-|_].*)?$"),
+                Rule: regexp.MustCompile("^\\d{3,5}([a-zA-Z]+[-|_]\\d+)([-|_].*)?$"),
                 Rewrite: "$1$2",
+            },
+            {
+                Name: "rewrite 1pon or carib",
+                Rule: regexp.MustCompile("(?i)(1pondo|1pon|carib)[-|_]?(.*)"),
+                Rewrite: "$2",
             },
         }
     function: |
@@ -97,6 +102,9 @@ func TestLiveRewriterRule(t *testing.T) {
 		"123abc_1234":             "ABC_1234",
 		"222aaa-22222_helloworld": "AAA-22222_HELLOWORLD",
 		"aaa-1234-CD1":            "AAA-1234-CD1",
+		"carib-1234-222":          "1234-222",
+		"1pon-2344-222":           "2344-222",
+		"1pondo-1234-222":         "1234-222",
 	}
 	for k, v := range m {
 		res, err := rewriter.Rewrite(context.Background(), k)
