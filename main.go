@@ -346,10 +346,12 @@ func readIOStream(c *config.LinkConfig) ([]byte, error) {
 		return os.ReadFile(c.Link)
 	}
 	name := path.Base(c.Link)
-	local := path.Join(c.CacheDir, name)
+	cachedir := path.Join(os.TempDir(), "rule")
+	cacheday := 7 * 24 * time.Hour
+	local := path.Join(cachedir, name)
 	st, err := os.Stat(local)
-	if err == nil && st.ModTime().Add(time.Duration(c.CacheDay)*24*time.Hour).After(time.Now()) {
-		return os.ReadFile(c.Link)
+	if err == nil && st.ModTime().Add(cacheday).After(time.Now()) {
+		return os.ReadFile(local)
 	}
 	req, err := http.NewRequest(http.MethodGet, c.Link, nil)
 	if err != nil {
@@ -367,7 +369,7 @@ func readIOStream(c *config.LinkConfig) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cachedir, 0755); err != nil {
 		return nil, err
 	}
 	if err := os.WriteFile(local, raw, 0644); err != nil {

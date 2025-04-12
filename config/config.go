@@ -29,24 +29,6 @@ type NetworkConfig struct {
 	Proxy   string `json:"proxy"`
 }
 
-type NumberRewriteRule struct {
-	Remark  string `json:"remark"`
-	Rule    string `json:"rule"`
-	Rewrite string `json:"rewrite"`
-}
-
-type NumberCategoryRule struct {
-	Remark   string   `json:"remark"`
-	Rules    []string `json:"rules"`
-	Category string   `json:"category"`
-}
-
-type NumberRule struct {
-	NumberUncensorRules []string             `json:"number_uncensor_rules"`
-	NumberRewriteRules  []NumberRewriteRule  `json:"number_rewrite_rules"`
-	NumberCategoryRule  []NumberCategoryRule `json:"number_category_rules"`
-}
-
 type AIEngineConfig struct {
 	Name string      `json:"name"`
 	Args interface{} `json:"args"`
@@ -77,10 +59,8 @@ type Config struct {
 }
 
 type LinkConfig struct {
-	Type     string `json:"type"`
-	Link     string `json:"link"`
-	CacheDir string `json:"cache_dir"`
-	CacheDay int    `json:"cache_day"`
+	Type string `json:"type"`
+	Link string `json:"link"`
 }
 
 type RuleConfig struct {
@@ -96,6 +76,7 @@ func defaultConfig() *Config {
 		Handlers:        sysHandler,
 		LogConfig:       sysLogConfig,
 		Dependencies:    sysDependencies,
+		RuleConfig:      sysRuleConfig,
 	}
 }
 

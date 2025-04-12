@@ -55,7 +55,7 @@ func TestNumberCategortier(t *testing.T) {
 
 var liveNumberCategorierRule = `
 plugins:
-  - name: basci_categorier
+  - name: basic_categorier
     define: |
         cats := map[string][]*regexp.Regexp{
             "FC2": []*regexp.Regexp{
