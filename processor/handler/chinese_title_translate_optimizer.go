@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -91,7 +90,7 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(ctx context.Context
 		return "", false, err
 	}
 	defer rsp.Body.Close()
-	raw, err := io.ReadAll(rsp.Body)
+	raw, err := client.ReadHTTPData(rsp)
 	if err != nil {
 		return "", false, err
 	}
