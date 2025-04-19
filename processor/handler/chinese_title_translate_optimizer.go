@@ -70,7 +70,7 @@ func (c *chineseTitleTranslateOptimizer) encodeNumberId(numberid string) string 
 func (c *chineseTitleTranslateOptimizer) cleanSearchTitle(title string) string {
 	sts := defaultYesJav100TitleExtractRegexp.FindStringSubmatch(title)
 	if len(sts) <= 1 {
-		return title
+		return ""
 	}
 	return strings.TrimSpace(sts[1])
 }
@@ -114,10 +114,11 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(ctx context.Context
 		searchedTitle = res
 		break
 	}
+	searchedTitle = c.cleanSearchTitle(searchedTitle)
 	if len(searchedTitle) == 0 {
 		return "", false, nil
 	}
-	return c.cleanSearchTitle(searchedTitle), true, nil
+	return searchedTitle, true, nil
 }
 
 func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.FileContext) error {
