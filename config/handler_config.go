@@ -8,6 +8,7 @@ var sysHandler = []string{
 	"actor_spliter",
 	"duration_fixer",
 	"translater",
+	"chinese_title_translate_optimizer",
 	"number_title",
 	"ai_tagger",
 	"tag_padder",

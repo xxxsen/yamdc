@@ -39,4 +39,7 @@ func TestTranslator(t *testing.T) {
 	res, err = tt.Translate(context.Background(), "これはテストです", "", "zh")
 	assert.NoError(t, err)
 	t.Logf("result:%s", res)
+	res, err = tt.Translate(context.Background(), "MTALL-148 うるちゅるリップで締めつけるジュル音高めの極上スローフェラと淫語性交 雫月心桜", "", "zh")
+	assert.NoError(t, err)
+	t.Logf("result:%s", res)
 }
