@@ -24,3 +24,6 @@ var ResIMGVR []byte
 
 //go:embed image/hack.png
 var ResIMGHack []byte
+
+//go:embed json/c_number.json.gz
+var ResCNumber []byte //数据来源为mdcx
