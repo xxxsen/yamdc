@@ -14,10 +14,18 @@ import (
 
 const (
 	defaultAITaggerPrompt = `
-你需要从下面的这些信息中提取5个最合适的中文标签, 使用逗号将其隔开, 产生的标签不能重复也不能与给到的现有标签重复, 如果无法产生有效标签, 则返回空文本, 不需要有多余的解释和输出。
+You are an expert in tagging adult video content. The input is a title or description written in Chinese, Japanese, or English. Your task is to extract up to 5 keywords that are explicitly mentioned or directly implied by the text. Do not guess or invent.
 
-标题:"{TITLE}"
-摘要:"{PLOT}"
+Each keyword must:
+- Be in Simplified Chinese
+- Be 2 to 3 Chinese characters long (no 4-character or longer phrases)
+- Be directly supported by the text
+
+Only output the keywords, separated by commas. No explanation, no extra text.
+
+Input:
+TITLE: "{TITLE}"
+PLOT: "{PLOT}"
 `
 )
 
