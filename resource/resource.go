@@ -4,23 +4,23 @@ import (
 	_ "embed"
 )
 
-//go:embed subtitle.png
+//go:embed image/subtitle.png
 var ResIMGSubtitle []byte
 
-//go:embed uncensored.png
+//go:embed image/uncensored.png
 var ResIMGUncensored []byte
 
-//go:embed 4k.png
+//go:embed image/4k.png
 var ResIMG4K []byte
 
-//go:embed leak.png
+//go:embed image/leak.png
 var ResIMGLeak []byte
 
-//go:embed 8k.png
+//go:embed image/8k.png
 var ResIMG8K []byte
 
-//go:embed vr.png
+//go:embed image/vr.png
 var ResIMGVR []byte
 
-//go:embed hack.png
+//go:embed image/hack.png
 var ResIMGHack []byte
