@@ -180,3 +180,19 @@ version: "3.1"
     //other config...
 }
 ```
+
+### cloudflare绕过
+
+部分网站会开启cloudflare的反爬虫能力, 目前支持使用[`pyparr`](https://github.com/ThePhaseless/Byparr)进行绕过, 如果已经部署了相关的服务, 可以在配置种开启下面的选项来支持。
+
+```json
+{
+    "scan_dir": "...",
+    "flare_solverr_config": {
+        "enable": true,
+        "host": "http://127.0.0.1:8191" //替换成具体的地址
+    }
+}
+```
+
+**NOTE: 开启后, 会增加部分刮削源, 不开也没啥关系, 日志中会打错误日志而已...**
