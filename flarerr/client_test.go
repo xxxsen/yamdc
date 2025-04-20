@@ -1,4 +1,4 @@
-package bypass
+package flarerr
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 
 func TestByPas(t *testing.T) {
 	c := NewClient(&http.Client{}, "http://127.0.0.1:8191")
-	MustAddToByPassList(c, "www.javlibrary.com")
+	MustAddToSolverList(c, "www.javlibrary.com")
 	req, err := http.NewRequest(http.MethodGet, "https://www.javlibrary.com/cn/?v=javmeyqe5y", nil)
 	assert.NoError(t, err)
 	start := time.Now()

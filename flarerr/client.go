@@ -1,4 +1,4 @@
-package bypass
+package flarerr
 
 import (
 	"bytes"
@@ -18,19 +18,19 @@ const (
 	defaultByPassClientTimeout = 40 * time.Second
 )
 
-type IByPassClient interface {
-	AddToByPassList(host string) error
+type ISolverClient interface {
+	AddToSolverList(host string) error
 	client.IHTTPClient
 }
 
-type bypassClient struct {
+type solverClient struct {
 	impl      client.IHTTPClient
 	endpoint  string
 	timeout   time.Duration
 	byPastMap map[string]struct{}
 }
 
-func (b *bypassClient) convertRequest(oreq *http.Request) (*flareRequest, error) {
+func (b *solverClient) convertRequest(oreq *http.Request) (*flareRequest, error) {
 	if oreq.Method != http.MethodGet {
 		return nil, fmt.Errorf("flare request only support GET method, got %s", oreq.Method)
 	}
@@ -44,14 +44,14 @@ func (b *bypassClient) convertRequest(oreq *http.Request) (*flareRequest, error)
 	return req, nil
 }
 
-func (b *bypassClient) isNeedByPass(req *http.Request) bool {
+func (b *solverClient) isNeedByPass(req *http.Request) bool {
 	if _, ok := b.byPastMap[req.Host]; ok {
 		return true
 	}
 	return false
 }
 
-func (b *bypassClient) AddToByPassList(host string) error {
+func (b *solverClient) AddToSolverList(host string) error {
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		uri, err := url.Parse(host)
 		if err != nil {
@@ -63,7 +63,7 @@ func (b *bypassClient) AddToByPassList(host string) error {
 	return nil
 }
 
-func (b *bypassClient) handleByPassRequest(req *http.Request) (*http.Response, error) {
+func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, error) {
 	fr, err := b.convertRequest(req)
 	if err != nil {
 		return nil, err
@@ -94,15 +94,15 @@ func (b *bypassClient) handleByPassRequest(req *http.Request) (*http.Response, e
 	}, nil
 }
 
-func (b *bypassClient) Do(req *http.Request) (*http.Response, error) {
+func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
 	if b.isNeedByPass(req) {
 		return b.handleByPassRequest(req)
 	}
 	return b.impl.Do(req)
 }
 
-func NewClient(impl client.IHTTPClient, endpoint string) IByPassClient {
-	bc := &bypassClient{
+func NewClient(impl client.IHTTPClient, endpoint string) ISolverClient {
+	bc := &solverClient{
 		impl:      impl,
 		endpoint:  endpoint,
 		timeout:   defaultByPassClientTimeout,
@@ -111,8 +111,8 @@ func NewClient(impl client.IHTTPClient, endpoint string) IByPassClient {
 	return bc
 }
 
-func MustAddToByPassList(c IByPassClient, host string) {
-	if err := c.AddToByPassList(host); err != nil {
+func MustAddToSolverList(c ISolverClient, host string) {
+	if err := c.AddToSolverList(host); err != nil {
 		panic(fmt.Sprintf("add host:%s to bypass list failed, err:%v", host, err))
 	}
 }

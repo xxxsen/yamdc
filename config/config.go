@@ -51,24 +51,31 @@ type PluginConfig struct {
 	Data    interface{} `json:"data"`
 }
 
+type FlareSolverrConfig struct {
+	Enable     bool     `json:"enable"`
+	Host       string   `json:"host"`
+	DomainList []string `json:"domain_list"` //需要使用flaresolverr的域名列表
+}
+
 type Config struct {
-	ScanDir         string                   `json:"scan_dir"`
-	SaveDir         string                   `json:"save_dir"`
-	DataDir         string                   `json:"data_dir"`
-	Naming          string                   `json:"naming"`
-	PluginConfig    map[string]PluginConfig  `json:"plugin_config"`
-	HandlerConfig   map[string]HandlerConfig `json:"handler_config"`
-	AIEngine        AIEngineConfig           `json:"ai_engine"`
-	Plugins         []string                 `json:"plugins"`
-	CategoryPlugins []CategoryPlugin         `json:"category_plugins"`
-	Handlers        []string                 `json:"handlers"`
-	ExtraMediaExts  []string                 `json:"extra_media_exts"`
-	LogConfig       logger.LogConfig         `json:"log_config"`
-	Dependencies    []Dependency             `json:"dependencies"`
-	NetworkConfig   NetworkConfig            `json:"network_config"`
-	TranslateConfig TranslateConfig          `json:"translate_config"`
-	RuleConfig      RuleConfig               `json:"rule_config"`
-	SwitchConfig    SwitchConfig             `json:"switch_config"`
+	ScanDir            string                   `json:"scan_dir"`
+	SaveDir            string                   `json:"save_dir"`
+	DataDir            string                   `json:"data_dir"`
+	Naming             string                   `json:"naming"`
+	PluginConfig       map[string]PluginConfig  `json:"plugin_config"`
+	HandlerConfig      map[string]HandlerConfig `json:"handler_config"`
+	AIEngine           AIEngineConfig           `json:"ai_engine"`
+	Plugins            []string                 `json:"plugins"`
+	CategoryPlugins    []CategoryPlugin         `json:"category_plugins"`
+	Handlers           []string                 `json:"handlers"`
+	ExtraMediaExts     []string                 `json:"extra_media_exts"`
+	LogConfig          logger.LogConfig         `json:"log_config"`
+	Dependencies       []Dependency             `json:"dependencies"`
+	NetworkConfig      NetworkConfig            `json:"network_config"`
+	TranslateConfig    TranslateConfig          `json:"translate_config"`
+	RuleConfig         RuleConfig               `json:"rule_config"`
+	SwitchConfig       SwitchConfig             `json:"switch_config"`
+	FlareSolverrConfig FlareSolverrConfig       `json:"flare_solverr_config"`
 }
 
 type SwitchConfig struct {
@@ -108,6 +115,14 @@ func defaultConfig() *Config {
 		TranslateConfig: TranslateConfig{
 			Enable: true,
 			Engine: "google",
+		},
+		FlareSolverrConfig: FlareSolverrConfig{
+			Enable: false, //默认不启用, 毕竟还要额外配置
+			Host:   "http://127.0.0.1:8191",
+			DomainList: []string{
+				"www.javlibrary.com",
+				"javlibrary.com",
+			},
 		},
 	}
 }

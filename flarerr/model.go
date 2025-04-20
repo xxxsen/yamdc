@@ -1,4 +1,4 @@
-package bypass
+package flarerr
 
 type flareRequest struct {
 	Cmd        string `json:"cmd"`

@@ -25,6 +25,7 @@ import (
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
 	"yamdc/ffmpeg"
+	"yamdc/flarerr"
 	"yamdc/processor"
 	"yamdc/processor/handler"
 	"yamdc/searcher"
@@ -329,6 +330,16 @@ func setupHTTPClient(c *config.Config) error {
 	clientImpl, err := client.NewClient(opts...)
 	if err != nil {
 		return err
+	}
+	if c.FlareSolverrConfig.Enable {
+		bc := flarerr.NewClient(clientImpl, c.FlareSolverrConfig.Host)
+		for _, domain := range c.FlareSolverrConfig.DomainList {
+			if err := bc.AddToSolverList(domain); err != nil {
+				return fmt.Errorf("add domain to bypass list failed, domain:%s, err:%w", domain, err)
+			}
+		}
+		clientImpl = bc
+		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
 	}
 	client.SetDefault(clientImpl)
 	return nil
