@@ -93,7 +93,7 @@ func (p *av18) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieM
 		decoder.WithCoverParser(p.coverParser),
 		decoder.WithPlotParser(p.plotParser),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err

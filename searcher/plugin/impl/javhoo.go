@@ -48,7 +48,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		SampleImageListExpr: `//div[@id="sample-box"]/div/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

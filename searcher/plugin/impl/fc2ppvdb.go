@@ -58,7 +58,7 @@ func (p *fc2ppvdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mo
 		SampleImageListExpr: "",
 	}
 	mdata, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
 	)
 	if err != nil {

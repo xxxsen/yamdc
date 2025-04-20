@@ -81,7 +81,7 @@ func (p *missav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		PosterExpr:          "",
 		SampleImageListExpr: "",
 	}
-	mdata, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)))
+	mdata, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)))
 	if err != nil {
 		return nil, false, err
 	}

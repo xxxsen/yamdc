@@ -66,7 +66,7 @@ func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

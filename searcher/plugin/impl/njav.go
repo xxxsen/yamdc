@@ -83,7 +83,7 @@ func (p *njav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieM
 		PosterExpr:          "",
 		SampleImageListExpr: "",
 	}
-	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)))
+	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)))
 	if err != nil {
 		return nil, false, err
 	}

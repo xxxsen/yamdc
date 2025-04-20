@@ -80,7 +80,7 @@ func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	}
 	res, err := dec.DecodeHTML(data,
 		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err

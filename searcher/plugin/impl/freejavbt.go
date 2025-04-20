@@ -50,7 +50,7 @@ func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.M
 	}
 	res, err := dec.DecodeHTML(data,
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err

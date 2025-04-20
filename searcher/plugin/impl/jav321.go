@@ -65,7 +65,7 @@ func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	}
 	rs, err := dec.DecodeHTML(data,
 		decoder.WithDefaultStringProcessor(p.defaultStringProcessor),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

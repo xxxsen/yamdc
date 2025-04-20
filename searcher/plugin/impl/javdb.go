@@ -81,7 +81,7 @@ func (p *javdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 		SampleImageListExpr: `//div[@class="tile-images preview-images"]/a[@class="tile-item"]/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

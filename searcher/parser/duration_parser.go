@@ -58,6 +58,17 @@ func DefaultDurationParser(ctx context.Context) decoder.NumberParseFunc {
 	}
 }
 
+func MinuteOnlyDurationParser(ctx context.Context) decoder.NumberParseFunc {
+	return func(v string) int64 {
+		intv, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			logutil.GetLogger(ctx).Error("decode minute only duration failed", zap.Error(err), zap.String("data", v))
+			return 0
+		}
+		return intv * 60 // convert minutes to seconds
+	}
+}
+
 func toDuration(timeStr string) (int64, error) {
 	re := defaultDurationRegexp
 	matches := re.FindStringSubmatch(timeStr)

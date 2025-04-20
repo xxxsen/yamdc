@@ -57,7 +57,7 @@ func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 		Title:       result.Name,
 		Plot:        result.Description,
 		Actors:      p.readActors(&result),
-		ReleaseDate: parser.DefaultReleaseDateParser(ctx)(result.PublishDate),
+		ReleaseDate: parser.DateOnlyReleaseDateParser(ctx)(result.PublishDate),
 		Studio:      p.readStudio(&result),
 		Genres:      p.readGenres(&result),
 		Cover: &model.File{

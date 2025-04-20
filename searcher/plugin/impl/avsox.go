@@ -131,7 +131,7 @@ func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 		decoder.WithDefaultStringProcessor(strings.TrimSpace),
 	)
