@@ -40,7 +40,7 @@ func (p *fc2) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, e
 		return nil, fmt.Errorf("unable to decode fc2 number")
 	}
 	uri := fmt.Sprintf("%s/article/%s/", api.MustSelectDomain(defaultFc2DomainList), nid)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *fc2) decodeDuration(ctx context.Context) decoder.NumberParseFunc {

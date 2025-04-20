@@ -33,7 +33,7 @@ func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Re
 	data.Set("sn", number)
 	body := data.Encode()
 	host := api.MustSelectDomain(defaultFreeJav321HostList)
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/search", host), strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/search", host), strings.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

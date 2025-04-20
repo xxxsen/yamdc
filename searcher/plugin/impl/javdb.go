@@ -30,7 +30,7 @@ func (p *javdb) OnGetHosts(ctx context.Context) []string {
 
 func (p *javdb) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	link := fmt.Sprintf("%s/search?q=%s&f=all", api.MustSelectDomain(defaultJavDBHostList), number)
-	return http.NewRequest(http.MethodGet, link, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 }
 
 func (p *javdb) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {

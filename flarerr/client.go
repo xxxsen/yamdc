@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 	"yamdc/client"
+
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
 )
 
 //基于flaresolverr实现
@@ -96,6 +99,7 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 
 func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
 	if b.isNeedByPass(req) {
+		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect", zap.String("req", req.URL.String()))
 		return b.handleByPassRequest(req)
 	}
 	return b.impl.Do(req)

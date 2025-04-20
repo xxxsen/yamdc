@@ -27,7 +27,7 @@ func (j *javlibrary) OnGetHosts(ctx context.Context) []string {
 
 func (j *javlibrary) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	uri := fmt.Sprintf("%s/cn/vl_searchbyid.php?keyword=%s", api.MustSelectDomain(defaultJavLibraryHostList), number)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (j *javlibrary) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {

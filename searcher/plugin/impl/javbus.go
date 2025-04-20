@@ -27,7 +27,7 @@ func (p *javbus) OnGetHosts(ctx context.Context) []string {
 
 func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	url := fmt.Sprintf("%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
-	return http.NewRequest(http.MethodGet, url, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 }
 
 func (p *javbus) OnDecorateRequest(ctx context.Context, req *http.Request) error {

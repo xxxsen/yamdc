@@ -28,7 +28,7 @@ func (p *freejavbt) OnGetHosts(ctx context.Context) []string {
 func (p *freejavbt) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	host := api.MustSelectDomain(defaultFreeJavBtHostList)
 	uri := host + "/zh/" + number
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *freejavbt) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {

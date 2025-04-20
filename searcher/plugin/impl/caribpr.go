@@ -36,7 +36,7 @@ func (p *caribpr) OnGetHosts(ctx context.Context) []string {
 
 func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	uri := fmt.Sprintf("%s/moviepages/%s/index.html", api.MustSelectDomain(defaultCaribprHostList), number)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	return req, err
 }
 

@@ -31,7 +31,7 @@ func (p *missav) OnGetHosts(ctx context.Context) []string {
 
 func (p *missav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	link := fmt.Sprintf("%s/cn/search/%s", api.MustSelectDomain(defaultMissavDomains), number)
-	return http.NewRequest(http.MethodGet, link, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 }
 
 func (p *missav) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {

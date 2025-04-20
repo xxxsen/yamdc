@@ -30,7 +30,7 @@ func (p *av18) OnGetHosts(ctx context.Context) []string {
 func (p *av18) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	host := api.MustSelectDomain(default18AvHostList)
 	uri := fmt.Sprintf("%s/cn/search.php?kw_type=key&kw=%s", host, number)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *av18) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {

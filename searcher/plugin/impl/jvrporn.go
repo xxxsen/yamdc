@@ -48,7 +48,7 @@ func (j *jvrporn) OnMakeHTTPRequest(ctx context.Context, number string) (*http.R
 	}
 	id := slices[1]
 	uri := fmt.Sprintf("%s/video/%s/", api.MustSelectDomain(defaultJvrpornHostList), id)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, err
 	}
