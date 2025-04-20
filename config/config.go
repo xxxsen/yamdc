@@ -47,8 +47,9 @@ type HandlerConfig struct {
 }
 
 type PluginConfig struct {
-	Disable bool        `json:"disable"`
-	Data    interface{} `json:"data"`
+	Disable       bool        `json:"disable"`
+	EnableFlarerr bool        `json:"enable_flarerr"` //是否启用flaresolverr
+	Data          interface{} `json:"data"`
 }
 
 type FlareSolverrConfig struct {
@@ -105,6 +106,7 @@ func defaultConfig() *Config {
 		LogConfig:       sysLogConfig,
 		Dependencies:    sysDependencies,
 		RuleConfig:      sysRuleConfig,
+		PluginConfig:    sysPluginConfig,
 		SwitchConfig: SwitchConfig{
 			EnableSearchMetaCache:    true,
 			EnableLinkMode:           false,
@@ -119,10 +121,6 @@ func defaultConfig() *Config {
 		FlareSolverrConfig: FlareSolverrConfig{
 			Enable: false, //默认不启用, 毕竟还要额外配置
 			Host:   "http://127.0.0.1:8191",
-			DomainList: []string{
-				"www.javlibrary.com",
-				"javlibrary.com",
-			},
 		},
 	}
 }

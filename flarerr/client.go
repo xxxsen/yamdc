@@ -115,8 +115,10 @@ func NewClient(impl client.IHTTPClient, endpoint string) ISolverClient {
 	return bc
 }
 
-func MustAddToSolverList(c ISolverClient, host string) {
-	if err := c.AddToSolverList(host); err != nil {
-		panic(fmt.Sprintf("add host:%s to bypass list failed, err:%v", host, err))
+func MustAddToSolverList(c ISolverClient, hosts ...string) {
+	for _, host := range hosts {
+		if err := c.AddToSolverList(host); err != nil {
+			panic(fmt.Sprintf("add host:%s to bypass list failed, err:%v", host, err))
+		}
 	}
 }
