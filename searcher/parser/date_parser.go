@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func DefaultReleaseDateParser(ctx context.Context) decoder.NumberParseFunc {
+func DateOnlyReleaseDateParser(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		t, err := time.Parse(time.DateOnly, v)
 		if err != nil {

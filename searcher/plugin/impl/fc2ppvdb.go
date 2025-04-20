@@ -33,7 +33,7 @@ func (p *fc2ppvdb) OnMakeHTTPRequest(ctx context.Context, nid string) (*http.Req
 		return nil, fmt.Errorf("unable to decode fc2 vid")
 	}
 	link := fmt.Sprintf("%s/articles/%s", api.MustSelectDomain(defaultFc2PPVDBDomains), vid)
-	req, err := http.NewRequest(http.MethodGet, link, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (p *fc2ppvdb) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mo
 		SampleImageListExpr: "",
 	}
 	mdata, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
 	)
 	if err != nil {

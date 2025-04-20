@@ -48,7 +48,7 @@ func (j *jvrporn) OnMakeHTTPRequest(ctx context.Context, number string) (*http.R
 	}
 	id := slices[1]
 	uri := fmt.Sprintf("%s/video/%s/", api.MustSelectDomain(defaultJvrpornHostList), id)
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (j *jvrporn) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 		SampleImageListExpr: `//div[@class="gallery-wrap"]/div[@id="snapshot-gallery"]/a/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
 	)
 	if err != nil {

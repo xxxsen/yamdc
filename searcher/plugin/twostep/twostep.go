@@ -67,7 +67,7 @@ func HandleXPathTwoStepSearch(ctx context.Context, invoker api.HTTPInvoker, req 
 		return nil, fmt.Errorf("no link select result found")
 	}
 	link = xctx.LinkPrefix + link
-	req, err = http.NewRequest(http.MethodGet, link, nil)
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 	if err != nil {
 		return nil, fmt.Errorf("step re-create result page link failed, err:%w", err)
 	}

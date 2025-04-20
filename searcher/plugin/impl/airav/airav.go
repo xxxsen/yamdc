@@ -30,7 +30,7 @@ func (p *airav) OnGetHosts(ctx context.Context) []string {
 
 func (p *airav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	domain := api.MustSelectDomain(defaultAirAvHostList)
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/video/barcode/%s?lng=zh-TW", domain, number), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/video/barcode/%s?lng=zh-TW", domain, number), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (p *airav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 		Title:       result.Name,
 		Plot:        result.Description,
 		Actors:      p.readActors(&result),
-		ReleaseDate: parser.DefaultReleaseDateParser(ctx)(result.PublishDate),
+		ReleaseDate: parser.DateOnlyReleaseDateParser(ctx)(result.PublishDate),
 		Studio:      p.readStudio(&result),
 		Genres:      p.readGenres(&result),
 		Cover: &model.File{

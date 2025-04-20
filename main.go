@@ -25,6 +25,7 @@ import (
 	"yamdc/face/goface"
 	"yamdc/face/pigo"
 	"yamdc/ffmpeg"
+	"yamdc/flarerr"
 	"yamdc/processor"
 	"yamdc/processor/handler"
 	"yamdc/searcher"
@@ -226,6 +227,13 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
+		if plugc.EnableFlarerr {
+			if err := tryAddToSolverList(plg.OnGetHosts(context.Background())); err != nil { //非关键错误, 直接跳过插件初始化
+				logutil.GetLogger(context.Background()).Error("plugin need flarerr but add to solver list failed, skip create",
+					zap.String("plugin", name), zap.Error(err))
+				continue
+			}
+		}
 		sr, err := searcher.NewDefaultSearcher(name, plg,
 			searcher.WithHTTPClient(client.DefaultClient()),
 			searcher.WithSearchCache(c.SwitchConfig.EnableSearchMetaCache),
@@ -237,6 +245,15 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 		rs = append(rs, sr)
 	}
 	return rs, nil
+}
+
+func tryAddToSolverList(hosts []string) error {
+	impl, ok := client.DefaultClient().(flarerr.ISolverClient)
+	if !ok {
+		return fmt.Errorf("flaresolverr client is not enabled")
+	}
+	flarerr.MustAddToSolverList(impl, hosts...)
+	return nil
 }
 
 func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
@@ -329,6 +346,12 @@ func setupHTTPClient(c *config.Config) error {
 	clientImpl, err := client.NewClient(opts...)
 	if err != nil {
 		return err
+	}
+	if c.FlareSolverrConfig.Enable {
+		bc := flarerr.NewClient(clientImpl, c.FlareSolverrConfig.Host)
+		flarerr.MustAddToSolverList(bc, c.FlareSolverrConfig.DomainList...)
+		clientImpl = bc
+		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
 	}
 	client.SetDefault(clientImpl)
 	return nil

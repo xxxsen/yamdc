@@ -32,7 +32,7 @@ func (p *njav) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Requ
 	nid := number
 	nid = strings.ReplaceAll(nid, "_", "-") //将下划线替换为中划线
 	uri := fmt.Sprintf("%s/cn/search/%s", api.MustSelectDomain(defaultNJavHostList), nid)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *njav) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
@@ -83,7 +83,7 @@ func (p *njav) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieM
 		PosterExpr:          "",
 		SampleImageListExpr: "",
 	}
-	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)))
+	meta, err := dec.DecodeHTML(data, decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)))
 	if err != nil {
 		return nil, false, err
 	}

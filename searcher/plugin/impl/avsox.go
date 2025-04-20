@@ -36,7 +36,7 @@ func (p *avsox) OnGetHosts(ctx context.Context) []string {
 }
 
 func (p *avsox) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	return http.NewRequest(http.MethodGet, api.MustSelectDomain(defaultAvSoxHostList), nil) //返回一个假的request
+	return http.NewRequestWithContext(ctx, http.MethodGet, api.MustSelectDomain(defaultAvSoxHostList), nil) //返回一个假的request
 }
 
 func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, oriReq *http.Request) (*http.Response, error) {
@@ -63,7 +63,7 @@ func (p *avsox) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker
 		return nil, fmt.Errorf("unable to find match number")
 	}
 	uri := "https:" + link
-	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request failed, err:%w", err)
 	}
@@ -84,7 +84,7 @@ func (p *avsox) generateTryList(num string) []string {
 
 func (p *avsox) trySearchByNumber(ctx context.Context, oriReq *http.Request, invoker api.HTTPInvoker, number string) (string, bool, error) {
 	host := fmt.Sprintf("%s://%s", oriReq.URL.Scheme, oriReq.URL.Host)
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/cn/search/%s", host, number), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/cn/search/%s", host, number), nil)
 	if err != nil {
 		return "", false, err
 	}
@@ -131,7 +131,7 @@ func (p *avsox) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movie
 		SampleImageListExpr: "",
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 		decoder.WithDefaultStringProcessor(strings.TrimSpace),
 	)

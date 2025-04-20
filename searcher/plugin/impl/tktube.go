@@ -30,7 +30,7 @@ func (p *tktube) OnGetHosts(ctx context.Context) []string {
 func (p *tktube) OnMakeHTTPRequest(ctx context.Context, n string) (*http.Request, error) {
 	nid := strings.ReplaceAll(n, "-", "--")
 	uri := fmt.Sprintf("%s/zh/search/%s/", api.MustSelectDomain(defaultTkTubeHostList), nid)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *tktube) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
@@ -80,7 +80,7 @@ func (p *tktube) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	}
 	res, err := dec.DecodeHTML(data,
 		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 	)
 	if err != nil {
 		return nil, false, err

@@ -33,7 +33,7 @@ func (p *jav321) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Re
 	data.Set("sn", number)
 	body := data.Encode()
 	host := api.MustSelectDomain(defaultFreeJav321HostList)
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/search", host), strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/search", host), strings.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (p *jav321) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 	}
 	rs, err := dec.DecodeHTML(data,
 		decoder.WithDefaultStringProcessor(p.defaultStringProcessor),
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

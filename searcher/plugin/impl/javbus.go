@@ -27,7 +27,7 @@ func (p *javbus) OnGetHosts(ctx context.Context) []string {
 
 func (p *javbus) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	url := fmt.Sprintf("%s/%s", api.MustSelectDomain(defaultJavBusDomainList), number)
-	return http.NewRequest(http.MethodGet, url, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 }
 
 func (p *javbus) OnDecorateRequest(ctx context.Context, req *http.Request) error {
@@ -66,7 +66,7 @@ func (p *javbus) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		SampleImageListExpr: `//div[@id="sample-waterfall"]/a[@class="sample-box"]/@href`,
 	}
 	rs, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {

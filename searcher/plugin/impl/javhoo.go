@@ -27,7 +27,7 @@ func (p *javhoo) OnGetHosts(ctx context.Context) []string {
 
 func (p *javhoo) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	uri := fmt.Sprintf("%s/av/%s", api.MustSelectDomain(defaultJavHooHostList), number)
-	return http.NewRequest(http.MethodGet, uri, nil)
+	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
 func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
@@ -48,7 +48,7 @@ func (p *javhoo) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Movi
 		SampleImageListExpr: `//div[@id="sample-box"]/div/a/@href`,
 	}
 	meta, err := dec.DecodeHTML(data,
-		decoder.WithReleaseDateParser(parser.DefaultReleaseDateParser(ctx)),
+		decoder.WithReleaseDateParser(parser.DateOnlyReleaseDateParser(ctx)),
 		decoder.WithDurationParser(parser.DefaultDurationParser(ctx)),
 	)
 	if err != nil {
