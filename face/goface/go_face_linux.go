@@ -5,10 +5,12 @@ package goface
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"yamdc/face"
 
 	goface "github.com/Kagami/go-face"
+	"golang.org/x/sys/cpu"
 )
 
 type goFace struct {
@@ -39,6 +41,10 @@ func (f *goFace) Name() string {
 }
 
 func NewGoFace(modelDir string) (face.IFaceRec, error) {
+	if !cpu.X86.HasAVX {
+		return nil, fmt.Errorf("no AVX support, skip init goface recognizer")
+	}
+
 	inst, err := goface.NewRecognizer(modelDir)
 	if err != nil {
 		return nil, err
