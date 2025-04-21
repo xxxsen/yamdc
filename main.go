@@ -309,7 +309,7 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 func setupFace(c *config.Config, models string) error {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
-	if c.SwitchConfig.EnablePigoFaceRecognizer {
+	if c.SwitchConfig.EnableGoFaceRecognizer {
 		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return goface.NewGoFace(models)
 		})
