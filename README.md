@@ -192,7 +192,7 @@ version: "3.1"
         "enable": true,
         "host": "http://127.0.0.1:8191", //替换成具体的地址
         "domains": {
-            "abc.com": true  //这里填写要使用flare_solverr的域名
+            "abc.com": true  //这里填写要使用flare_solverr的域名。启动的时候, 会打印插件当前的域名列表, 如果某个域名需要绕过cloudflare则加到这里即可。
         }
     }
 }
