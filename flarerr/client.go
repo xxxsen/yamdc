@@ -32,6 +32,7 @@ type solverClient struct {
 	endpoint  string
 	timeout   time.Duration
 	byPastMap map[string]struct{}
+	tested    bool
 }
 
 func (b *solverClient) convertRequest(oreq *http.Request) (*flareRequest, error) {
@@ -98,15 +99,7 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 	}, nil
 }
 
-func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
-	if b.isNeedByPass(req) {
-		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect", zap.String("req", req.URL.String()))
-		return b.handleByPassRequest(req)
-	}
-	return b.impl.Do(req)
-}
-
-func testHost(impl client.IHTTPClient, endpoint string) error {
+func (b *solverClient) testHost(impl client.IHTTPClient, endpoint string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -121,12 +114,24 @@ func testHost(impl client.IHTTPClient, endpoint string) error {
 	return nil
 }
 
+func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
+	if !b.tested { //测试通过后续就不再测试了
+		if err := b.testHost(b.impl, b.endpoint); err != nil {
+			return nil, fmt.Errorf("test solver host failed, endpoint:%s, err:%w", b.endpoint, err)
+		}
+		b.tested = true
+	}
+
+	if b.isNeedByPass(req) {
+		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect", zap.String("req", req.URL.String()))
+		return b.handleByPassRequest(req)
+	}
+	return b.impl.Do(req)
+}
+
 func New(impl client.IHTTPClient, endpoint string) (ICloudflareSolverClient, error) {
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 		endpoint = "http://" + endpoint
-	}
-	if err := testHost(impl, endpoint); err != nil {
-		return nil, fmt.Errorf("test host failed, endpoint:%s, err:%w", endpoint, err)
 	}
 	bc := &solverClient{
 		impl:      impl,
