@@ -64,7 +64,7 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
-	logkit.Info("current switch config", zap.Any("switch", c.SwitchConfig))
+	logkit.Info("use switch config", zap.Any("switch", c.SwitchConfig))
 	if err := setupAIEngine(c); err != nil {
 		logkit.Fatal("setup ai engine failed", zap.Error(err))
 	}
@@ -73,22 +73,22 @@ func main() {
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
-	logkit.Info("current use translator engine", zap.String("engine", c.TranslateConfig.Engine))
+	logkit.Info("use translator engine", zap.String("engine", c.TranslateConfig.Engine))
 	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
 	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
-	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
+	logkit.Info("use plugins", zap.Strings("plugins", c.Plugins))
 	for _, ct := range c.CategoryPlugins {
 		logkit.Info("-- cat plugins", zap.String("cat", ct.Name), zap.Strings("plugins", ct.Plugins))
 	}
-	logkit.Info("current use handlers", zap.Strings("handlers", c.Handlers))
+	logkit.Info("use handlers", zap.Strings("handlers", c.Handlers))
 	logkit.Info("use naming rule", zap.String("rule", c.Naming))
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("check current feature list")
+	logkit.Info("check feature list")
 	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
 	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
