@@ -10,7 +10,8 @@ import (
 )
 
 func TestByPas(t *testing.T) {
-	c, _ := New(&http.Client{}, "http://127.0.0.1:8191")
+	c, err := New(&http.Client{}, "http://127.0.0.1:8191")
+	assert.NoError(t, err)
 	MustAddToSolverList(c, "www.javlibrary.com")
 	req, err := http.NewRequest(http.MethodGet, "https://www.javlibrary.com/cn/vl_searchbyid.php?keyword=ZMAR-134", nil)
 	assert.NoError(t, err)
