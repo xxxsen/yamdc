@@ -1,7 +1,8 @@
 module yamdc
 
-go 1.24
-toolchain go1.24.1
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/Conight/go-googletrans v0.2.4

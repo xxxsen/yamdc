@@ -64,7 +64,7 @@ func main() {
 		logkit.Fatal("ensure dependencies failed", zap.Error(err))
 	}
 	logkit.Info("check dependencies finish...")
-	logkit.Info("current switch config", zap.Any("switch", c.SwitchConfig))
+	logkit.Info("use switch config", zap.Any("switch", c.SwitchConfig))
 	if err := setupAIEngine(c); err != nil {
 		logkit.Fatal("setup ai engine failed", zap.Error(err))
 	}
@@ -73,22 +73,22 @@ func main() {
 	if err := setupTranslator(c); err != nil {
 		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
 	}
-	logkit.Info("current use translator engine", zap.String("engine", c.TranslateConfig.Engine))
+	logkit.Info("use translator engine", zap.String("engine", c.TranslateConfig.Engine))
 	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
 		logkit.Error("init face recognizer failed", zap.Error(err))
 	}
 	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
 	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
-	logkit.Info("current use plugins", zap.Strings("plugins", c.Plugins))
+	logkit.Info("use plugins", zap.Strings("plugins", c.Plugins))
 	for _, ct := range c.CategoryPlugins {
 		logkit.Info("-- cat plugins", zap.String("cat", ct.Name), zap.Strings("plugins", ct.Plugins))
 	}
-	logkit.Info("current use handlers", zap.Strings("handlers", c.Handlers))
+	logkit.Info("use handlers", zap.Strings("handlers", c.Handlers))
 	logkit.Info("use naming rule", zap.String("rule", c.Naming))
 	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
 	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
 	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("check current feature list")
+	logkit.Info("check feature list")
 	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
 	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
 	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
@@ -212,7 +212,6 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
-		Data:    map[string]interface{}{},
 	}
 	for _, name := range plgs {
 		plugc, ok := m[name]
@@ -223,16 +222,9 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 			logutil.GetLogger(context.Background()).Info("plugin is disabled, skip create", zap.String("plugin", name))
 			continue
 		}
-		plg, err := factory.CreatePlugin(name, defc.Data)
+		plg, err := factory.CreatePlugin(name, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
-		}
-		if plugc.EnableFlarerr {
-			if err := tryAddToSolverList(plg.OnGetHosts(context.Background())); err != nil { //非关键错误, 直接跳过插件初始化
-				logutil.GetLogger(context.Background()).Error("plugin need flarerr but add to solver list failed, skip create",
-					zap.String("plugin", name), zap.Error(err))
-				continue
-			}
 		}
 		sr, err := searcher.NewDefaultSearcher(name, plg,
 			searcher.WithHTTPClient(client.DefaultClient()),
@@ -241,26 +233,16 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name))
+		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(context.Background())))
 		rs = append(rs, sr)
 	}
 	return rs, nil
-}
-
-func tryAddToSolverList(hosts []string) error {
-	impl, ok := client.DefaultClient().(flarerr.ISolverClient)
-	if !ok {
-		return fmt.Errorf("flaresolverr client is not enabled")
-	}
-	flarerr.MustAddToSolverList(impl, hosts...)
-	return nil
 }
 
 func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
-		Data:    map[string]interface{}{},
 	}
 	for _, name := range hs {
 		handlec, ok := m[name]
@@ -271,7 +253,7 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, handlec.Data)
+		h, err := handler.CreateHandler(name, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
@@ -348,10 +330,21 @@ func setupHTTPClient(c *config.Config) error {
 		return err
 	}
 	if c.FlareSolverrConfig.Enable {
-		bc := flarerr.NewClient(clientImpl, c.FlareSolverrConfig.Host)
-		flarerr.MustAddToSolverList(bc, c.FlareSolverrConfig.DomainList...)
-		clientImpl = bc
-		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
+		bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
+		if err != nil {
+			return fmt.Errorf("create flaresolverr client failed, err:%w", err)
+		}
+		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
+		for domain, ok := range c.FlareSolverrConfig.Domains {
+			if !ok {
+				continue
+			}
+			domainList = append(domainList, domain)
+			logutil.GetLogger(context.Background()).Debug("add domain to flaresolverr", zap.String("domain", domain))
+		}
+		flarerr.MustAddToSolverList(bpc, domainList...)
+		clientImpl = bpc
+		logutil.GetLogger(context.Background()).Info("enable flaresolverr client")
 	}
 	client.SetDefault(clientImpl)
 	return nil

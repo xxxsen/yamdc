@@ -21,9 +21,3 @@ var sysCategoryPlugins = []CategoryPlugin{
 	{Name: "FC2", Plugins: []string{"fc2", "18av", "njav", "freejavbt", "tktube", "avsox", "fc2ppvdb"}},
 	{Name: "JVR", Plugins: []string{"jvrporn"}},
 }
-
-var sysPluginConfig = map[string]PluginConfig{
-	"javlibrary": {
-		EnableFlarerr: true,
-	},
-}
