@@ -42,20 +42,17 @@ type TranslateConfig struct {
 }
 
 type HandlerConfig struct {
-	Disable bool        `json:"disable"`
-	Data    interface{} `json:"data"`
+	Disable bool `json:"disable"`
 }
 
 type PluginConfig struct {
-	Disable       bool        `json:"disable"`
-	EnableFlarerr bool        `json:"enable_flarerr"` //是否启用flaresolverr
-	Data          interface{} `json:"data"`
+	Disable bool `json:"disable"`
 }
 
 type FlareSolverrConfig struct {
-	Enable     bool     `json:"enable"`
-	Host       string   `json:"host"`
-	DomainList []string `json:"domain_list"` //需要使用flaresolverr的域名列表
+	Enable  bool            `json:"enable"`
+	Host    string          `json:"host"`
+	Domains map[string]bool `json:"domains"` //需要使用flaresolverr的域名列表
 }
 
 type Config struct {
@@ -106,7 +103,6 @@ func defaultConfig() *Config {
 		LogConfig:       sysLogConfig,
 		Dependencies:    sysDependencies,
 		RuleConfig:      sysRuleConfig,
-		PluginConfig:    sysPluginConfig,
 		SwitchConfig: SwitchConfig{
 			EnableSearchMetaCache:    true,
 			EnableLinkMode:           false,
@@ -121,6 +117,9 @@ func defaultConfig() *Config {
 		FlareSolverrConfig: FlareSolverrConfig{
 			Enable: false, //默认不启用, 毕竟还要额外配置
 			Host:   "http://127.0.0.1:8191",
+			Domains: map[string]bool{
+				"www.javlibrary.com": true,
+			},
 		},
 	}
 }

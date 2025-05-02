@@ -212,7 +212,6 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
-		Data:    map[string]interface{}{},
 	}
 	for _, name := range plgs {
 		plugc, ok := m[name]
@@ -223,16 +222,9 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 			logutil.GetLogger(context.Background()).Info("plugin is disabled, skip create", zap.String("plugin", name))
 			continue
 		}
-		plg, err := factory.CreatePlugin(name, defc.Data)
+		plg, err := factory.CreatePlugin(name, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
-		}
-		if plugc.EnableFlarerr {
-			if err := tryAddToSolverList(plg.OnGetHosts(context.Background())); err != nil { //非关键错误, 直接跳过插件初始化
-				logutil.GetLogger(context.Background()).Error("plugin need flarerr but add to solver list failed, skip create",
-					zap.String("plugin", name), zap.Error(err))
-				continue
-			}
 		}
 		sr, err := searcher.NewDefaultSearcher(name, plg,
 			searcher.WithHTTPClient(client.DefaultClient()),
@@ -247,20 +239,10 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	return rs, nil
 }
 
-func tryAddToSolverList(hosts []string) error {
-	impl, ok := client.DefaultClient().(flarerr.ISolverClient)
-	if !ok {
-		return fmt.Errorf("flaresolverr client is not enabled")
-	}
-	flarerr.MustAddToSolverList(impl, hosts...)
-	return nil
-}
-
 func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
-		Data:    map[string]interface{}{},
 	}
 	for _, name := range hs {
 		handlec, ok := m[name]
@@ -271,7 +253,7 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, handlec.Data)
+		h, err := handler.CreateHandler(name, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
@@ -349,7 +331,15 @@ func setupHTTPClient(c *config.Config) error {
 	}
 	if c.FlareSolverrConfig.Enable {
 		bc := flarerr.NewClient(clientImpl, c.FlareSolverrConfig.Host)
-		flarerr.MustAddToSolverList(bc, c.FlareSolverrConfig.DomainList...)
+		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
+		for domain, ok := range c.FlareSolverrConfig.Domains {
+			if !ok {
+				continue
+			}
+			logutil.GetLogger(context.Background()).Info("add domain to flaresolverr", zap.String("domain", domain))
+		}
+
+		flarerr.MustAddToSolverList(bc, domainList...)
 		clientImpl = bc
 		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
 	}
