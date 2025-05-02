@@ -340,11 +340,11 @@ func setupHTTPClient(c *config.Config) error {
 				continue
 			}
 			domainList = append(domainList, domain)
-			logutil.GetLogger(context.Background()).Info("add domain to flaresolverr", zap.String("domain", domain))
+			logutil.GetLogger(context.Background()).Debug("add domain to flaresolverr", zap.String("domain", domain))
 		}
 		flarerr.MustAddToSolverList(bpc, domainList...)
 		clientImpl = bpc
-		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
+		logutil.GetLogger(context.Background()).Info("enable flaresolverr client")
 	}
 	client.SetDefault(clientImpl)
 	return nil
