@@ -106,6 +106,9 @@ func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func NewClient(impl client.IHTTPClient, endpoint string) ISolverClient {
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "http://" + endpoint
+	}
 	bc := &solverClient{
 		impl:      impl,
 		endpoint:  endpoint,

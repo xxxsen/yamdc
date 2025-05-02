@@ -190,9 +190,10 @@ version: "3.1"
     "scan_dir": "...",
     "flare_solverr_config": {
         "enable": true,
-        "host": "http://127.0.0.1:8191" //替换成具体的地址
+        "host": "http://127.0.0.1:8191", //替换成具体的地址
+        "domains": {
+            "abc.com": true  //这里填写要使用flare_solverr的域名
+        }
     }
 }
 ```
-
-**NOTE: 开启后, 会增加部分刮削源, 不开也没啥关系, 日志中会打错误日志而已...**

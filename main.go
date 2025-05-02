@@ -233,7 +233,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name))
+		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(context.Background())))
 		rs = append(rs, sr)
 	}
 	return rs, nil
@@ -336,6 +336,7 @@ func setupHTTPClient(c *config.Config) error {
 			if !ok {
 				continue
 			}
+			domainList = append(domainList, domain)
 			logutil.GetLogger(context.Background()).Info("add domain to flaresolverr", zap.String("domain", domain))
 		}
 
