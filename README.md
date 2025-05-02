@@ -183,7 +183,7 @@ version: "3.1"
 
 ### cloudflare绕过
 
-部分网站会开启cloudflare的反爬虫能力, 目前支持使用[`pyparr`](https://github.com/ThePhaseless/Byparr)进行绕过, 如果已经部署了相关的服务, 可以在配置种开启下面的选项来支持。
+部分网站会开启cloudflare的反爬虫能力, 目前支持使用[`byparr`](https://github.com/ThePhaseless/Byparr)进行绕过, 如果已经部署了相关的服务, 可以在配置种开启下面的选项来支持。
 
 ```json
 {
