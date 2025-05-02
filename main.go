@@ -330,7 +330,10 @@ func setupHTTPClient(c *config.Config) error {
 		return err
 	}
 	if c.FlareSolverrConfig.Enable {
-		bc := flarerr.NewClient(clientImpl, c.FlareSolverrConfig.Host)
+		bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
+		if err != nil {
+			return fmt.Errorf("create flaresolverr client failed, err:%w", err)
+		}
 		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
 		for domain, ok := range c.FlareSolverrConfig.Domains {
 			if !ok {
@@ -339,9 +342,8 @@ func setupHTTPClient(c *config.Config) error {
 			domainList = append(domainList, domain)
 			logutil.GetLogger(context.Background()).Info("add domain to flaresolverr", zap.String("domain", domain))
 		}
-
-		flarerr.MustAddToSolverList(bc, domainList...)
-		clientImpl = bc
+		flarerr.MustAddToSolverList(bpc, domainList...)
+		clientImpl = bpc
 		logutil.GetLogger(context.Background()).Debug("enable flaresolverr client")
 	}
 	client.SetDefault(clientImpl)

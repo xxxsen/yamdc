@@ -2,6 +2,7 @@ package flarerr
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,8 +22,8 @@ const (
 	defaultByPassClientTimeout = 40 * time.Second
 )
 
-type ISolverClient interface {
-	AddToSolverList(host string) error
+type ICloudflareSolverClient interface {
+	AddHost(host string) error
 	client.IHTTPClient
 }
 
@@ -54,7 +55,7 @@ func (b *solverClient) isNeedByPass(req *http.Request) bool {
 	return false
 }
 
-func (b *solverClient) AddToSolverList(host string) error {
+func (b *solverClient) AddHost(host string) error {
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		uri, err := url.Parse(host)
 		if err != nil {
@@ -105,9 +106,27 @@ func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
 	return b.impl.Do(req)
 }
 
-func NewClient(impl client.IHTTPClient, endpoint string) ISolverClient {
+func testHost(impl client.IHTTPClient, endpoint string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	rsp, err := impl.Do(req)
+	if err != nil {
+		return err
+	}
+	defer rsp.Body.Close()
+	return nil
+}
+
+func New(impl client.IHTTPClient, endpoint string) (ICloudflareSolverClient, error) {
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 		endpoint = "http://" + endpoint
+	}
+	if err := testHost(impl, endpoint); err != nil {
+		return nil, fmt.Errorf("test host failed, endpoint:%s, err:%w", endpoint, err)
 	}
 	bc := &solverClient{
 		impl:      impl,
@@ -115,12 +134,12 @@ func NewClient(impl client.IHTTPClient, endpoint string) ISolverClient {
 		timeout:   defaultByPassClientTimeout,
 		byPastMap: make(map[string]struct{}),
 	}
-	return bc
+	return bc, nil
 }
 
-func MustAddToSolverList(c ISolverClient, hosts ...string) {
+func MustAddToSolverList(c ICloudflareSolverClient, hosts ...string) {
 	for _, host := range hosts {
-		if err := c.AddToSolverList(host); err != nil {
+		if err := c.AddHost(host); err != nil {
 			panic(fmt.Sprintf("add host:%s to bypass list failed, err:%v", host, err))
 		}
 	}
