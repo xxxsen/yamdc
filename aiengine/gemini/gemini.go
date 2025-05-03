@@ -53,7 +53,7 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 		return "", fmt.Errorf("no translate result found")
 	}
 	if len(res.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("no translate result part found")
+		return "", fmt.Errorf("no translate result part found, reason:%s", res.Candidates[0].FinishReason)
 	}
 	content := strings.TrimSpace(res.Candidates[0].Content.Parts[0].Text)
 	if len(content) == 0 {
