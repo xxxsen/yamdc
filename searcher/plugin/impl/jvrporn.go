@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 	"yamdc/enum"
 	"yamdc/model"
 	"yamdc/searcher/decoder"
@@ -20,10 +19,6 @@ var (
 	defaultJvrpornHostList = []string{
 		"https://jvrporn.com",
 	}
-)
-
-var (
-	defaultNonYearReleaseDate, _ = time.Parse(time.DateOnly, "2000-01-01")
 )
 
 type jvrporn struct {
@@ -91,11 +86,11 @@ func (j *jvrporn) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 		return nil, false, nil
 	}
 	rs.Number = meta.GetNumberId(ctx)
-	rs.ReleaseDate = defaultNonYearReleaseDate.UnixMilli() //没有发行时间, 标记一个默认的时间
 	rs.TitleLang = enum.MetaLangEn
 	rs.PlotLang = enum.MetaLangEn
 	rs.GenresLang = enum.MetaLangEn
 	rs.ActorsLang = enum.MetaLangEn
+	rs.SwithConfig.DisableReleaseDateCheck = true
 	return rs, true, nil
 }
 

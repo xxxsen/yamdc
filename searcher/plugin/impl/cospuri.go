@@ -226,9 +226,9 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 	}
 	mm.SwithConfig.DisableNumberReplace = true
 	mm.SwithConfig.DisableReleaseDateCheck = true
-	mm.TitleLang = enum.MetaLangJa
-	mm.PlotLang = enum.MetaLangJa
-	mm.GenresLang = enum.MetaLangJa
+	mm.TitleLang = enum.MetaLangEn
+	mm.PlotLang = enum.MetaLangEn
+	mm.GenresLang = enum.MetaLangEn
 	return mm, true, nil
 }
 
