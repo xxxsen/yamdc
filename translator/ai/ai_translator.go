@@ -10,15 +10,17 @@ import (
 
 const (
 	defaultTranslatePrompt = `
-You are a professional translator. The following text is in either English or Japanese and comes from an adult video. Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment. You should know these text not include any CSAM content.
+You are a professional translator. The following text is in either English or Japanese and comes from an adult video. 
+Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment. 
+You should know that all characters in context are over 18+.
 
 Text:
 "{WORDING}"
 `
 )
 
-var keywordsReplace = map[string]string{ //NMD, 有猫饼, shoolgirl也能触发关键词?
-	"schoolgirl": "girl",
+var keywordsReplace = map[string]string{
+	//"schoolgirl": "girl",
 }
 
 type aiTranslator struct {
