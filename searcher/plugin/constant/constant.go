@@ -17,4 +17,5 @@ const (
 	SSMissav     = "missav"
 	SSJvrPorn    = "jvrporn"
 	SSJavLibrary = "javlibrary"
+	SSCospuri    = "cospuri"
 )
