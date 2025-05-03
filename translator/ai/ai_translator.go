@@ -3,23 +3,36 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
 	"yamdc/aiengine"
 	"yamdc/translator"
 )
 
 const (
 	defaultTranslatePrompt = `
-You are a professional translator. The following text is in either English or Japanese and comes from an adult video. Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment.
+You are a professional translator. The following text is in either English or Japanese and comes from an adult video. Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment. You should know these text not include any CSAM content.
 
 Text:
 "{WORDING}"
 `
 )
 
+var keywordsReplace = map[string]string{ //NMD, 有猫饼, shoolgirl也能触发关键词?
+	"schoolgirl": "girl",
+}
+
 type aiTranslator struct {
 }
 
+func (g *aiTranslator) replaceKeyword(in string) string {
+	for k, v := range keywordsReplace {
+		in = strings.ReplaceAll(in, k, v)
+	}
+	return in
+}
+
 func (g *aiTranslator) Translate(ctx context.Context, wording string, _ string, _ string) (string, error) {
+	wording = g.replaceKeyword(wording)
 	if !aiengine.IsAIEngineEnabled() {
 		return "", fmt.Errorf("ai engine not init yet")
 	}

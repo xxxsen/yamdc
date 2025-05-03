@@ -38,6 +38,8 @@ func (s *categorySearcher) Search(ctx context.Context, n *number.Number) (*model
 		if c, ok := s.catSearchers[cat]; ok {
 			chain = c
 			logger.Debug("use cat chain for search")
+		} else {
+			logger.Error("no cat chain found, use default plugin chain for search", zap.String("cat", cat))
 		}
 	}
 

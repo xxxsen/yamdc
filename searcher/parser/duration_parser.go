@@ -26,6 +26,13 @@ func cleanTimeSequence(res string) []string {
 	return rs
 }
 
+func DefaultMMDurationParser(ctx context.Context) decoder.NumberParseFunc {
+	return func(v string) int64 {
+		res, _ := strconv.ParseInt(v, 10, 64)
+		return res * 60 // convert minutes to seconds
+	}
+}
+
 func DefaultHHMMSSDurationParser(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		res := cleanTimeSequence(v)

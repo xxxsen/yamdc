@@ -152,10 +152,15 @@ func (c *Capture) processFileList(ctx context.Context, fcs []*model.FileContext)
 }
 
 func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
-	ts := time.UnixMilli(fc.Meta.ReleaseDate)
-	date := ts.Format(time.DateOnly)
-	year := fmt.Sprintf("%d", ts.Year())
-	month := fmt.Sprintf("%d", ts.Month())
+	date := "0000-00-00"
+	year := "0000"
+	month := "00"
+	if fc.Meta.ReleaseDate > 0 {
+		ts := time.UnixMilli(fc.Meta.ReleaseDate)
+		date = ts.Format(time.DateOnly)
+		year = fmt.Sprintf("%d", ts.Year())
+		month = fmt.Sprintf("%d", ts.Month())
+	}
 	actor := utils.BuildAuthorsName(fc.Meta.Actors)
 	title := utils.BuildTitle(fc.Meta.Title)
 	titleTranslated := utils.BuildTitle(fc.Meta.TitleTranslated)

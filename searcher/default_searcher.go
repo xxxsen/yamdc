@@ -193,14 +193,16 @@ func (p *DefaultSearcher) verifyMeta(meta *model.MovieMeta) error {
 	if len(meta.Title) == 0 {
 		return fmt.Errorf("no title")
 	}
-	if meta.ReleaseDate == 0 {
+	if !meta.SwithConfig.DisableReleaseDateCheck && meta.ReleaseDate == 0 {
 		return fmt.Errorf("no release_date")
 	}
 	return nil
 }
 
 func (p *DefaultSearcher) fixMeta(ctx context.Context, req *http.Request, mvmeta *model.MovieMeta) {
-	mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的番号
+	if !mvmeta.SwithConfig.DisableNumberReplace {
+		mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的番号
+	}
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	if mvmeta.Cover != nil {
 		p.fixSingleURL(req, &mvmeta.Cover.Name, prefix)

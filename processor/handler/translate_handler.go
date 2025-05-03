@@ -9,6 +9,9 @@ import (
 	"yamdc/model"
 	"yamdc/store"
 	"yamdc/translator"
+
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
 )
 
 const (
@@ -59,13 +62,15 @@ func (p *translaterHandler) translateArray(ctx context.Context, name string, in 
 	if !p.isNeedTranslate(lang) {
 		return nil
 	}
-	rs := make([]string, 0, len(in))
+	rs := make([]string, 0, len(in)*2)
+	rs = append(rs, in...)
 	for _, item := range in {
 		var res string
 		if err := p.translateSingle(ctx, "dispatch-"+name+"-translate", item, lang, &res); err != nil {
-			return err
+			logutil.GetLogger(ctx).Error("translate array failed", zap.Error(err), zap.String("name", name), zap.String("translate_item", item))
+			continue
 		}
-		rs = append(rs, fmt.Sprintf("%s/%s", res, item))
+		rs = append(rs, res)
 	}
 	*out = rs
 	return nil
