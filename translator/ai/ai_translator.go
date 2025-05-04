@@ -24,6 +24,7 @@ var keywordsReplace = map[string]string{
 }
 
 type aiTranslator struct {
+	c *config
 }
 
 func (g *aiTranslator) replaceKeyword(in string) string {
@@ -41,7 +42,7 @@ func (g *aiTranslator) Translate(ctx context.Context, wording string, _ string, 
 	args := map[string]interface{}{
 		"WORDING": wording,
 	}
-	res, err := aiengine.Complete(ctx, defaultTranslatePrompt, args)
+	res, err := aiengine.Complete(ctx, g.c.prompt, args)
 	if err != nil {
 		return "", err
 	}
@@ -52,6 +53,15 @@ func (g *aiTranslator) Name() string {
 	return "ai"
 }
 
-func New() translator.ITranslator {
-	return &aiTranslator{}
+func New(opts ...Option) translator.ITranslator {
+	c := &config{}
+	for _, opt := range opts {
+		opt(c)
+	}
+	if len(c.prompt) == 0 {
+		c.prompt = defaultTranslatePrompt
+	}
+	return &aiTranslator{
+		c: c,
+	}
 }

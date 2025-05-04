@@ -39,6 +39,8 @@ import (
 
 	"yamdc/searcher/plugin/factory"
 	_ "yamdc/searcher/plugin/register"
+
+	"github.com/samber/lo"
 )
 
 var conf = flag.String("config", "./config.json", "config file")
@@ -365,21 +367,37 @@ func setupTranslator(c *config.Config) error {
 	if !c.TranslateConfig.Enable {
 		return nil
 	}
-	translatorGetter := func() (translator.ITranslator, error) {
-		if strings.EqualFold(c.TranslateConfig.Engine, "google") {
-			return google.New(google.WithProxyUrl(c.NetworkConfig.Proxy)), nil
+	allEngines := make(map[string]translator.ITranslator, 4)
+	enginec := c.TranslateConfig.EngineConfig
+	if enginec.Google.Enable {
+		opts := []google.Option{}
+		if enginec.Google.UseProxy && len(c.NetworkConfig.Proxy) > 0 {
+			opts = append(opts, google.WithProxyUrl(c.NetworkConfig.Proxy))
 		}
-		if strings.EqualFold(c.TranslateConfig.Engine, "ai") {
-			return ai.New(), nil
+		allEngines[translator.TrNameGoogle] = google.New(opts...)
+	}
+	if enginec.AI.Enable {
+		allEngines[translator.TrNameAI] = ai.New(ai.WithPrompt(enginec.AI.Prompt))
+	}
+	useEngines := make([]translator.ITranslator, 0, len(allEngines))
+	engineNames := []string{
+		c.TranslateConfig.Engine,
+	}
+	engineNames = append(engineNames, c.TranslateConfig.Fallback...)
+	engineNames = lo.Uniq(engineNames)
+	for _, name := range engineNames {
+		e, ok := allEngines[strings.ToLower(name)]
+		if !ok {
+			logutil.GetLogger(context.Background()).Error("spec engine not found, skip", zap.String("name", name))
+			continue
 		}
-		return nil, fmt.Errorf("unsupported translator engine: %s", c.TranslateConfig.Engine)
+		useEngines = append(useEngines, e)
 	}
-	engine, err := translatorGetter()
-	if err != nil {
-		return err
+	if len(useEngines) == 0 {
+		return fmt.Errorf("no engine used, need to check engine config")
 	}
-
-	translator.SetTranslator(engine)
+	tr := translator.NewGroup(useEngines...)
+	translator.SetTranslator(tr)
 	return nil
 }
 
