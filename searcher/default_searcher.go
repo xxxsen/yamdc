@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -21,6 +22,11 @@ import (
 const (
 	defaultPageSearchCacheExpire = 30 * 24 * time.Hour
 )
+
+type searchCacheContext struct {
+	KvData     map[string]string `json:"kv_data"`
+	SearchData string            `json:"search_data"`
+}
 
 type DefaultSearcher struct {
 	name string
@@ -117,7 +123,7 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx context.Context, req *http.Reque
 }
 
 func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, number *number.Number) ([]byte, error) {
-	key := p.name + ":" + number.GetNumberID()
+	key := p.name + ":" + number.GetNumberID() + ":v1"
 	dataLoader := func() ([]byte, error) {
 		rsp, err := p.plg.OnHandleHTTPRequest(ctx, p.invokeHTTPRequest, req)
 		if err != nil {
@@ -143,10 +149,30 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 	if !p.cc.searchCache {
 		return dataLoader()
 	}
-	return store.LoadData(ctx, key, defaultPageSearchCacheExpire, dataLoader)
+	res, err := store.LoadData(ctx, key, defaultPageSearchCacheExpire, func() ([]byte, error) {
+		res, err := dataLoader()
+		if err != nil {
+			return nil, err
+		}
+		cachectx := &searchCacheContext{
+			KvData:     api.ExportContainer(ctx),
+			SearchData: string(res),
+		}
+		return json.Marshal(cachectx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("load data from cache failed, err:%w", err)
+	}
+	cachectx := &searchCacheContext{}
+	if err := json.Unmarshal(res, cachectx); err != nil {
+		return nil, fmt.Errorf("decode search cache data failed, err:%w", err)
+	}
+	api.ImportContainer(ctx, cachectx.KvData)
+	return []byte(cachectx.SearchData), nil
 }
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
+	ctx = api.InitContainer(ctx)
 	ctx = meta.SetNumberId(ctx, number.GetNumberID())
 	ok, err := p.plg.OnPrecheckRequest(ctx, number.GetNumberID())
 	if err != nil {
