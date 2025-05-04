@@ -374,10 +374,10 @@ func setupTranslator(c *config.Config) error {
 		if enginec.Google.UseProxy && len(c.NetworkConfig.Proxy) > 0 {
 			opts = append(opts, google.WithProxyUrl(c.NetworkConfig.Proxy))
 		}
-		allEngines["google"] = google.New(opts...)
+		allEngines[translator.TrNameGoogle] = google.New(opts...)
 	}
 	if enginec.AI.Enable {
-		allEngines["ai"] = ai.New(ai.WithPrompt(enginec.AI.Prompt))
+		allEngines[translator.TrNameAI] = ai.New(ai.WithPrompt(enginec.AI.Prompt))
 	}
 	useEngines := make([]translator.ITranslator, 0, len(allEngines))
 	engineNames := []string{
