@@ -155,7 +155,7 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 			return nil, err
 		}
 		cachectx := &searchCacheContext{
-			KvData:     api.ExportContainer(ctx),
+			KvData:     api.ExportContainerData(ctx),
 			SearchData: string(res),
 		}
 		return json.Marshal(cachectx)
@@ -167,7 +167,7 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 	if err := json.Unmarshal(res, cachectx); err != nil {
 		return nil, fmt.Errorf("decode search cache data failed, err:%w", err)
 	}
-	api.ImportContainer(ctx, cachectx.KvData)
+	api.ImportContainerData(ctx, cachectx.KvData)
 	return []byte(cachectx.SearchData), nil
 }
 

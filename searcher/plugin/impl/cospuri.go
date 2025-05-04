@@ -215,7 +215,11 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 	if err != nil {
 		return nil, false, err
 	}
-	mm.Number = strings.ToUpper("cospuri-" + api.MustGetKeyValue(ctx, defaultCospuriRealNumberIdKey))
+	realid, ok := api.GetKeyValue(ctx, defaultCospuriRealNumberIdKey)
+	if !ok {
+		return nil, false, fmt.Errorf("cospuri real id not found")
+	}
+	mm.Number = strings.ToUpper("cospuri-" + realid)
 	mm.SwithConfig.DisableNumberReplace = true
 	mm.SwithConfig.DisableReleaseDateCheck = true
 	mm.TitleLang = enum.MetaLangEn

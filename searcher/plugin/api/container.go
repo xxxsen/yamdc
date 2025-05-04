@@ -43,14 +43,14 @@ func MustGetKeyValue(ctx context.Context, key string) string {
 	return v
 }
 
-func ExportContainer(ctx context.Context) map[string]string {
+func ExportContainerData(ctx context.Context) map[string]string {
 	c := ctx.Value(defaultContainerTypeKey).(*container)
 	m := make(map[string]string)
 	maps.Copy(m, c.m)
 	return m
 }
 
-func ImportContainer(ctx context.Context, m map[string]string) {
+func ImportContainerData(ctx context.Context, m map[string]string) {
 	c := ctx.Value(defaultContainerTypeKey).(*container)
 	maps.Copy(c.m, m)
 }
