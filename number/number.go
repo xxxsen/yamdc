@@ -82,7 +82,7 @@ func resolveHack(info *Number, str string) bool {
 }
 
 func resolve4K(info *Number, str string) bool {
-	if str != defaultSuffix4K {
+	if str != defaultSuffix4K && str != defaultSuffix4KV2 {
 		return false
 	}
 	info.is4k = true
