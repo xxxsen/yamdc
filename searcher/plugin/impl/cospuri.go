@@ -32,6 +32,10 @@ var (
 	defaultCosPuriCoverMatchRegexp     = regexp.MustCompile(`(?i)url\((.*)\s*\)`)
 )
 
+const (
+	defaultCospuriRealNumberIdKey = "key_cospuri_real_number_id"
+)
+
 type cospuri struct {
 	api.DefaultPlugin
 }
@@ -94,15 +98,15 @@ func (c *cospuri) OnMakeHTTPRequest(ctx context.Context, number string) (*http.R
 }
 
 func (c *cospuri) handleHTTPRequestForV1Format(ctx context.Context,
-	invoker api.HTTPInvoker, originReq *http.Request, model, id string) (*http.Response, error) {
+	invoker api.HTTPInvoker, originReq *http.Request, model, id string) (*http.Response, string, error) {
 
 	id = strings.ToLower(id)
 	uri := fmt.Sprintf("%s://%s/model/%s", originReq.URL.Scheme, originReq.URL.Host, model)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-
+	realNumberId := ""
 	rsp, err := twostep.HandleXPathTwoStepSearch(ctx, invoker, req, &twostep.XPathTwoStepContext{
 		Ps: []*twostep.XPathPair{
 			{
@@ -125,7 +129,8 @@ func (c *cospuri) handleHTTPRequestForV1Format(ctx context.Context,
 					logutil.GetLogger(ctx).Warn("unable to parse request uri, id not found", zap.String("item", item))
 					continue
 				}
-				if strings.HasPrefix(sampleId, id) {
+				if len(sampleId) != 0 && strings.HasPrefix(sampleId, id) {
+					realNumberId = sampleId
 					return item, true, nil
 				}
 			}
@@ -136,23 +141,23 @@ func (c *cospuri) handleHTTPRequestForV1Format(ctx context.Context,
 		LinkPrefix:            fmt.Sprintf("%s://%s", originReq.URL.Scheme, originReq.URL.Host),
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return rsp, nil
+	return rsp, realNumberId, nil
 }
 
 func (c *cospuri) handleHTTPRequestForV2Format(ctx context.Context,
-	invoker api.HTTPInvoker, originReq *http.Request, _, id string) (*http.Response, error) {
+	invoker api.HTTPInvoker, originReq *http.Request, _, id string) (*http.Response, string, error) {
 	uri := fmt.Sprintf("%s://%s/sample?id=%s", originReq.URL.Scheme, originReq.URL.Host, strings.ToLower(id))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	rsp, err := invoker(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return rsp, nil
+	return rsp, id, nil
 }
 
 func (c *cospuri) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, originReq *http.Request) (*http.Response, error) {
@@ -162,10 +167,16 @@ func (c *cospuri) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvok
 	}
 	isV2Fmt := len(model) == 0
 	logutil.GetLogger(ctx).Debug("decode model and id succ", zap.Bool("is_v2_format", isV2Fmt), zap.String("model", model), zap.String("id", id))
-	if !isV2Fmt {
-		return c.handleHTTPRequestForV1Format(ctx, invoker, originReq, model, id)
+	requestHandler := c.handleHTTPRequestForV1Format
+	if isV2Fmt {
+		requestHandler = c.handleHTTPRequestForV2Format
 	}
-	return c.handleHTTPRequestForV2Format(ctx, invoker, originReq, model, id)
+	rsp, realid, err := requestHandler(ctx, invoker, originReq, model, id)
+	if err != nil {
+		return nil, err
+	}
+	api.SetKeyValue(ctx, defaultCospuriRealNumberIdKey, realid)
+	return rsp, nil
 }
 
 func (c *cospuri) extractCoverUrl(in string) string {
@@ -178,47 +189,9 @@ func (c *cospuri) extractCoverUrl(in string) string {
 	return ""
 }
 
-func (c *cospuri) extractNumberId(in string) string {
-	//format: /disclaimer?id=04264arm&channel=cosplay
-	uri, err := url.ParseRequestURI(in)
-	if err != nil {
-		logutil.GetLogger(context.Background()).Warn("extract number id but parse request uri failed", zap.Error(err), zap.String("res", in))
-		return ""
-	}
-	id := uri.Query().Get("id")
-	if len(id) == 0 {
-		logutil.GetLogger(context.Background()).Warn("extract number id but id not found", zap.String("res", in))
-		return ""
-	}
-	return id
-}
-
-func (c *cospuri) extractNumberIdByCoverLink(lnk string) (string, error) {
-	uri, err := url.Parse(lnk)
-	if err != nil {
-		return "", fmt.Errorf("extract number id but parse cover link failed, err:%w", err)
-	}
-	kw := "/preview/"
-	idx := strings.Index(uri.Path, kw)
-	if idx < 0 {
-		return "", fmt.Errorf("no kw to indicate the number id idx, kw:%s", kw)
-	}
-	numberData := uri.Path[idx+len(kw):]
-	endIdx := strings.Index(numberData, "/")
-	if endIdx < 0 {
-		return "", fmt.Errorf("no end idx to indicate the number id")
-	}
-	numberid := numberData[:endIdx]
-
-	if !defaultCosPuriV2NumberFormatRegexp.MatchString(numberid) {
-		return "", fmt.Errorf("extract numberid from cover, but numberid invalid, numberid:%s", numberid)
-	}
-	return numberid, nil
-}
-
 func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
-		NumberExpr:          `//div[@class="sample-details"]//iframe[@class="disclaimer"]/@src`, //基于cover链接提取
+		NumberExpr:          ``,
 		TitleExpr:           `//div[@class="sample-details"]//div[@class="description"]/text()`, //没有title, 拿desc先顶着= =。
 		PlotExpr:            `//div[@class="sample-details"]//div[@class="description"]/text()`,
 		ActorListExpr:       `//div[@class="sample-details"]//div[@class="sample-model"]/a/text()`,
@@ -238,21 +211,15 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 			parser.DefaultMMDurationParser(ctx),
 		),
 		decoder.WithCoverParser(c.extractCoverUrl),
-		decoder.WithNumberParser(c.extractNumberId),
 	)
-	if len(mm.Number) == 0 {
-		if mm.Number, err = c.extractNumberIdByCoverLink(mm.Cover.Name); err != nil {
-			return nil, false, fmt.Errorf("extract number id from cover link failed, err:%w", err)
-		}
-		logutil.GetLogger(ctx).Debug("extract number id from cover link succ", zap.String("number", mm.Number), zap.String("cover_link", mm.Cover.Name))
-	}
 	if err != nil {
 		return nil, false, err
 	}
-	if len(mm.Number) == 0 {
-		return nil, false, nil
+	realid, ok := api.GetKeyValue(ctx, defaultCospuriRealNumberIdKey)
+	if !ok {
+		return nil, false, fmt.Errorf("cospuri real id not found")
 	}
-	mm.Number = strings.ToUpper("cospuri-" + mm.Number)
+	mm.Number = strings.ToUpper("cospuri-" + realid)
 	mm.SwithConfig.DisableNumberReplace = true
 	mm.SwithConfig.DisableReleaseDateCheck = true
 	mm.TitleLang = enum.MetaLangEn
