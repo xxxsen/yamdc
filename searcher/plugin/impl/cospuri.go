@@ -190,8 +190,7 @@ func (c *cospuri) extractNumberId(in string) string {
 		logutil.GetLogger(context.Background()).Warn("extract number id but id not found", zap.String("res", in))
 		return ""
 	}
-	//重建为标准番号
-	return strings.ToUpper("cospuri-" + id)
+	return id
 }
 
 func (c *cospuri) extractNumberIdByCoverLink(lnk string) (string, error) {
@@ -214,7 +213,7 @@ func (c *cospuri) extractNumberIdByCoverLink(lnk string) (string, error) {
 	if !defaultCosPuriV2NumberFormatRegexp.MatchString(numberid) {
 		return "", fmt.Errorf("extract numberid from cover, but numberid invalid, numberid:%s", numberid)
 	}
-	return strings.ToUpper("cospuri-" + numberid), nil
+	return numberid, nil
 }
 
 func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
@@ -253,6 +252,7 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 	if len(mm.Number) == 0 {
 		return nil, false, nil
 	}
+	mm.Number = strings.ToUpper("cospuri-" + mm.Number)
 	mm.SwithConfig.DisableNumberReplace = true
 	mm.SwithConfig.DisableReleaseDateCheck = true
 	mm.TitleLang = enum.MetaLangEn
