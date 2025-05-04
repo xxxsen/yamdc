@@ -194,9 +194,32 @@ func (c *cospuri) extractNumberId(in string) string {
 	return strings.ToUpper("cospuri-" + id)
 }
 
+func (c *cospuri) extractNumberIdByCoverLink(lnk string) (string, error) {
+	uri, err := url.Parse(lnk)
+	if err != nil {
+		return "", fmt.Errorf("extract number id but parse cover link failed, err:%w", err)
+	}
+	kw := "/preview/"
+	idx := strings.Index(uri.Path, kw)
+	if idx < 0 {
+		return "", fmt.Errorf("no kw to indicate the number id idx, kw:%s", kw)
+	}
+	numberData := uri.Path[idx+len(kw):]
+	endIdx := strings.Index(numberData, "/")
+	if endIdx < 0 {
+		return "", fmt.Errorf("no end idx to indicate the number id")
+	}
+	numberid := numberData[:endIdx]
+
+	if !defaultCosPuriV2NumberFormatRegexp.MatchString(numberid) {
+		return "", fmt.Errorf("extract numberid from cover, but numberid invalid, numberid:%s", numberid)
+	}
+	return strings.ToUpper("cospuri-" + numberid), nil
+}
+
 func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	dec := decoder.XPathHtmlDecoder{
-		NumberExpr:          `//div[@class="sample-details"]//iframe[@class="disclaimer"]/@src`,
+		NumberExpr:          `//div[@class="sample-details"]//iframe[@class="disclaimer"]/@src`, //基于cover链接提取
 		TitleExpr:           `//div[@class="sample-details"]//div[@class="description"]/text()`, //没有title, 拿desc先顶着= =。
 		PlotExpr:            `//div[@class="sample-details"]//div[@class="description"]/text()`,
 		ActorListExpr:       `//div[@class="sample-details"]//div[@class="sample-model"]/a/text()`,
@@ -218,6 +241,12 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 		decoder.WithCoverParser(c.extractCoverUrl),
 		decoder.WithNumberParser(c.extractNumberId),
 	)
+	if len(mm.Number) == 0 {
+		if mm.Number, err = c.extractNumberIdByCoverLink(mm.Cover.Name); err != nil {
+			return nil, false, fmt.Errorf("extract number id from cover link failed, err:%w", err)
+		}
+		logutil.GetLogger(ctx).Debug("extract number id from cover link succ", zap.String("number", mm.Number), zap.String("cover_link", mm.Cover.Name))
+	}
 	if err != nil {
 		return nil, false, err
 	}
