@@ -35,10 +35,27 @@ type AIEngineConfig struct {
 }
 
 type TranslateConfig struct {
-	Enable                 bool   `json:"enable"`
-	Engine                 string `json:"engine"`
-	DiscardTranslatedTitle bool   `json:"discard_translated_title"`
-	DiscardTranslatedPlot  bool   `json:"discard_translated_plot"`
+	Enable                 bool                  `json:"enable"`
+	Engine                 string                `json:"engine"`
+	Fallback               []string              `json:"fallback"`
+	DiscardTranslatedTitle bool                  `json:"discard_translated_title"`
+	DiscardTranslatedPlot  bool                  `json:"discard_translated_plot"`
+	EngineConfig           TranslateEngineConfig `json:"engine_config"`
+}
+
+type TranslateEngineConfig struct {
+	Google GoogleTranslateEngineConfig `json:"google"`
+	AI     AITranslateEngineConfig     `json:"ai"`
+}
+
+type GoogleTranslateEngineConfig struct {
+	Enable   bool `json:"enable"`
+	UseProxy bool `json:"use_proxy"`
+}
+
+type AITranslateEngineConfig struct {
+	Enable bool   `json:"enable"`
+	Prompt string `json:"prompt"`
 }
 
 type HandlerConfig struct {
@@ -111,8 +128,19 @@ func defaultConfig() *Config {
 			EnableSearcherCheck:      false,
 		},
 		TranslateConfig: TranslateConfig{
-			Enable: true,
-			Engine: "google",
+			Enable:   true,
+			Engine:   "google",
+			Fallback: []string{"google"},
+			EngineConfig: TranslateEngineConfig{
+				Google: GoogleTranslateEngineConfig{
+					Enable:   true,
+					UseProxy: true,
+				},
+				AI: AITranslateEngineConfig{
+					Enable: true,
+					Prompt: "", //不填则默认使用默认的prompt
+				},
+			},
 		},
 		FlareSolverrConfig: FlareSolverrConfig{
 			Enable: false, //默认不启用, 毕竟还要额外配置

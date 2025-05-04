@@ -13,10 +13,15 @@ type GenerationConfig struct {
 	TopP        float64 `json:"topP"`
 }
 
+type PromptFeedback struct {
+	BlockReason string `json:"blockReason"`
+}
+
 type Response struct {
-	Candidates    []Candidate   `json:"candidates"`
-	UsageMetadata UsageMetadata `json:"usageMetadata"`
-	ModelVersion  string        `json:"modelVersion"`
+	PromptFeedback PromptFeedback `json:"promptFeedback"`
+	Candidates     []Candidate    `json:"candidates"`
+	UsageMetadata  UsageMetadata  `json:"usageMetadata"`
+	ModelVersion   string         `json:"modelVersion"`
 }
 
 type Candidate struct {

@@ -50,7 +50,7 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 		return "", err
 	}
 	if len(res.Candidates) == 0 {
-		return "", fmt.Errorf("no translate result found")
+		return "", fmt.Errorf("no translate result found, maybe blocked, prompt feedback:%s", res.PromptFeedback.BlockReason)
 	}
 	if len(res.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("no translate result part found, reason:%s", res.Candidates[0].FinishReason)
