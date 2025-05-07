@@ -12,6 +12,9 @@ import (
 	"yamdc/searcher/plugin/constant"
 	"yamdc/searcher/plugin/factory"
 	"yamdc/searcher/plugin/meta"
+	"yamdc/searcher/plugin/twostep"
+
+	"github.com/samber/lo"
 )
 
 var (
@@ -29,12 +32,32 @@ func (m *madouqu) OnGetHosts(ctx context.Context) []string {
 }
 
 func (m *madouqu) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	uri := fmt.Sprintf("%s/video/%s/", api.MustSelectDomain(defaultMadouQuHostList), strings.ToLower(number))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
-	if err != nil {
-		return nil, err
+	return http.NewRequestWithContext(ctx, http.MethodGet, api.MustSelectDomain(defaultMadouQuHostList), nil)
+}
+
+func (m *madouqu) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
+	num := meta.GetNumberId(ctx)
+	ns := []string{
+		num,
+		strings.ReplaceAll(num, "-", ""),
+		strings.ReplaceAll(num, "_", ""),
 	}
-	return req, nil
+	ns = lo.Uniq(ns)
+	return twostep.HandleMultiLinkSearch(ctx, invoker, &twostep.MultiLinkContext{
+		ReqBuilder: func(nid string) (*http.Request, error) {
+			uri := fmt.Sprintf("%s://%s/video/%s/", req.URL.Scheme, req.URL.Host, strings.ToLower(nid))
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+			if err != nil {
+				return nil, err
+			}
+			return req, nil
+		},
+		Numbers:         ns,
+		ValidStatusCode: []int{http.StatusOK},
+		ResultTester: func(raw []byte) (bool, error) {
+			return strings.Contains(string(raw), "片名"), nil
+		},
+	})
 }
 
 func (m *madouqu) onDecodeNumber(in string) string {
