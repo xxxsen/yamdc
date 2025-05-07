@@ -2,8 +2,6 @@ module yamdc
 
 go 1.24.0
 
-toolchain go1.24.2
-
 require (
 	github.com/Conight/go-googletrans v0.2.4
 	github.com/Kagami/go-face v0.0.0-20210630145111-0c14797b4d0e
