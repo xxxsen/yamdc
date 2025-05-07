@@ -31,12 +31,21 @@ func (m *madouqu) OnGetHosts(ctx context.Context) []string {
 	return defaultMadouQuHostList
 }
 
+func (m *madouqu) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
+	if !strings.HasPrefix(number, "MDQ") {
+		return false, nil
+	}
+	return true, nil
+}
+
 func (m *madouqu) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	return http.NewRequestWithContext(ctx, http.MethodGet, api.MustSelectDomain(defaultMadouQuHostList), nil)
 }
 
 func (m *madouqu) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
 	num := meta.GetNumberId(ctx)
+	num = strings.TrimPrefix(num, "MDQ") //移除默认的前缀
+	num = strings.Trim(num, "-_")
 	ns := []string{
 		num,
 		strings.ReplaceAll(num, "-", ""),

@@ -67,6 +67,9 @@ plugins:
             "COSPURI": []*regexp.Regexp{
                 regexp.MustCompile("(?i)^COSPURI.*$"),
             },
+            "MD": []*regexp.Regexp{
+                regexp.MustCompile("(?i)^MDQ[-|_].*$"),
+            },
         }
     function: |
         func(ctx context.Context, number string) (string, bool, error) {
@@ -95,6 +98,9 @@ func TestLiveNumberCategorier(t *testing.T) {
 		"COSPURI-Emiri-Momota-0548": "COSPURI",
 		"COSPURI-123456":            "COSPURI",
 		"cospuri-123456":            "COSPURI",
+		"MDQ-123456":                "MD",
+		"MDQ_aaaa":                  "MD",
+		"mdq_bbbb":                  "MD",
 	}
 	for k, v := range m {
 		res, matched, err := ctr.Category(context.Background(), k)

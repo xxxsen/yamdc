@@ -92,6 +92,7 @@ plugins:
             regexp.MustCompile("(?i)^DSAM[-|_].*$"),
             regexp.MustCompile("(?i)^JVR[-|_].*$"),
             regexp.MustCompile("(?i)COSPURI[-|_].*$"),
+            regexp.MustCompile("(?i)MDQ[-|_].*$"),
         }     
     function: |
         func(ctx context.Context, number string) (bool, error) {
@@ -149,6 +150,9 @@ func TestLiveUncensorChecker(t *testing.T) {
 		"SMDY-123":                  false,
 		"COSPURI-aaa1111":           true,
 		"COSPURI-RIA-RUOK-aaaa1111": true,
+		"mdq-xg-123":                true, //麻豆的部分番号跟现有的番号冲突了, 导致无法正确区分到底是骑兵还是步兵, so, 直接给麻豆的视频都加个mdq前缀吧, 懒得处理了...
+		"mdq-cm-123":                true,
+		"mdq-md-123":                true,
 	}
 	for k, v := range m {
 		res, err := ck.IsMatch(context.Background(), k)
