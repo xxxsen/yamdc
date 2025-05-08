@@ -32,7 +32,7 @@ func (m *madouqu) OnGetHosts(ctx context.Context) []string {
 }
 
 func (m *madouqu) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
-	if !strings.HasPrefix(number, "MDQ") {
+	if !strings.HasPrefix(number, "MADOU") {
 		return false, nil
 	}
 	return true, nil
@@ -44,7 +44,7 @@ func (m *madouqu) OnMakeHTTPRequest(ctx context.Context, number string) (*http.R
 
 func (m *madouqu) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvoker, req *http.Request) (*http.Response, error) {
 	num := meta.GetNumberId(ctx)
-	num = strings.TrimPrefix(num, "MDQ") //移除默认的前缀
+	num = strings.TrimPrefix(num, "MADOU") //移除默认的前缀
 	num = strings.Trim(num, "-_")
 	ns := []string{
 		num,
