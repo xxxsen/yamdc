@@ -406,7 +406,7 @@ func readScriptStream(c *config.LinkConfig) ([]byte, error) {
 		return os.ReadFile(c.Link)
 	}
 	ctx := context.Background()
-	return store.LoadData(ctx, c.Link, 3*24*time.Hour, func() ([]byte, error) {
+	return store.LoadData(ctx, c.Link, 24*time.Hour, func() ([]byte, error) {
 		logutil.GetLogger(ctx).Info("try read script link from remote...", zap.String("link", c.Link))
 		req, err := http.NewRequest(http.MethodGet, c.Link, nil)
 		if err != nil {
