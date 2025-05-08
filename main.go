@@ -472,6 +472,6 @@ func rewriteEnvFlagToConfig(c *config.SwitchConfig) {
 		c.EnableGoFaceRecognizer = false
 	}
 	if os.Getenv("ENABLE_PIGO_FACE_RECOGNIZER") == "false" {
-		c.EnableGoFaceRecognizer = false
+		c.EnablePigoFaceRecognizer = false
 	}
 }
