@@ -21,4 +21,5 @@ var sysCategoryPlugins = []CategoryPlugin{
 	{Name: "FC2", Plugins: []string{"fc2", "18av", "njav", "freejavbt", "tktube", "avsox", "fc2ppvdb"}},
 	{Name: "JVR", Plugins: []string{"jvrporn"}},
 	{Name: "COSPURI", Plugins: []string{"cospuri"}},
+	{Name: "MD", Plugins: []string{"madouqu"}},
 }

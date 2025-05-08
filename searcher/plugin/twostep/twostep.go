@@ -16,11 +16,11 @@ type XPathPair struct {
 }
 
 type XPathTwoStepContext struct {
-	Ps                    []*XPathPair
-	LinkSelector          OnTwoStepLinkSelect
-	ValidStatusCode       []int
-	CheckResultCountMatch bool
-	LinkPrefix            string
+	Ps                    []*XPathPair        //用户传入多组XPath, 用于在页面获取完数据后进行数据提取
+	LinkSelector          OnTwoStepLinkSelect //回调用户函数，确认哪些链接是符合预期的
+	ValidStatusCode       []int               //http的哪些状态码是有效的
+	CheckResultCountMatch bool                //检查多组xpath的result个数是否一致
+	LinkPrefix            string              //用于重建链接的前缀
 }
 
 type OnTwoStepLinkSelect func(ps []*XPathPair) (string, bool, error)
@@ -39,6 +39,7 @@ func HandleXPathTwoStepSearch(ctx context.Context, invoker api.HTTPInvoker, req 
 	if err != nil {
 		return nil, fmt.Errorf("step search failed, err:%w", err)
 	}
+	defer rsp.Body.Close()
 	if !isCodeInValidStatusCodeList(xctx.ValidStatusCode, rsp.StatusCode) {
 		return nil, fmt.Errorf("status code:%d not in valid list", rsp.StatusCode)
 	}

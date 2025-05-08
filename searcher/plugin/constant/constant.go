@@ -18,4 +18,5 @@ const (
 	SSJvrPorn    = "jvrporn"
 	SSJavLibrary = "javlibrary"
 	SSCospuri    = "cospuri"
+	SSMadouqu    = "madouqu"
 )
