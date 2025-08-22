@@ -1,4 +1,4 @@
-FROM golang:1.24
+FROM golang:1.24-bookworm
 
 RUN apt update && apt install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg62-turbo-dev gfortran -y 
 WORKDIR /build
