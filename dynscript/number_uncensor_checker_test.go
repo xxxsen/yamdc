@@ -6,34 +6,34 @@ import (
 )
 
 var numberUncensorRule = `
-plugins:
-  - name: check_uncensor
-    define: |
-      prefixList := []string {
-          "FC2",
-          "HEYZO",
-      }
-      reList := []*regexp.Regexp{
-          regexp.MustCompile("(?i)^AAA-.*$"),
-      }		
-    function: |
-      func(ctx context.Context, number string) (bool, error) {
-          for _, prefix := range prefixList {
-              if strings.HasPrefix(number, prefix) {
-                  return true, nil
-              }
-          }
-          for _, re := range reList {
-              if re.MatchString(number) {
-                  return true, nil
-              }
-          }
-          return false, nil	  			
-      }
+import = [ "regexp", "strings" ]
 
-import:
-  - regexp  
-  - strings
+[[plugins]]
+name = "check_uncensor"
+define = """
+prefixList := []string {
+    "FC2",
+    "HEYZO",
+}
+reList := []*regexp.Regexp{
+    regexp.MustCompile("(?i)^AAA-.*$"),
+}
+"""
+function = """
+func(ctx context.Context, number string) (bool, error) {
+    for _, prefix := range prefixList {
+        if strings.HasPrefix(number, prefix) {
+            return true, nil
+        }
+    }
+    for _, re := range reList {
+        if re.MatchString(number) {
+            return true, nil
+        }
+    }
+    return false, nil\t  \t\t\t
+}
+"""
 `
 
 func TestNumberUncensorCheck(t *testing.T) {
@@ -59,58 +59,60 @@ func TestNumberUncensorCheck(t *testing.T) {
 }
 
 var defaultLiveCode = `
-plugins:
-  - name: basic_uncensor_checker
-    define: |
-        prefixList := []string {
-        
+import = [ "strings", "regexp" ]
+
+[[plugins]]
+name = "basic_uncensor_checker"
+define = """
+prefixList := []string {
+
+}
+regList := []*regexp.Regexp{
+    regexp.MustCompile("(?i)^\\\\d+[-|_]\\\\d+$"),
+    regexp.MustCompile("(?i)^N\\\\d+$"),
+    regexp.MustCompile("(?i)^K\\\\d+$"),
+    regexp.MustCompile("(?i)^KB\\\\d+$"),
+    regexp.MustCompile("(?i)^C\\\\d+-KI\\\\d+$"),
+    regexp.MustCompile("(?i)^1PON.*$"),
+    regexp.MustCompile("(?i)^CARIB.*$"),
+    regexp.MustCompile("(?i)^SM3D2DBD.*$"),
+    regexp.MustCompile("(?i)^SMDV.*$"),
+    regexp.MustCompile("(?i)^SKY.*$"),
+    regexp.MustCompile("(?i)^HEY.*$"),
+    regexp.MustCompile("(?i)^FC2.*$"),
+    regexp.MustCompile("(?i)^MKD.*$"),
+    regexp.MustCompile("(?i)^MKBD.*$"),
+    regexp.MustCompile("(?i)^H4610.*$"),
+    regexp.MustCompile("(?i)^H0930.*$"),
+    regexp.MustCompile("(?i)^MD[-|_].*$"),
+    regexp.MustCompile("(?i)^SMD[-|_].*$"),
+    regexp.MustCompile("(?i)^SSDV[-|_].*$"),
+    regexp.MustCompile("(?i)^CCDV[-|_].*$"),
+    regexp.MustCompile("(?i)^LLDV[-|_].*$"),
+    regexp.MustCompile("(?i)^DRC[-|_].*$"),
+    regexp.MustCompile("(?i)^MXX[-|_].*$"),
+    regexp.MustCompile("(?i)^DSAM[-|_].*$"),
+    regexp.MustCompile("(?i)^JVR[-|_].*$"),
+    regexp.MustCompile("(?i)COSPURI[-|_].*$"),
+    regexp.MustCompile("(?i)MADOU[-|_].*$"),
+}     
+"""
+function = """
+func(ctx context.Context, number string) (bool, error) {
+    for _, reg := range regList {
+        if reg.MatchString(number) {
+            return true, nil 
         }
-        regList := []*regexp.Regexp{
-            regexp.MustCompile("(?i)^\\d+[-|_]\\d+$"),
-            regexp.MustCompile("(?i)^N\\d+$"),
-            regexp.MustCompile("(?i)^K\\d+$"),
-            regexp.MustCompile("(?i)^KB\\d+$"),
-            regexp.MustCompile("(?i)^C\\d+-KI\\d+$"),
-            regexp.MustCompile("(?i)^1PON.*$"),
-            regexp.MustCompile("(?i)^CARIB.*$"),
-            regexp.MustCompile("(?i)^SM3D2DBD.*$"),
-            regexp.MustCompile("(?i)^SMDV.*$"),
-            regexp.MustCompile("(?i)^SKY.*$"),
-            regexp.MustCompile("(?i)^HEY.*$"),
-            regexp.MustCompile("(?i)^FC2.*$"),
-            regexp.MustCompile("(?i)^MKD.*$"),
-            regexp.MustCompile("(?i)^MKBD.*$"),
-            regexp.MustCompile("(?i)^H4610.*$"),
-            regexp.MustCompile("(?i)^H0930.*$"),
-            regexp.MustCompile("(?i)^MD[-|_].*$"),
-            regexp.MustCompile("(?i)^SMD[-|_].*$"),
-            regexp.MustCompile("(?i)^SSDV[-|_].*$"),
-            regexp.MustCompile("(?i)^CCDV[-|_].*$"),
-            regexp.MustCompile("(?i)^LLDV[-|_].*$"),
-            regexp.MustCompile("(?i)^DRC[-|_].*$"),
-            regexp.MustCompile("(?i)^MXX[-|_].*$"),
-            regexp.MustCompile("(?i)^DSAM[-|_].*$"),
-            regexp.MustCompile("(?i)^JVR[-|_].*$"),
-            regexp.MustCompile("(?i)COSPURI[-|_].*$"),
-            regexp.MustCompile("(?i)MADOU[-|_].*$"),
-        }     
-    function: |
-        func(ctx context.Context, number string) (bool, error) {
-            for _, reg := range regList {
-                if reg.MatchString(number) {
-                    return true, nil 
-                }
-            }
-            for _, prefix := range prefixList {
-                if strings.HasPrefix(number, prefix) {
-                    return true, nil 
-                }
-            }
-            return false, nil 
+    }
+    for _, prefix := range prefixList {
+        if strings.HasPrefix(number, prefix) {
+            return true, nil 
         }
-import:
-  - strings    
-  - regexp  
+    }
+    return false, nil 
+}
+"""
+
 `
 
 func TestLiveUncensorChecker(t *testing.T) {

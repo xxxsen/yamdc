@@ -39,7 +39,7 @@ func (u *uncensorCheckerImpl) IsMatch(ctx context.Context, number string) (bool,
 
 func NewNumberUncensorChecker(rule string) (INumberUncensorChecker, error) {
 	rule = rewriteTabToSpace(rule)
-	pk, err := picker.ParseData[NumberUncensorCheckFunc]([]byte(rule), picker.YamlDecoder, picker.WithSafeFuncWrap(true))
+	pk, err := picker.ParseData[NumberUncensorCheckFunc]([]byte(rule), picker.TomlDecoder, picker.WithSafeFuncWrap(true))
 	if err != nil {
 		return nil, err
 	}
