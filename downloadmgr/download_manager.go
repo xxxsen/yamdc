@@ -1,6 +1,7 @@
 package downloadmgr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -45,11 +46,6 @@ func (m *DownloadManager) writeToFile(rc io.Reader, dst string) error {
 	return nil
 }
 
-func (m *DownloadManager) Download(src string, dst string) error {
-	_, err := m.Sync(context.Background(), src, dst)
-	return err
-}
-
 type fileMeta struct {
 	ETag         string `json:"etag"`
 	LastModified string `json:"last_modified"`
@@ -74,33 +70,49 @@ func readFileMeta(path string) (*fileMeta, error) {
 	return &meta, nil
 }
 
-func writeFileMeta(path string, meta *fileMeta) error {
+func (m *DownloadManager) writeFileMeta(path string, meta *fileMeta) error {
 	raw, err := json.Marshal(meta)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0644)
+	return m.writeToFile(bytes.NewReader(raw), path)
 }
 
-func (m *DownloadManager) Sync(ctx context.Context, src string, dst string) (bool, error) {
+func (m *DownloadManager) attachETag(req *http.Request, metaPath string) error {
+	meta, err := readFileMeta(metaPath)
+	if err != nil {
+		return fmt.Errorf("read meta failed, err:%w", err)
+	}
+	if meta == nil {
+		return nil
+	}
+	if meta.ETag != "" {
+		req.Header.Set("If-None-Match", meta.ETag)
+	}
+	if meta.LastModified != "" {
+		req.Header.Set("If-Modified-Since", meta.LastModified)
+	}
+	return nil
+}
+
+func (m *DownloadManager) isFileExist(dst string) bool {
+	_, err := os.Stat(dst)
+	return err == nil
+}
+
+func (m *DownloadManager) Download(ctx context.Context, src string, dst string, sync bool) (bool, error) {
+	if m.isFileExist(dst) && !sync {
+		return false, nil
+	}
 	if err := m.ensureDir(dst); err != nil {
 		return false, err
-	}
-	meta, err := readFileMeta(metaFilePath(dst))
-	if err != nil {
-		return false, fmt.Errorf("read meta failed, err:%w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
 	if err != nil {
 		return false, err
 	}
-	if meta != nil {
-		if meta.ETag != "" {
-			req.Header.Set("If-None-Match", meta.ETag)
-		}
-		if meta.LastModified != "" {
-			req.Header.Set("If-Modified-Since", meta.LastModified)
-		}
+	if err := m.attachETag(req, metaFilePath(dst)); err != nil {
+		return false, fmt.Errorf("attach etag meta data failed, err:%w", err)
 	}
 	rsp, err := m.cli.Do(req)
 	if err != nil {
@@ -125,7 +137,7 @@ func (m *DownloadManager) Sync(ctx context.Context, src string, dst string) (boo
 		ETag:         rsp.Header.Get("ETag"),
 		LastModified: rsp.Header.Get("Last-Modified"),
 	}
-	if err := writeFileMeta(metaFilePath(dst), newMeta); err != nil {
+	if err := m.writeFileMeta(metaFilePath(dst), newMeta); err != nil {
 		return false, err
 	}
 	return true, nil
