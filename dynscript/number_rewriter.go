@@ -40,7 +40,7 @@ func (n *numberRewriterImpl) Rewrite(ctx context.Context, number string) (string
 
 func NewNumberRewriter(rule string) (INumberRewriter, error) {
 	rule = rewriteTabToSpace(rule)
-	pk, err := picker.ParseData[NumberRewriteFunc]([]byte(rule), picker.TomlDecoder, picker.WithSafeFuncWrap(true))
+	pk, err := picker.Parse[NumberRewriteFunc]([]byte(rule), picker.TomlDecoder, picker.WithSafeFuncWrap(true))
 	if err != nil {
 		return nil, err
 	}

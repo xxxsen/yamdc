@@ -39,7 +39,7 @@ func (n *numberCategorierImpl) Category(ctx context.Context, number string) (str
 
 func NewNumberCategorier(rule string) (INumberCategorier, error) {
 	rule = rewriteTabToSpace(rule)
-	pk, err := picker.ParseData[NumberCategoryFunc]([]byte(rule), picker.YamlDecoder, picker.WithSafeFuncWrap(true))
+	pk, err := picker.Parse[NumberCategoryFunc]([]byte(rule), picker.TomlDecoder, picker.WithSafeFuncWrap(true))
 	if err != nil {
 		return nil, err
 	}
