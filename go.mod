@@ -13,7 +13,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
 	github.com/xxxsen/common v0.1.22
-	github.com/xxxsen/picker v0.0.3-beta.2
+	github.com/xxxsen/picker v0.0.3-beta.3
 	go.uber.org/zap v1.23.0
 	golang.org/x/image v0.18.0
 	golang.org/x/net v0.38.0
@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/thoas/go-funk v0.9.3 // indirect
 	github.com/traefik/yaegi v0.16.1 // indirect
 )

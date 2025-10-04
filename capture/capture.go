@@ -141,12 +141,13 @@ func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContex
 func (c *Capture) processFileList(ctx context.Context, fcs []*model.FileContext) error {
 	var outErr error
 	for _, item := range fcs {
+		start := time.Now()
 		if err := c.processOneFile(ctx, item); err != nil {
 			outErr = err
 			logutil.GetLogger(ctx).Error("process file failed", zap.Error(err), zap.String("file", item.FullFilePath))
 			continue
 		}
-		logutil.GetLogger(ctx).Info("process file succ", zap.String("file", item.FullFilePath))
+		logutil.GetLogger(ctx).Info("process file succ", zap.String("file", item.FullFilePath), zap.Duration("cost", time.Since(start)))
 	}
 	return outErr
 }

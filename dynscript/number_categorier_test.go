@@ -8,30 +8,33 @@ import (
 )
 
 var numberCategortierRule = `
-plugins:
-  - name: number_categorier
-	define: |
-		m := map[string][]*regexp.Regexp {
-			"AAA": []*regexp.Regexp{
-				regexp.MustCompile("^AAA-.*$"), 
-			},
-			"JVR": []*regexp.Regexp{
-				regexp.MustCompile("^BBB-.*$"),
-			},
-		}
-	function: |
-		func(ctx context.Context, number string) (string, bool, error) {
-			for category, reList := range m {
-				for _, re := range reList {
-					if re.MatchString(number) {
-						return category, true, nil
-					}
-				}
-			}
-			return "", false, nil
-		}		
-import:
-  - regexp			
+import = [ "regexp" ]
+
+[[plugins]]
+name = "number_categorier"
+define = """
+m := map[string][]*regexp.Regexp {
+"AAA": []*regexp.Regexp{
+  regexp.MustCompile("^AAA-.*$"), 
+},
+"JVR": []*regexp.Regexp{
+  regexp.MustCompile("^BBB-.*$"),
+},
+}
+"""
+function = """
+func(ctx context.Context, number string) (string, bool, error) {
+for category, reList := range m {
+  for _, re := range reList {
+    if re.MatchString(number) {
+      return category, true, nil
+      }
+    }
+  }
+return "", false, nil
+}    
+"""
+		
 `
 
 func TestNumberCategortier(t *testing.T) {
@@ -54,37 +57,39 @@ func TestNumberCategortier(t *testing.T) {
 }
 
 var liveNumberCategorierRule = `
-plugins:
-  - name: basic_categorier
-    define: |
-        cats := map[string][]*regexp.Regexp{
-            "FC2": []*regexp.Regexp{
-                regexp.MustCompile("(?i)^FC2.*$"),
-            },
-            "JVR": []*regexp.Regexp{
-                regexp.MustCompile("(?i)^JVR.*$"),
-            },
-            "COSPURI": []*regexp.Regexp{
-                regexp.MustCompile("(?i)^COSPURI.*$"),
-            },
-            "MD": []*regexp.Regexp{
-                regexp.MustCompile("(?i)^MADOU[-|_].*$"),
-            },
-        }
-    function: |
-        func(ctx context.Context, number string) (string, bool, error) {
-            for cat, ruleList := range cats {
-                for _, rule := range ruleList {
-                    if rule.MatchString(number) {
-                        return cat, true, nil
-                    }
-                }
+import = [ "strings", "regexp" ]
+
+[[plugins]]
+name = "basic_categorier"
+define = """
+cats := map[string][]*regexp.Regexp{
+    "FC2": []*regexp.Regexp{
+        regexp.MustCompile("(?i)^FC2.*$"),
+    },
+    "JVR": []*regexp.Regexp{
+        regexp.MustCompile("(?i)^JVR.*$"),
+    },
+    "COSPURI": []*regexp.Regexp{
+        regexp.MustCompile("(?i)^COSPURI.*$"),
+    },
+    "MD": []*regexp.Regexp{
+        regexp.MustCompile("(?i)^MADOU[-|_].*$"),
+    },
+}
+"""
+function = """
+func(ctx context.Context, number string) (string, bool, error) {
+    for cat, ruleList := range cats {
+        for _, rule := range ruleList {
+            if rule.MatchString(number) {
+                return cat, true, nil
             }
-            return "", false, nil
         }
-import:
-  - strings    
-  - regexp  
+    }
+    return "", false, nil
+}
+"""
+ 
 `
 
 func TestLiveNumberCategorier(t *testing.T) {
