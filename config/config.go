@@ -16,6 +16,7 @@ type CategoryPlugin struct {
 type Dependency struct {
 	Link    string `json:"link"`
 	RelPath string `json:"rel_path"`
+	Refresh bool   `json:"refresh"`
 }
 
 type ProxyConfig struct {
@@ -101,15 +102,10 @@ type SwitchConfig struct {
 	EnableSearcherCheck      bool `json:"enable_searcher_check"`       //测试场景使用, 检查插件的目标域名是否还能访问
 }
 
-type LinkConfig struct {
-	Type string `json:"type"`
-	Link string `json:"link"`
-}
-
 type RuleConfig struct {
-	NumberRewriter       LinkConfig `json:"number_rewriter"`
-	NumberCategorier     LinkConfig `json:"number_categorier"`
-	NumberUncensorTester LinkConfig `json:"number_uncensor_tester"`
+	NumberRewriterConfig       string `json:"number_rewriter"`
+	NumberCategorierConfig     string `json:"number_categorier"`
+	NumberUncensorTesterConfig string `json:"number_uncensor_tester"`
 }
 
 func defaultConfig() *Config {

@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -281,8 +281,9 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 	deps := make([]*dependency.Dependency, 0, len(cdeps))
 	for _, item := range cdeps {
 		deps = append(deps, &dependency.Dependency{
-			URL:    item.Link,
-			Target: filepath.Join(datadir, item.RelPath),
+			URL:     item.Link,
+			Target:  filepath.Join(datadir, item.RelPath),
+			Refresh: item.Refresh,
 		})
 	}
 	return dependency.Resolve(client.DefaultClient(), deps)
@@ -401,28 +402,13 @@ func setupTranslator(c *config.Config) error {
 	return nil
 }
 
-func readScriptStream(c *config.LinkConfig) ([]byte, error) {
-	if c.Type == "local" {
-		return os.ReadFile(c.Link)
-	}
-	ctx := context.Background()
-	return store.LoadData(ctx, c.Link, 24*time.Hour, func() ([]byte, error) {
-		logutil.GetLogger(ctx).Info("try read script link from remote...", zap.String("link", c.Link))
-		req, err := http.NewRequest(http.MethodGet, c.Link, nil)
-		if err != nil {
-			return nil, err
-		}
-		rsp, err := client.DefaultClient().Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer rsp.Body.Close()
-		return client.ReadHTTPData(rsp)
-	})
+func readScriptStream(datadir string, relpath string) ([]byte, error) {
+	loc := path.Join(datadir, relpath)
+	return os.ReadFile(loc)
 }
 
 func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
-	rule, err := readScriptStream(&c.RuleConfig.NumberUncensorTester)
+	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberUncensorTesterConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +422,7 @@ func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
 }
 
 func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
-	rule, err := readScriptStream(&c.RuleConfig.NumberCategorier)
+	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberCategorierConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +436,7 @@ func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
 }
 
 func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
-	rule, err := readScriptStream(&c.RuleConfig.NumberRewriter)
+	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberRewriterConfig)
 	if err != nil {
 		return nil, err
 	}
