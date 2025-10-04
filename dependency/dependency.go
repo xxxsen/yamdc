@@ -31,6 +31,6 @@ func handleFileDownload(ctx context.Context, m *downloadmgr.DownloadManager, dep
 	if err != nil {
 		return err
 	}
-	logutil.GetLogger(ctx).Debug("depency sync succ", zap.String("link", dep.URL), zap.String("target", dep.Target), zap.Bool("updated", updated))
+	logutil.GetLogger(ctx).Debug("dependency sync succ", zap.String("link", dep.URL), zap.String("target", dep.Target), zap.Bool("updated", updated))
 	return nil
 }
