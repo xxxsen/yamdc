@@ -403,8 +403,15 @@ func setupTranslator(c *config.Config) error {
 }
 
 func readScriptStream(datadir string, relpath string) ([]byte, error) {
-	loc := path.Join(datadir, relpath)
-	return os.ReadFile(loc)
+	paths := []string{relpath, path.Join(datadir, relpath)} //尝试从所有的路径种查找脚本, relpath可以被用户传入, 所以优先查找
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		return data, nil
+	}
+	return nil, fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
 }
 
 func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
