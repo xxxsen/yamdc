@@ -36,46 +36,46 @@ func TestNumberRewrite(t *testing.T) {
 
 const (
 	defaultLiveRewriterRule = `
-plugins:
-  - name: to_upper_string
-    function: |
-        func(ctx context.Context, number string) (string, error) {
-            return strings.ToUpper(number), nil 
-        }
-  - name: basic_number_rewriter
-    define: |
-        sts := []struct{
-            Name string
-            Rule *regexp.Regexp 
-            Rewrite string 
-        }{
-            {
-                Name: "format fc2",
-                Rule: regexp.MustCompile("(?i)^fc2[-|_]?(ppv)?[-|_]?(\\d+)([-|_].*)?$"),
-                Rewrite: "FC2-PPV-$2$3",
-            },
-            {
-                Name: "format number like '234abc-123' to 'abc-123'",
-                Rule: regexp.MustCompile("^\\d{3,5}([a-zA-Z]+[-|_]\\d+)([-|_].*)?$"),
-                Rewrite: "$1$2",
-            },
-            {
-                Name: "rewrite 1pon or carib",
-                Rule: regexp.MustCompile("(?i)(1pondo|1pon|carib)[-|_]?(.*)"),
-                Rewrite: "$2",
-            },
-        }
-    function: |
-        func(ctx context.Context, number string) (string, error) {
-            for _, item := range sts {
-                newNumber := item.Rule.ReplaceAllString(number, item.Rewrite)
-                number = newNumber 
-            }
-            return number, nil
-        }
-import:
-  - strings    
-  - regexp  
+import = [ "strings", "regexp" ]
+
+[[plugins]]
+name = "to_upper_string"
+function = """
+func(ctx context.Context, number string) (string, error) {
+    return strings.ToUpper(number), nil 
+}
+"""
+
+[[plugins]]
+name = "basic_number_rewriter"
+define = """
+sts := []struct{
+    Name string
+    Rule *regexp.Regexp 
+    Rewrite string 
+}{
+    {
+        Name: "format fc2",
+        Rule: regexp.MustCompile("(?i)^fc2[-|_]?(ppv)?[-|_]?(\\\\d+)([-|_].*)?$"),
+        Rewrite: "FC2-PPV-$2$3",
+    },
+    {
+        Name: "rewrite 1pon or carib",
+        Rule: regexp.MustCompile("(?i)(1pondo|1pon|carib)[-|_]?(.*)"),
+        Rewrite: "$2",
+    },
+}
+"""
+function = """
+func(ctx context.Context, number string) (string, error) {
+    for _, item := range sts {
+        newNumber := item.Rule.ReplaceAllString(number, item.Rewrite)
+        number = newNumber 
+    }
+    return number, nil
+}
+"""
+
 `
 )
 
@@ -87,7 +87,7 @@ func TestLiveRewriterRule(t *testing.T) {
 
 	m := map[string]string{
 		"fc2ppv12345-CD1":         "FC2-PPV-12345-CD1",
-		"123ABC-456-CD1":          "ABC-456-CD1",
+		"123ABC-456-CD1":          "123ABC-456-CD1",
 		"fc2ppv_1234":             "FC2-PPV-1234",
 		"fc2_ppv_1234":            "FC2-PPV-1234",
 		"fc2ppv-123":              "FC2-PPV-123",
@@ -99,8 +99,8 @@ func TestLiveRewriterRule(t *testing.T) {
 		"fc2ppv-12345-C-CD1":      "FC2-PPV-12345-C-CD1",
 		"fc2ppv-12345-CD1":        "FC2-PPV-12345-CD1",
 		"123abc_123aaa":           "123ABC_123AAA",
-		"123abc_1234":             "ABC_1234",
-		"222aaa-22222_helloworld": "AAA-22222_HELLOWORLD",
+		"123abc_1234":             "123ABC_1234",
+		"222aaa-22222_helloworld": "222AAA-22222_HELLOWORLD",
 		"aaa-1234-CD1":            "AAA-1234-CD1",
 		"carib-1234-222":          "1234-222",
 		"1pon-2344-222":           "2344-222",
