@@ -171,10 +171,26 @@ version: "3.1"
 {
     "scan_dir": "...",
     "ai_engine": {
-        "name": "gemini", //当前仅支持gemini, 不填则不开启
+        "name": "gemini",
         "args": {
             "model": "gemini-2.0-flash", //按需填写, 仅测试2.0-flash, 其他的没测试
             "key": "fill with your key here" //从这里获取 https://aistudio.google.com/app/apikey
+        }
+    }
+    //other config...
+}
+```
+
+或者使用本地的 Ollama 服务：
+
+```json
+{
+    "scan_dir": "...",
+    "ai_engine": {
+        "name": "ollama",
+        "args": {
+            "host": "http://127.0.0.1:11434", //Ollama API 地址，默认即可
+            "model": "llama3.2:latest"        //替换为本地已有的模型名称
         }
     }
     //other config...

@@ -13,6 +13,7 @@ import (
 	"time"
 	"yamdc/aiengine"
 	_ "yamdc/aiengine/gemini"
+	_ "yamdc/aiengine/ollama"
 	"yamdc/capture"
 	"yamdc/capture/ruleapi"
 	"yamdc/client"
