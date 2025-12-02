@@ -45,42 +45,6 @@ services:
 
 配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/scrape/savedir`下。
 
-**NOTE: 程序依赖go-face进行人脸识别, 以用于识别图片中的人脸并进行截图, 这个库需要有对应的模型文件, 程序启动的时候, 会检测模型文件是否存在, 如果不存在, 则会自动下载模型文件到`数据目录`下**
-
-### 手动编译
-
-程序编译需要go环境, 版本需要>=**1.21**, 请自行安装。
-
-#### 依赖相关
-
-linux下编译, 需要安装相关的依赖, 可以使用下面的命令进行安装
-
-```shell
-# Ubuntu
-sudo apt-get install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg-turbo8-dev gfortran
-# Debian
-sudo apt-get install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg62-turbo-dev gfortran
-# 其他
-# 我也不知道其他发行版对应的依赖名是啥...
-```
-
-**NOTE: 如果不是编译linux下的可执行文件则可以跳过安装依赖部分, 当然, 缺少依赖会导致后面的人脸识别特性无法开启。**
-
-#### 编译&运行
-
-```shell
-CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -a -tags netgo -ldflags '-w' -o yamdc ./
-```
-
-编译完成后, 会在目录下生成对应的可执行文件(windows用户需要重命名下, 给可执行文件增加`.exe` 后缀。)
-
-之后执行下面命令运行即可。
-
-```shell
-# --config指定配置文件位置, 详细配置参考后续章节。
-./yamdc --config=./config.json
-```
-
 ## 基础配置
 
 ```json
