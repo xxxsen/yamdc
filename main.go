@@ -21,7 +21,6 @@ import (
 	"yamdc/dependency"
 	"yamdc/dynscript"
 	"yamdc/face"
-	"yamdc/face/goface"
 	"yamdc/face/pigo"
 	"yamdc/ffmpeg"
 	"yamdc/flarerr"
@@ -293,11 +292,6 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 func setupFace(c *config.Config, models string) error {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
-	if c.SwitchConfig.EnableGoFaceRecognizer {
-		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
-			return goface.NewGoFace(models)
-		})
-	}
 	if c.SwitchConfig.EnablePigoFaceRecognizer {
 		faceRecCreator = append(faceRecCreator, func() (face.IFaceRec, error) {
 			return pigo.NewPigo(models)
@@ -461,9 +455,6 @@ func rewriteEnvFlagToConfig(c *config.SwitchConfig) {
 	//配置项均移到配置文件中, 不再使用环境变量
 	if os.Getenv("ENABLE_SEARCH_META_CACHE") == "false" {
 		c.EnableSearchMetaCache = false
-	}
-	if os.Getenv("ENABLE_GO_FACE_RECOGNIZER") == "false" {
-		c.EnableGoFaceRecognizer = false
 	}
 	if os.Getenv("ENABLE_PIGO_FACE_RECOGNIZER") == "false" {
 		c.EnablePigoFaceRecognizer = false
