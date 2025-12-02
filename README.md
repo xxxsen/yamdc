@@ -165,13 +165,13 @@ version: "3.1"
 - 标签提取: 使用当前已有的标题、简介额外提取5个标签
 - 文本翻译: 用于替换谷歌翻译
 
-开启的方式如下
+开启的方式如下:
 
 ```json
 {
     "scan_dir": "...",
     "ai_engine": {
-        "name": "gemini",
+        "name": "gemini", 
         "args": {
             "model": "gemini-2.0-flash", //按需填写, 仅测试2.0-flash, 其他的没测试
             "key": "fill with your key here" //从这里获取 https://aistudio.google.com/app/apikey
@@ -189,8 +189,8 @@ version: "3.1"
     "ai_engine": {
         "name": "ollama",
         "args": {
-            "host": "http://127.0.0.1:11434", //Ollama API 地址，默认即可
-            "model": "llama3.2:latest"        //替换为本地已有的模型名称
+            "host": "https://ollama.abc.com", //Ollama API 地址，替换成你自建的地址
+            "model": "gemma2:2b"        //替换为本地已有的模型名称
         }
     }
     //other config...
