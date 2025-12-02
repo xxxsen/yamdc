@@ -45,42 +45,6 @@ services:
 
 配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/scrape/savedir`下。
 
-**NOTE: 程序依赖go-face进行人脸识别, 以用于识别图片中的人脸并进行截图, 这个库需要有对应的模型文件, 程序启动的时候, 会检测模型文件是否存在, 如果不存在, 则会自动下载模型文件到`数据目录`下**
-
-### 手动编译
-
-程序编译需要go环境, 版本需要>=**1.21**, 请自行安装。
-
-#### 依赖相关
-
-linux下编译, 需要安装相关的依赖, 可以使用下面的命令进行安装
-
-```shell
-# Ubuntu
-sudo apt-get install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg-turbo8-dev gfortran
-# Debian
-sudo apt-get install libdlib-dev libblas-dev libatlas-base-dev liblapack-dev libjpeg62-turbo-dev gfortran
-# 其他
-# 我也不知道其他发行版对应的依赖名是啥...
-```
-
-**NOTE: 如果不是编译linux下的可执行文件则可以跳过安装依赖部分, 当然, 缺少依赖会导致后面的人脸识别特性无法开启。**
-
-#### 编译&运行
-
-```shell
-CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -a -tags netgo -ldflags '-w' -o yamdc ./
-```
-
-编译完成后, 会在目录下生成对应的可执行文件(windows用户需要重命名下, 给可执行文件增加`.exe` 后缀。)
-
-之后执行下面命令运行即可。
-
-```shell
-# --config指定配置文件位置, 详细配置参考后续章节。
-./yamdc --config=./config.json
-```
-
 ## 基础配置
 
 ```json
@@ -165,16 +129,32 @@ version: "3.1"
 - 标签提取: 使用当前已有的标题、简介额外提取5个标签
 - 文本翻译: 用于替换谷歌翻译
 
-开启的方式如下
+开启的方式如下:
 
 ```json
 {
     "scan_dir": "...",
     "ai_engine": {
-        "name": "gemini", //当前仅支持gemini, 不填则不开启
+        "name": "gemini", 
         "args": {
             "model": "gemini-2.0-flash", //按需填写, 仅测试2.0-flash, 其他的没测试
             "key": "fill with your key here" //从这里获取 https://aistudio.google.com/app/apikey
+        }
+    }
+    //other config...
+}
+```
+
+或者使用本地的 Ollama 服务：
+
+```json
+{
+    "scan_dir": "...",
+    "ai_engine": {
+        "name": "ollama",
+        "args": {
+            "host": "https://ollama.abc.com", //Ollama API 地址，替换成你自建的地址
+            "model": "gemma2:2b"        //替换为本地已有的模型名称
         }
     }
     //other config...

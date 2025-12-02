@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultYesJav100QueryLinkTplt = "https://www.yesjav100.com/search.asp?q=%s&"
+	defaultYesJav100QueryLinkTplt = "https://www.yesjav.com/search.asp?q=%s&"
 )
 
 var (
