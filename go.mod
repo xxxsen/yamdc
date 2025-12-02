@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	github.com/Conight/go-googletrans v0.2.4
-	github.com/Kagami/go-face v0.0.0-20210630145111-0c14797b4d0e
 	github.com/antchfx/htmlquery v1.3.1
 	github.com/esimov/pigo v1.4.6
 	github.com/glebarez/go-sqlite v1.22.0
@@ -51,7 +50,7 @@ require (
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sync v0.18.0
-	golang.org/x/sys v0.38.0
+	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -60,5 +59,3 @@ require (
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/sqlite v1.28.0 // indirect
 )
-
-replace github.com/Kagami/go-face => github.com/xxxsen/go-face v0.0.2
