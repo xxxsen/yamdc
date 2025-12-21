@@ -73,6 +73,11 @@ type FlareSolverrConfig struct {
 	Domains map[string]bool `json:"domains"` //需要使用flaresolverr的域名列表
 }
 
+type TagMappingConfig struct {
+	Enable   bool   `json:"enable"`    //是否启用标签映射功能
+	FilePath string `json:"file_path"` //配置文件路径
+}
+
 type Config struct {
 	ScanDir            string                   `json:"scan_dir"`
 	SaveDir            string                   `json:"save_dir"`
@@ -92,6 +97,7 @@ type Config struct {
 	RuleConfig         RuleConfig               `json:"rule_config"`
 	SwitchConfig       SwitchConfig             `json:"switch_config"`
 	FlareSolverrConfig FlareSolverrConfig       `json:"flare_solverr_config"`
+	TagMappingConfig   TagMappingConfig         `json:"tag_mapping_config"`
 }
 
 type SwitchConfig struct {
@@ -142,6 +148,10 @@ func defaultConfig() *Config {
 			Domains: map[string]bool{
 				"www.javlibrary.com": true,
 			},
+		},
+		TagMappingConfig: TagMappingConfig{
+			Enable:   false, //默认不启用, 毕竟还要额外配置
+			FilePath: "",    // 如果启用,需要指定配置文件路径
 		},
 	}
 }
