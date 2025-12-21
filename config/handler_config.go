@@ -12,4 +12,5 @@ var sysHandler = []string{
 	"number_title",
 	"ai_tagger",
 	"tag_padder",
+	"tag_mapper",
 }

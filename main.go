@@ -31,6 +31,7 @@ import (
 	"yamdc/translator"
 	"yamdc/translator/ai"
 	"yamdc/translator/google"
+	"yamdc/utils"
 
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
@@ -104,7 +105,7 @@ func main() {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
 	tryTestSearcher(c, ss, catSs)
-	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
+	ps, err := buildProcessor(c, c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
 	}
@@ -239,7 +240,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	return rs, nil
 }
 
-func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(c *config.Config, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
@@ -253,7 +254,7 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, struct{}{})
+		h, err := buildHandler(c, name, struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
@@ -262,6 +263,22 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 		rs = append(rs, p)
 	}
 	return rs, nil
+}
+func buildHandler(c *config.Config, name string, args any) (handler.IHandler, error) {
+
+	switch name {
+	case handler.HTagMapper:
+		tagMapper, err := utils.NewTagMapper(c.TagMappingConfig.Enable, c.TagMappingConfig.FilePath)
+		if err != nil {
+			return nil, fmt.Errorf("create tag mapper failed, err:%w", err)
+		}
+		// mapperUtils
+		return handler.CreateHandler(name, tagMapper)
+
+	default:
+		return handler.CreateHandler(name, args)
+	}
+
 }
 
 func precheckDir(c *config.Config) error {
