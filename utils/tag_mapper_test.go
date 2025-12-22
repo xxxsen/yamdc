@@ -389,3 +389,206 @@ func TestProcessTags_MultipleRootTags(t *testing.T) {
 	assert.Contains(t, output, "制服")
 	assert.Contains(t, output, "JK制服")
 }
+
+// TestValidateUniqueness_DuplicateTags 测试标签重复的情况
+func TestValidateUniqueness_DuplicateTags(t *testing.T) {
+	// 同级标签重复
+	config := []*TagNode{
+		{Name: "Tag1"},
+		{Name: "Tag1"}, // 重复
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "标签 'Tag1' 重复出现")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_DuplicateTagsInDifferentLevels 测试不同层级标签重复
+func TestValidateUniqueness_DuplicateTagsInDifferentLevels(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name: "Parent",
+			Children: []*TagNode{
+				{Name: "Child"},
+			},
+		},
+		{Name: "Child"}, // 与子标签重复
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "标签 'Child' 重复出现")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_DuplicateAlias 测试别名重复
+func TestValidateUniqueness_DuplicateAlias(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name:  "Tag1",
+			Alias: []string{"alias1", "alias2"},
+		},
+		{
+			Name:  "Tag2",
+			Alias: []string{"alias1"}, // alias1重复
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "别名 'alias1' 重复出现")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_AliasConflictWithTagName 测试别名与标签名冲突
+func TestValidateUniqueness_AliasConflictWithTagName(t *testing.T) {
+	config := []*TagNode{
+		{Name: "Tag1"},
+		{
+			Name:  "Tag2",
+			Alias: []string{"Tag1"}, // 别名与Tag1标签名冲突
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "别名 'Tag1' 与标签名冲突")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_AliasConflictWithChildTagName 测试别名与子标签名冲突
+func TestValidateUniqueness_AliasConflictWithChildTagName(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name: "Parent",
+			Children: []*TagNode{
+				{Name: "Child"},
+			},
+		},
+		{
+			Name:  "Tag2",
+			Alias: []string{"Child"}, // 别名与子标签名冲突
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "别名 'Child' 与标签名冲突")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_AliasPointsToNonexistentTag 测试别名指向不存在的标签
+func TestValidateUniqueness_AliasPointsToNonexistentTag(t *testing.T) {
+	// 这种情况理论上不应该发生,因为别名是从标签节点定义的
+	// 但我们可以手动构造来测试校验逻辑
+	mapper := &TagMapper{
+		aliasToStandard: map[string]string{
+			"alias1": "NonexistentTag",
+		},
+		tagToParent: map[string]string{
+			"ExistingTag": "",
+		},
+		tagToPath: make(map[string][]string),
+	}
+
+	err := mapper.validateUniqueness()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "别名 'alias1' 映射到不存在的标签 'NonexistentTag'")
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_MultipleErrors 测试多个校验错误
+func TestValidateUniqueness_MultipleErrors(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name:  "Tag1",
+			Alias: []string{"alias1"},
+		},
+		{
+			Name:  "Tag1",             // 重复标签
+			Alias: []string{"alias1"}, // 重复别名
+		},
+		{
+			Name:  "Tag2",
+			Alias: []string{"Tag1"}, // 别名与标签名冲突
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	_, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	// 应该包含多个错误信息
+	assert.Contains(t, err.Error(), "标签 'Tag1' 重复出现")
+	assert.Contains(t, err.Error(), "别名 'alias1' 重复出现")
+	assert.Contains(t, err.Error(), "别名 'Tag1' 与标签名冲突")
+}
+
+// TestValidateUniqueness_ValidConfiguration 测试有效配置不报错
+func TestValidateUniqueness_ValidConfiguration(t *testing.T) {
+	config := getTestConfig()
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.NoError(t, err)
+	assert.NotNil(t, mapper)
+}
+
+// TestValidateUniqueness_ComplexValidConfiguration 测试复杂有效配置
+func TestValidateUniqueness_ComplexValidConfiguration(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name:  "Level1A",
+			Alias: []string{"L1A", "一级A"},
+			Children: []*TagNode{
+				{
+					Name:  "Level2A",
+					Alias: []string{"L2A"},
+					Children: []*TagNode{
+						{Name: "Level3A", Alias: []string{"L3A"}},
+					},
+				},
+				{
+					Name:  "Level2B",
+					Alias: []string{"L2B"},
+				},
+			},
+		},
+		{
+			Name:  "Level1B",
+			Alias: []string{"L1B", "一级B"},
+			Children: []*TagNode{
+				{Name: "Level2C", Alias: []string{"L2C"}},
+			},
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.NoError(t, err)
+	assert.NotNil(t, mapper)
+}
+
+// TestRealTagsJsonFile 测试实际的 tags.json 文件
+func TestRealTagsJsonFile(t *testing.T) {
+	// 尝试加载项目中的 tags.json 文件
+	filePath := "../.vscode/tags.json"
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		t.Skip("tags.json file not found, skipping test")
+		return
+	}
+
+	mapper, err := NewTagMapper(filePath)
+	// 应该成功加载，没有重复或冲突错误
+	assert.NoError(t, err, "tags.json should not have any duplicate tags or aliases")
+	assert.NotNil(t, mapper)
+
+	// 测试一些简单的标签处理
+	if mapper != nil {
+		// 测试 Cosplay 标签
+		result := mapper.ProcessTags([]string{"cos"})
+		assert.Contains(t, result, "Cosplay")
+
+		// 测试多层级标签
+		result = mapper.ProcessTags([]string{"Genshin"})
+		assert.Contains(t, result, "Cosplay")
+		assert.Contains(t, result, "原神")
+	}
+}

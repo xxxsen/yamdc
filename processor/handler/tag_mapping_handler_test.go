@@ -20,19 +20,41 @@ func createTestTagMappingConfig(t *testing.T) string {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "tag-mappings.json")
 
-	config := map[string]interface{}{
-		"cosplay": map[string]interface{}{
-			"_alias": []interface{}{"cos", "角色扮演"},
-			"原神": map[string]interface{}{
-				"_alias": []interface{}{"Genshin", "⚪神"},
-				"芭芭拉·佩奇": []interface{}{"芭芭拉", "Barbara Pegg", "Barbara"},
-				"莫娜":     []interface{}{"Mona"},
+	// 使用新格式(数组)
+	config := []*utils.TagNode{
+		{
+			Name:  "cosplay",
+			Alias: []string{"cos", "角色扮演"},
+			Children: []*utils.TagNode{
+				{
+					Name:  "原神",
+					Alias: []string{"Genshin", "⚪神"},
+					Children: []*utils.TagNode{
+						{
+							Name:  "芭芭拉·佩奇",
+							Alias: []string{"芭芭拉", "Barbara Pegg", "Barbara"},
+						},
+						{
+							Name:  "莫娜",
+							Alias: []string{"Mona"},
+						},
+					},
+				},
 			},
 		},
-		"制服": map[string]interface{}{
-			"_alias": []interface{}{"uniform", "유니폼"},
-			"JK制服":   []interface{}{"jk", "水手服"},
-			"护士服":    []interface{}{"nurse"},
+		{
+			Name:  "制服",
+			Alias: []string{"uniform", "유니폼"},
+			Children: []*utils.TagNode{
+				{
+					Name:  "JK制服",
+					Alias: []string{"jk", "水手服"},
+				},
+				{
+					Name:  "护士服",
+					Alias: []string{"nurse"},
+				},
+			},
 		},
 	}
 
@@ -93,10 +115,9 @@ func TestTagMappingHandler_EmptyTags(t *testing.T) {
 
 func TestTagMappingHandler_AliasMapping(t *testing.T) {
 	filePath := createTestTagMappingConfig(t)
-	mapperUtil, err := utils.NewTagMapper(true, filePath)
-	require.NoError(t, err)
-
-	handler, err := createTagMappingHandler(mapperUtil)
+	handler, err := createTagMappingHandler(map[string]interface{}{
+		"file_path": filePath,
+	})
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -185,7 +206,7 @@ func TestTagMappingHandler_FileNotFound(t *testing.T) {
 
 func TestTagMappingHandler_NoConfig(t *testing.T) {
 	// 测试没有配置参数时的行为
-	handler, err := createTagMappingHandler("invalid_args")
+	handler, err := createTagMappingHandler(map[string]interface{}{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")

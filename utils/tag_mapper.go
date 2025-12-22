@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	kDupAliasKey  = "__DUPLICATE__ALIAS__"
+	kDupParentKey = "__DUPLICATE__PARENT__"
+)
+
 // TagNode 标签节点结构
 type TagNode struct {
 	Name     string     `json:"name"`
@@ -65,22 +70,42 @@ func NewTagMapper(filePath string) (*TagMapper, error) {
 	return mapper, nil
 }
 
-// parseTagNodes 解析新格式的标签树（数组形式）
+// parseTagNodes 解析新格式的标签树(数组形式)
 func (tm *TagMapper) parseTagNodes(nodes []*TagNode, parent string) {
 	for _, node := range nodes {
 		if node.Name == "" {
 			continue
 		}
 
-		// 记录父子关系
-		if parent != "" {
-			tm.tagToParent[node.Name] = parent
+		// 检查标签是否已存在(重复检测)
+		if existingParent, exists := tm.tagToParent[node.Name]; exists {
+			// 标签已存在,记录到临时错误信息中
+			// 我们在这里不直接返回错误,而是继续解析,最后在validateUniqueness中统一报告
+			// 为了检测重复,我们需要一个专门的重复标记
+			// 使用特殊的parent值来标记重复
+			if existingParent != kDupParentKey {
+				tm.tagToParent[node.Name] = kDupParentKey
+			}
+		} else {
+			// 记录父子关系
+			if parent != "" {
+				tm.tagToParent[node.Name] = parent
+			} else {
+				// 根节点也需要记录,用于唯一性校验
+				tm.tagToParent[node.Name] = "" // 根节点的parent为空
+			}
 		}
 
 		// 记录别名映射
 		for _, alias := range node.Alias {
 			if alias != "" {
-				tm.aliasToStandard[alias] = node.Name
+				// 检查别名是否已存在
+				if _, exists := tm.aliasToStandard[alias]; exists {
+					// 别名重复,标记为特殊值
+					tm.aliasToStandard[alias] = kDupAliasKey
+				} else {
+					tm.aliasToStandard[alias] = node.Name
+				}
 			}
 		}
 
@@ -91,19 +116,11 @@ func (tm *TagMapper) parseTagNodes(nodes []*TagNode, parent string) {
 	}
 }
 
-// buildPathCache 构建路径缓存，为每个标签计算完整路径
+// buildPathCache 构建路径缓存,为每个标签计算完整路径
 func (tm *TagMapper) buildPathCache() {
 	// 为每个标签构建从根到该标签的完整路径
 	for tag := range tm.tagToParent {
 		tm.getOrBuildPath(tag)
-	}
-
-	// 为没有父标签的根标签也建立路径（只包含自己）
-	for tag := range tm.aliasToStandard {
-		standardTag := tm.aliasToStandard[tag]
-		if _, exists := tm.tagToPath[standardTag]; !exists {
-			tm.tagToPath[standardTag] = []string{standardTag}
-		}
 	}
 }
 
@@ -112,6 +129,11 @@ func (tm *TagMapper) getOrBuildPath(tag string) []string {
 	// 如果已经缓存，直接返回
 	if path, exists := tm.tagToPath[tag]; exists {
 		return path
+	}
+
+	// 检查标签是否被标记为重复，如果是，返回nil
+	if parent, exists := tm.tagToParent[tag]; exists && parent == kDupParentKey {
+		return nil
 	}
 
 	// 构建路径
@@ -123,7 +145,11 @@ func (tm *TagMapper) getOrBuildPath(tag string) []string {
 		path = append([]string{current}, path...) // 在前面插入
 
 		parent, hasParent := tm.tagToParent[current]
-		if !hasParent {
+		if !hasParent || parent == "" {
+			break
+		}
+		// 如果父标签被标记为重复，停止追溯
+		if parent == kDupParentKey {
 			break
 		}
 		current = parent
@@ -153,11 +179,20 @@ func (tm *TagMapper) ProcessTags(tags []string) []string {
 		// 查找是否是别名
 		standardTag := tag
 		if mapped, isAlias := tm.aliasToStandard[tag]; isAlias {
+			// 跳过被标记为重复的别名
+			if mapped == kDupAliasKey {
+				continue
+			}
 			standardTag = mapped
 		}
 
+		// 跳过被标记为重复的标签
+		if parent, exists := tm.tagToParent[standardTag]; exists && parent == kDupParentKey {
+			continue
+		}
+
 		// 查找是否有完整路径
-		if path, hasPath := tm.tagToPath[standardTag]; hasPath {
+		if path, hasPath := tm.tagToPath[standardTag]; hasPath && len(path) > 0 {
 			// 添加完整路径中的所有标签
 			for _, t := range path {
 				resultSet[t] = true
@@ -179,39 +214,38 @@ func (tm *TagMapper) ProcessTags(tags []string) []string {
 
 // validateUniqueness 校验标签和别名的唯一性
 func (tm *TagMapper) validateUniqueness() error {
-	tagSet := make(map[string]bool)
-	aliasSet := make(map[string]bool)
 	var errors []string
 
-	// 校验所有标准标签
-	for tag := range tm.tagToPath {
-		if tagSet[tag] {
+	// 1. 检查标签重复(通过特殊标记)
+	for tag, parent := range tm.tagToParent {
+		if parent == kDupParentKey {
 			errors = append(errors, fmt.Sprintf("标签 '%s' 重复出现", tag))
 		}
-		tagSet[tag] = true
 	}
 
-	// 校验所有别名
+	// 2. 检查别名重复和冲突
 	for alias, tag := range tm.aliasToStandard {
 		// 检查别名是否重复
-		if aliasSet[alias] {
+		if tag == kDupAliasKey {
 			errors = append(errors, fmt.Sprintf("别名 '%s' 重复出现", alias))
+			continue
 		}
-		aliasSet[alias] = true
 
-		// 检查别名是否与标签名冲突
-		if tagSet[alias] {
+		// 检查别名是否与任何标签名冲突
+		if _, isTag := tm.tagToParent[alias]; isTag {
 			errors = append(errors, fmt.Sprintf("别名 '%s' 与标签名冲突", alias))
 		}
 
-		// 检查映射的标签是否存在
-		if !tagSet[tag] {
-			// 这可能是根级标签，添加到tagSet
-			tagSet[tag] = true
+		// 检查别名映射的标签是否存在
+		if mappedParent, exists := tm.tagToParent[tag]; !exists {
+			errors = append(errors, fmt.Sprintf("别名 '%s' 映射到不存在的标签 '%s'", alias, tag))
+		} else if mappedParent == kDupParentKey {
+			// 别名指向的标签本身是重复的,这个错误已经在标签重复检查中报告了
+			// 不需要重复报告
 		}
 	}
 
-	// 如果有错误，返回所有错误信息
+	// 如果有错误,返回所有错误信息
 	if len(errors) > 0 {
 		return fmt.Errorf("%s", strings.Join(errors, "; "))
 	}
