@@ -33,8 +33,8 @@ func (p *manyvids) OnGetHosts(ctx context.Context) []string {
 func (p *manyvids) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
 	//番号格式
 	//example: MANYVIDS-123456
-	if strings.HasPrefix(number, "MANYVIDS") {
-		return true, nil
+	if !strings.HasPrefix(number, "MANYVIDS") {
+		return false, nil
 	}
 	return true, nil
 }
