@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	utils2 "github.com/xxxsen/common/utils"
+	"os"
 	"yamdc/model"
 	"yamdc/utils"
 
@@ -53,19 +54,28 @@ func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) e
 // createTagMappingHandler 创建标签映射处理器
 func createTagMappingHandler(args interface{}) (IHandler, error) {
 	c := &tagMappingConfig{}
+
+	handler := &tagMappingHandler{}
+
 	if err := utils2.ConvStructJson(args, c); err != nil {
 		return nil, err
 	}
 	// 如果映射器未启用，直接返回
 	if c.FilePath == "" {
-		return nil, nil
+		return handler, nil
+	}
+	// 默认所有功能都是开启的(disable=false)
+	// 为了兼容旧版本配置文件, 如果配置文件不存在, 也不开启这个功能
+	if _, err := os.Stat(c.FilePath); os.IsNotExist(err) {
+		return handler, nil
 	}
 
 	mapper, err := utils.NewTagMapper(c.FilePath)
 	if err != nil {
 		return nil, err
 	}
-	return &tagMappingHandler{mapper: mapper}, nil
+	handler.mapper = mapper
+	return handler, nil
 }
 
 func init() {
