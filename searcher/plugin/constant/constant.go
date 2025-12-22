@@ -19,4 +19,5 @@ const (
 	SSJavLibrary = "javlibrary"
 	SSCospuri    = "cospuri"
 	SSMadouqu    = "madouqu"
+	SSManyVids   = "manyvids"
 )
