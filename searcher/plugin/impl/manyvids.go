@@ -39,7 +39,6 @@ func (p *manyvids) OnPrecheckRequest(ctx context.Context, number string) (bool, 
 	return true, nil
 }
 func (p *manyvids) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	//返回一个假地址, 仅包含hostname
 	num := strings.TrimPrefix(number, "MANYVIDS-") //移除默认的前缀
 	uri := fmt.Sprintf("%s/Video/%s", api.MustSelectDomain(defaultManyVidsHosts), num)
 	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
