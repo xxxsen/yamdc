@@ -7,25 +7,26 @@ import (
 	"strings"
 )
 
+// TagNode 标签节点结构
+type TagNode struct {
+	Name     string     `json:"name"`
+	Alias    []string   `json:"alias"`
+	Children []*TagNode `json:"children"`
+}
+
 // TagMapper 标签映射器，用于处理标签的别名映射和父级补全
 type TagMapper struct {
-	enabled         bool
 	aliasToStandard map[string]string   // 别名到标准标签的映射
 	tagToParent     map[string]string   // 标签到父标签的映射
 	tagToPath       map[string][]string // 标签到完整路径的缓存
 }
 
 // NewTagMapper 创建新的标签映射器
-func NewTagMapper(enable bool, filePath string) (*TagMapper, error) {
+func NewTagMapper(filePath string) (*TagMapper, error) {
 	mapper := &TagMapper{
-		enabled:         enable,
 		aliasToStandard: make(map[string]string),
 		tagToParent:     make(map[string]string),
 		tagToPath:       make(map[string][]string),
-	}
-
-	if !enable {
-		return mapper, nil
 	}
 
 	if filePath == "" {
@@ -43,62 +44,49 @@ func NewTagMapper(enable bool, filePath string) (*TagMapper, error) {
 		return mapper, fmt.Errorf("failed to read tag mapping file: %w", err)
 	}
 
-	// 解析 JSON
-	var config map[string]interface{}
-	if err := json.Unmarshal(data, &config); err != nil {
-		return mapper, fmt.Errorf("failed to parse tag mapping file: %w", err)
+	// 尝试解析新格式（数组）
+	var nodes []*TagNode
+	err = json.Unmarshal(data, &nodes)
+	if err != nil {
+		return mapper, fmt.Errorf("failed to parse tag mapping file as array: %w", err)
 	}
 
-	// 递归解析标签树
-	mapper.parseTagTree(config, "")
-
+	// 格式解析成功
+	mapper.parseTagNodes(nodes, "")
 	// 构建路径缓存
 	mapper.buildPathCache()
+
+	// 执行唯一性校验
+	err = mapper.validateUniqueness()
+	if err != nil {
+		return mapper, fmt.Errorf("tag uniqueness validation failed: %w", err)
+	}
 
 	return mapper, nil
 }
 
-// parseTagTree 递归解析标签树
-func (tm *TagMapper) parseTagTree(node map[string]interface{}, parent string) {
-	for key, value := range node {
-		// 跳过 _alias 字段，它在处理标准标签时会被处理
-		if key == "_alias" {
+// parseTagNodes 解析新格式的标签树（数组形式）
+func (tm *TagMapper) parseTagNodes(nodes []*TagNode, parent string) {
+	for _, node := range nodes {
+		if node.Name == "" {
 			continue
 		}
 
-		// 当前键是标准标签
-		standardTag := key
-
-		// 如果有父标签，记录父子关系
+		// 记录父子关系
 		if parent != "" {
-			tm.tagToParent[standardTag] = parent
+			tm.tagToParent[node.Name] = parent
 		}
 
-		// 处理值的不同类型
-		switch v := value.(type) {
-		case map[string]interface{}:
-			// 值是对象，可能包含 _alias 和子标签
-			// 先处理当前标签的别名
-			if aliases, ok := v["_alias"]; ok {
-				if aliasArray, ok := aliases.([]interface{}); ok {
-					for _, alias := range aliasArray {
-						if aliasStr, ok := alias.(string); ok {
-							tm.aliasToStandard[aliasStr] = standardTag
-						}
-					}
-				}
+		// 记录别名映射
+		for _, alias := range node.Alias {
+			if alias != "" {
+				tm.aliasToStandard[alias] = node.Name
 			}
+		}
 
-			// 递归处理子标签
-			tm.parseTagTree(v, standardTag)
-
-		case []interface{}:
-			// 值是数组，表示这是简化别名配置
-			for _, alias := range v {
-				if aliasStr, ok := alias.(string); ok {
-					tm.aliasToStandard[aliasStr] = standardTag
-				}
-			}
+		// 递归处理子节点
+		if len(node.Children) > 0 {
+			tm.parseTagNodes(node.Children, node.Name)
 		}
 	}
 }
@@ -148,10 +136,6 @@ func (tm *TagMapper) getOrBuildPath(tag string) []string {
 
 // ProcessTags 处理标签列表，执行别名映射和父级补全
 func (tm *TagMapper) ProcessTags(tags []string) []string {
-	if !tm.enabled {
-		return tags
-	}
-
 	if len(tags) == 0 {
 		return tags
 	}
@@ -193,7 +177,44 @@ func (tm *TagMapper) ProcessTags(tags []string) []string {
 	return result
 }
 
-// IsEnabled 返回映射器是否启用
-func (tm *TagMapper) IsEnabled() bool {
-	return tm.enabled
+// validateUniqueness 校验标签和别名的唯一性
+func (tm *TagMapper) validateUniqueness() error {
+	tagSet := make(map[string]bool)
+	aliasSet := make(map[string]bool)
+	var errors []string
+
+	// 校验所有标准标签
+	for tag := range tm.tagToPath {
+		if tagSet[tag] {
+			errors = append(errors, fmt.Sprintf("标签 '%s' 重复出现", tag))
+		}
+		tagSet[tag] = true
+	}
+
+	// 校验所有别名
+	for alias, tag := range tm.aliasToStandard {
+		// 检查别名是否重复
+		if aliasSet[alias] {
+			errors = append(errors, fmt.Sprintf("别名 '%s' 重复出现", alias))
+		}
+		aliasSet[alias] = true
+
+		// 检查别名是否与标签名冲突
+		if tagSet[alias] {
+			errors = append(errors, fmt.Sprintf("别名 '%s' 与标签名冲突", alias))
+		}
+
+		// 检查映射的标签是否存在
+		if !tagSet[tag] {
+			// 这可能是根级标签，添加到tagSet
+			tagSet[tag] = true
+		}
+	}
+
+	// 如果有错误，返回所有错误信息
+	if len(errors) > 0 {
+		return fmt.Errorf("%s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 // 创建测试用的配置文件
-func createTestConfigFile(t *testing.T, config map[string]interface{}) string {
+func createTestConfigFile(t *testing.T, config []*TagNode) string {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "tag-mappings.json")
 
@@ -26,33 +26,68 @@ func createTestConfigFile(t *testing.T, config map[string]interface{}) string {
 }
 
 // 测试配置文件示例
-func getTestConfig() map[string]interface{} {
-	return map[string]interface{}{
-		"cosplay": map[string]interface{}{
-			"_alias": []interface{}{"cos", "角色扮演"},
-			"原神": map[string]interface{}{
-				"_alias": []interface{}{"Genshin", "⚪神"},
-				"芭芭拉·佩奇": []interface{}{"芭芭拉", "Barbara Pegg", "Barbara"},
-				"莫娜":     []interface{}{"Mona"},
+func getTestConfig() []*TagNode {
+	return []*TagNode{
+		{
+			Name: "cosplay",
+			Alias: []string{
+				"cos", "角色扮演",
+			},
+			Children: []*TagNode{
+				{
+					Name: "原神",
+					Alias: []string{
+						"Genshin", "⚪神",
+					},
+					Children: []*TagNode{
+						{
+							Name: "芭芭拉·佩奇",
+							Alias: []string{
+								"芭芭拉", "Barbara Pegg", "Barbara",
+							},
+						},
+						{
+							Name: "莫娜",
+							Alias: []string{
+								"Mona",
+							},
+						},
+					},
+				},
 			},
 		},
-		"制服": map[string]interface{}{
-			"_alias": []interface{}{"uniform", "유니폼"},
-			"JK制服":   []interface{}{"jk", "水手服"},
-			"护士服":    []interface{}{"nurse"},
+		{
+			Name: "制服",
+			Alias: []string{
+				"uniform", "유니폼",
+			},
+			Children: []*TagNode{
+				{
+					Name: "JK制服",
+					Alias: []string{
+						"jk", "水手服",
+					},
+				},
+				{
+					Name: "护士服",
+					Alias: []string{
+						"nurse",
+					},
+				},
+			},
 		},
 	}
 }
 
-func TestNewTagMapper_Disabled(t *testing.T) {
-	mapper, err := NewTagMapper(false, "")
-	assert.NoError(t, err)
+func TestNewTagMapper_EmptyPath(t *testing.T) {
+	mapper, err := NewTagMapper("")
+	assert.Error(t, err)
 	assert.NotNil(t, mapper)
-	assert.False(t, mapper.IsEnabled())
+	assert.Contains(t, err.Error(), "empty")
 }
 
 func TestNewTagMapper_FileNotFound(t *testing.T) {
-	mapper, err := NewTagMapper(true, "/nonexistent/file.json")
+	mapper, err := NewTagMapper("/nonexistent/file.json")
 	assert.Error(t, err)
 	assert.NotNil(t, mapper)
 }
@@ -63,7 +98,7 @@ func TestNewTagMapper_InvalidJSON(t *testing.T) {
 	err := os.WriteFile(filePath, []byte("invalid json content"), 0644)
 	require.NoError(t, err)
 
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	assert.Error(t, err)
 	assert.NotNil(t, mapper)
 }
@@ -72,10 +107,9 @@ func TestNewTagMapper_Success(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
 
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	assert.NoError(t, err)
 	assert.NotNil(t, mapper)
-	assert.True(t, mapper.IsEnabled())
 
 	// 验证别名映射是否正确构建
 	assert.Equal(t, "cosplay", mapper.aliasToStandard["cos"])
@@ -91,19 +125,28 @@ func TestNewTagMapper_Success(t *testing.T) {
 	assert.Equal(t, "制服", mapper.tagToParent["JK制服"])
 }
 
-func TestProcessTags_Disabled(t *testing.T) {
-	mapper, err := NewTagMapper(false, "")
+func TestProcessTags_EmptyMapper(t *testing.T) {
+	// 创建一个空的mapper（没有配置文件）
+	// 模拟禁用状态
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "empty.json")
+	// 创建一个空配置
+	err := os.WriteFile(filePath, []byte("[]"), 0644)
+	require.NoError(t, err)
+
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	input := []string{"cos", "test"}
 	output := mapper.ProcessTags(input)
-	assert.Equal(t, input, output)
+	// 空配置应该直接返回原标签
+	assert.ElementsMatch(t, input, output)
 }
 
 func TestProcessTags_EmptyInput(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	output := mapper.ProcessTags([]string{})
@@ -113,7 +156,7 @@ func TestProcessTags_EmptyInput(t *testing.T) {
 func TestProcessTags_AliasMapping(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -156,7 +199,7 @@ func TestProcessTags_AliasMapping(t *testing.T) {
 func TestProcessTags_ParentCompletion(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -194,7 +237,7 @@ func TestProcessTags_ParentCompletion(t *testing.T) {
 func TestProcessTags_MultipleTagsWithDedup(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -232,7 +275,7 @@ func TestProcessTags_MultipleTagsWithDedup(t *testing.T) {
 func TestProcessTags_UnknownTag(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -265,7 +308,7 @@ func TestProcessTags_UnknownTag(t *testing.T) {
 func TestProcessTags_EmptyStringFiltering(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	input := []string{"cos", "", "  ", "Mona"}
@@ -279,16 +322,41 @@ func TestProcessTags_EmptyStringFiltering(t *testing.T) {
 
 func TestProcessTags_ComplexHierarchy(t *testing.T) {
 	// 测试更深层次的层级结构
-	config := map[string]interface{}{
-		"Level1": map[string]interface{}{
-			"_alias": []interface{}{"L1"},
-			"Level2": map[string]interface{}{
-				"_alias": []interface{}{"L2"},
-				"Level3": map[string]interface{}{
-					"_alias": []interface{}{"L3"},
-					"Level4": map[string]interface{}{
-						"_alias": []interface{}{"L4"},
-						"Level5": []interface{}{"L5"},
+	config := []*TagNode{
+		{
+			Name: "Level1",
+			Alias: []string{
+				"L1",
+			},
+			Children: []*TagNode{
+				{
+					Name: "Level2",
+					Alias: []string{
+						"L2",
+					},
+					Children: []*TagNode{
+						{
+							Name: "Level3",
+							Alias: []string{
+								"L3",
+							},
+							Children: []*TagNode{
+								{
+									Name: "Level4",
+									Alias: []string{
+										"L4",
+									},
+									Children: []*TagNode{
+										{
+											Name: "Level5",
+											Alias: []string{
+												"L5",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -296,7 +364,7 @@ func TestProcessTags_ComplexHierarchy(t *testing.T) {
 	}
 
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	// 测试最深层别名
@@ -310,7 +378,7 @@ func TestProcessTags_ComplexHierarchy(t *testing.T) {
 func TestProcessTags_MultipleRootTags(t *testing.T) {
 	config := getTestConfig()
 	filePath := createTestConfigFile(t, config)
-	mapper, err := NewTagMapper(true, filePath)
+	mapper, err := NewTagMapper(filePath)
 	require.NoError(t, err)
 
 	// 测试多个根级标签
