@@ -95,12 +95,13 @@ services:
   "data_dir": "...",
   "naming": "...",
 
-  // 添加这个配置
-  "tag_mapping_config":{
-    // 启用 标签自动映射和父级标签自动补全
-    "enable": true,
-    // 需要指定 标签映射文件的路径
-    "file_path": "/Users/admin/tags.json"
+  "handler_config": {
+    "tag_mapper": {
+      "disabled": false,
+      "args": {
+        "file_path": "/Users/lucas/work/code/go/yamdc/tags.json"
+      }
+    }
   }
 }
 ```
