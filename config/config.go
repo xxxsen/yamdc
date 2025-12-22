@@ -60,7 +60,8 @@ type AITranslateEngineConfig struct {
 }
 
 type HandlerConfig struct {
-	Disable bool `json:"disable"`
+	Disable bool        `json:"disable"`
+	Args    interface{} `json:"args"`
 }
 
 type PluginConfig struct {
