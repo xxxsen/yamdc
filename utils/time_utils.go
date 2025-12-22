@@ -26,3 +26,29 @@ func TimeStrToSecond(str string) (int64, error) {
 	}
 	return h*3600 + m*60 + s, nil
 }
+
+func HumanDurationToSecond(duration string) int64 {
+	// 解析时间字符串
+	var totalSeconds int64
+	var currentNum int64
+
+	for _, char := range duration {
+		switch char {
+		case 'h':
+			totalSeconds += currentNum * 3600
+			currentNum = 0
+		case 'm':
+			totalSeconds += currentNum * 60
+			currentNum = 0
+		case 's':
+			totalSeconds += currentNum
+			currentNum = 0
+		default:
+			// 数字字符
+			if char >= '0' && char <= '9' {
+				currentNum = currentNum*10 + int64(char-'0')
+			}
+		}
+	}
+	return totalSeconds
+}
