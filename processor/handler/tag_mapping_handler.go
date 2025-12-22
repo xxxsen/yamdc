@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	utils2 "github.com/xxxsen/common/utils"
 	"yamdc/model"
 	"yamdc/utils"
 
@@ -13,11 +14,15 @@ type tagMappingHandler struct {
 	mapper *utils.TagMapper
 }
 
+type tagMappingConfig struct {
+	FilePath string `json:"file_path"`
+}
+
 func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	logger := logutil.GetLogger(ctx)
 
 	// 如果映射器未启用，直接返回
-	if h.mapper == nil || !h.mapper.IsEnabled() {
+	if h.mapper == nil {
 		logger.Debug("tag mapper is disabled, skip tag mapping")
 		return nil
 	}
@@ -47,13 +52,19 @@ func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) e
 
 // createTagMappingHandler 创建标签映射处理器
 func createTagMappingHandler(args interface{}) (IHandler, error) {
-	mapper, ok := args.(*utils.TagMapper)
-	if !ok {
-		// 如果没有配置参数，创建禁用状态的处理器
-		disableMapper, _ := utils.NewTagMapper(false, "")
-		return &tagMappingHandler{mapper: disableMapper}, nil
+	c := &tagMappingConfig{}
+	if err := utils2.ConvStructJson(args, c); err != nil {
+		return nil, err
+	}
+	// 如果映射器未启用，直接返回
+	if c.FilePath == "" {
+		return nil, nil
 	}
 
+	mapper, err := utils.NewTagMapper(c.FilePath)
+	if err != nil {
+		return nil, err
+	}
 	return &tagMappingHandler{mapper: mapper}, nil
 }
 

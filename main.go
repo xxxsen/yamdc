@@ -4,6 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/xxxsen/common/logger"
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"path"
@@ -31,12 +35,6 @@ import (
 	"yamdc/translator"
 	"yamdc/translator/ai"
 	"yamdc/translator/google"
-	"yamdc/utils"
-
-	"github.com/xxxsen/common/logger"
-	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	"yamdc/searcher/plugin/factory"
 	_ "yamdc/searcher/plugin/register"
@@ -254,7 +252,7 @@ func buildProcessor(c *config.Config, hs []string, m map[string]config.HandlerCo
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := buildHandler(c, name, struct{}{})
+		h, err := handler.CreateHandler(name, handlec.Args)
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
@@ -263,22 +261,6 @@ func buildProcessor(c *config.Config, hs []string, m map[string]config.HandlerCo
 		rs = append(rs, p)
 	}
 	return rs, nil
-}
-func buildHandler(c *config.Config, name string, args any) (handler.IHandler, error) {
-
-	switch name {
-	case handler.HTagMapper:
-		tagMapper, err := utils.NewTagMapper(c.TagMappingConfig.Enable, c.TagMappingConfig.FilePath)
-		if err != nil {
-			return nil, fmt.Errorf("create tag mapper failed, err:%w", err)
-		}
-		// mapperUtils
-		return handler.CreateHandler(name, tagMapper)
-
-	default:
-		return handler.CreateHandler(name, args)
-	}
-
 }
 
 func precheckDir(c *config.Config) error {
