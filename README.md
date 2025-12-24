@@ -7,6 +7,24 @@ yamdc
 
 推荐使用docker运行。 在非linux环境下运行, 部分特性无法启用。
 
+### 本地构建与运行
+
+```bash
+make build
+```
+
+构建后可使用以下任意方式运行：
+
+```bash
+./yamdc run --config=./config.json
+```
+
+运行单元测试：
+
+```bash
+make test
+```
+
 ### docker运行
 
 使用docker运行, 对应的`docker-compose.yml`参考下面文件
@@ -82,7 +100,7 @@ services:
 |-UC, -U|-|添加破解水印|
 
 ## 其他配置
-### 映射 标签自动映射和父级标签自动补全
+### 标签自动映射和父级标签自动补全
 功能：当当检测到某个标签（或其别名）时，自动完成两项核心操作：
 1. 将别名标签映射为标准标签
 2. 自动向上递归添加所有父级标准标签
@@ -99,7 +117,7 @@ services:
     "tag_mapper": {
       "disabled": false,
       "args": {
-        "file_path": "/Users/lucas/work/code/go/yamdc/tags.json"
+        "file_path": "/path/to/your/tagconfig/tags.json"
       }
     }
   }
