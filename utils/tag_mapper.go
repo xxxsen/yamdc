@@ -35,25 +35,25 @@ func NewTagMapper(filePath string) (*TagMapper, error) {
 	}
 
 	if filePath == "" {
-		return mapper, fmt.Errorf("tag mapping file path is empty")
+		return nil, fmt.Errorf("tag mapping file path is empty")
 	}
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return mapper, fmt.Errorf("tag mapping file not found: %s", filePath)
+		return nil, fmt.Errorf("tag mapping file not found: %s", filePath)
 	}
 
 	// 读取配置文件
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return mapper, fmt.Errorf("failed to read tag mapping file: %w", err)
+		return nil, fmt.Errorf("failed to read tag mapping file: %w", err)
 	}
 
 	// 尝试解析新格式（数组）
 	var nodes []*TagNode
 	err = json.Unmarshal(data, &nodes)
 	if err != nil {
-		return mapper, fmt.Errorf("failed to parse tag mapping file as array: %w", err)
+		return nil, fmt.Errorf("failed to parse tag mapping file as array: %w", err)
 	}
 
 	// 格式解析成功
@@ -64,7 +64,7 @@ func NewTagMapper(filePath string) (*TagMapper, error) {
 	// 执行唯一性校验
 	err = mapper.validateUniqueness()
 	if err != nil {
-		return mapper, fmt.Errorf("tag uniqueness validation failed: %w", err)
+		return nil, fmt.Errorf("tag uniqueness validation failed: %w", err)
 	}
 
 	return mapper, nil
