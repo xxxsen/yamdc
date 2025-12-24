@@ -10,11 +10,11 @@ import (
 	"yamdc/internal/enum"
 	"yamdc/internal/model"
 	"yamdc/internal/searcher/decoder"
+	"yamdc/internal/searcher/parser"
 	"yamdc/internal/searcher/plugin/api"
 	"yamdc/internal/searcher/plugin/constant"
 	"yamdc/internal/searcher/plugin/factory"
 	"yamdc/internal/searcher/plugin/meta"
-	"yamdc/internal/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -38,17 +38,6 @@ func (p *caribpr) OnMakeHTTPRequest(ctx context.Context, number string) (*http.R
 	uri := fmt.Sprintf("%s/moviepages/%s/index.html", api.MustSelectDomain(defaultCaribprHostList), number)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	return req, err
-}
-
-func (p *caribpr) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		ts, err := utils.TimeStrToSecond(v)
-		if err != nil {
-			logutil.GetLogger(ctx).Error("parse duration failed", zap.String("duration", v), zap.Error(err))
-			return 0
-		}
-		return ts
-	}
 }
 
 func (p *caribpr) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
@@ -83,7 +72,7 @@ func (p *caribpr) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 		SampleImageListExpr: `//div[@class='movie-gallery']/div[@class='section is-wide']/div[2]/div[@class='grid-item']/div/a/@href`,
 	}
 	metadata, err := dec.DecodeHTML(data,
-		decoder.WithDurationParser(p.decodeDuration(ctx)),
+		decoder.WithDurationParser(parser.DefaultHHMMSSDurationParser(ctx)),
 		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx)),
 	)
 	if err != nil {
