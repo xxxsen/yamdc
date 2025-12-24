@@ -4,6 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/xxxsen/common/logger"
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"path"
@@ -31,11 +35,6 @@ import (
 	"yamdc/translator"
 	"yamdc/translator/ai"
 	"yamdc/translator/google"
-
-	"github.com/xxxsen/common/logger"
-	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	"yamdc/searcher/plugin/factory"
 	_ "yamdc/searcher/plugin/register"
@@ -104,7 +103,7 @@ func main() {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
 	tryTestSearcher(c, ss, catSs)
-	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
+	ps, err := buildProcessor(c, c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
 	}
@@ -239,7 +238,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	return rs, nil
 }
 
-func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(c *config.Config, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
@@ -253,7 +252,7 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, struct{}{})
+		h, err := handler.CreateHandler(name, handlec.Args)
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
