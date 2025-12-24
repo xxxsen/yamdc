@@ -9,7 +9,6 @@ import (
 	"testing"
 	"yamdc/internal/model"
 	"yamdc/internal/number"
-	"yamdc/internal/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,15 +20,15 @@ func createTestTagMappingConfig(t *testing.T) string {
 	filePath := filepath.Join(tmpDir, "tag-mappings.json")
 
 	// 使用新格式(数组)
-	config := []*utils.TagNode{
+	config := []*TagNode{
 		{
 			Name:  "cosplay",
 			Alias: []string{"cos", "角色扮演"},
-			Children: []*utils.TagNode{
+			Children: []*TagNode{
 				{
 					Name:  "原神",
 					Alias: []string{"Genshin", "⚪神"},
-					Children: []*utils.TagNode{
+					Children: []*TagNode{
 						{
 							Name:  "芭芭拉·佩奇",
 							Alias: []string{"芭芭拉", "Barbara Pegg", "Barbara"},
@@ -45,7 +44,7 @@ func createTestTagMappingConfig(t *testing.T) string {
 		{
 			Name:  "制服",
 			Alias: []string{"uniform", "유니폼"},
-			Children: []*utils.TagNode{
+			Children: []*TagNode{
 				{
 					Name:  "JK制服",
 					Alias: []string{"jk", "水手服"},

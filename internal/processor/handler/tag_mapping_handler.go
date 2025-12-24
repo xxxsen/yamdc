@@ -2,17 +2,16 @@ package handler
 
 import (
 	"context"
-	utils2 "github.com/xxxsen/common/utils"
 	"os"
 	"yamdc/internal/model"
-	"yamdc/internal/utils"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/common/utils"
 	"go.uber.org/zap"
 )
 
 type tagMappingHandler struct {
-	mapper *utils.TagMapper
+	mapper *TagMapper
 }
 
 type tagMappingConfig struct {
@@ -57,7 +56,7 @@ func createTagMappingHandler(args interface{}) (IHandler, error) {
 
 	handler := &tagMappingHandler{}
 
-	if err := utils2.ConvStructJson(args, c); err != nil {
+	if err := utils.ConvStructJson(args, c); err != nil {
 		return nil, err
 	}
 	// 如果映射器未启用，直接返回
@@ -70,7 +69,7 @@ func createTagMappingHandler(args interface{}) (IHandler, error) {
 		return handler, nil
 	}
 
-	mapper, err := utils.NewTagMapper(c.FilePath)
+	mapper, err := NewTagMapper(c.FilePath)
 	if err != nil {
 		return nil, err
 	}
