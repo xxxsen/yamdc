@@ -1,4 +1,4 @@
-package utils
+package capture
 
 import "bytes"
 
@@ -9,7 +9,7 @@ const (
 	defaultMaxItemCharactor = 200
 )
 
-func BuildAuthorsName(acts []string) string {
+func buildAuthorsName(acts []string) string {
 	if len(acts) == 0 {
 		return defaultNonActorName
 	}
@@ -29,7 +29,7 @@ func BuildAuthorsName(acts []string) string {
 	return buf.String()
 }
 
-func BuildTitle(title string) string {
+func buildTitle(title string) string {
 	if len(title) > defaultMaxItemCharactor {
 		return title[:defaultMaxItemCharactor]
 	}

@@ -1,4 +1,4 @@
-package utils
+package capture
 
 import (
 	"testing"
@@ -27,7 +27,7 @@ func TestName(t *testing.T) {
 		},
 	}
 	for _, item := range testList {
-		name := BuildAuthorsName(item.acts)
+		name := buildAuthorsName(item.acts)
 		assert.Equal(t, item.result, name)
 	}
 }

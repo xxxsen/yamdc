@@ -162,9 +162,9 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 		year = fmt.Sprintf("%d", ts.Year())
 		month = fmt.Sprintf("%d", ts.Month())
 	}
-	actor := utils.BuildAuthorsName(fc.Meta.Actors)
-	title := utils.BuildTitle(fc.Meta.Title)
-	titleTranslated := utils.BuildTitle(fc.Meta.TitleTranslated)
+	actor := buildAuthorsName(fc.Meta.Actors)
+	title := buildTitle(fc.Meta.Title)
+	titleTranslated := buildTitle(fc.Meta.TitleTranslated)
 	if len(titleTranslated) == 0 {
 		titleTranslated = title
 	}
