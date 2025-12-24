@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"yamdc/internal/searcher/decoder"
 	"yamdc/internal/searcher/plugin/api"
-	"yamdc/internal/searcher/utils"
+	"yamdc/internal/searcher/plugin/utils"
 )
 
 type XPathPair struct {

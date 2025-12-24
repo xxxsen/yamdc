@@ -13,7 +13,7 @@ import (
 	"yamdc/internal/searcher/plugin/constant"
 	"yamdc/internal/searcher/plugin/factory"
 	"yamdc/internal/searcher/plugin/meta"
-	"yamdc/internal/searcher/utils"
+	"yamdc/internal/searcher/plugin/utils"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
