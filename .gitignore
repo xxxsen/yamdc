@@ -2,7 +2,7 @@ test_data*
 __debug_bin*
 .vscode
 models/
-yamdc
+/yamdc
 .idea
 config.json
 .qoder
