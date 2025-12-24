@@ -9,7 +9,7 @@ import (
 	"time"
 	"yamdc/internal/enum"
 	"yamdc/internal/model"
-	"yamdc/internal/numberkit"
+	"yamdc/internal/searcher/plugin/numberkit"
 	"yamdc/internal/searcher/decoder"
 	"yamdc/internal/searcher/plugin/api"
 	"yamdc/internal/searcher/plugin/constant"

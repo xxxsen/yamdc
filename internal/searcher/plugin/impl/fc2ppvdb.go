@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"yamdc/internal/enum"
 	"yamdc/internal/model"
-	"yamdc/internal/numberkit"
+	"yamdc/internal/searcher/plugin/numberkit"
 	"yamdc/internal/searcher/decoder"
 	"yamdc/internal/searcher/parser"
 	"yamdc/internal/searcher/plugin/api"
