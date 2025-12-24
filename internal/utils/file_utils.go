@@ -4,18 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 )
-
-func GetExtName(f string, def string) string {
-	if v := filepath.Ext(f); v != "" {
-		return v
-	}
-	return def
-}
 
 func Move(srcFile, dstFile string) error {
 	err := os.Rename(srcFile, dstFile)
