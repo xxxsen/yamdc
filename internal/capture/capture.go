@@ -374,7 +374,7 @@ func (c *Capture) moveMovieByLink(_ *model.FileContext, src, dst string) error {
 }
 
 func (c *Capture) moveMovieDirect(_ *model.FileContext, src, dst string) error {
-	return utils.Move(src, dst)
+	return moveFile(src, dst)
 }
 
 func (c *Capture) exportNFOData(fc *model.FileContext) error {

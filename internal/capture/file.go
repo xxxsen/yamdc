@@ -1,4 +1,4 @@
-package utils
+package capture
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func Move(srcFile, dstFile string) error {
+func moveFile(srcFile, dstFile string) error {
 	err := os.Rename(srcFile, dstFile)
 	if err != nil && strings.Contains(err.Error(), "invalid cross-device link") {
 		return moveCrossDevice(srcFile, dstFile)
@@ -17,7 +17,7 @@ func Move(srcFile, dstFile string) error {
 	return err
 }
 
-func Copy(srcFile, dstFile string) error {
+func copyFile(srcFile, dstFile string) error {
 	fi, err := os.Stat(srcFile)
 	if err != nil {
 		return fmt.Errorf("stat source failed, err:%w", err)
@@ -45,7 +45,7 @@ func Copy(srcFile, dstFile string) error {
 func moveCrossDevice(srcFile, dstFile string) error {
 	dstFileTemp := dstFile + ".tempfile." + uuid.NewString()
 	defer os.Remove(dstFileTemp)
-	if err := Copy(srcFile, dstFileTemp); err != nil {
+	if err := copyFile(srcFile, dstFileTemp); err != nil {
 		return fmt.Errorf("copy file failed, err:%w", err)
 	}
 	if err := os.Rename(dstFileTemp, dstFile); err != nil {
