@@ -2,8 +2,8 @@ package capture
 
 import (
 	"time"
-	"yamdc/internal/model"
-	"yamdc/internal/nfo"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/nfo"
 )
 
 func formatTimeToDate(ts int64) string {

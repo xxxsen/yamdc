@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"time"
-	"yamdc/internal/hasher"
+	"github.com/xxxsen/yamdc/internal/hasher"
 )
 
 type DataRewriteFunc func(ctx context.Context, data []byte) ([]byte, error)

@@ -3,7 +3,7 @@ package factory
 import (
 	"fmt"
 	"sort"
-	"yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 type CreatorFunc func(args interface{}) (api.IPlugin, error)

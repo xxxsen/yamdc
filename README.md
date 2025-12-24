@@ -11,6 +11,21 @@ yamdc
 
 ### 本地构建与运行
 
+使用 go install 安装：
+
+```bash
+go install github.com/xxxsen/yamdc/cmd/yamdc@latest
+```
+
+安装后可直接运行：
+
+```bash
+yamdc --config=./config.json
+yamdc run --config=./config.json
+```
+
+或使用源码构建：
+
 ```bash
 make build
 ```
@@ -18,6 +33,7 @@ make build
 构建后可使用以下任意方式运行：
 
 ```bash
+./yamdc --config=./config.json
 ./yamdc run --config=./config.json
 ```
 

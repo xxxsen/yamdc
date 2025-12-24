@@ -2,8 +2,8 @@ package processor
 
 import (
 	"context"
-	"yamdc/internal/model"
-	"yamdc/internal/processor/handler"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/processor/handler"
 )
 
 var DefaultProcessor IProcessor = &defaultProcessor{}

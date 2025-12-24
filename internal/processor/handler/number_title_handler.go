@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"strings"
-	"yamdc/internal/model"
-	"yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 )
 
 type numberTitleHandler struct {

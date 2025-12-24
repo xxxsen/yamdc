@@ -3,7 +3,7 @@ package google
 import (
 	"context"
 	"testing"
-	"yamdc/internal/translator"
+	"github.com/xxxsen/yamdc/internal/translator"
 
 	"github.com/stretchr/testify/assert"
 )

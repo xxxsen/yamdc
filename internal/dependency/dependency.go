@@ -3,8 +3,8 @@ package dependency
 import (
 	"context"
 	"fmt"
-	"yamdc/internal/client"
-	"yamdc/internal/downloadmgr"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/downloadmgr"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

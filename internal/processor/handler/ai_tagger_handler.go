@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
-	"yamdc/internal/aiengine"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

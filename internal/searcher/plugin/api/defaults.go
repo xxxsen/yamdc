@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type DefaultPlugin struct {

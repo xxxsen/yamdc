@@ -3,7 +3,7 @@ package decoder
 import (
 	"bytes"
 	"strings"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html"

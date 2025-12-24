@@ -6,7 +6,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
-	"yamdc/internal/face"
+	"github.com/xxxsen/yamdc/internal/face"
 
 	pigo "github.com/esimov/pigo/core"
 )

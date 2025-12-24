@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"yamdc/internal/aiengine"
-	"yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/client"
 
 	"github.com/xxxsen/common/utils"
 )

@@ -8,14 +8,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"yamdc/internal/enum"
-	"yamdc/internal/model"
-	"yamdc/internal/searcher/decoder"
-	"yamdc/internal/searcher/parser"
-	"yamdc/internal/searcher/plugin/api"
-	"yamdc/internal/searcher/plugin/constant"
-	"yamdc/internal/searcher/plugin/factory"
-	"yamdc/internal/searcher/plugin/meta"
+	"github.com/xxxsen/yamdc/internal/enum"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/searcher/decoder"
+	"github.com/xxxsen/yamdc/internal/searcher/parser"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/constant"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 )
 
 var defaultManyVidsHosts = []string{

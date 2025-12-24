@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"yamdc/internal/client"
-	"yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 type MultiLinkContext struct {

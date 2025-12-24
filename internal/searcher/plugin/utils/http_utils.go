@@ -3,7 +3,7 @@ package utils
 import (
 	"bytes"
 	"net/http"
-	"yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/client"
 
 	"golang.org/x/net/html"
 )

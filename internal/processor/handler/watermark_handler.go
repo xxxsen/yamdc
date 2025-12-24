@@ -3,9 +3,9 @@ package handler
 import (
 	"context"
 	"fmt"
-	"yamdc/internal/image"
-	"yamdc/internal/model"
-	"yamdc/internal/store"
+	"github.com/xxxsen/yamdc/internal/image"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/store"
 
 	"github.com/xxxsen/common/logutil"
 )

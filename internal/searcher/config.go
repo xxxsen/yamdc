@@ -1,6 +1,6 @@
 package searcher
 
-import "yamdc/internal/client"
+import "github.com/xxxsen/yamdc/internal/client"
 
 type config struct {
 	cli         client.IHTTPClient

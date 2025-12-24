@@ -2,9 +2,9 @@ package capture
 
 import (
 	"fmt"
-	"yamdc/internal/capture/ruleapi"
-	"yamdc/internal/processor"
-	"yamdc/internal/searcher"
+	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
+	"github.com/xxxsen/yamdc/internal/processor"
+	"github.com/xxxsen/yamdc/internal/searcher"
 )
 
 const (

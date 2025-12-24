@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"yamdc/internal/client"
-	"yamdc/internal/model"
-	"yamdc/internal/resource"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/resource"
 
 	"github.com/antchfx/htmlquery"
 	"github.com/xxxsen/common/logutil"

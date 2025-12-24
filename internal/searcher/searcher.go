@@ -2,8 +2,8 @@ package searcher
 
 import (
 	"context"
-	"yamdc/internal/model"
-	"yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 )
 
 type ISearcher interface {

@@ -1,6 +1,6 @@
 package model
 
-import "yamdc/internal/number"
+import "github.com/xxxsen/yamdc/internal/number"
 
 type MovieMeta struct {
 	Number           string   `json:"number"`            //番号

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 	"unicode"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/samber/lo"
 )

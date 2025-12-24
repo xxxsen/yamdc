@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type HTTPInvoker func(ctx context.Context, req *http.Request) (*http.Response, error)

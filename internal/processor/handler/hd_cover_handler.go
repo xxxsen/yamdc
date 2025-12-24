@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"yamdc/internal/client"
-	"yamdc/internal/image"
-	"yamdc/internal/model"
-	"yamdc/internal/store"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/image"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 const (

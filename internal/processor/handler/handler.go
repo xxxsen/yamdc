@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type IHandler interface {

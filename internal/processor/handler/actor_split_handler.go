@@ -4,7 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 var (

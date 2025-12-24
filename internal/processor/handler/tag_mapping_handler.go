@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 	"os"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/common/utils"

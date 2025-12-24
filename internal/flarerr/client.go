@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/client"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

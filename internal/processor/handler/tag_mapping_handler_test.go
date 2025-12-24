@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
-	"yamdc/internal/model"
-	"yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

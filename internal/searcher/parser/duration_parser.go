@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"yamdc/internal/searcher/decoder"
+	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

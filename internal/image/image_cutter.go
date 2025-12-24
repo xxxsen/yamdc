@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"math"
-	"yamdc/internal/face"
+	"github.com/xxxsen/yamdc/internal/face"
 )
 
 const (

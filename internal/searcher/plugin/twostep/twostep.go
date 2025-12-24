@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"yamdc/internal/searcher/decoder"
-	"yamdc/internal/searcher/plugin/api"
-	"yamdc/internal/searcher/plugin/utils"
+	"github.com/xxxsen/yamdc/internal/searcher/decoder"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/utils"
 )
 
 type XPathPair struct {

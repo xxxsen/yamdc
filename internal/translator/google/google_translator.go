@@ -2,7 +2,7 @@ package google
 
 import (
 	"context"
-	"yamdc/internal/translator"
+	"github.com/xxxsen/yamdc/internal/translator"
 
 	gt "github.com/Conight/go-googletrans"
 )

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/client"
 )
 
 type DownloadManager struct {

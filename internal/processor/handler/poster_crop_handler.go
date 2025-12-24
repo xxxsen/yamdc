@@ -3,10 +3,10 @@ package handler
 import (
 	"context"
 	"fmt"
-	"yamdc/internal/face"
-	"yamdc/internal/image"
-	"yamdc/internal/model"
-	"yamdc/internal/store"
+	"github.com/xxxsen/yamdc/internal/face"
+	"github.com/xxxsen/yamdc/internal/image"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/store"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"yamdc/internal/aiengine"
-	"yamdc/internal/translator"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/translator"
 )
 
 const (

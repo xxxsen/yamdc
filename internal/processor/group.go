@@ -2,7 +2,7 @@ package processor
 
 import (
 	"context"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

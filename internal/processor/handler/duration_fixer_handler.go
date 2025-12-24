@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"yamdc/internal/ffmpeg"
-	"yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/ffmpeg"
+	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

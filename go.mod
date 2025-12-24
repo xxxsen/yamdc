@@ -1,4 +1,4 @@
-module yamdc
+module github.com/xxxsen/yamdc
 
 go 1.24.0
 

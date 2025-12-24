@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/client"
 )
 
 type httpClientMock struct {
