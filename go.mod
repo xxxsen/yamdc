@@ -1,4 +1,4 @@
-module yamdc
+module github.com/xxxsen/yamdc
 
 go 1.24.0
 
@@ -11,6 +11,7 @@ require (
 	github.com/imroc/req/v3 v3.57.0
 	github.com/klauspost/compress v1.18.2
 	github.com/samber/lo v1.50.0
+	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.11.1
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
 	github.com/xxxsen/common v0.1.28
