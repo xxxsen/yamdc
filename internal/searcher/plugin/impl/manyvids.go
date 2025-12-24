@@ -11,11 +11,11 @@ import (
 	"yamdc/internal/enum"
 	"yamdc/internal/model"
 	"yamdc/internal/searcher/decoder"
+	"yamdc/internal/searcher/parser"
 	"yamdc/internal/searcher/plugin/api"
 	"yamdc/internal/searcher/plugin/constant"
 	"yamdc/internal/searcher/plugin/factory"
 	"yamdc/internal/searcher/plugin/meta"
-	"yamdc/internal/utils"
 )
 
 var defaultManyVidsHosts = []string{
@@ -71,7 +71,7 @@ func (p *manyvids) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		// 21m30s
 		// 01h16m56s
-		return utils.HumanDurationToSecond(v)
+		return parser.HumanDurationToSecond(v)
 	}
 }
 func (p *manyvids) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
