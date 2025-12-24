@@ -1,4 +1,4 @@
-package utils
+package capture
 
 import (
 	"time"
@@ -6,19 +6,24 @@ import (
 	"yamdc/internal/nfo"
 )
 
-func ConvertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
+func formatTimeToDate(ts int64) string {
+	t := time.UnixMilli(ts)
+	return t.Format(time.DateOnly)
+}
+
+func convertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 	mv := &nfo.Movie{
 		ID:            m.Number,
 		Plot:          m.Plot,
-		Dateadded:     FormatTimeToDate(time.Now().UnixMilli()),
+		Dateadded:     formatTimeToDate(time.Now().UnixMilli()),
 		Title:         m.Title,
 		OriginalTitle: m.Title,
 		SortTitle:     m.Title,
 		Set:           m.Series,
 		Rating:        0,
-		Release:       FormatTimeToDate(m.ReleaseDate),
-		ReleaseDate:   FormatTimeToDate(m.ReleaseDate),
-		Premiered:     FormatTimeToDate(m.ReleaseDate),
+		Release:       formatTimeToDate(m.ReleaseDate),
+		ReleaseDate:   formatTimeToDate(m.ReleaseDate),
+		Premiered:     formatTimeToDate(m.ReleaseDate),
 		Runtime:       uint64(m.Duration) / 60, //分钟数
 		Year:          time.UnixMilli(m.ReleaseDate).Year(),
 		Tags:          m.Genres,

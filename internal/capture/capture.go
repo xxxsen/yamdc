@@ -298,7 +298,7 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 	logger.Info("process succ",
 		zap.String("number_id", fc.Number.GetNumberID()),
 		zap.String("scrape_source", fc.Meta.ExtInfo.ScrapeInfo.Source),
-		zap.String("release_date", utils.FormatTimeToDate(fc.Meta.ReleaseDate)),
+		zap.String("release_date", formatTimeToDate(fc.Meta.ReleaseDate)),
 		zap.Int("duration", int(fc.Meta.Duration)),
 		zap.Int("sample_img_cnt", len(fc.Meta.SampleImages)),
 		zap.Strings("genres", fc.Meta.Genres),
@@ -378,7 +378,7 @@ func (c *Capture) moveMovieDirect(_ *model.FileContext, src, dst string) error {
 }
 
 func (c *Capture) exportNFOData(fc *model.FileContext) error {
-	mov, err := utils.ConvertMetaToMovieNFO(fc.Meta)
+	mov, err := convertMetaToMovieNFO(fc.Meta)
 	if err != nil {
 		return fmt.Errorf("convert meta to movie nfo failed, err:%w", err)
 	}
