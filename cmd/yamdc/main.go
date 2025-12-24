@@ -3,11 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/pflag"
-	"github.com/xxxsen/common/logger"
-	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"path"
@@ -35,6 +30,12 @@ import (
 	"yamdc/internal/translator"
 	"yamdc/internal/translator/ai"
 	"yamdc/internal/translator/google"
+
+	"github.com/spf13/pflag"
+	"github.com/xxxsen/common/logger"
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"yamdc/internal/searcher/plugin/factory"
 	_ "yamdc/internal/searcher/plugin/register"
@@ -104,7 +105,7 @@ func main() {
 		logkit.Fatal("build cat searcher failed", zap.Error(err))
 	}
 	tryTestSearcher(c, ss, catSs)
-	ps, err := buildProcessor(c, c.Handlers, c.HandlerConfig)
+	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
 		logkit.Fatal("build processor failed", zap.Error(err))
 	}
@@ -254,7 +255,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	return rs, nil
 }
 
-func buildProcessor(c *config.Config, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
