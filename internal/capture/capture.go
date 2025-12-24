@@ -14,8 +14,8 @@ import (
 	"yamdc/internal/number"
 	"yamdc/internal/processor"
 	"yamdc/internal/store"
-	"yamdc/internal/utils"
 
+	"github.com/samber/lo"
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/common/replacer"
 	"github.com/xxxsen/common/trace"
@@ -53,7 +53,10 @@ func New(opts ...Option) (*Capture, error) {
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
 	}
-	return &Capture{c: c, extMap: utils.StringListToSet(utils.StringListToLower(append(c.ExtraMediaExtList, defaultMediaSuffix...)))}, nil
+	extMap := lo.SliceToMap(append(c.ExtraMediaExtList, defaultMediaSuffix...), func(in string) (string, struct{}) {
+		return strings.ToLower(in), struct{}{}
+	})
+	return &Capture{c: c, extMap: extMap}, nil
 }
 
 func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {

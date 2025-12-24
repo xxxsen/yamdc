@@ -5,7 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"yamdc/internal/model"
-	"yamdc/internal/utils"
+
+	"github.com/samber/lo"
 )
 
 type tagPadderHandler struct{}
@@ -50,7 +51,7 @@ func (h *tagPadderHandler) Handle(ctx context.Context, fc *model.FileContext) er
 	if tag, ok := h.generateNumberPrefixTag(fc); ok {
 		h.rewriteOrAppendTag(fc.Meta, tag)
 	}
-	fc.Meta.Genres = utils.DedupStringList(fc.Meta.Genres)
+	fc.Meta.Genres = lo.Uniq(fc.Meta.Genres)
 	return nil
 }
 
