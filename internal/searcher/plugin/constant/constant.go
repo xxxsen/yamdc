@@ -20,4 +20,5 @@ const (
 	SSCospuri    = "cospuri"
 	SSMadouqu    = "madouqu"
 	SSManyVids   = "manyvids"
+	SSRi400      = "ri400"
 )
