@@ -208,6 +208,32 @@ textarea {
   overflow-x: auto;
 }
 
+.list-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 250, 242, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.list-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(180, 79, 45, 0.16);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

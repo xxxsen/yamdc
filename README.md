@@ -20,8 +20,7 @@ go install github.com/xxxsen/yamdc/cmd/yamdc@latest
 安装后可直接运行：
 
 ```bash
-yamdc --config=./config.json
-yamdc run --config=./config.json
+yamdc server --config=./config.json
 ```
 
 或使用源码构建：
@@ -33,8 +32,6 @@ make build
 构建后可使用以下任意方式运行：
 
 ```bash
-./yamdc --config=./config.json
-./yamdc run --config=./config.json
 ./yamdc server --config=./config.json
 ```
 
@@ -80,11 +77,11 @@ services:
 
 需要挂载扫描目录(/scandir), 存储目录(/savedir), 数据目录(/datadir)和配置目录(/config), 这几个目录在自己的配置文件中指定。
 
-配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/scrape/savedir`下。
+配置完成后, 使用`docker compose up`启动服务, 然后通过 WebUI 手动触发扫描、刮削、review 与入库流程。刮削完成并确认入库后的电影会被存储到`/data/scrape/savedir`下。
 
-## WebUI 模式
+## WebUI
 
-当前仓库已经支持 WebUI 模式，分为 Go Server 和 Next.js 前端两部分：
+当前仓库已经仅保留服务端模式，分为 Go Server 和 Next.js 前端两部分：
 
 - Go Server: `yamdc server --config=...`
 - WebUI: `web/`

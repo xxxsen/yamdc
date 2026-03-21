@@ -14,7 +14,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/dynscript"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
-	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/processor"
@@ -33,122 +32,66 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
+	"go.uber.org/zap"
 
 	"github.com/samber/lo"
 )
 
 func main() {
-	mode, configPath, err := parseModeAndConfigPath()
-	if err != nil {
-		log.Fatalf("parse flags failed, err:%v", err)
-	}
-	c, err := config.Parse(configPath)
-	if err != nil {
-		log.Fatalf("parse config failed, err:%v", err)
-	}
-	switch mode {
-	case "server":
-		runServer(c)
-	default:
-		runCLI(c)
+	if err := newRootCmd().Execute(); err != nil {
+		log.Fatalf("execute command failed, err:%v", err)
 	}
 }
 
-func runCLI(c *config.Config) {
-	rewriteEnvFlagToConfig(&c.SwitchConfig)
-	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
-	if err := precheckDir(c); err != nil {
-		logkit.Fatal("precheck dir failed", zap.Error(err))
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "yamdc",
+		Short:         "YAMDC server",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
-	if err := setupHTTPClient(c); err != nil {
-		logkit.Fatal("setup http client failed", zap.Error(err))
-	}
-	logkit.Info("check dependencies...")
-	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
-		logkit.Fatal("ensure dependencies failed", zap.Error(err))
-	}
-	logkit.Info("check dependencies finish...")
-	logkit.Info("use switch config", zap.Any("switch", c.SwitchConfig))
-	if err := setupAIEngine(c); err != nil {
-		logkit.Fatal("setup ai engine failed", zap.Error(err))
-	}
-
-	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
-	if err := setupTranslator(c); err != nil {
-		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
-	}
-	logkit.Info("use translator engine", zap.String("engine", c.TranslateConfig.Engine))
-	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
-		logkit.Error("init face recognizer failed", zap.Error(err))
-	}
-	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
-	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
-	logkit.Info("use plugins", zap.Strings("plugins", c.Plugins))
-	for _, ct := range c.CategoryPlugins {
-		logkit.Info("-- cat plugins", zap.String("cat", ct.Name), zap.Strings("plugins", ct.Plugins))
-	}
-	logkit.Info("use handlers", zap.Strings("handlers", c.Handlers))
-	logkit.Info("use naming rule", zap.String("rule", c.Naming))
-	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
-	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
-	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("check feature list")
-	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
-	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
-	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
-	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
-	logkit.Info("-- ai engine", zap.Bool("enable", aiengine.IsAIEngineEnabled()))
-
-	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
-	if err != nil {
-		logkit.Fatal("build searcher failed", zap.Error(err))
-	}
-	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
-	if err != nil {
-		logkit.Fatal("build cat searcher failed", zap.Error(err))
-	}
-	tryTestSearcher(c, ss, catSs)
-	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
-	if err != nil {
-		logkit.Fatal("build processor failed", zap.Error(err))
-	}
-	cap, err := buildCapture(c, ss, catSs, ps)
-	if err != nil {
-		logkit.Fatal("build capture runner failed", zap.Error(err))
-	}
-	logkit.Info("capture kit init succ, start scraping")
-	if err := cap.Run(context.Background()); err != nil {
-		logkit.Error("run capture kit failed", zap.Error(err))
-		return
-	}
-	logkit.Info("run capture kit finish, all file scrape succ")
+	cmd.AddCommand(newServerCmd())
+	return cmd
 }
 
-func runServer(c *config.Config) {
+func newServerCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "server",
+		Short: "Start YAMDC HTTP server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := config.Parse(configPath)
+			if err != nil {
+				return fmt.Errorf("parse config failed, err:%w", err)
+			}
+			return runServer(c)
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
+	return cmd
+}
+
+func runServer(c *config.Config) error {
 	rewriteEnvFlagToConfig(&c.SwitchConfig)
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
 	if err := precheckDir(c); err != nil {
-		logkit.Fatal("precheck dir failed", zap.Error(err))
+		return fmt.Errorf("precheck dir failed, err:%w", err)
 	}
 	if err := setupHTTPClient(c); err != nil {
-		logkit.Fatal("setup http client failed", zap.Error(err))
+		return fmt.Errorf("setup http client failed, err:%w", err)
 	}
 	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
-		logkit.Fatal("ensure dependencies failed", zap.Error(err))
+		return fmt.Errorf("ensure dependencies failed, err:%w", err)
 	}
 	if err := setupAIEngine(c); err != nil {
-		logkit.Fatal("setup ai engine failed", zap.Error(err))
+		return fmt.Errorf("setup ai engine failed, err:%w", err)
 	}
 	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
 	if err := setupTranslator(c); err != nil {
@@ -159,23 +102,23 @@ func runServer(c *config.Config) {
 	}
 	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
 	if err != nil {
-		logkit.Fatal("build searcher failed", zap.Error(err))
+		return fmt.Errorf("build searcher failed, err:%w", err)
 	}
 	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
 	if err != nil {
-		logkit.Fatal("build cat searcher failed", zap.Error(err))
+		return fmt.Errorf("build cat searcher failed, err:%w", err)
 	}
 	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
 	if err != nil {
-		logkit.Fatal("build processor failed", zap.Error(err))
+		return fmt.Errorf("build processor failed, err:%w", err)
 	}
 	cap, err := buildCapture(c, ss, catSs, ps)
 	if err != nil {
-		logkit.Fatal("build capture runner failed", zap.Error(err))
+		return fmt.Errorf("build capture runner failed, err:%w", err)
 	}
 	appDB, err := repository.NewSQLite(filepath.Join(c.DataDir, "app", "app.db"))
 	if err != nil {
-		logkit.Fatal("init app db failed", zap.Error(err))
+		return fmt.Errorf("init app db failed, err:%w", err)
 	}
 	defer appDB.Close()
 
@@ -194,25 +137,9 @@ func runServer(c *config.Config) {
 	}
 	logkit.Info("yamdc server start", zap.String("addr", addr), zap.String("scan_dir", c.ScanDir), zap.String("data_dir", c.DataDir))
 	if err := http.ListenAndServe(addr, api.Handler()); err != nil {
-		logkit.Fatal("listen and serve failed", zap.Error(err))
+		return fmt.Errorf("listen and serve failed, err:%w", err)
 	}
-}
-
-func parseModeAndConfigPath() (string, string, error) {
-	fs := pflag.NewFlagSet("yamdc", pflag.ContinueOnError)
-	configPath := fs.String("config", "./config.json", "config file")
-	mode := "run"
-	if len(os.Args) > 1 && (os.Args[1] == "run" || os.Args[1] == "server") {
-		mode = os.Args[1]
-		if err := fs.Parse(os.Args[2:]); err != nil {
-			return "", "", err
-		}
-		return mode, *configPath, nil
-	}
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return "", "", err
-	}
-	return mode, *configPath, nil
+	return nil
 }
 
 func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
@@ -257,50 +184,6 @@ func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[str
 		rs[strings.ToUpper(plg.Name)] = ss
 	}
 	return rs, nil
-}
-
-func tryTestSearcher(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
-	if !c.SwitchConfig.EnableSearcherCheck {
-		return
-	}
-	testMap := make(map[string]searcher.ISearcher)
-	for _, s := range ss {
-		testMap[s.Name()] = s
-	}
-	for _, catS := range catSs {
-		for _, item := range catS {
-			if _, ok := testMap[item.Name()]; ok {
-				continue
-			}
-			testMap[item.Name()] = item
-		}
-	}
-	wg, ctx := errgroup.WithContext(context.Background())
-	m := make(map[string]error, len(ss))
-	var lck sync.Mutex
-	logutil.GetLogger(ctx).Info("try test searhers...")
-	for _, s := range testMap {
-		s := s
-		wg.Go(func() error {
-			err := s.Check(ctx)
-			lck.Lock()
-			defer lck.Unlock()
-			m[s.Name()] = err
-			return nil
-		})
-	}
-	if err := wg.Wait(); err != nil {
-		logutil.GetLogger(ctx).Error("test searcher internal err", zap.Error(err))
-		return
-	}
-	for name, err := range m {
-		if err != nil {
-			logutil.GetLogger(ctx).Error("-- test searher failed", zap.String("searcher", name), zap.Error(err))
-			continue
-		}
-		logutil.GetLogger(ctx).Info("-- test searcher succ", zap.String("searcher", name))
-	}
-
 }
 
 func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {

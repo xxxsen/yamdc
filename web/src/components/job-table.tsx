@@ -20,6 +20,7 @@ export function JobTable({ initialData }: Props) {
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [message, setMessage] = useState<string>("");
+  const [isScanning, setIsScanning] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [logJob, setLogJob] = useState<JobItem | null>(null);
   const [logs, setLogs] = useState<JobLogItem[]>([]);
@@ -71,12 +72,14 @@ export function JobTable({ initialData }: Props) {
   const handleScan = () => {
     startTransition(async () => {
       try {
-        setMessage("扫描中...");
+        setIsScanning(true);
+        setMessage("");
         await triggerScan();
         await refreshJobs();
-        setMessage("扫描完成");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "扫描失败");
+      } finally {
+        setIsScanning(false);
       }
     });
   };
@@ -92,7 +95,6 @@ export function JobTable({ initialData }: Props) {
           });
           setAllJobs(data.items);
           setTotal(data.total);
-          setMessage("");
         } catch (error) {
           setMessage(error instanceof Error ? error.message : "查询失败");
         }
@@ -104,10 +106,9 @@ export function JobTable({ initialData }: Props) {
   const handleRun = (job: JobItem) => {
     startTransition(async () => {
       try {
-        setMessage(`启动任务 #${job.id}...`);
+        setMessage("");
         await runJob(job.id);
         await refreshJobs();
-        setMessage(`任务 #${job.id} 已进入 processing`);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "启动任务失败");
       }
@@ -117,10 +118,9 @@ export function JobTable({ initialData }: Props) {
   const handleRerun = (job: JobItem) => {
     startTransition(async () => {
       try {
-        setMessage(`重试任务 #${job.id}...`);
+        setMessage("");
         await rerunJob(job.id);
         await refreshJobs();
-        setMessage(`任务 #${job.id} 已重新进入 processing`);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "重试任务失败");
       }
@@ -150,7 +150,7 @@ export function JobTable({ initialData }: Props) {
     setDeleteConfirmJob(null);
     startTransition(async () => {
       try {
-        setMessage(`删除任务 #${job.id}...`);
+        setMessage("");
         await deleteJob(job.id);
         await refreshJobs();
         if (logJob?.id === job.id) {
@@ -158,7 +158,6 @@ export function JobTable({ initialData }: Props) {
           setLogs([]);
           setLogMessage("");
         }
-        setMessage(`任务 #${job.id} 已删除`);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "删除任务失败");
       }
@@ -202,14 +201,19 @@ export function JobTable({ initialData }: Props) {
               <option value="reviewing">Reviewing ({counts.reviewing ?? 0})</option>
               <option value="failed">Failed ({counts.failed ?? 0})</option>
             </select>
-            {message ? <span style={{ color: "var(--muted)", fontSize: 14 }}>{message}</span> : null}
+            {message ? <span style={{ color: "var(--danger)", fontSize: 14 }}>{message}</span> : null}
             <button className="btn btn-primary" onClick={handleScan} disabled={isPending}>
               <RefreshCw size={16} />
               立即扫描
             </button>
           </div>
         </div>
-        <div className="table-wrap" style={{ flex: 1, overflow: "auto" }}>
+        <div className="table-wrap" style={{ position: "relative", flex: 1, overflow: "auto" }}>
+          {isScanning ? (
+            <div className="list-loading-overlay">
+              <div className="list-loading-spinner" />
+            </div>
+          ) : null}
           <table className="table">
             <thead>
               <tr>
