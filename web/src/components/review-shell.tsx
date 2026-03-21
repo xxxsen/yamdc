@@ -416,7 +416,16 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                 </div>
                 <div className="review-media-offset">
                   <div className="panel review-fanart-panel">
-                    <div className="review-fanart-strip">
+                    <div
+                      className="review-fanart-strip"
+                      onWheel={(e) => {
+                        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
+                          return;
+                        }
+                        e.currentTarget.scrollLeft += e.deltaY;
+                        e.preventDefault();
+                      }}
+                    >
                       {(meta.sample_images ?? []).map((item) => (
                         <button key={item.key} type="button" className="review-fanart-item" onClick={() => setPreview({ title: imageTitle("fanart"), item })}>
                           <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
