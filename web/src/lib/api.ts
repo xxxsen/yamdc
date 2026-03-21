@@ -91,6 +91,7 @@ export async function listJobs(params?: {
   keyword?: string;
   page?: number;
   pageSize?: number;
+  all?: boolean;
 }) {
   const query = new URLSearchParams();
   if (params?.status) {
@@ -104,6 +105,9 @@ export async function listJobs(params?: {
   }
   if (params?.pageSize) {
     query.set("page_size", String(params.pageSize));
+  }
+  if (params?.all) {
+    query.set("all", "true");
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const resp = await fetch(`${getBaseURL()}/api/jobs${suffix}`, {

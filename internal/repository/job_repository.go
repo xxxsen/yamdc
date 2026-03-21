@@ -59,10 +59,8 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 	if page <= 0 {
 		page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-	if pageSize > 200 {
+	all := pageSize <= 0
+	if !all && pageSize > 200 {
 		pageSize = 200
 	}
 	where := ` WHERE deleted_at = 0`
@@ -91,8 +89,14 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 	query := `
 		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
-	` + where + ` ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`
-	queryArgs := append(append([]interface{}{}, args...), pageSize, (page-1)*pageSize)
+	` + where + ` ORDER BY updated_at DESC, id DESC`
+	queryArgs := append([]interface{}{}, args...)
+	if !all {
+		query += ` LIMIT ? OFFSET ?`
+		queryArgs = append(queryArgs, pageSize, (page-1)*pageSize)
+	} else {
+		pageSize = total
+	}
 	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("list jobs failed: %w", err)

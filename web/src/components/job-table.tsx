@@ -13,11 +13,9 @@ interface Props {
 }
 
 const STATUS_FILTER = "init,processing,failed,reviewing";
-const PAGE_SIZE = 20;
 
 export function JobTable({ initialData }: Props) {
   const [jobs, setJobs] = useState(initialData.items);
-  const [page, setPage] = useState(initialData.page);
   const [total, setTotal] = useState(initialData.total);
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState<string>("");
@@ -33,17 +31,13 @@ export function JobTable({ initialData }: Props) {
     }, {});
   }, [jobs]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const refreshJobs = async (nextPage = page, nextKeyword = keyword) => {
+  const refreshJobs = async (nextKeyword = keyword) => {
     const data = await listJobs({
       status: STATUS_FILTER,
-      page: nextPage,
-      pageSize: PAGE_SIZE,
+      all: true,
       keyword: nextKeyword,
     });
     setJobs(data.items);
-    setPage(data.page);
     setTotal(data.total);
   };
 
@@ -51,19 +45,17 @@ export function JobTable({ initialData }: Props) {
     const timer = window.setInterval(() => {
       void listJobs({
         status: STATUS_FILTER,
-        page,
-        pageSize: PAGE_SIZE,
+        all: true,
         keyword,
       })
         .then((data) => {
           setJobs(data.items);
-          setPage(data.page);
           setTotal(data.total);
         })
         .catch(() => undefined);
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [page, keyword]);
+  }, [keyword]);
 
   const handleScan = () => {
     startTransition(async () => {
@@ -82,7 +74,7 @@ export function JobTable({ initialData }: Props) {
     startTransition(async () => {
       try {
         setMessage("查询中...");
-        await refreshJobs(1, keyword);
+        await refreshJobs(keyword);
         setMessage("");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "查询失败");
@@ -155,7 +147,7 @@ export function JobTable({ initialData }: Props) {
 
   return (
     <>
-      <div className="panel" style={{ padding: 18 }}>
+      <div className="panel" style={{ padding: 18, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div
           style={{
             display: "flex",
@@ -169,7 +161,7 @@ export function JobTable({ initialData }: Props) {
           <div>
             <h2 style={{ margin: 0, fontSize: 24 }}>当前需处理的文件</h2>
             <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-              当前页 {jobs.length} 条，共 {total} 条任务，init {counts.init ?? 0}，processing {counts.processing ?? 0}，failed {counts.failed ?? 0}，
+              当前展示 {jobs.length} 条，共 {total} 条任务，init {counts.init ?? 0}，processing {counts.processing ?? 0}，failed {counts.failed ?? 0}，
               reviewing {counts.reviewing ?? 0}
             </p>
           </div>
@@ -191,20 +183,7 @@ export function JobTable({ initialData }: Props) {
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <div style={{ color: "var(--muted)", fontSize: 14 }}>
-            第 {page} / {totalPages} 页
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn" onClick={() => void refreshJobs(page - 1, keyword)} disabled={isPending || page <= 1}>
-              上一页
-            </button>
-            <button className="btn" onClick={() => void refreshJobs(page + 1, keyword)} disabled={isPending || page >= totalPages}>
-              下一页
-            </button>
-          </div>
-        </div>
-        <div className="table-wrap">
+        <div className="table-wrap" style={{ flex: 1, overflow: "auto" }}>
           <table className="table">
             <thead>
               <tr>

@@ -182,9 +182,9 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
 
   return (
     <div className="two-col">
-      <aside className="panel" style={{ padding: 18 }}>
+      <aside className="panel" style={{ padding: 18, height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <h2 style={{ marginTop: 0 }}>待 Review 列表</h2>
-        <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ display: "grid", gap: 10, overflow: "auto", minHeight: 0, paddingRight: 4 }}>
           {items.length === 0 ? <div style={{ color: "var(--muted)" }}>当前没有待 review 的任务</div> : null}
           {items.map((job) => (
             <button
@@ -210,7 +210,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
           ))}
         </div>
       </aside>
-      <section className="panel" style={{ padding: 18 }}>
+      <section className="panel" style={{ padding: 18, height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <h2 style={{ marginTop: 0 }}>刮削内容</h2>
         {selected ? (
           <div style={{ marginBottom: 12, color: "var(--muted)" }}>
@@ -229,8 +229,9 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
             删除
           </button>
         </div>
-        {meta ? (
-          <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ overflow: "auto", minHeight: 0, paddingRight: 4 }}>
+          {meta ? (
+            <div style={{ display: "grid", gap: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <label>
                 <div style={{ marginBottom: 6, color: "var(--muted)" }}>番号</div>
@@ -322,10 +323,11 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
               <summary style={{ cursor: "pointer", fontWeight: 600 }}>JSON 预览</summary>
               <pre style={{ margin: "12px 0 0", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13 }}>{rawJSON}</pre>
             </details>
-          </div>
-        ) : (
-          <div style={{ color: "var(--muted)" }}>选择左侧任务后在这里展示刮削结果</div>
-        )}
+            </div>
+          ) : (
+            <div style={{ color: "var(--muted)" }}>选择左侧任务后在这里展示刮削结果</div>
+          )}
+        </div>
       </section>
     </div>
   );

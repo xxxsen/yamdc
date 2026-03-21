@@ -73,15 +73,19 @@ func (a *API) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	pageSize := 50
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	all := r.URL.Query().Get("all") == "true"
 	if raw := r.URL.Query().Get("page"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			page = parsed
 		}
 	}
-	if raw := r.URL.Query().Get("page_size"); raw != "" {
+	if raw := r.URL.Query().Get("page_size"); raw != "" && !all {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			pageSize = parsed
 		}
+	}
+	if all {
+		pageSize = 0
 	}
 	items, err := a.jobRepo.ListJobs(r.Context(), statuses, keyword, page, pageSize)
 	if err != nil {

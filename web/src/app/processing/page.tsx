@@ -4,9 +4,12 @@ import { listJobs } from "@/lib/api";
 export default async function ProcessingPage() {
   const result = await listJobs({
     status: "init,processing,failed,reviewing",
-    page: 1,
-    pageSize: 20,
+    all: true,
   });
 
-  return <JobTable initialData={result} />;
+  return (
+    <div style={{ height: "calc(100dvh - 170px)" }}>
+      <JobTable initialData={result} />
+    </div>
+  );
 }
