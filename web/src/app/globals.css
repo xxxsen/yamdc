@@ -634,6 +634,34 @@ textarea {
   cursor: pointer;
 }
 
+.review-upload-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 248, 244, 0.4);
+  border-radius: 999px;
+  background: rgba(31, 26, 20, 0.34);
+  color: #fff8f4;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.review-upload-overlay-static {
+  position: static;
+  transform: none;
+}
+
+.review-upload-empty {
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .review-image-box-cover {
   height: 525px;
 }
@@ -666,6 +694,20 @@ textarea {
   overflow: hidden;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.62);
+}
+
+.review-fanart-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  padding: 0;
+  background: rgba(31, 26, 20, 0.72);
+  color: #fff8f4;
+  border: 1px solid rgba(255, 248, 244, 0.18);
 }
 
 .review-fanart-empty {

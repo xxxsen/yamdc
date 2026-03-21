@@ -1,11 +1,11 @@
 "use client";
 
-import { Check, Crop, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useRef, useState, useTransition } from "react";
 
 import type { JobItem, MediaFileRef, ReviewMeta, ScrapeDataItem } from "@/lib/api";
-import { cropPosterFromCover, deleteJob, getAssetURL, getReviewJob, importReviewJob, saveReviewJob } from "@/lib/api";
+import { cropPosterFromCover, deleteJob, getAssetURL, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
@@ -171,6 +171,9 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const coverUploadRef = useRef<HTMLInputElement | null>(null);
+  const posterUploadRef = useRef<HTMLInputElement | null>(null);
+  const fanartUploadRef = useRef<HTMLInputElement | null>(null);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
@@ -431,6 +434,61 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     });
   };
 
+  const handleRemoveFanart = (key: string) => {
+    if (!selected || !metaRef.current) {
+      return;
+    }
+    const nextMeta: ReviewMeta = {
+      ...metaRef.current,
+      sample_images: (metaRef.current.sample_images ?? []).filter((item) => item.key !== key),
+    };
+    persistMetaPatch(nextMeta, "已移除 fanart");
+  };
+
+  const persistMetaPatch = (nextMeta: ReviewMeta, successMessage: string) => {
+    if (!selected) {
+      return;
+    }
+    setMeta(nextMeta);
+    metaRef.current = nextMeta;
+    startTransition(async () => {
+      try {
+        const payload = buildPayload(nextMeta);
+        await saveReviewJob(selected.id, payload);
+        lastSavedPayloadRef.current = payload;
+        setMessage(successMessage);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "保存失败");
+      }
+    });
+  };
+
+  const handleUpload = async (file: File | undefined, target: "cover" | "poster" | "fanart") => {
+    if (!file || !meta || !selected) {
+      return;
+    }
+    startTransition(async () => {
+      try {
+        setMessage("上传图片...");
+        const asset = await uploadAsset(file);
+        let nextMeta: ReviewMeta;
+        if (target === "cover") {
+          nextMeta = { ...metaRef.current!, cover: asset };
+        } else if (target === "poster") {
+          nextMeta = { ...metaRef.current!, poster: asset };
+        } else {
+          nextMeta = {
+            ...metaRef.current!,
+            sample_images: [...(metaRef.current?.sample_images ?? []), asset],
+          };
+        }
+        persistMetaPatch(nextMeta, "图片已更新");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "上传失败");
+      }
+    });
+  };
+
   return (
     <>
       <div className="two-col">
@@ -573,17 +631,41 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                 <div className="review-media-offset">
                   <div className="review-artwork-row">
                     {meta.cover ? (
-                      <button
-                        type="button"
-                        className="panel review-image-card review-image-card-cover"
-                        onClick={() => setPreview({ title: imageTitle("cover"), item: meta.cover! })}
-                      >
+                      <div className="panel review-image-card review-image-card-cover">
                         <span className="review-image-title">封面</span>
                         <div className="review-image-box review-image-box-cover">
-                          <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
+                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("cover"), item: meta.cover! })}>
+                            <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
+                          </button>
+                          <button
+                            type="button"
+                            className="review-upload-overlay"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              coverUploadRef.current?.click();
+                            }}
+                            aria-label="上传封面"
+                            title="上传封面"
+                          >
+                            <Plus size={18} />
+                          </button>
                         </div>
-                      </button>
-                    ) : <div className="panel review-image-card review-image-card-cover review-image-empty">暂无封面</div>}
+                      </div>
+                    ) : (
+                      <div className="panel review-image-card review-image-card-cover review-image-empty">
+                        <div className="review-image-box review-image-box-cover review-upload-empty">
+                          <button
+                            type="button"
+                            className="review-upload-overlay"
+                            onClick={() => coverUploadRef.current?.click()}
+                            aria-label="上传封面"
+                            title="上传封面"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {meta.poster ? (
                       <div className="panel review-image-card review-image-card-poster">
                         <span className="review-image-title">海报</span>
@@ -594,6 +676,15 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                           <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}>
                             <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
                           </button>
+                          <button
+                            type="button"
+                            className="review-upload-overlay"
+                            onClick={() => posterUploadRef.current?.click()}
+                            aria-label="上传海报"
+                            title="上传海报"
+                          >
+                            <Plus size={18} />
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -602,7 +693,17 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
                           <Crop size={14} />
                         </button>
-                        暂无海报
+                        <div className="review-image-box review-image-box-poster review-upload-empty">
+                          <button
+                            type="button"
+                            className="review-upload-overlay"
+                            onClick={() => posterUploadRef.current?.click()}
+                            aria-label="上传海报"
+                            title="上传海报"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -620,11 +721,26 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                       }}
                     >
                       {(meta.sample_images ?? []).map((item) => (
-                        <button key={item.key} type="button" className="review-fanart-item" onClick={() => setPreview({ title: imageTitle("fanart"), item })}>
-                          <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
-                        </button>
+                        <div key={item.key} className="review-fanart-item">
+                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("fanart"), item })}>
+                            <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn review-inline-icon-btn review-fanart-delete"
+                            onClick={() => handleRemoveFanart(item.key)}
+                            aria-label="删除 fanart"
+                            title="删除 fanart"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
                       ))}
-                      {(meta.sample_images ?? []).length === 0 ? <div className="review-fanart-empty">暂无 fanart</div> : null}
+                      <button type="button" className="review-fanart-item review-upload-empty" onClick={() => fanartUploadRef.current?.click()}>
+                        <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
+                          <Plus size={18} />
+                        </span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -648,6 +764,36 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
           </div>
         </div>
       ) : null}
+      <input
+        ref={coverUploadRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          void handleUpload(e.target.files?.[0], "cover");
+          e.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={posterUploadRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          void handleUpload(e.target.files?.[0], "poster");
+          e.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={fanartUploadRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          void handleUpload(e.target.files?.[0], "fanart");
+          e.currentTarget.value = "";
+        }}
+      />
       {cropOpen && meta?.cover ? (
         <div className="review-preview-overlay" onClick={() => setCropOpen(false)}>
           <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>

@@ -77,7 +77,7 @@ export interface JobListResponse {
 
 function getBaseURL() {
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+    return "";
   }
   return process.env.YAMDC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
 }
@@ -225,6 +225,20 @@ export async function cropPosterFromCover(
   const data = (await resp.json()) as APIResponse<MediaFileRef>;
   if (!resp.ok || data.code !== 0) {
     throw new Error(data.message || `crop poster failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function uploadAsset(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(`${getBaseURL()}/api/assets/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await resp.json()) as APIResponse<MediaFileRef>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `upload asset failed: ${resp.status}`);
   }
   return data.data;
 }

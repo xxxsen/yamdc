@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -242,6 +243,37 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid upload file"})
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "read upload file failed"})
+			return
+		}
+		if !strings.HasPrefix(http.DetectContentType(data), "image/") {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "upload file is not an image"})
+			return
+		}
+		key, err := store.AnonymousPutData(r.Context(), data)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"code":    0,
+			"message": "asset uploaded",
+			"data": map[string]string{
+				"name": filepath.Base(header.Filename),
+				"key":  key,
+			},
+		})
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
 		return
