@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Crop, Trash2, X } from "lucide-react";
+import { Check, Crop, RotateCcw, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useRef, useState, useTransition } from "react";
 
@@ -147,26 +147,46 @@ function TokenEditor({
 
 export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
+  const initialRawMeta = initialScrapeData?.raw_data ? (() => {
+    try {
+      return JSON.parse(initialScrapeData.raw_data) as ReviewMeta;
+    } catch {
+      return null;
+    }
+  })() : null;
   const [items, setItems] = useState<JobItem[]>(jobs);
   const [selected, setSelected] = useState<JobItem | null>(jobs[0] ?? null);
   const [meta, setMeta] = useState<ReviewMeta | null>(initialMeta);
+  const [hasRawMeta, setHasRawMeta] = useState(initialRawMeta !== null);
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
   const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const lastSavedPayloadRef = useRef(buildPayload(initialMeta));
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
+  const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
+    let nextRawMeta: ReviewMeta | null = null;
+    if (data?.raw_data) {
+      try {
+        nextRawMeta = JSON.parse(data.raw_data) as ReviewMeta;
+      } catch {
+        nextRawMeta = null;
+      }
+    }
     const payload = buildPayload(nextMeta);
     setMeta(nextMeta);
     metaRef.current = nextMeta;
+    rawMetaRef.current = nextRawMeta;
+    setHasRawMeta(nextRawMeta !== null);
     lastSavedPayloadRef.current = payload;
     setMessage(data ? "" : "该任务还没有 scrape_data");
   };
@@ -182,6 +202,8 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
       } catch (error) {
         setMeta(null);
         metaRef.current = null;
+        rawMetaRef.current = null;
+        setHasRawMeta(false);
         lastSavedPayloadRef.current = "";
         setMessage(error instanceof Error ? error.message : "加载失败");
       }
@@ -197,6 +219,8 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
       selectedRef.current = null;
       setMeta(null);
       metaRef.current = null;
+      rawMetaRef.current = null;
+      setHasRawMeta(false);
       lastSavedPayloadRef.current = "";
       return;
     }
@@ -264,6 +288,34 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
       return;
     }
     setDeleteConfirmOpen(true);
+  };
+
+  const handleRestoreRaw = () => {
+    if (!selected || !rawMetaRef.current) {
+      return;
+    }
+    setRestoreConfirmOpen(true);
+  };
+
+  const confirmRestoreRaw = () => {
+    if (!selected || !rawMetaRef.current) {
+      return;
+    }
+    const restored = JSON.parse(JSON.stringify(rawMetaRef.current)) as ReviewMeta;
+    setRestoreConfirmOpen(false);
+    setMeta(restored);
+    metaRef.current = restored;
+    startTransition(async () => {
+      try {
+        setMessage("恢复原始刮削内容...");
+        const payload = buildPayload(restored);
+        await saveReviewJob(selected.id, payload);
+        lastSavedPayloadRef.current = payload;
+        setMessage("已恢复为原始刮削内容");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "恢复失败");
+      }
+    });
   };
 
   const confirmDelete = () => {
@@ -434,6 +486,16 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
             </div>
             <div className="review-actions">
               {message ? <span className="review-message">{message}</span> : null}
+              <button
+                type="button"
+                className="btn review-inline-icon-btn"
+                onClick={handleRestoreRaw}
+                disabled={!selected || isPending || !hasRawMeta}
+                aria-label="恢复原始刮削内容"
+                title="恢复原始刮削内容"
+              >
+                <RotateCcw size={14} />
+              </button>
             </div>
           </div>
           {meta ? (
@@ -649,6 +711,26 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
               </button>
               <button type="button" className="btn btn-primary" onClick={confirmDelete} disabled={isPending}>
                 删除
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {restoreConfirmOpen && selected ? (
+        <div className="review-preview-overlay" onClick={() => setRestoreConfirmOpen(false)}>
+          <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="review-confirm-title">恢复原始内容</div>
+            <div className="review-confirm-body">
+              这会用最初刮削得到的原始内容覆盖当前修改。
+              <br />
+              <span className="review-confirm-path">{selected.rel_path}</span>
+            </div>
+            <div className="review-confirm-actions">
+              <button type="button" className="btn" onClick={() => setRestoreConfirmOpen(false)}>
+                取消
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmRestoreRaw} disabled={isPending}>
+                恢复
               </button>
             </div>
           </div>
