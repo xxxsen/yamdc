@@ -3,13 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
@@ -23,13 +16,25 @@ import (
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/flarerr"
+	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
+	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
 	"github.com/xxxsen/yamdc/internal/translator/google"
+	"github.com/xxxsen/yamdc/internal/web"
+	"log"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/xxxsen/common/logger"
@@ -44,7 +49,7 @@ import (
 )
 
 func main() {
-	configPath, err := parseConfigPath()
+	mode, configPath, err := parseModeAndConfigPath()
 	if err != nil {
 		log.Fatalf("parse flags failed, err:%v", err)
 	}
@@ -52,6 +57,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse config failed, err:%v", err)
 	}
+	switch mode {
+	case "server":
+		runServer(c)
+	default:
+		runCLI(c)
+	}
+}
+
+func runCLI(c *config.Config) {
 	rewriteEnvFlagToConfig(&c.SwitchConfig)
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 	if err := precheckDir(c); err != nil {
@@ -121,19 +135,85 @@ func main() {
 	logkit.Info("run capture kit finish, all file scrape succ")
 }
 
-func parseConfigPath() (string, error) {
+func runServer(c *config.Config) {
+	rewriteEnvFlagToConfig(&c.SwitchConfig)
+	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
+	if err := precheckDir(c); err != nil {
+		logkit.Fatal("precheck dir failed", zap.Error(err))
+	}
+	if err := setupHTTPClient(c); err != nil {
+		logkit.Fatal("setup http client failed", zap.Error(err))
+	}
+	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
+		logkit.Fatal("ensure dependencies failed", zap.Error(err))
+	}
+	if err := setupAIEngine(c); err != nil {
+		logkit.Fatal("setup ai engine failed", zap.Error(err))
+	}
+	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
+	if err := setupTranslator(c); err != nil {
+		logkit.Error("setup translator failed", zap.Error(err))
+	}
+	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
+		logkit.Error("init face recognizer failed", zap.Error(err))
+	}
+	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
+	if err != nil {
+		logkit.Fatal("build searcher failed", zap.Error(err))
+	}
+	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
+	if err != nil {
+		logkit.Fatal("build cat searcher failed", zap.Error(err))
+	}
+	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
+	if err != nil {
+		logkit.Fatal("build processor failed", zap.Error(err))
+	}
+	cap, err := buildCapture(c, ss, catSs, ps)
+	if err != nil {
+		logkit.Fatal("build capture runner failed", zap.Error(err))
+	}
+	appDB, err := repository.NewSQLite(filepath.Join(c.DataDir, "app", "app.db"))
+	if err != nil {
+		logkit.Fatal("init app db failed", zap.Error(err))
+	}
+	defer appDB.Close()
+
+	jobRepo := repository.NewJobRepository(appDB.DB())
+	logRepo := repository.NewLogRepository(appDB.DB())
+	scrapeRepo := repository.NewScrapeDataRepository(appDB.DB())
+	scanSvc := scanner.New(c.ScanDir, c.ExtraMediaExts, jobRepo)
+	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, cap)
+	if err := jobSvc.Recover(context.Background()); err != nil {
+		logkit.Error("recover processing jobs failed", zap.Error(err))
+	}
+	scanSvc.Start(context.Background(), 30*time.Second)
+	api := web.NewAPI(jobRepo, scanSvc, jobSvc)
+	addr := os.Getenv("YAMDC_SERVER_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	logkit.Info("yamdc server start", zap.String("addr", addr), zap.String("scan_dir", c.ScanDir), zap.String("data_dir", c.DataDir))
+	if err := http.ListenAndServe(addr, api.Handler()); err != nil {
+		logkit.Fatal("listen and serve failed", zap.Error(err))
+	}
+}
+
+func parseModeAndConfigPath() (string, string, error) {
 	fs := pflag.NewFlagSet("yamdc", pflag.ContinueOnError)
 	configPath := fs.String("config", "./config.json", "config file")
-	if len(os.Args) > 1 && os.Args[1] == "run" {
+	mode := "run"
+	if len(os.Args) > 1 && (os.Args[1] == "run" || os.Args[1] == "server") {
+		mode = os.Args[1]
 		if err := fs.Parse(os.Args[2:]); err != nil {
-			return "", err
+			return "", "", err
 		}
-		return *configPath, nil
+		return mode, *configPath, nil
 	}
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return *configPath, nil
+	return mode, *configPath, nil
 }
 
 func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {

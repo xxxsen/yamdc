@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/nfo"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/store"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/samber/lo"
 	"github.com/xxxsen/common/logutil"
@@ -127,6 +127,60 @@ func (c *Capture) Run(ctx context.Context) error {
 	c.displayNumberInfo(ctx, fcs)
 	if err := c.processFileList(ctx, fcs); err != nil {
 		return fmt.Errorf("proc file list failed, err:%w", err)
+	}
+	return nil
+}
+
+func (c *Capture) ResolveFileContext(file string) (*model.FileContext, error) {
+	fc := &model.FileContext{FullFilePath: file}
+	if err := c.resolveFileInfo(fc, file); err != nil {
+		return nil, err
+	}
+	return fc, nil
+}
+
+func (c *Capture) ScrapeMeta(ctx context.Context, fc *model.FileContext) error {
+	steps := []struct {
+		name string
+		fn   fcProcessFunc
+	}{
+		{"search", c.doSearch},
+		{"process", c.doProcess},
+		{"metaverify", c.doMetaVerify},
+		{"datadiscard", c.doDataDiscard},
+	}
+	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
+	for idx, step := range steps {
+		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
+		log.Debug("step start")
+		if err := step.fn(ctx, fc); err != nil {
+			log.Error("proc step failed", zap.Error(err))
+			return err
+		}
+		log.Debug("step end")
+	}
+	return nil
+}
+
+func (c *Capture) ImportMeta(ctx context.Context, fc *model.FileContext) error {
+	steps := []struct {
+		name string
+		fn   fcProcessFunc
+	}{
+		{"metaverify", c.doMetaVerify},
+		{"naming", c.doNaming},
+		{"savedata", c.doSaveData},
+		{"nfo", c.doExport},
+	}
+	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
+	for idx, step := range steps {
+		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
+		log.Debug("step start")
+		if err := step.fn(ctx, fc); err != nil {
+			log.Error("proc step failed", zap.Error(err))
+			return err
+		}
+		log.Debug("step end")
 	}
 	return nil
 }
