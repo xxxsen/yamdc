@@ -55,7 +55,7 @@ function imageTitle(type: string) {
     return "封面";
   }
   if (type === "poster") {
-    return "Poster";
+    return "海报";
   }
   return "Extrafanart";
 }
@@ -406,12 +406,12 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         className="panel review-image-card review-image-card-poster"
                         onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}
                       >
-                        <span className="review-image-title">Poster</span>
+                        <span className="review-image-title">海报</span>
                         <div className="review-image-box review-image-box-poster">
                           <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </div>
                       </button>
-                    ) : <div className="panel review-image-card review-image-card-poster review-image-empty">暂无 Poster</div>}
+                    ) : <div className="panel review-image-card review-image-card-poster review-image-empty">暂无海报</div>}
                   </div>
                 </div>
                 <div className="review-media-offset">
