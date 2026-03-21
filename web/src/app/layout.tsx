@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+
+import { TopNav } from "@/components/top-nav";
 
 import "./globals.css";
 
@@ -32,14 +33,7 @@ export default function RootLayout({
               </div>
               <h1 style={{ margin: "6px 0 0", fontSize: 36 }}>Media Capture Console</h1>
             </div>
-            <nav style={{ display: "flex", gap: 10 }}>
-              <Link className="btn" href="/processing">
-                待处理
-              </Link>
-              <Link className="btn" href="/review">
-                待 Review
-              </Link>
-            </nav>
+            <TopNav />
           </header>
           {children}
         </div>
@@ -47,4 +41,3 @@ export default function RootLayout({
     </html>
   );
 }
-
