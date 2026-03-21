@@ -174,6 +174,37 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "import completed"})
 			return
+		case "poster-crop":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "read body failed"})
+				return
+			}
+			var req struct {
+				X      int `json:"x"`
+				Y      int `json:"y"`
+				Width  int `json:"width"`
+				Height int `json:"height"`
+			}
+			if err := json.Unmarshal(body, &req); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid json body"})
+				return
+			}
+			if req.Width <= 0 || req.Height <= 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid crop rectangle"})
+				return
+			}
+			poster, err := a.jobSvc.CropPosterFromCover(r.Context(), id, req.X, req.Y, req.Width, req.Height)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "poster cropped", "data": poster})
+			return
 		default:
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "route not found"})
 			return

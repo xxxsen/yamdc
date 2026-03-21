@@ -211,6 +211,24 @@ export async function importReviewJob(id: number) {
   return data;
 }
 
+export async function cropPosterFromCover(
+  id: number,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/poster-crop`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(rect),
+  });
+  const data = (await resp.json()) as APIResponse<MediaFileRef>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `crop poster failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
 export function getAssetURL(key: string) {
   return `/api/assets/${encodeURIComponent(key)}`;
 }

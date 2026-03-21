@@ -1,11 +1,11 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Crop, X } from "lucide-react";
 import Image from "next/image";
-import { useRef, useState, useTransition } from "react";
+import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useRef, useState, useTransition } from "react";
 
 import type { JobItem, MediaFileRef, ReviewMeta, ScrapeDataItem } from "@/lib/api";
-import { deleteJob, getAssetURL, getReviewJob, importReviewJob, saveReviewJob } from "@/lib/api";
+import { cropPosterFromCover, deleteJob, getAssetURL, getReviewJob, importReviewJob, saveReviewJob } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
 
 const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
 const PREVIEW_IMAGE_STYLE = { objectFit: "contain", objectPosition: "center" } as const;
+const POSTER_ASPECT = 2 / 3;
 
 function parseMeta(data: ScrapeDataItem | null): ReviewMeta | null {
   if (!data) {
@@ -151,10 +152,14 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const [meta, setMeta] = useState<ReviewMeta | null>(initialMeta);
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
   const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const lastSavedPayloadRef = useRef(buildPayload(initialMeta));
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
+  const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
@@ -269,6 +274,102 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
         setMessage("任务已删除");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "删除失败");
+      }
+    });
+  };
+
+  const openCropper = () => {
+    if (!meta?.cover) {
+      return;
+    }
+    setCropOpen(true);
+  };
+
+  const handleCropImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+    const displayWidth = img.clientWidth;
+    const displayHeight = img.clientHeight;
+    let width = 0;
+    let height = 0;
+    let x = 0;
+    let y = 0;
+    if (naturalWidth >= naturalHeight) {
+      height = displayHeight;
+      width = height * POSTER_ASPECT;
+      x = Math.max(0, (displayWidth - width) / 2);
+      y = 0;
+    } else {
+      width = displayWidth;
+      height = width / POSTER_ASPECT;
+      x = 0;
+      y = Math.max(0, (displayHeight - height) / 2);
+    }
+    setCropImageSize({ displayWidth, displayHeight, naturalWidth, naturalHeight });
+    setCropRect({ x, y, width, height });
+  };
+
+  const beginCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    cropDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: cropRect.x,
+      originY: cropRect.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = cropDragRef.current;
+    if (!dragState) {
+      return;
+    }
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+    setCropRect((prev) => {
+      const next = { ...prev };
+      if (cropImageSize.naturalWidth >= cropImageSize.naturalHeight) {
+        next.x = Math.min(Math.max(0, dragState.originX + deltaX), cropImageSize.displayWidth - prev.width);
+      } else {
+        next.y = Math.min(Math.max(0, dragState.originY + deltaY), cropImageSize.displayHeight - prev.height);
+      }
+      return next;
+    });
+  };
+
+  const endCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (cropDragRef.current) {
+      cropDragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    }
+  };
+
+  const handleConfirmCrop = () => {
+    if (!selected || !meta?.cover || cropImageSize.displayWidth === 0 || cropImageSize.displayHeight === 0) {
+      return;
+    }
+    const scaleX = cropImageSize.naturalWidth / cropImageSize.displayWidth;
+    const scaleY = cropImageSize.naturalHeight / cropImageSize.displayHeight;
+    const payload = {
+      x: Math.round(cropRect.x * scaleX),
+      y: Math.round(cropRect.y * scaleY),
+      width: Math.round(cropRect.width * scaleX),
+      height: Math.round(cropRect.height * scaleY),
+    };
+    startTransition(async () => {
+      try {
+        setMessage("从封面截取海报...");
+        const poster = await cropPosterFromCover(selected.id, payload);
+        updateMeta({ poster });
+        metaRef.current = { ...(metaRef.current ?? {}), poster };
+        lastSavedPayloadRef.current = buildPayload(metaRef.current);
+        setCropOpen(false);
+        setMessage("海报已更新");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "海报截取失败");
       }
     });
   };
@@ -401,17 +502,26 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                       </button>
                     ) : <div className="panel review-image-card review-image-card-cover review-image-empty">暂无封面</div>}
                     {meta.poster ? (
-                      <button
-                        type="button"
-                        className="panel review-image-card review-image-card-poster"
-                        onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}
-                      >
+                      <div className="panel review-image-card review-image-card-poster">
                         <span className="review-image-title">海报</span>
+                        <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                          <Crop size={14} />
+                        </button>
                         <div className="review-image-box review-image-box-poster">
-                          <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
+                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}>
+                            <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
+                          </button>
                         </div>
-                      </button>
-                    ) : <div className="panel review-image-card review-image-card-poster review-image-empty">暂无海报</div>}
+                      </div>
+                    ) : (
+                      <div className="panel review-image-card review-image-card-poster review-image-empty">
+                        <span className="review-image-title">海报</span>
+                        <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                          <Crop size={14} />
+                        </button>
+                        暂无海报
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="review-media-offset">
@@ -451,6 +561,54 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
             <div className="review-preview-title">{preview.title}</div>
             <div className="review-preview-frame">
               <Image src={getAssetURL(preview.item.key)} alt={preview.item.name} fill style={PREVIEW_IMAGE_STYLE} unoptimized />
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {cropOpen && meta?.cover ? (
+        <div className="review-preview-overlay" onClick={() => setCropOpen(false)}>
+          <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="review-crop-head">
+              <div className="review-preview-title">从封面截取海报</div>
+            </div>
+            <div className="review-crop-stage">
+              <div className="review-crop-canvas">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={getAssetURL(meta.cover.key)}
+                  alt="cover crop preview"
+                  className="review-crop-image"
+                  onLoad={handleCropImageLoad}
+                />
+                {cropRect.width > 0 && cropRect.height > 0 ? (
+                  <div
+                    className="review-crop-selection"
+                    style={{
+                      left: cropRect.x,
+                      top: cropRect.y,
+                      width: cropRect.width,
+                      height: cropRect.height,
+                    }}
+                    onPointerDown={beginCropDrag}
+                    onPointerMove={handleCropDrag}
+                    onPointerUp={endCropDrag}
+                    onPointerCancel={endCropDrag}
+                  />
+                ) : null}
+                {cropRect.width > 0 && cropRect.height > 0 ? (
+                  <button
+                    type="button"
+                    className="btn review-crop-confirm"
+                    style={{
+                      left: cropRect.x + cropRect.width - 54,
+                      top: cropRect.y + 8,
+                    }}
+                    onClick={handleConfirmCrop}
+                  >
+                    截取
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

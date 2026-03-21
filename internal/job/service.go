@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	stdimage "image"
 	"os"
 	"sync"
 
 	"github.com/xxxsen/yamdc/internal/capture"
+	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 type Service struct {
@@ -74,6 +77,75 @@ func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData st
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "review", "review data saved", "")
 	return nil
+}
+
+func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, width, height int) (*model.File, error) {
+	j, err := s.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if j == nil {
+		return nil, fmt.Errorf("job not found")
+	}
+	if j.Status != jobdef.StatusReviewing {
+		return nil, fmt.Errorf("job is not in reviewing status")
+	}
+	data, err := s.scrapeRepo.GetByJobID(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, fmt.Errorf("scrape data not found")
+	}
+	payload := data.RawData
+	if data.ReviewData != "" {
+		payload = data.ReviewData
+	}
+	var meta model.MovieMeta
+	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
+		return nil, fmt.Errorf("parse review meta failed: %w", err)
+	}
+	if meta.Cover == nil || meta.Cover.Key == "" {
+		return nil, fmt.Errorf("cover not found")
+	}
+	raw, err := store.GetData(ctx, meta.Cover.Key)
+	if err != nil {
+		return nil, fmt.Errorf("load cover failed: %w", err)
+	}
+	img, err := imgutil.LoadImage(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode cover failed: %w", err)
+	}
+	bounds := img.Bounds()
+	rect := stdimage.Rect(x, y, x+width, y+height)
+	if rect.Min.X < bounds.Min.X || rect.Min.Y < bounds.Min.Y || rect.Max.X > bounds.Max.X || rect.Max.Y > bounds.Max.Y {
+		return nil, fmt.Errorf("crop rectangle out of bounds")
+	}
+	cropped, err := imgutil.CutImageViaRectangle(img, rect)
+	if err != nil {
+		return nil, fmt.Errorf("crop poster failed: %w", err)
+	}
+	croppedRaw, err := imgutil.WriteImageToBytes(cropped)
+	if err != nil {
+		return nil, fmt.Errorf("encode poster failed: %w", err)
+	}
+	key, err := store.AnonymousPutData(ctx, croppedRaw)
+	if err != nil {
+		return nil, fmt.Errorf("store poster failed: %w", err)
+	}
+	meta.Poster = &model.File{
+		Name: "./poster.jpg",
+		Key:  key,
+	}
+	reviewData, err := json.Marshal(&meta)
+	if err != nil {
+		return nil, fmt.Errorf("marshal review meta failed: %w", err)
+	}
+	if err := s.scrapeRepo.SaveReviewData(ctx, jobID, string(reviewData)); err != nil {
+		return nil, err
+	}
+	_ = s.logRepo.Add(ctx, jobID, "info", "review", "poster cropped from cover", fmt.Sprintf("%d,%d,%d,%d", x, y, width, height))
+	return meta.Poster, nil
 }
 
 func (s *Service) Import(ctx context.Context, jobID int64) error {
