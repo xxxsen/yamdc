@@ -166,3 +166,31 @@ func TestJobRepositoryListJobsWithKeywordAndPaging(t *testing.T) {
 	require.Equal(t, 2, result.Total)
 	require.Len(t, result.Items, 1)
 }
+
+func TestJobRepositoryUpsertScannedJobDoesNotRefreshUpdatedAtWithoutChanges(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName: "AAA-001.mp4",
+		FileExt:  ".mp4",
+		RelPath:  "AAA-001.mp4",
+		AbsPath:  "/scan/AAA-001.mp4",
+		Number:   "AAA-001",
+		FileSize: 1,
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	result, err := repo.ListJobs(ctx, []jobdef.Status{jobdef.StatusInit}, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	firstUpdatedAt := result.Items[0].UpdatedAt
+
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	result, err = repo.ListJobs(ctx, []jobdef.Status{jobdef.StatusInit}, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.Equal(t, firstUpdatedAt, result.Items[0].UpdatedAt)
+}

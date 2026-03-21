@@ -47,7 +47,16 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 			number = excluded.number,
 			file_size = excluded.file_size,
 			deleted_at = 0,
-			updated_at = excluded.updated_at
+			updated_at = CASE
+				WHEN yamdc_job_tab.file_name != excluded.file_name
+					OR yamdc_job_tab.file_ext != excluded.file_ext
+					OR yamdc_job_tab.abs_path != excluded.abs_path
+					OR yamdc_job_tab.number != excluded.number
+					OR yamdc_job_tab.file_size != excluded.file_size
+					OR yamdc_job_tab.deleted_at != 0
+				THEN excluded.updated_at
+				ELSE yamdc_job_tab.updated_at
+			END
 	`, uuid.NewString(), in.FileName, in.FileExt, in.RelPath, in.AbsPath, in.Number, in.FileSize, jobdef.StatusInit, now, now)
 	if err != nil {
 		return fmt.Errorf("upsert scanned job failed: %w", err)
@@ -89,7 +98,7 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 	query := `
 		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
-	` + where + ` ORDER BY updated_at DESC, id DESC`
+	` + where + ` ORDER BY created_at DESC, id DESC`
 	queryArgs := append([]interface{}{}, args...)
 	if !all {
 		query += ` LIMIT ? OFFSET ?`
