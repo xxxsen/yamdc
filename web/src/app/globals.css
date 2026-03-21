@@ -332,10 +332,27 @@ textarea {
 }
 
 .review-job-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   padding: 12px;
   border-radius: 14px;
   text-align: left;
+}
+
+.review-job-card-main {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
+}
+
+.review-job-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .review-job-card-path {
@@ -569,6 +586,10 @@ textarea {
   padding: 0;
 }
 
+.review-action-approve {
+  color: var(--ok);
+}
+
 .review-image-crop-btn {
   position: absolute;
   top: 6px;
@@ -758,6 +779,36 @@ textarea {
   background: rgba(255, 250, 242, 0.92);
   color: var(--foreground);
   cursor: pointer;
+}
+
+.review-confirm-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 18px;
+}
+
+.review-confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.review-confirm-body {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.review-confirm-path {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--foreground);
+  word-break: break-all;
+}
+
+.review-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 @media (max-width: 960px) {

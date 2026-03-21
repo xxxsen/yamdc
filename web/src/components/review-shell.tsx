@@ -1,6 +1,6 @@
 "use client";
 
-import { Crop, X } from "lucide-react";
+import { Check, Crop, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useRef, useState, useTransition } from "react";
 
@@ -153,6 +153,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
   const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
@@ -262,10 +263,14 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     if (!selected) {
       return;
     }
-    const ok = window.confirm(`确认删除该任务及源文件吗？\n\n${selected.rel_path}`);
-    if (!ok) {
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!selected) {
       return;
     }
+    setDeleteConfirmOpen(false);
     startTransition(async () => {
       try {
         setMessage("删除任务...");
@@ -382,20 +387,42 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
           <div className="review-job-list">
             {items.length === 0 ? <div style={{ color: "var(--muted)" }}>当前没有待 review 的任务</div> : null}
             {items.map((job) => (
-              <button
+              <div
                 key={job.id}
                 className="panel review-job-card"
                 style={{
                   border: selected?.id === job.id ? "1px solid var(--accent)" : undefined,
                   background: selected?.id === job.id ? "rgba(180, 79, 45, 0.08)" : undefined,
                 }}
-                onClick={() => loadDetail(job)}
-                disabled={isPending}
               >
-                <div className="review-job-card-path">{job.rel_path}</div>
-                <div className="review-job-card-number">{job.number}</div>
-                <div className="review-job-card-time">更新时间 {formatUnixMillis(job.updated_at)}</div>
-              </button>
+                <button className="review-job-card-main" onClick={() => loadDetail(job)} disabled={isPending}>
+                  <div className="review-job-card-path">{job.rel_path}</div>
+                  <div className="review-job-card-number">{job.number}</div>
+                  <div className="review-job-card-time">更新时间 {formatUnixMillis(job.updated_at)}</div>
+                </button>
+                <div className="review-job-card-actions">
+                  <button
+                    type="button"
+                    className="btn review-inline-icon-btn review-action-approve"
+                    onClick={handleImport}
+                    disabled={isPending || selected?.id !== job.id}
+                    aria-label="入库"
+                    title="入库"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn review-inline-icon-btn"
+                    onClick={handleDelete}
+                    disabled={isPending || selected?.id !== job.id}
+                    aria-label="删除"
+                    title="删除"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </aside>
@@ -407,12 +434,6 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
             </div>
             <div className="review-actions">
               {message ? <span className="review-message">{message}</span> : null}
-              <button className="btn btn-primary" onClick={handleImport} disabled={!selected || isPending || !meta}>
-                入库
-              </button>
-              <button className="btn" onClick={handleDelete} disabled={!selected || isPending}>
-                删除
-              </button>
             </div>
           </div>
           {meta ? (
@@ -609,6 +630,26 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                   </button>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {deleteConfirmOpen && selected ? (
+        <div className="review-preview-overlay" onClick={() => setDeleteConfirmOpen(false)}>
+          <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="review-confirm-title">确认删除</div>
+            <div className="review-confirm-body">
+              这会删除当前任务以及对应的源文件。
+              <br />
+              <span className="review-confirm-path">{selected.rel_path}</span>
+            </div>
+            <div className="review-confirm-actions">
+              <button type="button" className="btn" onClick={() => setDeleteConfirmOpen(false)}>
+                取消
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmDelete} disabled={isPending}>
+                删除
+              </button>
             </div>
           </div>
         </div>

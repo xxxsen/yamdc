@@ -24,6 +24,7 @@ export function JobTable({ initialData }: Props) {
   const [logJob, setLogJob] = useState<JobItem | null>(null);
   const [logs, setLogs] = useState<JobLogItem[]>([]);
   const [logMessage, setLogMessage] = useState("");
+  const [deleteConfirmJob, setDeleteConfirmJob] = useState<JobItem | null>(null);
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
 
@@ -142,10 +143,11 @@ export function JobTable({ initialData }: Props) {
   };
 
   const handleDelete = (job: JobItem) => {
-    const ok = window.confirm(`确认删除文件并移除任务吗？\n\n${job.rel_path}`);
-    if (!ok) {
-      return;
-    }
+    setDeleteConfirmJob(job);
+  };
+
+  const confirmDelete = (job: JobItem) => {
+    setDeleteConfirmJob(null);
     startTransition(async () => {
       try {
         setMessage(`删除任务 #${job.id}...`);
@@ -318,6 +320,26 @@ export function JobTable({ initialData }: Props) {
                   {item.detail ? <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>{item.detail}</div> : null}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {deleteConfirmJob ? (
+        <div className="review-preview-overlay" onClick={() => setDeleteConfirmJob(null)}>
+          <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="review-confirm-title">确认删除</div>
+            <div className="review-confirm-body">
+              这会删除当前任务以及对应的源文件。
+              <br />
+              <span className="review-confirm-path">{deleteConfirmJob.rel_path}</span>
+            </div>
+            <div className="review-confirm-actions">
+              <button type="button" className="btn" onClick={() => setDeleteConfirmJob(null)}>
+                取消
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => confirmDelete(deleteConfirmJob)} disabled={isPending}>
+                删除
+              </button>
             </div>
           </div>
         </div>
