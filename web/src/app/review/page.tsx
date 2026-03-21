@@ -11,7 +11,7 @@ export default async function ReviewPage() {
   const initialScrapeData = jobs.length > 0 ? await getReviewJob(jobs[0].id) : null;
 
   return (
-    <div style={{ height: "calc(100dvh - 170px)" }}>
+    <div style={{ height: "100%" }}>
       <ReviewShell jobs={jobs} initialScrapeData={initialScrapeData} />
     </div>
   );

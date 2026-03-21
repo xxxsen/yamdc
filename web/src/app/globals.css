@@ -53,6 +53,104 @@ textarea {
   padding: 32px 20px 48px;
 }
 
+.app-shell {
+  position: relative;
+  display: flex;
+  gap: 20px;
+  height: 100dvh;
+  width: min(66.666vw, 1680px);
+  padding: 20px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.app-shell-collapsed {
+  gap: 0;
+}
+
+.sidebar {
+  position: relative;
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  height: 100%;
+  min-width: 240px;
+}
+
+.main-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.app-shell-collapsed .main-content {
+  flex-basis: 100%;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--foreground);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.sidebar-link:hover {
+  transform: translateX(2px);
+}
+
+.sidebar-link-active {
+  background: var(--accent);
+  color: #fff8f4;
+}
+
+.sidebar-edge-toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 96px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(180, 79, 45, 0.2), rgba(180, 79, 45, 0.04));
+  color: rgba(31, 26, 20, 0.72);
+  cursor: pointer;
+  opacity: 0.28;
+  transition:
+    opacity 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.sidebar-edge-toggle:hover {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(180, 79, 45, 0.36), rgba(180, 79, 45, 0.1));
+  color: var(--accent-strong);
+}
+
+.sidebar-edge-toggle-close {
+  right: 0;
+}
+
+.sidebar-edge-toggle-open {
+  left: 0;
+}
+
 .panel {
   background: var(--panel);
   backdrop-filter: blur(12px);
@@ -211,11 +309,19 @@ textarea {
 }
 
 @media (max-width: 960px) {
-  .shell {
-    padding: 20px 14px 32px;
+  .app-shell {
+    flex-direction: column;
+    width: 100%;
+    padding: 14px;
   }
 
   .two-col {
     grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    min-width: 0;
+    flex-basis: auto;
   }
 }

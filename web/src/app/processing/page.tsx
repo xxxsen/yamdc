@@ -8,7 +8,7 @@ export default async function ProcessingPage() {
   });
 
   return (
-    <div style={{ height: "calc(100dvh - 170px)" }}>
+    <div style={{ height: "100%" }}>
       <JobTable initialData={result} />
     </div>
   );

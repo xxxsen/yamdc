@@ -11,20 +11,21 @@ export function TopNav() {
   const pathname = usePathname();
 
   return (
-    <nav style={{ display: "flex", gap: 10 }}>
+    <nav style={{ display: "grid", gap: 10 }}>
       <Link
-        className={`btn ${isActive(pathname, "/processing") ? "btn-primary" : ""}`}
+        className={`sidebar-link ${isActive(pathname, "/processing") ? "sidebar-link-active" : ""}`}
         href="/processing"
+        title="文件列表"
       >
-        待处理
+        文件列表
       </Link>
       <Link
-        className={`btn ${isActive(pathname, "/review") ? "btn-primary" : ""}`}
+        className={`sidebar-link ${isActive(pathname, "/review") ? "sidebar-link-active" : ""}`}
         href="/review"
+        title="Review 列表"
       >
-        待 Review
+        Review列表
       </Link>
     </nav>
   );
 }
-

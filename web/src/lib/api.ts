@@ -212,5 +212,5 @@ export async function importReviewJob(id: number) {
 }
 
 export function getAssetURL(key: string) {
-  return `${getBaseURL()}/api/assets/${encodeURIComponent(key)}`;
+  return `/api/assets/${encodeURIComponent(key)}`;
 }

@@ -187,7 +187,6 @@ func runServer(c *config.Config) {
 	if err := jobSvc.Recover(context.Background()); err != nil {
 		logkit.Error("recover processing jobs failed", zap.Error(err))
 	}
-	scanSvc.Start(context.Background(), 30*time.Second)
 	api := web.NewAPI(jobRepo, scanSvc, jobSvc)
 	addr := os.Getenv("YAMDC_SERVER_ADDR")
 	if addr == "" {
