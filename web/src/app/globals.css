@@ -201,7 +201,7 @@ textarea {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.78);
   color: var(--foreground);
-  padding: 12px 14px;
+  padding: 8px 12px;
 }
 
 .table-wrap {
@@ -313,6 +313,347 @@ textarea {
   min-height: 0;
 }
 
+.review-list-panel,
+.review-detail-panel {
+  padding: 18px;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-job-list {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.review-job-card {
+  padding: 12px;
+  border-radius: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-job-card-path {
+  font-weight: 600;
+}
+
+.review-job-card-number,
+.review-job-card-time,
+.review-subtitle,
+.review-message,
+.review-label {
+  color: var(--muted);
+}
+
+.review-job-card-number,
+.review-job-card-time,
+.review-subtitle,
+.review-message {
+  font-size: 13px;
+}
+
+.review-job-card-number,
+.review-job-card-time {
+  margin-top: 4px;
+}
+
+.review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex: 0 0 auto;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.review-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) 320px;
+  gap: 16px;
+  overflow: hidden;
+  align-items: start;
+}
+
+.review-content-single {
+  grid-template-columns: 1fr;
+}
+
+.review-form,
+.review-media {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  align-content: start;
+}
+
+.review-stack {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.review-field {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-field-area,
+.review-field-tokens {
+  align-items: start;
+}
+
+.review-field-media {
+  align-items: start;
+}
+
+.review-media-offset {
+  padding-left: 94px;
+}
+
+.review-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review-label-side {
+  text-align: right;
+  padding-top: 2px;
+}
+
+.review-input-strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.review-meta-row {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  align-items: start;
+}
+
+.review-meta-row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.review-meta-row-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.review-textarea {
+  min-height: 68px;
+  max-height: 68px;
+  resize: none;
+  line-height: 1.45;
+}
+
+.token-editor {
+  display: flex;
+  align-items: center;
+  align-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  cursor: text;
+}
+
+.token-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 999px;
+  background: rgba(180, 79, 45, 0.12);
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.token-chip-remove {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff8f4;
+  cursor: pointer;
+  padding: 0;
+}
+
+.token-input {
+  flex: 1 1 140px;
+  min-width: 140px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--foreground);
+}
+
+.review-media {
+  grid-template-rows: auto auto;
+}
+
+.review-artwork-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 10px;
+  min-height: 0;
+  align-items: end;
+}
+
+.review-image-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.review-image-card-cover {
+  min-height: 0;
+}
+
+.review-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.review-image-title {
+  display: block;
+  min-height: 16px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.review-image-box {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.review-image-box-cover {
+  height: 525px;
+}
+
+.review-image-box-poster {
+  height: 525px;
+}
+
+.review-fanart-panel {
+  padding: 10px;
+  min-height: 0;
+  width: 100%;
+}
+
+.review-fanart-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.review-fanart-item {
+  position: relative;
+  flex: 0 0 210px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.review-fanart-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.review-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(26, 18, 14, 0.6);
+}
+
+.review-preview-dialog {
+  position: relative;
+  width: min(80vw, 1200px);
+  padding: 16px;
+}
+
+.review-preview-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.review-preview-frame {
+  position: relative;
+  width: 100%;
+  height: min(78vh, 720px);
+}
+
+.review-preview-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 55;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.92);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
 @media (max-width: 960px) {
   .app-shell {
     flex-direction: column;
@@ -322,6 +663,30 @@ textarea {
 
   .two-col {
     grid-template-columns: 1fr;
+  }
+
+  .review-content,
+  .review-meta-row-2,
+  .review-meta-row-4,
+  .review-artwork-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-field {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .review-label-side {
+    text-align: left;
+  }
+
+  .review-media-offset {
+    padding-left: 0;
+  }
+
+  .review-content {
+    overflow: auto;
   }
 
   .sidebar {
