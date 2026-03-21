@@ -160,6 +160,48 @@ textarea {
   min-height: 40px;
 }
 
+.status-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-chip-view {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.status-chip:hover .status-chip-view[data-enabled="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.status-chip:hover .badge[data-view-enabled="true"] {
+  opacity: 0.18;
+}
+
+.status-chip-view.icon-btn-danger {
+  color: var(--danger);
+}
+
 .two-col {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);

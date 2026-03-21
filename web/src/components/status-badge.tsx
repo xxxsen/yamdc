@@ -10,6 +10,9 @@ const LABELS: Record<JobStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: JobStatus }) {
-  return <span className={cn("badge", `badge-${status}`)}>{LABELS[status]}</span>;
+  return (
+    <span className={cn("badge", `badge-${status}`)} data-view-enabled={status !== "init"}>
+      {LABELS[status]}
+    </span>
+  );
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, RefreshCw, RotateCcw, ScrollText, Trash2, X } from "lucide-react";
+import { Eye, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
@@ -15,21 +15,31 @@ interface Props {
 const STATUS_FILTER = "init,processing,failed,reviewing";
 
 export function JobTable({ initialData }: Props) {
-  const [jobs, setJobs] = useState(initialData.items);
+  const [allJobs, setAllJobs] = useState(initialData.items);
   const [total, setTotal] = useState(initialData.total);
   const [keyword, setKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [message, setMessage] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [logJob, setLogJob] = useState<JobItem | null>(null);
   const [logs, setLogs] = useState<JobLogItem[]>([]);
   const [logMessage, setLogMessage] = useState("");
 
+  const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
+
   const counts = useMemo(() => {
-    return jobs.reduce<Record<string, number>>((acc, item) => {
+    return allJobs.reduce<Record<string, number>>((acc, item) => {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
     }, {});
-  }, [jobs]);
+  }, [allJobs]);
+
+  const jobs = useMemo(() => {
+    if (statusFilter === "all") {
+      return allJobs;
+    }
+    return allJobs.filter((item) => item.status === statusFilter);
+  }, [allJobs, statusFilter]);
 
   const refreshJobs = async (nextKeyword = keyword) => {
     const data = await listJobs({
@@ -37,7 +47,7 @@ export function JobTable({ initialData }: Props) {
       all: true,
       keyword: nextKeyword,
     });
-    setJobs(data.items);
+    setAllJobs(data.items);
     setTotal(data.total);
   };
 
@@ -49,13 +59,13 @@ export function JobTable({ initialData }: Props) {
         keyword,
       })
         .then((data) => {
-          setJobs(data.items);
+          setAllJobs(data.items);
           setTotal(data.total);
         })
         .catch(() => undefined);
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [keyword]);
+  }, [keyword, resolvedStatusFilter]);
 
   const handleScan = () => {
     startTransition(async () => {
@@ -70,17 +80,25 @@ export function JobTable({ initialData }: Props) {
     });
   };
 
-  const handleSearch = () => {
-    startTransition(async () => {
-      try {
-        setMessage("查询中...");
-        await refreshJobs(keyword);
-        setMessage("");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "查询失败");
-      }
-    });
-  };
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        try {
+          const data = await listJobs({
+            status: STATUS_FILTER,
+            all: true,
+            keyword,
+          });
+          setAllJobs(data.items);
+          setTotal(data.total);
+          setMessage("");
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "查询失败");
+        }
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [keyword, resolvedStatusFilter]);
 
   const handleRun = (job: JobItem) => {
     startTransition(async () => {
@@ -160,10 +178,7 @@ export function JobTable({ initialData }: Props) {
         >
           <div>
             <h2 style={{ margin: 0, fontSize: 24 }}>当前需处理的文件</h2>
-            <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-              当前展示 {jobs.length} 条，共 {total} 条任务，init {counts.init ?? 0}，processing {counts.processing ?? 0}，failed {counts.failed ?? 0}，
-              reviewing {counts.reviewing ?? 0}
-            </p>
+            <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>当前展示 {jobs.length} 条，共 {total} 条任务</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <input
@@ -173,9 +188,18 @@ export function JobTable({ initialData }: Props) {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
-            <button className="btn" onClick={handleSearch} disabled={isPending}>
-              查询
-            </button>
+            <select
+              className="input"
+              style={{ width: 160 }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">全部状态 ({total})</option>
+              <option value="init">Init ({counts.init ?? 0})</option>
+              <option value="processing">Processing ({counts.processing ?? 0})</option>
+              <option value="reviewing">Reviewing ({counts.reviewing ?? 0})</option>
+              <option value="failed">Failed ({counts.failed ?? 0})</option>
+            </select>
             {message ? <span style={{ color: "var(--muted)", fontSize: 14 }}>{message}</span> : null}
             <button className="btn btn-primary" onClick={handleScan} disabled={isPending}>
               <RefreshCw size={16} />
@@ -187,7 +211,6 @@ export function JobTable({ initialData }: Props) {
           <table className="table">
             <thead>
               <tr>
-                <th>Name</th>
                 <th>Path</th>
                 <th>Number</th>
                 <th>Size</th>
@@ -203,9 +226,6 @@ export function JobTable({ initialData }: Props) {
                 const canDelete = job.status === "init" || job.status === "failed" || job.status === "reviewing";
                 return (
                   <tr key={job.id}>
-                    <td style={{ minWidth: 180 }}>
-                      <div className="cell-center">{job.file_name}</div>
-                    </td>
                     <td style={{ minWidth: 260, color: "var(--muted)" }}>
                       <div className="cell-center">{job.rel_path}</div>
                     </td>
@@ -217,7 +237,18 @@ export function JobTable({ initialData }: Props) {
                     </td>
                     <td style={{ width: 120 }}>
                       <div className="cell-center">
-                        <StatusBadge status={job.status} />
+                        <div className="status-chip">
+                          <StatusBadge status={job.status} />
+                          <button
+                            className={`status-chip-view ${job.status === "failed" || job.error_msg ? "icon-btn-danger" : ""}`}
+                            data-enabled={job.status !== "init"}
+                            onClick={() => handleOpenLogs(job)}
+                            disabled={isPending || job.status === "init"}
+                            aria-label="查看日志"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </div>
                       </div>
                     </td>
                     <td style={{ width: 150 }}>
@@ -231,16 +262,9 @@ export function JobTable({ initialData }: Props) {
                           </button>
                         ) : (
                           <button className="btn" onClick={() => handleRun(job)} disabled={!canRun || isPending}>
-                            <Play size={16} />
+                            <Sparkles size={16} />
                           </button>
                         )}
-                        <button
-                          className={`btn ${job.status === "failed" || job.error_msg ? "icon-btn-danger" : ""}`}
-                          onClick={() => handleOpenLogs(job)}
-                          disabled={isPending}
-                        >
-                          <ScrollText size={16} />
-                        </button>
                         <button className="btn" onClick={() => handleDelete(job)} disabled={!canDelete || isPending}>
                           <Trash2 size={16} />
                         </button>
@@ -251,7 +275,7 @@ export function JobTable({ initialData }: Props) {
               })}
               {jobs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)", textAlign: "center", padding: 28 }}>
+                  <td colSpan={6} style={{ color: "var(--muted)", textAlign: "center", padding: 28 }}>
                     当前没有待处理文件
                   </td>
                 </tr>
