@@ -425,6 +425,11 @@ textarea {
   align-items: start;
 }
 
+.review-field-tokens .review-label-side {
+  align-self: center;
+  padding-top: 0;
+}
+
 .review-media-offset {
   padding-left: 94px;
 }

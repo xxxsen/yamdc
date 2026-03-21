@@ -92,7 +92,7 @@ function TokenEditor({
   };
 
   return (
-    <label className="review-field review-field-tokens">
+    <div className="review-field review-field-tokens">
       <span className="review-label review-label-side">{label}</span>
       <div className="token-editor" onClick={() => document.getElementById(`token-${label}`)?.focus()}>
         {value.map((item, idx) => (
@@ -141,7 +141,7 @@ function TokenEditor({
           }}
         />
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -437,29 +437,29 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                   />
                 </div>
                 <div className="review-meta-row review-meta-row-4">
-                  <label className="review-field">
+                  <div className="review-field">
                     <span className="review-label review-label-side">导演</span>
                     <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleAutoSave} />
-                  </label>
-                  <label className="review-field">
+                  </div>
+                  <div className="review-field">
                     <span className="review-label review-label-side">制作商</span>
                     <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleAutoSave} />
-                  </label>
-                  <label className="review-field">
+                  </div>
+                  <div className="review-field">
                     <span className="review-label review-label-side">发行商</span>
                     <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleAutoSave} />
-                  </label>
-                  <label className="review-field">
+                  </div>
+                  <div className="review-field">
                     <span className="review-label review-label-side">系列</span>
                     <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleAutoSave} />
-                  </label>
+                  </div>
                 </div>
                 <div className="review-meta-row review-meta-row-2">
-                  <label className="review-field review-field-area">
+                  <div className="review-field review-field-area">
                     <span className="review-label review-label-side">简介</span>
                     <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleAutoSave} />
-                  </label>
-                  <label className="review-field review-field-area">
+                  </div>
+                  <div className="review-field review-field-area">
                     <span className="review-label review-label-side">翻译简介</span>
                     <textarea
                       className="input review-textarea"
@@ -467,7 +467,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                       onChange={(e) => updateMeta({ plot_translated: e.target.value })}
                       onBlur={handleAutoSave}
                     />
-                  </label>
+                  </div>
                 </div>
                 <div className="review-meta-row">
                   <TokenEditor
