@@ -117,10 +117,10 @@ textarea {
 
 .table th,
 .table td {
-  padding: 14px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table th {
@@ -133,7 +133,9 @@ textarea {
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   border-radius: 999px;
+  min-width: 96px;
   padding: 4px 10px;
   font-size: 12px;
   border: 1px solid currentColor;
@@ -144,6 +146,19 @@ textarea {
 .badge-reviewing { color: var(--warn); }
 .badge-done { color: var(--ok); }
 .badge-failed { color: var(--danger); }
+
+.icon-btn-danger {
+  color: var(--danger);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cell-center {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
 
 .two-col {
   display: grid;

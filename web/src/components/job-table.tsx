@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, RefreshCw, RotateCcw, ScrollText, Trash2, TriangleAlert, X } from "lucide-react";
+import { Play, RefreshCw, RotateCcw, ScrollText, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
@@ -203,16 +203,28 @@ export function JobTable({ initialData }: Props) {
                 const canDelete = job.status === "init" || job.status === "failed" || job.status === "reviewing";
                 return (
                   <tr key={job.id}>
-                    <td style={{ minWidth: 180 }}>{job.file_name}</td>
-                    <td style={{ minWidth: 260, color: "var(--muted)" }}>{job.rel_path}</td>
-                    <td>{job.number}</td>
-                    <td>{formatBytes(job.file_size)}</td>
-                    <td>
-                      <StatusBadge status={job.status} />
+                    <td style={{ minWidth: 180 }}>
+                      <div className="cell-center">{job.file_name}</div>
                     </td>
-                    <td>{formatUnixMillis(job.updated_at)}</td>
+                    <td style={{ minWidth: 260, color: "var(--muted)" }}>
+                      <div className="cell-center">{job.rel_path}</div>
+                    </td>
                     <td>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <div className="cell-center">{job.number}</div>
+                    </td>
+                    <td>
+                      <div className="cell-center">{formatBytes(job.file_size)}</div>
+                    </td>
+                    <td style={{ width: 120 }}>
+                      <div className="cell-center">
+                        <StatusBadge status={job.status} />
+                      </div>
+                    </td>
+                    <td style={{ width: 150 }}>
+                      <div className="cell-center">{formatUnixMillis(job.updated_at)}</div>
+                    </td>
+                    <td style={{ width: 176 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "nowrap", alignItems: "center" }}>
                         {canRerun ? (
                           <button className="btn" onClick={() => handleRerun(job)} disabled={isPending}>
                             <RotateCcw size={16} />
@@ -222,18 +234,16 @@ export function JobTable({ initialData }: Props) {
                             <Play size={16} />
                           </button>
                         )}
-                        <button className="btn" onClick={() => handleOpenLogs(job)} disabled={isPending}>
+                        <button
+                          className={`btn ${job.status === "failed" || job.error_msg ? "icon-btn-danger" : ""}`}
+                          onClick={() => handleOpenLogs(job)}
+                          disabled={isPending}
+                        >
                           <ScrollText size={16} />
                         </button>
                         <button className="btn" onClick={() => handleDelete(job)} disabled={!canDelete || isPending}>
                           <Trash2 size={16} />
                         </button>
-                        {job.error_msg ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--danger)" }}>
-                            <TriangleAlert size={14} />
-                            {job.error_msg}
-                          </span>
-                        ) : null}
                       </div>
                     </td>
                   </tr>
