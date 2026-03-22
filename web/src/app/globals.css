@@ -434,15 +434,17 @@ textarea {
 
 .review-content-single {
   grid-template-columns: 1fr;
+  height: 100%;
 }
 
 .review-form,
 .review-media {
+  height: 100%;
   min-height: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   overflow: hidden;
-  align-content: start;
 }
 
 .review-stack {
@@ -477,6 +479,26 @@ textarea {
   padding-left: 94px;
 }
 
+.review-cover-slot {
+  flex: 1 1 auto;
+  min-height: 180px;
+  display: flex;
+}
+
+.review-cover-slot .review-image-card-cover {
+  flex: 1 1 auto;
+}
+
+.review-cover-slot .review-image-box-cover {
+  height: 100%;
+  min-height: 180px;
+}
+
+.review-fanart-slot {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
 .review-label {
   font-size: 12px;
   letter-spacing: 0.04em;
@@ -500,6 +522,10 @@ textarea {
   align-items: start;
 }
 
+.review-meta-row-full {
+  width: 100%;
+}
+
 .review-meta-row-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -508,9 +534,13 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.review-meta-row-top {
+  align-content: start;
+}
+
 .review-textarea {
-  min-height: 68px;
-  max-height: 68px;
+  min-height: 108px;
+  max-height: 108px;
   resize: none;
   line-height: 1.45;
 }
@@ -529,9 +559,16 @@ textarea {
   cursor: text;
 }
 
+.token-editor-single-line {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .token-chip {
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   padding: 6px 10px 6px 12px;
@@ -572,12 +609,23 @@ textarea {
   grid-template-rows: auto auto;
 }
 
-.review-artwork-row {
+.review-main-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 14px;
+  align-items: start;
+}
+
+.review-top-fields {
+  display: grid;
   gap: 10px;
-  min-height: 0;
-  align-items: end;
+  min-width: 0;
+}
+
+.review-main-side {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
 .review-image-card {
@@ -625,6 +673,7 @@ textarea {
 
 .review-image-card-cover {
   min-height: 0;
+  width: 100%;
 }
 
 .review-image-empty {
@@ -688,12 +737,24 @@ textarea {
   background: rgba(255, 255, 255, 0.72);
 }
 
-.review-image-box-cover {
-  height: 525px;
+.review-image-box-poster {
+  aspect-ratio: 2 / 3;
+  height: auto;
 }
 
-.review-image-box-poster {
-  height: 525px;
+.review-image-card-poster {
+  width: 100%;
+}
+
+.review-top-poster {
+  width: 100%;
+  box-shadow: 0 16px 34px rgba(58, 35, 20, 0.1);
+}
+
+.review-main-poster {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
 }
 
 .review-fanart-panel {
@@ -891,10 +952,15 @@ textarea {
   }
 
   .review-content,
+  .review-main-layout,
   .review-meta-row-2,
-  .review-meta-row-4,
-  .review-artwork-row {
+  .review-meta-row-4 {
     grid-template-columns: 1fr;
+  }
+
+  .review-main-poster {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .review-field {
@@ -912,6 +978,19 @@ textarea {
 
   .review-content {
     overflow: auto;
+  }
+
+  .review-image-card-poster {
+    width: 100%;
+  }
+
+  .review-image-box-poster {
+    height: 525px;
+  }
+
+  .review-image-box-cover {
+    height: 300px;
+    min-height: 300px;
   }
 
   .sidebar {

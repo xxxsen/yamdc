@@ -67,12 +67,14 @@ function TokenEditor({
   value,
   onChange,
   onBlurSave,
+  singleLine = false,
 }: {
   label: string;
   placeholder: string;
   value: string[];
   onChange: (next: string[]) => void;
   onBlurSave: () => void;
+  singleLine?: boolean;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -94,7 +96,7 @@ function TokenEditor({
   return (
     <div className="review-field review-field-tokens">
       <span className="review-label review-label-side">{label}</span>
-      <div className="token-editor" onClick={() => document.getElementById(`token-${label}`)?.focus()}>
+      <div className={`token-editor${singleLine ? " token-editor-single-line" : ""}`} onClick={() => document.getElementById(`token-${label}`)?.focus()}>
         {value.map((item, idx) => (
           <span key={`${item}-${idx}`} className="token-chip">
             {item}
@@ -559,156 +561,161 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
           {meta ? (
             <div className="review-content review-content-single">
               <div className="review-form">
-                <div className="review-field">
-                  <span className="review-label review-label-side">标题</span>
-                  <input
-                    className="input review-input-strong"
-                    value={meta.title ?? ""}
-                    onChange={(e) => updateMeta({ title: e.target.value })}
-                    onBlur={handleAutoSave}
-                  />
+                <div className="review-main-layout">
+                  <div className="review-top-fields">
+                    <div className="review-field">
+                      <span className="review-label review-label-side">标题</span>
+                      <input
+                        className="input review-input-strong"
+                        value={meta.title ?? ""}
+                        onChange={(e) => updateMeta({ title: e.target.value })}
+                        onBlur={handleAutoSave}
+                      />
+                    </div>
+                    <div className="review-field">
+                      <span className="review-label review-label-side">翻译标题</span>
+                      <input
+                        className="input"
+                        value={meta.title_translated ?? ""}
+                        onChange={(e) => updateMeta({ title_translated: e.target.value })}
+                        onBlur={handleAutoSave}
+                      />
+                    </div>
+                    <div className="review-meta-row review-meta-row-2 review-meta-row-top">
+                      <div className="review-field">
+                        <span className="review-label review-label-side">导演</span>
+                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleAutoSave} />
+                      </div>
+                      <div className="review-field">
+                        <span className="review-label review-label-side">制作商</span>
+                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleAutoSave} />
+                      </div>
+                      <div className="review-field">
+                        <span className="review-label review-label-side">发行商</span>
+                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleAutoSave} />
+                      </div>
+                      <div className="review-field">
+                        <span className="review-label review-label-side">系列</span>
+                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleAutoSave} />
+                      </div>
+                    </div>
+                    <div className="review-meta-row review-meta-row-2">
+                      <div className="review-field review-field-area">
+                        <span className="review-label review-label-side">简介</span>
+                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleAutoSave} />
+                      </div>
+                      <div className="review-field review-field-area">
+                        <span className="review-label review-label-side">翻译简介</span>
+                        <textarea
+                          className="input review-textarea"
+                          value={meta.plot_translated ?? ""}
+                          onChange={(e) => updateMeta({ plot_translated: e.target.value })}
+                          onBlur={handleAutoSave}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="review-main-side">
+                    <div className="review-meta-row">
+                      <TokenEditor
+                        label="演员"
+                        placeholder="输入演员名后输入逗号"
+                        value={normalizeList(meta.actors)}
+                        onChange={(next) => updateMeta({ actors: next })}
+                        onBlurSave={handleAutoSave}
+                      />
+                    </div>
+                  </div>
+                  {meta.poster ? (
+                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
+                      <span className="review-image-title">海报</span>
+                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                        <Crop size={14} />
+                      </button>
+                      <div className="review-image-box review-image-box-poster">
+                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}>
+                          <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
+                        </button>
+                        <button
+                          type="button"
+                          className="review-upload-overlay"
+                          onClick={() => posterUploadRef.current?.click()}
+                          aria-label="上传海报"
+                          title="上传海报"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster review-image-empty">
+                      <span className="review-image-title">海报</span>
+                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                        <Crop size={14} />
+                      </button>
+                      <div className="review-image-box review-image-box-poster review-upload-empty">
+                        <button
+                          type="button"
+                          className="review-upload-overlay"
+                          onClick={() => posterUploadRef.current?.click()}
+                          aria-label="上传海报"
+                          title="上传海报"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="review-field">
-                  <span className="review-label review-label-side">翻译标题</span>
-                  <input
-                    className="input"
-                    value={meta.title_translated ?? ""}
-                    onChange={(e) => updateMeta({ title_translated: e.target.value })}
-                    onBlur={handleAutoSave}
-                  />
-                </div>
-                <div className="review-meta-row review-meta-row-4">
-                  <div className="review-field">
-                    <span className="review-label review-label-side">导演</span>
-                    <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleAutoSave} />
-                  </div>
-                  <div className="review-field">
-                    <span className="review-label review-label-side">制作商</span>
-                    <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleAutoSave} />
-                  </div>
-                  <div className="review-field">
-                    <span className="review-label review-label-side">发行商</span>
-                    <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleAutoSave} />
-                  </div>
-                  <div className="review-field">
-                    <span className="review-label review-label-side">系列</span>
-                    <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleAutoSave} />
-                  </div>
-                </div>
-                <div className="review-meta-row review-meta-row-2">
-                  <div className="review-field review-field-area">
-                    <span className="review-label review-label-side">简介</span>
-                    <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleAutoSave} />
-                  </div>
-                  <div className="review-field review-field-area">
-                    <span className="review-label review-label-side">翻译简介</span>
-                    <textarea
-                      className="input review-textarea"
-                      value={meta.plot_translated ?? ""}
-                      onChange={(e) => updateMeta({ plot_translated: e.target.value })}
-                      onBlur={handleAutoSave}
-                    />
-                  </div>
-                </div>
-                <div className="review-meta-row">
-                  <TokenEditor
-                    label="演员"
-                    placeholder="输入演员名后输入逗号"
-                    value={normalizeList(meta.actors)}
-                    onChange={(next) => updateMeta({ actors: next })}
-                    onBlurSave={handleAutoSave}
-                  />
-                </div>
-                <div className="review-meta-row">
+                <div className="review-meta-row review-meta-row-full">
                   <TokenEditor
                     label="标签"
                     placeholder="输入标签后输入逗号"
                     value={normalizeList(meta.genres)}
                     onChange={(next) => updateMeta({ genres: next })}
                     onBlurSave={handleAutoSave}
+                    singleLine
                   />
                 </div>
-                <div className="review-media-offset">
-                  <div className="review-artwork-row">
-                    {meta.cover ? (
-                      <div className="panel review-image-card review-image-card-cover">
-                        <span className="review-image-title">封面</span>
-                        <div className="review-image-box review-image-box-cover">
-                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("cover"), item: meta.cover! })}>
-                            <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                          </button>
-                          <button
-                            type="button"
-                            className="review-upload-overlay"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              coverUploadRef.current?.click();
-                            }}
-                            aria-label="上传封面"
-                            title="上传封面"
-                          >
-                            <Plus size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="panel review-image-card review-image-card-cover review-image-empty">
-                        <div className="review-image-box review-image-box-cover review-upload-empty">
-                          <button
-                            type="button"
-                            className="review-upload-overlay"
-                            onClick={() => coverUploadRef.current?.click()}
-                            aria-label="上传封面"
-                            title="上传封面"
-                          >
-                            <Plus size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {meta.poster ? (
-                      <div className="panel review-image-card review-image-card-poster">
-                        <span className="review-image-title">海报</span>
-                        <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                          <Crop size={14} />
+                <div className="review-media-offset review-cover-slot">
+                  {meta.cover ? (
+                    <div className="panel review-image-card review-image-card-cover">
+                      <span className="review-image-title">封面</span>
+                      <div className="review-image-box review-image-box-cover">
+                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("cover"), item: meta.cover! })}>
+                          <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </button>
-                        <div className="review-image-box review-image-box-poster">
-                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}>
-                            <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                          </button>
-                          <button
-                            type="button"
-                            className="review-upload-overlay"
-                            onClick={() => posterUploadRef.current?.click()}
-                            aria-label="上传海报"
-                            title="上传海报"
-                          >
-                            <Plus size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="panel review-image-card review-image-card-poster review-image-empty">
-                        <span className="review-image-title">海报</span>
-                        <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                          <Crop size={14} />
+                        <button
+                          type="button"
+                          className="review-upload-overlay"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            coverUploadRef.current?.click();
+                          }}
+                          aria-label="上传封面"
+                          title="上传封面"
+                        >
+                          <Plus size={18} />
                         </button>
-                        <div className="review-image-box review-image-box-poster review-upload-empty">
-                          <button
-                            type="button"
-                            className="review-upload-overlay"
-                            onClick={() => posterUploadRef.current?.click()}
-                            aria-label="上传海报"
-                            title="上传海报"
-                          >
-                            <Plus size={18} />
-                          </button>
-                        </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="panel review-image-card review-image-card-cover review-image-empty">
+                      <div className="review-image-box review-image-box-cover review-upload-empty">
+                        <button
+                          type="button"
+                          className="review-upload-overlay"
+                          onClick={() => coverUploadRef.current?.click()}
+                          aria-label="上传封面"
+                          title="上传封面"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="review-media-offset">
+                <div className="review-media-offset review-fanart-slot">
                   <div className="panel review-fanart-panel">
                     <div
                       className="review-fanart-strip"
