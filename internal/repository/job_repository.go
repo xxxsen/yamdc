@@ -11,12 +11,18 @@ import (
 )
 
 type UpsertJobInput struct {
-	FileName string
-	FileExt  string
-	RelPath  string
-	AbsPath  string
-	Number   string
-	FileSize int64
+	FileName              string
+	FileExt               string
+	RelPath               string
+	AbsPath               string
+	Number                string
+	RawNumber             string
+	CleanedNumber         string
+	NumberSource          string
+	NumberCleanStatus     string
+	NumberCleanConfidence string
+	NumberCleanWarnings   string
+	FileSize              int64
 }
 
 type JobRepository struct {
@@ -38,26 +44,54 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 	now := time.Now().UnixMilli()
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO yamdc_job_tab (
-			job_uid, file_name, file_ext, rel_path, abs_path, number, file_size, status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number, number_source,
+			number_clean_status, number_clean_confidence, number_clean_warnings, file_size, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(rel_path) DO UPDATE SET
 			file_name = excluded.file_name,
 			file_ext = excluded.file_ext,
 			abs_path = excluded.abs_path,
-			number = excluded.number,
+			raw_number = excluded.raw_number,
+			cleaned_number = excluded.cleaned_number,
+			number = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN yamdc_job_tab.number
+				ELSE excluded.number
+			END,
+			number_source = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN yamdc_job_tab.number_source
+				ELSE excluded.number_source
+			END,
+			number_clean_status = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN yamdc_job_tab.number_clean_status
+				ELSE excluded.number_clean_status
+			END,
+			number_clean_confidence = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN yamdc_job_tab.number_clean_confidence
+				ELSE excluded.number_clean_confidence
+			END,
+			number_clean_warnings = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN yamdc_job_tab.number_clean_warnings
+				ELSE excluded.number_clean_warnings
+			END,
 			file_size = excluded.file_size,
 			deleted_at = 0,
 			updated_at = CASE
 				WHEN yamdc_job_tab.file_name != excluded.file_name
 					OR yamdc_job_tab.file_ext != excluded.file_ext
 					OR yamdc_job_tab.abs_path != excluded.abs_path
-					OR yamdc_job_tab.number != excluded.number
+					OR yamdc_job_tab.raw_number != excluded.raw_number
+					OR yamdc_job_tab.cleaned_number != excluded.cleaned_number
+					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number != excluded.number)
+					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_source != excluded.number_source)
+					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_status != excluded.number_clean_status)
+					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_confidence != excluded.number_clean_confidence)
+					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_warnings != excluded.number_clean_warnings)
 					OR yamdc_job_tab.file_size != excluded.file_size
 					OR yamdc_job_tab.deleted_at != 0
 				THEN excluded.updated_at
 				ELSE yamdc_job_tab.updated_at
 			END
-	`, uuid.NewString(), in.FileName, in.FileExt, in.RelPath, in.AbsPath, in.Number, in.FileSize, jobdef.StatusInit, now, now)
+	`, uuid.NewString(), in.FileName, in.FileExt, in.RelPath, in.AbsPath, in.Number, in.RawNumber, in.CleanedNumber, in.NumberSource, in.NumberCleanStatus, in.NumberCleanConfidence, in.NumberCleanWarnings, in.FileSize, jobdef.StatusInit, now, now)
 	if err != nil {
 		return fmt.Errorf("upsert scanned job failed: %w", err)
 	}
@@ -96,7 +130,9 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 		return nil, fmt.Errorf("count jobs failed: %w", err)
 	}
 	query := `
-		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, file_size, status, error_msg, created_at, updated_at
+		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number,
+		       number_source, number_clean_status, number_clean_confidence, number_clean_warnings,
+		       file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
 	` + where + ` ORDER BY created_at DESC, id DESC`
 	queryArgs := append([]interface{}{}, args...)
@@ -123,6 +159,12 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 			&item.RelPath,
 			&item.AbsPath,
 			&item.Number,
+			&item.RawNumber,
+			&item.CleanedNumber,
+			&item.NumberSource,
+			&item.NumberCleanStatus,
+			&item.NumberCleanConfidence,
+			&item.NumberCleanWarnings,
 			&item.FileSize,
 			&item.Status,
 			&item.ErrorMsg,
@@ -147,7 +189,9 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, error) {
 	var item jobdef.Job
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, file_size, status, error_msg, created_at, updated_at
+		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number,
+		       number_source, number_clean_status, number_clean_confidence, number_clean_warnings,
+		       file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
 		WHERE id = ? AND deleted_at = 0
 	`, id).Scan(
@@ -158,6 +202,12 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, err
 		&item.RelPath,
 		&item.AbsPath,
 		&item.Number,
+		&item.RawNumber,
+		&item.CleanedNumber,
+		&item.NumberSource,
+		&item.NumberCleanStatus,
+		&item.NumberCleanConfidence,
+		&item.NumberCleanWarnings,
 		&item.FileSize,
 		&item.Status,
 		&item.ErrorMsg,
@@ -171,6 +221,18 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, err
 		return nil, fmt.Errorf("get job failed: %w", err)
 	}
 	return &item, nil
+}
+
+func (r *JobRepository) UpdateNumber(ctx context.Context, id int64, number string, source string, cleanStatus string, cleanConfidence string, cleanWarnings string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE yamdc_job_tab
+		SET number = ?, number_source = ?, number_clean_status = ?, number_clean_confidence = ?, number_clean_warnings = ?, updated_at = ?
+		WHERE id = ? AND deleted_at = 0
+	`, number, source, cleanStatus, cleanConfidence, cleanWarnings, time.Now().UnixMilli(), id)
+	if err != nil {
+		return fmt.Errorf("update job number failed: %w", err)
+	}
+	return nil
 }
 
 func (r *JobRepository) UpdateStatus(ctx context.Context, id int64, from []jobdef.Status, to jobdef.Status, errMsg string) (bool, error) {

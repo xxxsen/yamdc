@@ -41,6 +41,19 @@ func NewService(
 	}
 }
 
+func requiresManualNumberReview(j *jobdef.Job) bool {
+	if j == nil {
+		return false
+	}
+	if j.NumberSource == "manual" {
+		return false
+	}
+	if j.NumberCleanStatus == "no_match" || j.NumberCleanStatus == "low_quality" {
+		return true
+	}
+	return j.NumberCleanConfidence == "low"
+}
+
 func (s *Service) Run(ctx context.Context, jobID int64) error {
 	return s.start(ctx, jobID, []jobdef.Status{jobdef.StatusInit})
 }
@@ -55,6 +68,29 @@ func (s *Service) ListLogs(ctx context.Context, jobID int64) ([]repository.LogIt
 
 func (s *Service) GetScrapeData(ctx context.Context, jobID int64) (*repository.ScrapeData, error) {
 	return s.scrapeRepo.GetByJobID(ctx, jobID)
+}
+
+func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (*jobdef.Job, error) {
+	j, err := s.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if j == nil {
+		return nil, fmt.Errorf("job not found")
+	}
+	if j.Status != jobdef.StatusInit && j.Status != jobdef.StatusFailed {
+		return nil, fmt.Errorf("job number can only be edited in init or failed status")
+	}
+	fc, err := s.capture.ResolveFileContext(j.AbsPath, input)
+	if err != nil {
+		return nil, fmt.Errorf("validate number failed: %w", err)
+	}
+	numberText := fc.Number.GenerateFileName()
+	if err := s.jobRepo.UpdateNumber(ctx, jobID, numberText, "manual", "success", "high", ""); err != nil {
+		return nil, err
+	}
+	_ = s.logRepo.Add(ctx, jobID, "info", "number", "job number updated", numberText)
+	return s.jobRepo.GetByID(ctx, jobID)
 }
 
 func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData string) error {
@@ -179,7 +215,7 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
 		return fmt.Errorf("parse final meta failed: %w", err)
 	}
-	fc, err := s.capture.ResolveFileContext(j.AbsPath)
+	fc, err := s.capture.ResolveFileContext(j.AbsPath, j.Number)
 	if err != nil {
 		return fmt.Errorf("resolve file context failed: %w", err)
 	}
@@ -238,6 +274,17 @@ func (s *Service) Recover(ctx context.Context) error {
 }
 
 func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Status) error {
+	j, err := s.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if j == nil {
+		return fmt.Errorf("job not found")
+	}
+	if requiresManualNumberReview(j) {
+		return fmt.Errorf("job number requires manual edit before scraping")
+	}
+
 	if !s.claim(jobID) {
 		return fmt.Errorf("job is already running")
 	}
@@ -269,7 +316,7 @@ func (s *Service) runOne(jobID int64) {
 		return
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "prepare", "resolve file context", j.AbsPath)
-	fc, err := s.capture.ResolveFileContext(j.AbsPath)
+	fc, err := s.capture.ResolveFileContext(j.AbsPath, j.Number)
 	if err != nil {
 		s.failJob(ctx, jobID, fmt.Sprintf("resolve file failed: %v", err))
 		return

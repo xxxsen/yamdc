@@ -3,6 +3,7 @@ package capture
 import (
 	"fmt"
 	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
 )
@@ -31,6 +32,7 @@ type config struct {
 	UncensorTester         ruleapi.ITester
 	NumberRewriter         ruleapi.IRewriter
 	NumberCategorier       ruleapi.IMatcher
+	NumberCleaner          numbercleaner.Cleaner
 	DiscardTranslatedTitle bool
 	DiscardTranslatedPlot  bool
 	LinkMode               bool
@@ -89,6 +91,12 @@ func WithNumberRewriter(t ruleapi.IRewriter) Option {
 func WithNumberCategorier(t ruleapi.IMatcher) Option {
 	return func(c *config) {
 		c.NumberCategorier = t
+	}
+}
+
+func WithNumberCleaner(cl numbercleaner.Cleaner) Option {
+	return func(c *config) {
+		c.NumberCleaner = cl
 	}
 }
 

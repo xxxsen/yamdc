@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
@@ -20,9 +21,10 @@ type Service struct {
 	scanDir string
 	repo    *repository.JobRepository
 	extMap  map[string]struct{}
+	cleaner numbercleaner.Cleaner
 }
 
-func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository) *Service {
+func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository, cleaner numbercleaner.Cleaner) *Service {
 	extMap := make(map[string]struct{}, len(defaultMediaSuffix)+len(extraMediaExts))
 	for _, item := range defaultMediaSuffix {
 		extMap[strings.ToLower(item)] = struct{}{}
@@ -34,6 +36,7 @@ func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository
 		scanDir: scanDir,
 		repo:    repo,
 		extMap:  extMap,
+		cleaner: cleaner,
 	}
 }
 
@@ -71,14 +74,42 @@ func (s *Service) Scan(ctx context.Context) error {
 		}
 		fileName := filepath.Base(path)
 		ext := filepath.Ext(fileName)
-		number := strings.TrimSuffix(fileName, ext)
+		rawNumber := strings.TrimSuffix(fileName, ext)
+		number := rawNumber
+		cleanedNumber := ""
+		numberSource := "raw"
+		numberCleanStatus := ""
+		numberCleanConfidence := ""
+		numberCleanWarnings := ""
+		if s.cleaner != nil {
+			res, err := s.cleaner.Clean(rawNumber)
+			if err != nil {
+				return fmt.Errorf("clean scan number failed: %w", err)
+			}
+			if res != nil {
+				cleanedNumber = res.Normalized
+				numberCleanStatus = string(res.Status)
+				numberCleanConfidence = string(res.Confidence)
+				numberCleanWarnings = strings.Join(res.Warnings, "; ")
+				if res.Normalized != "" {
+					number = res.Normalized
+					numberSource = "cleaner"
+				}
+			}
+		}
 		entries = append(entries, repository.UpsertJobInput{
-			FileName: fileName,
-			FileExt:  ext,
-			RelPath:  filepath.ToSlash(relPath),
-			AbsPath:  path,
-			Number:   number,
-			FileSize: info.Size(),
+			FileName:              fileName,
+			FileExt:               ext,
+			RelPath:               filepath.ToSlash(relPath),
+			AbsPath:               path,
+			Number:                number,
+			RawNumber:             rawNumber,
+			CleanedNumber:         cleanedNumber,
+			NumberSource:          numberSource,
+			NumberCleanStatus:     numberCleanStatus,
+			NumberCleanConfidence: numberCleanConfidence,
+			NumberCleanWarnings:   numberCleanWarnings,
+			FileSize:              info.Size(),
 		})
 		return nil
 	})

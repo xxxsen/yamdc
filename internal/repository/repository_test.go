@@ -194,3 +194,45 @@ func TestJobRepositoryUpsertScannedJobDoesNotRefreshUpdatedAtWithoutChanges(t *t
 	require.Len(t, result.Items, 1)
 	require.Equal(t, firstUpdatedAt, result.Items[0].UpdatedAt)
 }
+
+func TestJobRepositoryUpsertScannedJobPreservesManualNumber(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName:              "AAA-001.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "AAA-001.mp4",
+		AbsPath:               "/scan/AAA-001.mp4",
+		Number:                "AAA-001",
+		RawNumber:             "AAA001-raw",
+		CleanedNumber:         "AAA-001",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	result, err := repo.ListJobs(ctx, []jobdef.Status{jobdef.StatusInit}, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	jobID := result.Items[0].ID
+
+	require.NoError(t, repo.UpdateNumber(ctx, jobID, "MANUAL-999", "manual", "success", "high", ""))
+
+	input.CleanedNumber = "AAA-002"
+	input.Number = "AAA-002"
+	input.RawNumber = "AAA002-raw"
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "MANUAL-999", got.Number)
+	require.Equal(t, "manual", got.NumberSource)
+	require.Equal(t, "AAA-002", got.CleanedNumber)
+	require.Equal(t, "AAA002-raw", got.RawNumber)
+}

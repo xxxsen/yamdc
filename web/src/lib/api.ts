@@ -8,6 +8,12 @@ export interface JobItem {
   rel_path: string;
   abs_path: string;
   number: string;
+  raw_number: string;
+  cleaned_number: string;
+  number_source: string;
+  number_clean_status: string;
+  number_clean_confidence: string;
+  number_clean_warnings: string;
   file_size: number;
   status: JobStatus;
   error_msg: string;
@@ -161,6 +167,21 @@ export async function deleteJob(id: number) {
     throw new Error(data.message || `delete job failed: ${resp.status}`);
   }
   return data;
+}
+
+export async function updateJobNumber(id: number, number: string) {
+  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/number`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ number }),
+  });
+  const data = (await resp.json()) as APIResponse<JobItem>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `update job number failed: ${resp.status}`);
+  }
+  return data.data;
 }
 
 export async function listJobLogs(id: number) {

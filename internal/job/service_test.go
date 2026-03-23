@@ -27,20 +27,31 @@ func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
 
 func insertJob(t *testing.T, repo *repository.JobRepository, absPath string, status jobdef.Status) int64 {
 	t.Helper()
+	return insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(absPath),
+		FileExt:               filepath.Ext(absPath),
+		RelPath:               filepath.Base(absPath),
+		AbsPath:               absPath,
+		Number:                "TEST-001",
+		RawNumber:             "TEST001RAW",
+		CleanedNumber:         "TEST-001",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, status)
+}
+
+func insertJobWithInput(t *testing.T, repo *repository.JobRepository, in repository.UpsertJobInput, status jobdef.Status) int64 {
+	t.Helper()
 	ctx := context.Background()
-	err := repo.UpsertScannedJob(ctx, repository.UpsertJobInput{
-		FileName: filepath.Base(absPath),
-		FileExt:  filepath.Ext(absPath),
-		RelPath:  filepath.Base(absPath),
-		AbsPath:  absPath,
-		Number:   "TEST-001",
-		FileSize: 1,
-	})
+	err := repo.UpsertScannedJob(ctx, in)
 	require.NoError(t, err)
-	items, err := repo.ListJobs(ctx, nil, 10)
+	items, err := repo.ListJobs(ctx, nil, "", 1, 10)
 	require.NoError(t, err)
-	require.NotEmpty(t, items)
-	id := items[0].ID
+	require.NotEmpty(t, items.Items)
+	id := items.Items[0].ID
 	if status != jobdef.StatusInit {
 		ok, err := repo.UpdateStatus(ctx, id, []jobdef.Status{jobdef.StatusInit}, status, "")
 		require.NoError(t, err)
@@ -112,4 +123,32 @@ func TestServiceRecover(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, jobdef.StatusFailed, got.Status)
+}
+
+func TestServiceRunRequiresManualEditForLowConfidenceNumber(t *testing.T) {
+	svc, repo := newTestService(t)
+	file := filepath.Join(t.TempDir(), "G.mp4")
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file),
+		FileExt:               filepath.Ext(file),
+		RelPath:               filepath.Base(file),
+		AbsPath:               file,
+		Number:                "RAW-NUMBER",
+		RawNumber:             "RAW-NUMBER",
+		CleanedNumber:         "",
+		NumberSource:          "raw",
+		NumberCleanStatus:     "no_match",
+		NumberCleanConfidence: "low",
+		NumberCleanWarnings:   "no candidate matched",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	err := svc.Run(context.Background(), jobID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "requires manual edit")
+
+	got, getErr := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, getErr)
+	require.NotNil(t, got)
+	require.Equal(t, jobdef.StatusInit, got.Status)
 }

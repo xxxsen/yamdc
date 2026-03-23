@@ -52,6 +52,12 @@ func (s *SQLite) init(ctx context.Context) error {
 			rel_path TEXT NOT NULL UNIQUE,
 			abs_path TEXT NOT NULL,
 			number TEXT NOT NULL,
+			raw_number TEXT NOT NULL DEFAULT '',
+			cleaned_number TEXT NOT NULL DEFAULT '',
+			number_source TEXT NOT NULL DEFAULT 'raw',
+			number_clean_status TEXT NOT NULL DEFAULT '',
+			number_clean_confidence TEXT NOT NULL DEFAULT '',
+			number_clean_warnings TEXT NOT NULL DEFAULT '',
 			file_size INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL,
 			error_msg TEXT NOT NULL DEFAULT '',
@@ -93,6 +99,56 @@ func (s *SQLite) init(ctx context.Context) error {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("exec init stmt failed: %w", err)
 		}
+	}
+	jobColumns := []struct {
+		name string
+		def  string
+	}{
+		{name: "raw_number", def: "TEXT NOT NULL DEFAULT ''"},
+		{name: "cleaned_number", def: "TEXT NOT NULL DEFAULT ''"},
+		{name: "number_source", def: "TEXT NOT NULL DEFAULT 'raw'"},
+		{name: "number_clean_status", def: "TEXT NOT NULL DEFAULT ''"},
+		{name: "number_clean_confidence", def: "TEXT NOT NULL DEFAULT ''"},
+		{name: "number_clean_warnings", def: "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, col := range jobColumns {
+		if err := s.ensureColumn(ctx, "yamdc_job_tab", col.name, col.def); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *SQLite) ensureColumn(ctx context.Context, table string, name string, def string) error {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return fmt.Errorf("query table info failed: %w", err)
+	}
+	defer rows.Close()
+	var found bool
+	for rows.Next() {
+		var cid int
+		var colName string
+		var colType string
+		var notNull int
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &colName, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan table info failed: %w", err)
+		}
+		if colName == name {
+			found = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate table info failed: %w", err)
+	}
+	if found {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, name, def)); err != nil {
+		return fmt.Errorf("add column %s failed: %w", name, err)
 	}
 	return nil
 }

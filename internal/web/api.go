@@ -141,6 +141,29 @@ func (a *API) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": items})
+	case "number":
+		if r.Method != http.MethodPatch {
+			writeMethodNotAllowed(w)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "read body failed"})
+			return
+		}
+		var req struct {
+			Number string `json:"number"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid json body"})
+			return
+		}
+		item, err := a.jobSvc.UpdateNumber(r.Context(), id, req.Number)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "job number updated", "data": item})
 	case "":
 		if r.Method != http.MethodDelete {
 			writeMethodNotAllowed(w)

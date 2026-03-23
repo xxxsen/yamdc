@@ -7,6 +7,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/nfo"
 	"github.com/xxxsen/yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/store"
 	"io/fs"
@@ -50,6 +51,9 @@ func New(opts ...Option) (*Capture, error) {
 	if c.Processor == nil {
 		c.Processor = processor.DefaultProcessor
 	}
+	if c.NumberCleaner == nil {
+		c.NumberCleaner = numbercleaner.NewPassthroughCleaner()
+	}
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
 	}
@@ -59,12 +63,24 @@ func New(opts ...Option) (*Capture, error) {
 	return &Capture{c: c, extMap: extMap}, nil
 }
 
-func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
+func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredNumber string) error {
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
-	fileNoExt := fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+	fileNoExt := strings.TrimSpace(preferredNumber)
+	useCleaner := len(fileNoExt) == 0
+	if useCleaner {
+		fileNoExt = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+		cleaned, err := c.c.NumberCleaner.Clean(fileNoExt)
+		if err != nil {
+			return fmt.Errorf("clean number before rewrite failed, err:%w", err)
+		}
+		if cleaned != nil && len(cleaned.Normalized) != 0 {
+			fileNoExt = cleaned.Normalized
+		}
+	}
 	//番号改写
-	fileNoExt, err := c.c.NumberRewriter.Rewrite(fileNoExt)
+	var err error
+	fileNoExt, err = c.c.NumberRewriter.Rewrite(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("rewrite number before parse failed, err:%w", err)
 	}
@@ -107,7 +123,7 @@ func (c *Capture) readFileList() ([]*model.FileContext, error) {
 			return nil
 		}
 		fc := &model.FileContext{FullFilePath: path}
-		if err := c.resolveFileInfo(fc, path); err != nil {
+		if err := c.resolveFileInfo(fc, path, ""); err != nil {
 			return err
 		}
 		fcs = append(fcs, fc)
@@ -131,9 +147,13 @@ func (c *Capture) Run(ctx context.Context) error {
 	return nil
 }
 
-func (c *Capture) ResolveFileContext(file string) (*model.FileContext, error) {
+func (c *Capture) ResolveFileContext(file string, preferredNumber ...string) (*model.FileContext, error) {
 	fc := &model.FileContext{FullFilePath: file}
-	if err := c.resolveFileInfo(fc, file); err != nil {
+	numberInput := ""
+	if len(preferredNumber) > 0 {
+		numberInput = preferredNumber[0]
+	}
+	if err := c.resolveFileInfo(fc, file, numberInput); err != nil {
 		return nil, err
 	}
 	return fc, nil

@@ -1,10 +1,10 @@
 "use client";
 
-import { Eye, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
+import { Check, Edit3, Eye, Pencil, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
-import { deleteJob, listJobs, listJobLogs, rerunJob, runJob, triggerScan } from "@/lib/api";
+import { deleteJob, listJobs, listJobLogs, rerunJob, runJob, triggerScan, updateJobNumber } from "@/lib/api";
 import { formatBytes, formatUnixMillis } from "@/lib/utils";
 import { StatusBadge } from "./status-badge";
 
@@ -26,6 +26,8 @@ export function JobTable({ initialData }: Props) {
   const [logs, setLogs] = useState<JobLogItem[]>([]);
   const [logMessage, setLogMessage] = useState("");
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<JobItem | null>(null);
+  const [editingJobId, setEditingJobId] = useState<number | null>(null);
+  const [editingNumber, setEditingNumber] = useState("");
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
 
@@ -146,6 +148,129 @@ export function JobTable({ initialData }: Props) {
     setDeleteConfirmJob(job);
   };
 
+  const handleStartEditNumber = (job: JobItem) => {
+    setEditingJobId(job.id);
+    setEditingNumber(job.number);
+  };
+
+  const handleCancelEditNumber = () => {
+    setEditingJobId(null);
+    setEditingNumber("");
+  };
+
+  const handleSaveNumber = (job: JobItem) => {
+    startTransition(async () => {
+      try {
+        setMessage("");
+        await updateJobNumber(job.id, editingNumber);
+        handleCancelEditNumber();
+        await refreshJobs();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "更新番号失败");
+      }
+    });
+  };
+
+  const handleCommitEditNumber = (job: JobItem) => {
+    if (!editingNumber.trim()) {
+      handleCancelEditNumber();
+      return;
+    }
+    if (editingNumber.trim() === job.number.trim()) {
+      handleCancelEditNumber();
+      return;
+    }
+    handleSaveNumber(job);
+  };
+
+  const getNumberMeta = (job: JobItem) => {
+    if (job.number_source === "manual") {
+      return {
+        tone: "var(--info)",
+        kind: "manual",
+        warning: "用户已手动编辑番号",
+      };
+    }
+    if (job.number_clean_status === "success" && job.number_clean_confidence === "high") {
+      return {
+        tone: "var(--ok)",
+        kind: "success",
+        warning: "",
+      };
+    }
+    if (job.number_clean_status === "success" && job.number_clean_confidence === "medium") {
+      return {
+        tone: "var(--warn)",
+        kind: "warn",
+        warning: job.number_clean_warnings || "",
+      };
+    }
+    if (job.number_clean_status === "no_match" || job.number_clean_status === "low_quality" || job.number_clean_confidence === "low") {
+      return {
+        tone: "var(--danger)",
+        kind: "danger",
+        warning: job.number_clean_warnings || "清洗失败，当前使用原始值",
+      };
+    }
+    return {
+      tone: "var(--warn)",
+      kind: "warn",
+      warning: job.number_clean_warnings || "",
+    };
+  };
+
+  const requiresManualNumberReview = (job: JobItem) => {
+    if (job.number_source === "manual") {
+      return false;
+    }
+    if (job.number_clean_status === "no_match" || job.number_clean_status === "low_quality") {
+      return true;
+    }
+    return job.number_clean_confidence === "low";
+  };
+
+  const renderNumberStatusIcon = (job: JobItem) => {
+    const meta = getNumberMeta(job);
+    const baseStyle = {
+      width: 24,
+      height: 24,
+      minWidth: 24,
+      borderRadius: 999,
+      border: `1.5px solid ${meta.tone}`,
+      color: meta.tone,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    } as const;
+    if (meta.kind === "success") {
+      return (
+        <span style={baseStyle} title="清洗成功，高置信度">
+          <Check size={14} strokeWidth={2.4} />
+        </span>
+      );
+    }
+    if (meta.kind === "manual") {
+      return (
+        <span style={baseStyle} title={meta.warning}>
+          <Edit3 size={13} strokeWidth={2.2} />
+        </span>
+      );
+    }
+    if (meta.kind === "warn") {
+      return (
+        <span style={baseStyle} title="清洗成功，中等置信度">
+          <span style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>!</span>
+        </span>
+      );
+    }
+    return (
+      <span style={baseStyle} title={meta.warning || "清洗失败或低置信度"}>
+        <X size={14} strokeWidth={2.4} />
+      </span>
+    );
+  };
+
   const confirmDelete = (job: JobItem) => {
     setDeleteConfirmJob(null);
     startTransition(async () => {
@@ -230,13 +355,75 @@ export function JobTable({ initialData }: Props) {
                 const canRun = job.status === "init";
                 const canRerun = job.status === "failed";
                 const canDelete = job.status === "init" || job.status === "failed" || job.status === "reviewing";
+                const canEditNumber = job.status === "init" || job.status === "failed";
+                const needsManualNumberReview = requiresManualNumberReview(job);
+                const runDisabled = isPending || !canRun || needsManualNumberReview;
+                const rerunDisabled = isPending || needsManualNumberReview;
+                const runTitle = needsManualNumberReview ? "清洗失败或低置信度，需先手动编辑番号后才能刮削" : undefined;
                 return (
                   <tr key={job.id}>
                     <td style={{ minWidth: 260, color: "var(--muted)" }}>
                       <div className="cell-center">{job.rel_path}</div>
                     </td>
-                    <td>
-                      <div className="cell-center">{job.number}</div>
+                    <td style={{ width: 320 }}>
+                      <div className="cell-center" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          {editingJobId === job.id ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: 40 }}>
+                              {renderNumberStatusIcon(job)}
+                              <input
+                                className="input"
+                                style={{ width: "100%", minWidth: 0, height: 40, boxSizing: "border-box", padding: "0 12px" }}
+                                value={editingNumber}
+                                autoFocus
+                                onChange={(e) => setEditingNumber(e.target.value)}
+                                onBlur={() => handleCommitEditNumber(job)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleCommitEditNumber(job);
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    handleCancelEditNumber();
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                              {renderNumberStatusIcon(job)}
+                              <span
+                                style={{
+                                  minWidth: 0,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={job.number}
+                              >
+                                {job.number}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {canEditNumber ? (
+                          editingJobId === job.id ? (
+                            <button
+                              className="btn"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={handleCancelEditNumber}
+                              disabled={isPending}
+                            >
+                              <X size={16} />
+                            </button>
+                          ) : (
+                            <button className="btn" onClick={() => handleStartEditNumber(job)} disabled={isPending}>
+                              <Pencil size={16} />
+                            </button>
+                          )
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <div className="cell-center">{formatBytes(job.file_size)}</div>
@@ -263,11 +450,11 @@ export function JobTable({ initialData }: Props) {
                     <td style={{ width: 176 }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "nowrap", alignItems: "center" }}>
                         {canRerun ? (
-                          <button className="btn" onClick={() => handleRerun(job)} disabled={isPending}>
+                          <button className="btn" onClick={() => handleRerun(job)} disabled={rerunDisabled} title={runTitle}>
                             <RotateCcw size={16} />
                           </button>
                         ) : (
-                          <button className="btn" onClick={() => handleRun(job)} disabled={!canRun || isPending}>
+                          <button className="btn" onClick={() => handleRun(job)} disabled={runDisabled} title={runTitle}>
                             <Sparkles size={16} />
                           </button>
                         )}

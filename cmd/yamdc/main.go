@@ -16,6 +16,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/job"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
@@ -112,7 +113,11 @@ func runServer(c *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("build processor failed, err:%w", err)
 	}
-	cap, err := buildCapture(c, ss, catSs, ps)
+	numCleaner, err := buildNumberCleaner(c)
+	if err != nil {
+		return fmt.Errorf("build number cleaner failed, err:%w", err)
+	}
+	cap, err := buildCapture(c, ss, catSs, ps, numCleaner)
 	if err != nil {
 		return fmt.Errorf("build capture runner failed, err:%w", err)
 	}
@@ -125,7 +130,7 @@ func runServer(c *config.Config) error {
 	jobRepo := repository.NewJobRepository(appDB.DB())
 	logRepo := repository.NewLogRepository(appDB.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(appDB.DB())
-	scanSvc := scanner.New(c.ScanDir, c.ExtraMediaExts, jobRepo)
+	scanSvc := scanner.New(c.ScanDir, c.ExtraMediaExts, jobRepo, numCleaner)
 	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, cap)
 	if err := jobSvc.Recover(context.Background()); err != nil {
 		logkit.Error("recover processing jobs failed", zap.Error(err))
@@ -142,7 +147,7 @@ func runServer(c *config.Config) error {
 	return nil
 }
 
-func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
+func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
 	numberUncensorRule, err := buildNumberUncensorRule(c)
 	if err != nil {
 		return nil, err
@@ -166,6 +171,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 		capture.WithUncensorTester(numberUncensorRule),
 		capture.WithNumberCategorier(numberCategoryRule),
+		capture.WithNumberCleaner(numCleaner),
 		capture.WithNumberRewriter(numberRewriteRule),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
 		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
@@ -375,16 +381,24 @@ func setupTranslator(c *config.Config) error {
 	return nil
 }
 
-func readScriptStream(datadir string, relpath string) ([]byte, error) {
+func readScriptStreamWithPath(datadir string, relpath string) ([]byte, string, error) {
 	paths := []string{relpath, path.Join(datadir, relpath)} //尝试从所有的路径种查找脚本, relpath可以被用户传入, 所以优先查找
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			continue
 		}
-		return data, nil
+		return data, p, nil
 	}
-	return nil, fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
+	return nil, "", fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
+}
+
+func readScriptStream(datadir string, relpath string) ([]byte, error) {
+	data, _, err := readScriptStreamWithPath(datadir, relpath)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
@@ -427,6 +441,38 @@ func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
 	return ruleapi.WrapFuncAsRewriter(func(res string) (string, error) {
 		return rewriter.Rewrite(context.Background(), res)
 	}), nil
+}
+
+func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, error) {
+	cc := c.NumberCleanerConfig
+	if cc.Disabled || len(strings.TrimSpace(cc.RulePath)) == 0 {
+		return numbercleaner.NewPassthroughCleaner(), nil
+	}
+	baseRule, basePath, err := readScriptStreamWithPath(c.DataDir, cc.RulePath)
+	if err != nil {
+		return nil, err
+	}
+	logutil.GetLogger(context.Background()).Info("load number cleaner base rule", zap.String("path", basePath))
+	base, err := numbercleaner.NewLoader().Load(baseRule)
+	if err != nil {
+		return nil, err
+	}
+	finalRules := base
+	if len(strings.TrimSpace(cc.OverrideRulePath)) != 0 {
+		overrideRaw, overridePath, err := readScriptStreamWithPath(c.DataDir, cc.OverrideRulePath)
+		if err == nil {
+			logutil.GetLogger(context.Background()).Info("load number cleaner override rule", zap.String("path", overridePath))
+			override, err := numbercleaner.NewLoader().Load(overrideRaw)
+			if err != nil {
+				return nil, err
+			}
+			finalRules, err = numbercleaner.MergeRuleSets(base, override)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return numbercleaner.NewCleaner(finalRules)
 }
 
 func rewriteEnvFlagToConfig(c *config.SwitchConfig) {

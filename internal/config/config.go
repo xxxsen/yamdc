@@ -79,26 +79,33 @@ type TagMappingConfig struct {
 	FilePath string `json:"file_path"` //配置文件路径
 }
 
+type NumberCleanerConfig struct {
+	Disabled         bool   `json:"disabled"`
+	RulePath         string `json:"rule_path"`
+	OverrideRulePath string `json:"override_rule_path"`
+}
+
 type Config struct {
-	ScanDir            string                   `json:"scan_dir"`
-	SaveDir            string                   `json:"save_dir"`
-	DataDir            string                   `json:"data_dir"`
-	Naming             string                   `json:"naming"`
-	PluginConfig       map[string]PluginConfig  `json:"plugin_config"`
-	HandlerConfig      map[string]HandlerConfig `json:"handler_config"`
-	AIEngine           AIEngineConfig           `json:"ai_engine"`
-	Plugins            []string                 `json:"plugins"`
-	CategoryPlugins    []CategoryPlugin         `json:"category_plugins"`
-	Handlers           []string                 `json:"handlers"`
-	ExtraMediaExts     []string                 `json:"extra_media_exts"`
-	LogConfig          logger.LogConfig         `json:"log_config"`
-	Dependencies       []Dependency             `json:"dependencies"`
-	NetworkConfig      NetworkConfig            `json:"network_config"`
-	TranslateConfig    TranslateConfig          `json:"translate_config"`
-	RuleConfig         RuleConfig               `json:"rule_config"`
-	SwitchConfig       SwitchConfig             `json:"switch_config"`
-	FlareSolverrConfig FlareSolverrConfig       `json:"flare_solverr_config"`
-	TagMappingConfig   TagMappingConfig         `json:"tag_mapping_config"`
+	ScanDir             string                   `json:"scan_dir"`
+	SaveDir             string                   `json:"save_dir"`
+	DataDir             string                   `json:"data_dir"`
+	Naming              string                   `json:"naming"`
+	PluginConfig        map[string]PluginConfig  `json:"plugin_config"`
+	HandlerConfig       map[string]HandlerConfig `json:"handler_config"`
+	AIEngine            AIEngineConfig           `json:"ai_engine"`
+	Plugins             []string                 `json:"plugins"`
+	CategoryPlugins     []CategoryPlugin         `json:"category_plugins"`
+	Handlers            []string                 `json:"handlers"`
+	ExtraMediaExts      []string                 `json:"extra_media_exts"`
+	LogConfig           logger.LogConfig         `json:"log_config"`
+	Dependencies        []Dependency             `json:"dependencies"`
+	NetworkConfig       NetworkConfig            `json:"network_config"`
+	TranslateConfig     TranslateConfig          `json:"translate_config"`
+	RuleConfig          RuleConfig               `json:"rule_config"`
+	SwitchConfig        SwitchConfig             `json:"switch_config"`
+	FlareSolverrConfig  FlareSolverrConfig       `json:"flare_solverr_config"`
+	TagMappingConfig    TagMappingConfig         `json:"tag_mapping_config"`
+	NumberCleanerConfig NumberCleanerConfig      `json:"number_cleaner"`
 }
 
 type SwitchConfig struct {
@@ -153,6 +160,11 @@ func defaultConfig() *Config {
 		TagMappingConfig: TagMappingConfig{
 			Enable:   false, //默认不启用, 毕竟还要额外配置
 			FilePath: "",    // 如果启用,需要指定配置文件路径
+		},
+		NumberCleanerConfig: NumberCleanerConfig{
+			Disabled:         false,
+			RulePath:         "rules/number_cleaner.yaml",
+			OverrideRulePath: "",
 		},
 	}
 }
