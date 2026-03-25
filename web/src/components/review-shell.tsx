@@ -176,6 +176,8 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const coverUploadRef = useRef<HTMLInputElement | null>(null);
   const posterUploadRef = useRef<HTMLInputElement | null>(null);
   const fanartUploadRef = useRef<HTMLInputElement | null>(null);
+  const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
+  const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
@@ -495,22 +497,31 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     <>
       <div className="two-col">
         <aside className="panel review-list-panel">
-          <h2 style={{ marginTop: 0, marginBottom: 12 }}>Review 列表</h2>
+          <div className="review-list-head">
+            <div>
+              <div className="review-list-kicker">Review Queue</div>
+              <h2 className="review-list-title">Review 列表</h2>
+              <p className="review-list-subtitle">
+                当前 {items.length} 条待复核任务
+                {selectedIndex >= 0 ? `，正在查看第 ${selectedIndex + 1} 条` : ""}
+              </p>
+            </div>
+          </div>
           <div className="review-job-list">
-            {items.length === 0 ? <div style={{ color: "var(--muted)" }}>当前没有待 review 的任务</div> : null}
-            {items.map((job) => (
+            {items.length === 0 ? <div className="review-empty-state">当前没有待 review 的任务</div> : null}
+            {items.map((job, index) => (
               <div
                 key={job.id}
                 className="panel review-job-card"
-                style={{
-                  border: selected?.id === job.id ? "1px solid var(--accent)" : undefined,
-                  background: selected?.id === job.id ? "rgba(180, 79, 45, 0.08)" : undefined,
-                }}
+                data-active={selected?.id === job.id}
               >
                 <button className="review-job-card-main" onClick={() => loadDetail(job)} disabled={isPending}>
+                  <div className="review-job-card-topline">
+                    <span className="review-job-card-index">#{index + 1}</span>
+                    <span className="review-job-card-time">更新于 {formatUnixMillis(job.updated_at)}</span>
+                  </div>
                   <div className="review-job-card-path">{job.rel_path}</div>
                   <div className="review-job-card-number">{job.number}</div>
-                  <div className="review-job-card-time">更新时间 {formatUnixMillis(job.updated_at)}</div>
                 </button>
                 <div className="review-job-card-actions">
                   <button
@@ -541,11 +552,12 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
         <section className="panel review-detail-panel">
           <div className="review-header">
             <div>
-              <h2 style={{ margin: 0 }}>Review 内容</h2>
+              <div className="review-list-kicker">Review Editor</div>
+              <h2 className="review-detail-title">Review 内容</h2>
               {selected ? <div className="review-subtitle">当前任务 #{selected.id} / {selected.rel_path}</div> : null}
             </div>
             <div className="review-actions">
-              {message ? <span className="review-message">{message}</span> : null}
+              {message ? <span className="review-message" data-tone={messageTone}>{message}</span> : null}
               <button
                 type="button"
                 className="btn review-inline-icon-btn"

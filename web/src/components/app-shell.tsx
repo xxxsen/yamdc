@@ -12,20 +12,40 @@ export function AppShell({
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const currentTime = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
 
   return (
     <div className={`app-shell ${collapsed ? "app-shell-collapsed" : ""}`}>
       {!collapsed ? (
         <aside className="panel sidebar">
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, letterSpacing: "0.16em", color: "var(--muted)", textTransform: "uppercase" }}>
-                YAMDC
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-top">
+              <div className="sidebar-brand-mark">
+                <span>Y</span>
               </div>
-              <h1 style={{ margin: "8px 0 0", fontSize: 28, lineHeight: 1.05 }}>Media Capture</h1>
+              <div className="sidebar-brand-eyebrow">YAMDC</div>
+            </div>
+            <div className="sidebar-brand-copy">
+              <h1 className="sidebar-brand-title">Media Capture</h1>
+              <p className="sidebar-brand-subtitle">把扫描、刮削、复核和入库收在一个工作台里。</p>
+            </div>
+          </div>
+          <div className="sidebar-status-card">
+            <div className="sidebar-status-row">
+              <span className="sidebar-status-label">Workspace</span>
+              <span className="sidebar-status-value">Ready</span>
+            </div>
+            <div className="sidebar-status-row">
+              <span className="sidebar-status-label">Local Time</span>
+              <span className="sidebar-status-value">{currentTime}</span>
             </div>
           </div>
           <TopNav />
+          <div className="sidebar-footnote">Queue-first workflow for processing and review.</div>
           <button
             className="sidebar-edge-toggle sidebar-edge-toggle-close"
             onClick={() => setCollapsed(true)}

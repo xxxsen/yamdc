@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Edit3, Eye, Pencil, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
+import { Check, Edit3, Eye, Pencil, RefreshCw, RotateCcw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
@@ -32,6 +32,7 @@ export function JobTable({ initialData }: Props) {
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
+  const messageTone = /失败|failed|error/i.test(message) ? "danger" : "info";
 
   const counts = useMemo(() => {
     return allJobs.reduce<Record<string, number>>((acc, item) => {
@@ -39,6 +40,10 @@ export function JobTable({ initialData }: Props) {
       return acc;
     }, {});
   }, [allJobs]);
+  const processingCount = counts.processing ?? 0;
+  const failedCount = counts.failed ?? 0;
+  const reviewingCount = counts.reviewing ?? 0;
+  const initCount = counts.init ?? 0;
 
   const jobs = useMemo(() => {
     if (statusFilter === "all") {
@@ -58,6 +63,46 @@ export function JobTable({ initialData }: Props) {
   const selectedCount = selectedJobIds.size;
   const allSelectableChecked = selectableJobs.length > 0 && selectableJobs.every((job) => selectedJobIds.has(job.id));
   const hasPartialSelection = selectedCount > 0 && !allSelectableChecked;
+  const readyToRunCount = selectableJobs.length;
+
+  const summaryCards = [
+    {
+      label: "待提交",
+      value: initCount,
+      hint: readyToRunCount > 0 ? `其中 ${readyToRunCount} 条已满足提交条件` : "等待番号确认后可提交",
+      tone: "default",
+      filter: "init",
+    },
+    {
+      label: "处理中",
+      value: processingCount,
+      hint: processingCount > 0 ? "列表会自动轮询刷新" : "当前没有运行中的任务",
+      tone: "info",
+      filter: "processing",
+    },
+    {
+      label: "待复核",
+      value: reviewingCount,
+      hint: reviewingCount > 0 ? "进入 Review 列表继续处理" : "当前没有待复核任务",
+      tone: "warn",
+      filter: "reviewing",
+    },
+    {
+      label: "失败",
+      value: failedCount,
+      hint: failedCount > 0 ? "建议优先查看日志后重试" : "当前没有失败任务",
+      tone: "danger",
+      filter: "failed",
+    },
+  ] as const;
+
+  const filterChips = [
+    { value: "all", label: "全部", count: total },
+    { value: "init", label: "待提交", count: initCount },
+    { value: "processing", label: "处理中", count: processingCount },
+    { value: "reviewing", label: "待复核", count: reviewingCount },
+    { value: "failed", label: "失败", count: failedCount },
+  ] as const;
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -85,6 +130,16 @@ export function JobTable({ initialData }: Props) {
       return next;
     });
   }, [selectableJobs]);
+
+  useEffect(() => {
+    if (!message || messageTone === "danger") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setMessage("");
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [message, messageTone]);
 
   const refreshJobs = async (nextKeyword = keyword) => {
     const data = await listJobs({
@@ -236,18 +291,6 @@ export function JobTable({ initialData }: Props) {
     });
   };
 
-  const handleCommitEditNumber = (job: JobItem) => {
-    if (!editingNumber.trim()) {
-      handleCancelEditNumber();
-      return;
-    }
-    if (editingNumber.trim() === job.number.trim()) {
-      handleCancelEditNumber();
-      return;
-    }
-    handleSaveNumber(job);
-  };
-
   const handleRunSelectedJobs = () => {
     const pendingJobs = jobs.filter((job) => selectedJobIds.has(job.id) && canSelectJob(job));
     if (pendingJobs.length === 0) {
@@ -281,6 +324,18 @@ export function JobTable({ initialData }: Props) {
         setMessage(error instanceof Error ? error.message : "批量提交失败");
       }
     });
+  };
+
+  const handleCommitEditNumber = (job: JobItem) => {
+    if (!editingNumber.trim()) {
+      handleCancelEditNumber();
+      return;
+    }
+    if (editingNumber.trim() === job.number.trim()) {
+      handleCancelEditNumber();
+      return;
+    }
+    handleSaveNumber(job);
   };
 
   const getNumberMeta = (job: JobItem) => {
@@ -327,6 +382,27 @@ export function JobTable({ initialData }: Props) {
       return true;
     }
     return job.number_clean_confidence === "low";
+  };
+
+  const getNumberHint = (job: JobItem) => {
+    if (job.number_source === "manual") {
+      return "已手动确认";
+    }
+    if (job.number_clean_status === "success" && job.number_clean_confidence === "high") {
+      return "高置信度，可直接提交";
+    }
+    if (job.number_clean_status === "success" && job.number_clean_confidence === "medium") {
+      return job.number_clean_warnings || "中等置信度，建议检查";
+    }
+    return job.number_clean_warnings || "需先手动修正番号";
+  };
+
+  const getPathSegments = (job: JobItem) => {
+    const segments = job.rel_path.split("/").filter(Boolean);
+    return {
+      folder: segments.length > 1 ? segments.slice(0, -1).join(" / ") : "根目录",
+      name: segments.length > 0 ? segments[segments.length - 1] : job.rel_path,
+    };
   };
 
   const renderNumberStatusIcon = (job: JobItem) => {
@@ -391,50 +467,63 @@ export function JobTable({ initialData }: Props) {
 
   return (
     <>
-      <div className="panel" style={{ padding: 18, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 16,
-          }}
-        >
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24 }}>当前需处理的文件</h2>
-            <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>当前展示 {jobs.length} 条，共 {total} 条任务</p>
+      <div className="panel file-list-panel">
+        <div className="file-list-hero">
+          <div className="file-list-hero-copy">
+            <div className="file-list-eyebrow">Processing Queue</div>
+            <h2 className="file-list-title">文件列表</h2>
+            <p className="file-list-subtitle">
+              当前展示 {jobs.length} 条记录，共 {total} 条任务。优先处理低置信度番号，运行中的状态会自动刷新。
+            </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="file-list-stats">
+            {summaryCards.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className="file-list-stat-card"
+                data-tone={item.tone}
+                data-active={statusFilter === item.filter}
+                onClick={() => setStatusFilter(item.filter)}
+              >
+                <span className="file-list-stat-label">{item.label}</span>
+                <strong className="file-list-stat-value">{item.value}</strong>
+                <span className="file-list-stat-hint">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="file-list-toolbar">
+          <label className="file-list-search">
+            <Search size={16} />
             <input
-              className="input"
-              style={{ width: 240 }}
+              className="input file-list-search-input"
               placeholder="按文件名 / 路径 / 番号搜索"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
-            <select
-              className="input"
-              style={{ width: 160 }}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">全部状态 ({total})</option>
-              <option value="init">Init ({counts.init ?? 0})</option>
-              <option value="processing">Processing ({counts.processing ?? 0})</option>
-              <option value="reviewing">Reviewing ({counts.reviewing ?? 0})</option>
-              <option value="failed">Failed ({counts.failed ?? 0})</option>
-            </select>
-            {message ? <span style={{ color: "var(--danger)", fontSize: 14 }}>{message}</span> : null}
-            <button className="btn" onClick={handleRunSelectedJobs} disabled={selectedCount === 0 || isPending}>
-              提交已选 ({selectedCount})
-            </button>
+          </label>
+          <div className="file-list-toolbar-actions">
             <button className="btn btn-primary" onClick={handleScan} disabled={isPending}>
               <RefreshCw size={16} />
               立即扫描
             </button>
           </div>
+        </div>
+        <div className="file-list-chip-row" aria-label="状态快捷筛选">
+          {filterChips.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className="file-list-chip"
+              data-active={statusFilter === item.value}
+              onClick={() => setStatusFilter(item.value)}
+            >
+              <span>{item.label}</span>
+              <span className="file-list-chip-count">{item.count}</span>
+            </button>
+          ))}
         </div>
         <div className="table-wrap" style={{ position: "relative", flex: 1, overflow: "auto" }}>
           {isScanning ? (
@@ -442,11 +531,11 @@ export function JobTable({ initialData }: Props) {
               <div className="list-loading-spinner" />
             </div>
           ) : null}
-          <table className="table">
+          <table className="table file-table">
             <thead>
               <tr>
                 <th>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div className="file-table-path-head">
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -456,6 +545,16 @@ export function JobTable({ initialData }: Props) {
                       onChange={handleToggleSelectAll}
                     />
                     <span>Path</span>
+                    <button
+                      className="btn file-batch-submit-btn"
+                      data-visible={selectedCount > 0}
+                      onClick={handleRunSelectedJobs}
+                      disabled={selectedCount === 0 || isPending}
+                      aria-hidden={selectedCount === 0}
+                      tabIndex={selectedCount === 0 ? -1 : 0}
+                    >
+                      提交已选 ({selectedCount})
+                    </button>
                   </div>
                 </th>
                 <th>Number</th>
@@ -475,10 +574,11 @@ export function JobTable({ initialData }: Props) {
                 const runDisabled = isPending || !canRun || needsManualNumberReview;
                 const rerunDisabled = isPending || needsManualNumberReview;
                 const runTitle = needsManualNumberReview ? "清洗失败或低置信度，需先手动编辑番号后才能刮削" : undefined;
+                const { folder, name } = getPathSegments(job);
                 return (
-                  <tr key={job.id}>
-                    <td style={{ minWidth: 260, color: "var(--muted)" }}>
-                      <div className="cell-center" style={{ gap: 10 }}>
+                  <tr key={job.id} data-selected={selectedJobIds.has(job.id)} data-status={job.status}>
+                    <td data-label="文件" style={{ minWidth: 280 }}>
+                      <div className="file-path-cell">
                         <input
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
@@ -486,14 +586,24 @@ export function JobTable({ initialData }: Props) {
                           title={!canSelectJob(job) ? "仅高置信度或手动编辑后的番号可加入批量提交" : "选择任务"}
                           onChange={() => handleToggleSelectJob(job.id)}
                         />
-                        <span>{job.rel_path}</span>
+                        <div className="file-path-copy">
+                          <div className="file-path-title-row">
+                            <span className="file-path-name" title={name}>
+                              {name}
+                            </span>
+                            {needsManualNumberReview ? <span className="file-path-flag">需校正番号</span> : null}
+                          </div>
+                          <div className="file-path-folder" title={job.rel_path}>
+                            {folder}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td style={{ width: 320 }}>
-                      <div className="cell-center" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <td data-label="番号" style={{ width: 340 }}>
+                      <div className="file-number-cell">
                         <div style={{ minWidth: 0, flex: 1 }}>
                           {editingJobId === job.id ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: 40 }}>
+                            <div className="file-number-editing">
                               {renderNumberStatusIcon(job)}
                               <input
                                 className="input"
@@ -515,19 +625,14 @@ export function JobTable({ initialData }: Props) {
                               />
                             </div>
                           ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <div className="file-number-display">
                               {renderNumberStatusIcon(job)}
-                              <span
-                                style={{
-                                  minWidth: 0,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                                title={job.number}
-                              >
-                                {job.number}
-                              </span>
+                              <div className="file-number-copy">
+                                <span className="file-number-value" title={job.number}>
+                                  {job.number}
+                                </span>
+                                <span className="file-number-note">{getNumberHint(job)}</span>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -549,41 +654,51 @@ export function JobTable({ initialData }: Props) {
                         ) : null}
                       </div>
                     </td>
-                    <td>
-                      <div className="cell-center">{formatBytes(job.file_size)}</div>
+                    <td data-label="大小">
+                      <div className="file-meta-cell">{formatBytes(job.file_size)}</div>
                     </td>
-                    <td style={{ width: 120 }}>
-                      <div className="cell-center">
-                        <div className="status-chip">
+                    <td data-label="状态" style={{ width: 210 }}>
+                      <div className="file-status-cell">
+                        <div className="file-status-copy">
                           <StatusBadge status={job.status} />
+                        </div>
+                        {job.status !== "init" ? (
                           <button
-                            className={`status-chip-view ${job.status === "failed" || job.error_msg ? "icon-btn-danger" : ""}`}
-                            data-enabled={job.status !== "init"}
+                            className={`file-log-btn ${job.status === "failed" || job.error_msg ? "file-log-btn-danger" : ""}`}
                             onClick={() => handleOpenLogs(job)}
-                            disabled={isPending || job.status === "init"}
+                            disabled={isPending}
                             aria-label="查看日志"
+                            title="查看日志"
                           >
                             <Eye size={14} />
                           </button>
-                        </div>
+                        ) : (
+                          <span className="file-log-placeholder" aria-hidden="true">-</span>
+                        )}
                       </div>
                     </td>
-                    <td style={{ width: 150 }}>
-                      <div className="cell-center">{formatUnixMillis(job.updated_at)}</div>
+                    <td data-label="更新时间" style={{ width: 180 }}>
+                      <div className="file-time-cell">
+                        <span>{formatUnixMillis(job.updated_at)}</span>
+                        <span className="file-inline-muted">{job.status === "processing" ? "运行中自动刷新" : "最近一次状态变更"}</span>
+                      </div>
                     </td>
-                    <td style={{ width: 176 }}>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "nowrap", alignItems: "center" }}>
+                    <td data-label="操作" style={{ width: 230 }}>
+                      <div className="file-actions-cell">
                         {canRerun ? (
-                          <button className="btn" onClick={() => handleRerun(job)} disabled={rerunDisabled} title={runTitle}>
+                          <button className="btn file-action-btn" onClick={() => handleRerun(job)} disabled={rerunDisabled} title={runTitle}>
                             <RotateCcw size={16} />
+                            重试
                           </button>
                         ) : (
-                          <button className="btn" onClick={() => handleRun(job)} disabled={runDisabled} title={runTitle}>
+                          <button className="btn file-action-btn" onClick={() => handleRun(job)} disabled={runDisabled} title={runTitle}>
                             <Sparkles size={16} />
+                            提交
                           </button>
                         )}
-                        <button className="btn" onClick={() => handleDelete(job)} disabled={!canDelete || isPending}>
+                        <button className="btn file-action-btn file-action-btn-ghost" onClick={() => handleDelete(job)} disabled={!canDelete || isPending}>
                           <Trash2 size={16} />
+                          删除
                         </button>
                       </div>
                     </td>
@@ -600,39 +715,36 @@ export function JobTable({ initialData }: Props) {
             </tbody>
           </table>
         </div>
+        {message ? (
+          <div className="file-list-toast" data-tone={messageTone} role="status" aria-live="polite">
+            {message}
+          </div>
+        ) : null}
       </div>
       {logJob ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(24, 18, 12, 0.42)",
-            display: "grid",
-            placeItems: "center",
-            padding: 20,
-          }}
-        >
-          <div className="panel" style={{ width: "min(960px, 100%)", maxHeight: "80vh", overflow: "auto", padding: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+        <div className="review-preview-overlay" onClick={() => setLogJob(null)}>
+          <div className="panel file-log-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="file-log-head">
               <div>
-                <h3 style={{ margin: 0 }}>任务日志 #{logJob.id}</h3>
-                <div style={{ color: "var(--muted)", marginTop: 4 }}>{logJob.rel_path}</div>
+                <div className="file-log-kicker">Task Trace</div>
+                <h3 className="file-log-title">任务日志 #{logJob.id}</h3>
+                <div className="file-log-path">{logJob.rel_path}</div>
               </div>
               <button className="btn" onClick={() => setLogJob(null)}>
                 <X size={16} />
               </button>
             </div>
-            {logMessage ? <div style={{ color: "var(--muted)", marginBottom: 12 }}>{logMessage}</div> : null}
-            <div style={{ display: "grid", gap: 10 }}>
+            {logMessage ? <div className="file-log-message">{logMessage}</div> : null}
+            <div className="file-log-list">
               {logs.map((item) => (
-                <div key={item.id} style={{ border: "1px solid var(--line)", borderRadius: 14, padding: 12, background: "rgba(255,255,255,0.5)" }}>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 6, color: "var(--muted)", fontSize: 13 }}>
+                <div key={item.id} className="file-log-item">
+                  <div className="file-log-meta">
                     <span>{formatUnixMillis(item.created_at)}</span>
-                    <span>{item.level}</span>
-                    <span>{item.stage}</span>
+                    <span className="file-log-pill">{item.level}</span>
+                    <span className="file-log-pill">{item.stage}</span>
                   </div>
-                  <div>{item.message}</div>
-                  {item.detail ? <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>{item.detail}</div> : null}
+                  <div className="file-log-text">{item.message}</div>
+                  {item.detail ? <div className="file-log-detail">{item.detail}</div> : null}
                 </div>
               ))}
             </div>
