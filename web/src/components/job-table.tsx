@@ -53,6 +53,9 @@ export function JobTable({ initialData }: Props) {
   }, [allJobs, statusFilter]);
 
   const canSelectJob = (job: JobItem) => {
+    if (job.conflict_reason) {
+      return false;
+    }
     const hasApprovedNumber =
       job.number_source === "manual" || (job.number_clean_status === "success" && job.number_clean_confidence === "high");
     const isRunnable = job.status === "init" || job.status === "failed";
@@ -385,6 +388,9 @@ export function JobTable({ initialData }: Props) {
   };
 
   const getNumberHint = (job: JobItem) => {
+    if (job.conflict_reason) {
+      return "目标文件名冲突，需先处理";
+    }
     if (job.number_source === "manual") {
       return "已手动确认";
     }
@@ -570,10 +576,15 @@ export function JobTable({ initialData }: Props) {
                 const canRerun = job.status === "failed";
                 const canDelete = job.status === "init" || job.status === "failed" || job.status === "reviewing";
                 const canEditNumber = job.status === "init" || job.status === "failed";
+                const hasConflict = Boolean(job.conflict_reason);
                 const needsManualNumberReview = requiresManualNumberReview(job);
-                const runDisabled = isPending || !canRun || needsManualNumberReview;
-                const rerunDisabled = isPending || needsManualNumberReview;
-                const runTitle = needsManualNumberReview ? "清洗失败或低置信度，需先手动编辑番号后才能刮削" : undefined;
+                const runDisabled = isPending || !canRun || needsManualNumberReview || hasConflict;
+                const rerunDisabled = isPending || needsManualNumberReview || hasConflict;
+                const runTitle = hasConflict
+                  ? `${job.conflict_reason}${job.conflict_target ? `: ${job.conflict_target}` : ""}`
+                  : needsManualNumberReview
+                    ? "清洗失败或低置信度，需先手动编辑番号后才能刮削"
+                    : undefined;
                 const { folder, name } = getPathSegments(job);
                 return (
                   <tr key={job.id} data-selected={selectedJobIds.has(job.id)} data-status={job.status}>
@@ -591,6 +602,7 @@ export function JobTable({ initialData }: Props) {
                             <span className="file-path-name" title={name}>
                               {name}
                             </span>
+                            {hasConflict ? <span className="file-path-flag">目标冲突</span> : null}
                             {needsManualNumberReview ? <span className="file-path-flag">需校正番号</span> : null}
                           </div>
                           <div className="file-path-folder" title={job.rel_path}>

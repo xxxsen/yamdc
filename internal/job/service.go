@@ -6,12 +6,17 @@ import (
 	"fmt"
 	stdimage "image"
 	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/xxxsen/yamdc/internal/capture"
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
 )
@@ -24,6 +29,11 @@ type Service struct {
 
 	mu      sync.Mutex
 	running map[int64]struct{}
+}
+
+type JobConflict struct {
+	Reason string
+	Target string
 }
 
 func NewService(
@@ -81,7 +91,11 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 	if j.Status != jobdef.StatusInit && j.Status != jobdef.StatusFailed {
 		return nil, fmt.Errorf("job number can only be edited in init or failed status")
 	}
-	fc, err := s.capture.ResolveFileContext(j.AbsPath, input)
+	sourcePath, err := s.resolveJobSourcePath(ctx, j)
+	if err != nil {
+		return nil, err
+	}
+	fc, err := s.capture.ResolveFileContext(sourcePath, input)
 	if err != nil {
 		return nil, fmt.Errorf("validate number failed: %w", err)
 	}
@@ -90,7 +104,17 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 		return nil, err
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "number", "job number updated", numberText)
-	return s.jobRepo.GetByID(ctx, jobID)
+	updated, err := s.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if updated != nil {
+		if conflict, err := s.GetJobConflict(ctx, updated); err == nil && conflict != nil {
+			updated.ConflictReason = conflict.Reason
+			updated.ConflictTarget = conflict.Target
+		}
+	}
+	return updated, nil
 }
 
 func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData string) error {
@@ -200,6 +224,11 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	if j.Status != jobdef.StatusReviewing {
 		return fmt.Errorf("job is not in reviewing status")
 	}
+	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
+		return err
+	} else if conflict != nil {
+		return fmt.Errorf("%s: %s", conflict.Reason, conflict.Target)
+	}
 	data, err := s.scrapeRepo.GetByJobID(ctx, jobID)
 	if err != nil {
 		return err
@@ -215,7 +244,11 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
 		return fmt.Errorf("parse final meta failed: %w", err)
 	}
-	fc, err := s.capture.ResolveFileContext(j.AbsPath, j.Number)
+	sourcePath, err := s.resolveJobSourcePath(ctx, j)
+	if err != nil {
+		return err
+	}
+	fc, err := s.capture.ResolveFileContext(sourcePath, j.Number)
 	if err != nil {
 		return fmt.Errorf("resolve file context failed: %w", err)
 	}
@@ -284,6 +317,11 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 	if requiresManualNumberReview(j) {
 		return fmt.Errorf("job number requires manual edit before scraping")
 	}
+	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
+		return err
+	} else if conflict != nil {
+		return fmt.Errorf("%s: %s", conflict.Reason, conflict.Target)
+	}
 
 	if !s.claim(jobID) {
 		return fmt.Errorf("job is already running")
@@ -315,8 +353,13 @@ func (s *Service) runOne(jobID int64) {
 	if j == nil {
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "prepare", "resolve file context", j.AbsPath)
-	fc, err := s.capture.ResolveFileContext(j.AbsPath, j.Number)
+	sourcePath, err := s.resolveJobSourcePath(ctx, j)
+	if err != nil {
+		s.failJob(ctx, jobID, err.Error())
+		return
+	}
+	_ = s.logRepo.Add(ctx, jobID, "info", "prepare", "resolve file context", sourcePath)
+	fc, err := s.capture.ResolveFileContext(sourcePath, j.Number)
 	if err != nil {
 		s.failJob(ctx, jobID, fmt.Sprintf("resolve file failed: %v", err))
 		return
@@ -350,6 +393,243 @@ func (s *Service) runOne(jobID int64) {
 		return
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "job", "job moved to reviewing", "")
+}
+
+func (s *Service) resolveJobSourcePath(ctx context.Context, j *jobdef.Job) (string, error) {
+	if j == nil {
+		return "", fmt.Errorf("job not found")
+	}
+	if j.AbsPath == "" {
+		return "", fmt.Errorf("job source path is empty")
+	}
+	if info, err := os.Stat(j.AbsPath); err == nil && !info.IsDir() {
+		return j.AbsPath, nil
+	}
+	dirCandidates := make([]string, 0, 3)
+	appendDir := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		for _, item := range dirCandidates {
+			if item == candidate {
+				return
+			}
+		}
+		dirCandidates = append(dirCandidates, candidate)
+	}
+	appendDir(filepath.Dir(j.AbsPath))
+	if s.capture != nil && s.capture.ScanDir() != "" {
+		scanDir := s.capture.ScanDir()
+		appendDir(scanDir)
+		if parent := path.Dir(filepath.ToSlash(j.RelPath)); parent != "." && parent != "/" {
+			appendDir(filepath.Join(scanDir, filepath.FromSlash(parent)))
+		}
+	}
+	fileExt := firstNonEmptyString(j.FileExt, filepath.Ext(j.FileName))
+	candidates := make([]string, 0, 4)
+	appendCandidate := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		for _, item := range candidates {
+			if item == candidate {
+				return
+			}
+		}
+		candidates = append(candidates, candidate)
+	}
+	for _, dir := range dirCandidates {
+		candidates = candidates[:0]
+		appendCandidate(filepath.Join(dir, j.FileName))
+		if fileExt != "" {
+			appendCandidate(filepath.Join(dir, j.Number+fileExt))
+			appendCandidate(filepath.Join(dir, j.RawNumber+fileExt))
+			appendCandidate(filepath.Join(dir, j.CleanedNumber+fileExt))
+		}
+		for _, candidate := range candidates {
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				if err := s.syncJobSourcePath(ctx, j, candidate); err != nil {
+					return "", err
+				}
+				return candidate, nil
+			}
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		exactMatches := make([]string, 0, 1)
+		prefixMatches := make([]string, 0, 2)
+		fallbackMatches := make([]string, 0, 2)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if fileExt != "" && !strings.EqualFold(filepath.Ext(name), fileExt) {
+				continue
+			}
+			fullPath := filepath.Join(dir, name)
+			fallbackMatches = append(fallbackMatches, fullPath)
+			base := strings.TrimSuffix(name, filepath.Ext(name))
+			for _, expected := range []string{j.Number, j.RawNumber, j.CleanedNumber} {
+				expected = strings.TrimSpace(expected)
+				if expected == "" {
+					continue
+				}
+				if strings.EqualFold(base, expected) {
+					exactMatches = append(exactMatches, fullPath)
+					break
+				}
+				if strings.HasPrefix(strings.ToLower(base), strings.ToLower(expected)+".") || strings.HasPrefix(strings.ToLower(base), strings.ToLower(expected)+"-") {
+					prefixMatches = append(prefixMatches, fullPath)
+					break
+				}
+			}
+		}
+		if len(exactMatches) == 1 {
+			if err := s.syncJobSourcePath(ctx, j, exactMatches[0]); err != nil {
+				return "", err
+			}
+			return exactMatches[0], nil
+		}
+		if len(prefixMatches) == 1 {
+			if err := s.syncJobSourcePath(ctx, j, prefixMatches[0]); err != nil {
+				return "", err
+			}
+			return prefixMatches[0], nil
+		}
+		if len(fallbackMatches) == 1 {
+			if err := s.syncJobSourcePath(ctx, j, fallbackMatches[0]); err != nil {
+				return "", err
+			}
+			return fallbackMatches[0], nil
+		}
+	}
+	return "", fmt.Errorf("job source file not found: %s", j.AbsPath)
+}
+
+func (s *Service) syncJobSourcePath(ctx context.Context, j *jobdef.Job, sourcePath string) error {
+	if sourcePath == "" || sourcePath == j.AbsPath {
+		return nil
+	}
+	fileName := filepath.Base(sourcePath)
+	fileExt := filepath.Ext(fileName)
+	relPath := fileName
+	if parent := path.Dir(filepath.ToSlash(j.RelPath)); parent != "." && parent != "/" {
+		relPath = path.Join(parent, fileName)
+	}
+	if err := s.jobRepo.UpdateSourcePath(ctx, j.ID, fileName, fileExt, relPath, sourcePath); err != nil {
+		return err
+	}
+	j.FileName = fileName
+	j.FileExt = fileExt
+	j.RelPath = relPath
+	j.AbsPath = sourcePath
+	_ = s.logRepo.Add(ctx, j.ID, "warn", "source", "job source path refreshed", sourcePath)
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (s *Service) GetJobConflict(ctx context.Context, job *jobdef.Job) (*JobConflict, error) {
+	if job == nil {
+		return nil, nil
+	}
+	index, err := s.buildConflictIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conflict, ok := index[job.ID]
+	if !ok {
+		return nil, nil
+	}
+	return &conflict, nil
+}
+
+func (s *Service) ApplyJobConflicts(ctx context.Context, jobs []jobdef.Job) error {
+	index, err := s.buildConflictIndex(ctx)
+	if err != nil {
+		return err
+	}
+	for idx := range jobs {
+		if conflict, ok := index[jobs[idx].ID]; ok {
+			jobs[idx].ConflictReason = conflict.Reason
+			jobs[idx].ConflictTarget = conflict.Target
+		} else {
+			jobs[idx].ConflictReason = ""
+			jobs[idx].ConflictTarget = ""
+		}
+	}
+	return nil
+}
+
+func (s *Service) buildConflictIndex(ctx context.Context) (map[int64]JobConflict, error) {
+	result, err := s.jobRepo.ListJobs(ctx, nil, "", 1, 0)
+	if err != nil {
+		return nil, err
+	}
+	jobs := result.Items
+	index := make(map[int64]JobConflict, len(jobs))
+	grouped := make(map[string][]jobdef.Job)
+	for _, job := range jobs {
+		if job.Status == jobdef.StatusDone {
+			continue
+		}
+		key := buildJobConflictKey(&job)
+		if key == "" {
+			continue
+		}
+		grouped[key] = append(grouped[key], job)
+	}
+	for _, items := range grouped {
+		if len(items) <= 1 {
+			continue
+		}
+		targets := make([]string, 0, len(items))
+		for _, item := range items {
+			targets = append(targets, item.RelPath)
+		}
+		sort.Strings(targets)
+		targetText := strings.Join(targets, " | ")
+		for _, item := range items {
+			index[item.ID] = JobConflict{
+				Reason: "存在同目标文件名冲突",
+				Target: targetText,
+			}
+		}
+	}
+	return index, nil
+}
+
+func buildJobConflictKey(job *jobdef.Job) string {
+	if job == nil {
+		return ""
+	}
+	numberText := strings.TrimSpace(job.Number)
+	if numberText == "" {
+		return ""
+	}
+	parsed, err := number.Parse(numberText)
+	base := strings.ToUpper(numberText)
+	if err == nil && parsed != nil {
+		base = strings.ToUpper(parsed.GenerateFileName())
+	}
+	ext := strings.ToLower(strings.TrimSpace(firstNonEmptyString(job.FileExt, filepath.Ext(job.FileName))))
+	if ext == "" {
+		return base
+	}
+	return base + ext
 }
 
 func (s *Service) failJob(ctx context.Context, jobID int64, message string) {

@@ -152,3 +152,207 @@ func TestServiceRunRequiresManualEditForLowConfidenceNumber(t *testing.T) {
 	require.NotNil(t, got)
 	require.Equal(t, jobdef.StatusInit, got.Status)
 }
+
+func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
+	svc, repo := newTestService(t)
+	dir := t.TempDir()
+	newFile := filepath.Join(dir, "HEYZO-0040.mp4")
+	require.NoError(t, os.WriteFile(newFile, []byte("x"), 0644))
+
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "HEYZO-040.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "HEYZO-040.mp4",
+		AbsPath:               filepath.Join(dir, "HEYZO-040.mp4"),
+		Number:                "HEYZO-0040",
+		RawNumber:             "HEYZO-040",
+		CleanedNumber:         "HEYZO-0040",
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusReviewing)
+
+	jobItem, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, jobItem)
+
+	resolved, err := svc.resolveJobSourcePath(context.Background(), jobItem)
+	require.NoError(t, err)
+	require.Equal(t, newFile, resolved)
+
+	got, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, newFile, got.AbsPath)
+	require.Equal(t, "HEYZO-0040.mp4", got.FileName)
+	require.Equal(t, "HEYZO-0040.mp4", got.RelPath)
+}
+
+func TestServiceGetJobConflictDetectsDuplicateTargetFileName(t *testing.T) {
+	svc, repo := newTestService(t)
+	dir := t.TempDir()
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "aaa.com@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "aaa.com@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "aaa.com@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "aaa.com@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "bbb.com@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "bbb.com@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "bbb.com@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "bbb.com@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	job1, err := repo.GetByID(context.Background(), jobID1)
+	require.NoError(t, err)
+	job2, err := repo.GetByID(context.Background(), jobID2)
+	require.NoError(t, err)
+
+	conflict1, err := svc.GetJobConflict(context.Background(), job1)
+	require.NoError(t, err)
+	require.NotNil(t, conflict1)
+	require.Contains(t, conflict1.Reason, "冲突")
+
+	conflict2, err := svc.GetJobConflict(context.Background(), job2)
+	require.NoError(t, err)
+	require.NotNil(t, conflict2)
+	require.Contains(t, conflict2.Reason, "冲突")
+}
+
+func TestServiceGetJobConflictAllowsMultiCDTargets(t *testing.T) {
+	svc, repo := newTestService(t)
+	dir := t.TempDir()
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "ABC-123-CD1.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "ABC-123-CD1.mp4",
+		AbsPath:               filepath.Join(dir, "ABC-123-CD1.mp4"),
+		Number:                "ABC-123-CD1",
+		RawNumber:             "ABC-123-CD1",
+		CleanedNumber:         "ABC-123-CD1",
+		NumberSource:          "raw",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "ABC-123-CD2.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "ABC-123-CD2.mp4",
+		AbsPath:               filepath.Join(dir, "ABC-123-CD2.mp4"),
+		Number:                "ABC-123-CD2",
+		RawNumber:             "ABC-123-CD2",
+		CleanedNumber:         "ABC-123-CD2",
+		NumberSource:          "raw",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	job1, err := repo.GetByID(context.Background(), jobID1)
+	require.NoError(t, err)
+	job2, err := repo.GetByID(context.Background(), jobID2)
+	require.NoError(t, err)
+
+	conflict1, err := svc.GetJobConflict(context.Background(), job1)
+	require.NoError(t, err)
+	require.Nil(t, conflict1)
+
+	conflict2, err := svc.GetJobConflict(context.Background(), job2)
+	require.NoError(t, err)
+	require.Nil(t, conflict2)
+}
+
+func TestServiceGetJobConflictAllowsSpecialSuffixTargets(t *testing.T) {
+	svc, repo := newTestService(t)
+	dir := t.TempDir()
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "ABC-123-C.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "ABC-123-C.mp4",
+		AbsPath:               filepath.Join(dir, "ABC-123-C.mp4"),
+		Number:                "ABC-123-C",
+		RawNumber:             "ABC-123-C",
+		CleanedNumber:         "ABC-123-C",
+		NumberSource:          "raw",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "ABC-123-4K.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "ABC-123-4K.mp4",
+		AbsPath:               filepath.Join(dir, "ABC-123-4K.mp4"),
+		Number:                "ABC-123-4K",
+		RawNumber:             "ABC-123-4K",
+		CleanedNumber:         "ABC-123-4K",
+		NumberSource:          "raw",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	job1, err := repo.GetByID(context.Background(), jobID1)
+	require.NoError(t, err)
+	job2, err := repo.GetByID(context.Background(), jobID2)
+	require.NoError(t, err)
+
+	conflict1, err := svc.GetJobConflict(context.Background(), job1)
+	require.NoError(t, err)
+	require.Nil(t, conflict1)
+
+	conflict2, err := svc.GetJobConflict(context.Background(), job2)
+	require.NoError(t, err)
+	require.Nil(t, conflict2)
+}
+
+func TestServiceGetJobConflictIgnoresExistingSavedirTarget(t *testing.T) {
+	svc, repo := newTestService(t)
+	dir := t.TempDir()
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	jobItem, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, jobItem)
+
+	conflict, err := svc.GetJobConflict(context.Background(), jobItem)
+	require.NoError(t, err)
+	require.Nil(t, conflict)
+}

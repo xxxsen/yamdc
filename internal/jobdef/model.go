@@ -29,4 +29,6 @@ type Job struct {
 	ErrorMsg              string `json:"error_msg"`
 	CreatedAt             int64  `json:"created_at"`
 	UpdatedAt             int64  `json:"updated_at"`
+	ConflictReason        string `json:"conflict_reason,omitempty"`
+	ConflictTarget        string `json:"conflict_target,omitempty"`
 }

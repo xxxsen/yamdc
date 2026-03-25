@@ -117,3 +117,10 @@ func WithLinkMode(v bool) Option {
 		c.LinkMode = v
 	}
 }
+
+func (c *Capture) ScanDir() string {
+	if c == nil || c.c == nil {
+		return ""
+	}
+	return c.c.ScanDir
+}

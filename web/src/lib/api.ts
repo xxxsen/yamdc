@@ -19,6 +19,8 @@ export interface JobItem {
   error_msg: string;
   created_at: number;
   updated_at: number;
+  conflict_reason: string;
+  conflict_target: string;
 }
 
 export interface JobLogItem {
@@ -47,6 +49,78 @@ export interface ScrapeDataItem {
 export interface MediaFileRef {
   name: string;
   key: string;
+}
+
+export interface LibraryListItem {
+  rel_path: string;
+  name: string;
+  title: string;
+  number: string;
+  release_date: string;
+  actors: string[];
+  updated_at: number;
+  has_nfo: boolean;
+  poster_path: string;
+  cover_path: string;
+  file_count: number;
+  video_count: number;
+  variant_count: number;
+}
+
+export interface LibraryMeta {
+  title: string;
+  title_translated: string;
+  original_title: string;
+  plot: string;
+  plot_translated: string;
+  number: string;
+  release_date: string;
+  runtime: number;
+  studio: string;
+  label: string;
+  series: string;
+  director: string;
+  actors: string[];
+  genres: string[];
+  poster_path: string;
+  cover_path: string;
+  fanart_path: string;
+  thumb_path: string;
+  source: string;
+  scraped_at: string;
+}
+
+export interface LibraryFileItem {
+  name: string;
+  rel_path: string;
+  kind: string;
+  size: number;
+  updated_at: number;
+  variant_key?: string;
+  variant_label?: string;
+}
+
+export interface LibraryVariant {
+  key: string;
+  label: string;
+  base_name: string;
+  suffix: string;
+  is_primary: boolean;
+  video_path: string;
+  nfo_path: string;
+  poster_path: string;
+  cover_path: string;
+  meta: LibraryMeta;
+  files: LibraryFileItem[];
+  file_count: number;
+}
+
+export interface LibraryDetail {
+  item: LibraryListItem;
+  meta: LibraryMeta;
+  variants: LibraryVariant[];
+  primary_variant_key: string;
+  files: LibraryFileItem[];
 }
 
 export interface ReviewMeta {
@@ -123,6 +197,63 @@ export async function listJobs(params?: {
     throw new Error(`list jobs failed: ${resp.status}`);
   }
   const data = (await resp.json()) as APIResponse<JobListResponse>;
+  return data.data;
+}
+
+export async function listLibraryItems() {
+  const resp = await fetch(`${getBaseURL()}/api/library`, {
+    cache: "no-store",
+  });
+  if (!resp.ok) {
+    throw new Error(`list library failed: ${resp.status}`);
+  }
+  const data = (await resp.json()) as APIResponse<LibraryListItem[]>;
+  return data.data;
+}
+
+export async function getLibraryItem(path: string) {
+  const query = new URLSearchParams({ path });
+  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `get library item failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function updateLibraryItem(path: string, meta: LibraryMeta) {
+  const query = new URLSearchParams({ path });
+  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ meta }),
+  });
+  const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `update library item failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover", file: File) {
+  const query = new URLSearchParams({ path, kind });
+  if (variant) {
+    query.set("variant", variant);
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(`${getBaseURL()}/api/library/asset?${query.toString()}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `replace library asset failed: ${resp.status}`);
+  }
   return data.data;
 }
 
@@ -266,4 +397,8 @@ export async function uploadAsset(file: File) {
 
 export function getAssetURL(key: string) {
   return `/api/assets/${encodeURIComponent(key)}`;
+}
+
+export function getLibraryFileURL(path: string) {
+  return `/api/library/file?path=${encodeURIComponent(path)}`;
 }

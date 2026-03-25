@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, FolderKanban } from "lucide-react";
+import { Archive, ClipboardCheck, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -22,6 +22,12 @@ export function TopNav() {
       title: "Review 列表",
       subtitle: "复核刮削结果并入库",
       icon: ClipboardCheck,
+    },
+    {
+      href: "/library",
+      title: "已入库",
+      subtitle: "查看与修改 savedir 内容",
+      icon: Archive,
     },
   ] as const;
 

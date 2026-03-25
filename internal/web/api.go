@@ -20,10 +20,11 @@ type API struct {
 	jobRepo *repository.JobRepository
 	scanner *scanner.Service
 	jobSvc  *job.Service
+	saveDir string
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc}
+func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string) *API {
+	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir}
 }
 
 func (a *API) Handler() http.Handler {
@@ -33,6 +34,10 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/api/jobs", a.handleListJobs)
 	mux.HandleFunc("/api/jobs/", a.handleJobRoutes)
 	mux.HandleFunc("/api/review/jobs/", a.handleReviewRoutes)
+	mux.HandleFunc("/api/library", a.handleListLibrary)
+	mux.HandleFunc("/api/library/item", a.handleLibraryItem)
+	mux.HandleFunc("/api/library/file", a.handleLibraryFile)
+	mux.HandleFunc("/api/library/asset", a.handleLibraryAsset)
 	mux.HandleFunc("/api/assets/", a.handleAsset)
 	return withCORS(mux)
 }
@@ -90,6 +95,13 @@ func (a *API) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.jobRepo.ListJobs(r.Context(), statuses, keyword, page, pageSize)
 	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"code":    1,
+			"message": err.Error(),
+		})
+		return
+	}
+	if err := a.jobSvc.ApplyJobConflicts(r.Context(), items.Items); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"code":    1,
 			"message": err.Error(),
@@ -370,7 +382,7 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

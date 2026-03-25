@@ -81,6 +81,9 @@ func newServerCmd() *cobra.Command {
 
 func runServer(c *config.Config) error {
 	rewriteEnvFlagToConfig(&c.SwitchConfig)
+	if err := normalizeDirPaths(c); err != nil {
+		return fmt.Errorf("normalize dir paths failed, err:%w", err)
+	}
 	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
 	if err := precheckDir(c); err != nil {
 		return fmt.Errorf("precheck dir failed, err:%w", err)
@@ -135,7 +138,7 @@ func runServer(c *config.Config) error {
 	if err := jobSvc.Recover(context.Background()); err != nil {
 		logkit.Error("recover processing jobs failed", zap.Error(err))
 	}
-	api := web.NewAPI(jobRepo, scanSvc, jobSvc)
+	api := web.NewAPI(jobRepo, scanSvc, jobSvc, c.SaveDir)
 	addr := os.Getenv("YAMDC_SERVER_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -257,6 +260,29 @@ func precheckDir(c *config.Config) error {
 	}
 	if len(c.SaveDir) == 0 {
 		return fmt.Errorf("no save dir")
+	}
+	return nil
+}
+
+func normalizeDirPaths(c *config.Config) error {
+	var err error
+	if c.DataDir != "" {
+		c.DataDir, err = filepath.Abs(c.DataDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.ScanDir != "" {
+		c.ScanDir, err = filepath.Abs(c.ScanDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.SaveDir != "" {
+		c.SaveDir, err = filepath.Abs(c.SaveDir)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

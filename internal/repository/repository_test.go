@@ -236,3 +236,34 @@ func TestJobRepositoryUpsertScannedJobPreservesManualNumber(t *testing.T) {
 	require.Equal(t, "AAA-002", got.CleanedNumber)
 	require.Equal(t, "AAA002-raw", got.RawNumber)
 }
+
+func TestJobRepositoryUpsertScannedJobReactivatesDoneJob(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName: "AAA-001.mp4",
+		FileExt:  ".mp4",
+		RelPath:  "AAA-001.mp4",
+		AbsPath:  "/scan/AAA-001.mp4",
+		Number:   "AAA-001",
+		FileSize: 1,
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	result, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	jobID := result.Items[0].ID
+
+	require.NoError(t, repo.MarkDone(ctx, jobID))
+
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, jobdef.StatusInit, got.Status)
+	require.Equal(t, "", got.ErrorMsg)
+}

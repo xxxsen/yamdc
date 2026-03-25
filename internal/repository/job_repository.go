@@ -74,6 +74,34 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 				ELSE excluded.number_clean_warnings
 			END,
 			file_size = excluded.file_size,
+			status = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN excluded.status
+				ELSE yamdc_job_tab.status
+			END,
+			error_msg = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN ''
+				ELSE yamdc_job_tab.error_msg
+			END,
+			retry_count = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN 0
+				ELSE yamdc_job_tab.retry_count
+			END,
+			scrape_started_at = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN 0
+				ELSE yamdc_job_tab.scrape_started_at
+			END,
+			scrape_finished_at = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN 0
+				ELSE yamdc_job_tab.scrape_finished_at
+			END,
+			reviewed_at = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN 0
+				ELSE yamdc_job_tab.reviewed_at
+			END,
+			imported_at = CASE
+				WHEN yamdc_job_tab.status = 'done' OR yamdc_job_tab.deleted_at != 0 THEN 0
+				ELSE yamdc_job_tab.imported_at
+			END,
 			deleted_at = 0,
 			updated_at = CASE
 				WHEN yamdc_job_tab.file_name != excluded.file_name
@@ -87,6 +115,7 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_confidence != excluded.number_clean_confidence)
 					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_warnings != excluded.number_clean_warnings)
 					OR yamdc_job_tab.file_size != excluded.file_size
+					OR yamdc_job_tab.status = 'done'
 					OR yamdc_job_tab.deleted_at != 0
 				THEN excluded.updated_at
 				ELSE yamdc_job_tab.updated_at
@@ -231,6 +260,18 @@ func (r *JobRepository) UpdateNumber(ctx context.Context, id int64, number strin
 	`, number, source, cleanStatus, cleanConfidence, cleanWarnings, time.Now().UnixMilli(), id)
 	if err != nil {
 		return fmt.Errorf("update job number failed: %w", err)
+	}
+	return nil
+}
+
+func (r *JobRepository) UpdateSourcePath(ctx context.Context, id int64, fileName string, fileExt string, relPath string, absPath string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE yamdc_job_tab
+		SET file_name = ?, file_ext = ?, rel_path = ?, abs_path = ?, updated_at = ?
+		WHERE id = ? AND deleted_at = 0
+	`, fileName, fileExt, relPath, absPath, time.Now().UnixMilli(), id)
+	if err != nil {
+		return fmt.Errorf("update job source path failed: %w", err)
 	}
 	return nil
 }

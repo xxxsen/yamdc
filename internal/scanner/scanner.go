@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
@@ -126,10 +127,44 @@ func (s *Service) Scan(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.cleanupMissingJobs(ctx, entries); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (s *Service) isMediaFile(path string) bool {
 	_, ok := s.extMap[strings.ToLower(filepath.Ext(path))]
 	return ok
+}
+
+func (s *Service) cleanupMissingJobs(ctx context.Context, entries []repository.UpsertJobInput) error {
+	activePaths := make(map[string]struct{}, len(entries))
+	for _, item := range entries {
+		activePaths[item.RelPath] = struct{}{}
+	}
+	result, err := s.repo.ListJobs(ctx, []jobdef.Status{jobdef.StatusInit, jobdef.StatusFailed, jobdef.StatusReviewing}, "", 1, 0)
+	if err != nil {
+		return err
+	}
+	for _, job := range result.Items {
+		if _, ok := activePaths[job.RelPath]; ok {
+			continue
+		}
+		switch job.Status {
+		case jobdef.StatusReviewing:
+			ok, err := s.repo.UpdateStatus(ctx, job.ID, []jobdef.Status{jobdef.StatusReviewing}, jobdef.StatusFailed, "source file missing, unable to import")
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("mark reviewing job as failed failed, id:%d", job.ID)
+			}
+		default:
+			if err := s.repo.SoftDelete(ctx, job.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
