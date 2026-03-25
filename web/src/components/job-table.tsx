@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Edit3, Eye, Pencil, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
 import { deleteJob, listJobs, listJobLogs, rerunJob, runJob, triggerScan, updateJobNumber } from "@/lib/api";
@@ -28,6 +28,8 @@ export function JobTable({ initialData }: Props) {
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<JobItem | null>(null);
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [editingNumber, setEditingNumber] = useState("");
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
 
@@ -44,6 +46,45 @@ export function JobTable({ initialData }: Props) {
     }
     return allJobs.filter((item) => item.status === statusFilter);
   }, [allJobs, statusFilter]);
+
+  const canSelectJob = (job: JobItem) => {
+    const hasApprovedNumber =
+      job.number_source === "manual" || (job.number_clean_status === "success" && job.number_clean_confidence === "high");
+    const isRunnable = job.status === "init" || job.status === "failed";
+    return hasApprovedNumber && isRunnable;
+  };
+
+  const selectableJobs = useMemo(() => jobs.filter(canSelectJob), [jobs]);
+  const selectedCount = selectedJobIds.size;
+  const allSelectableChecked = selectableJobs.length > 0 && selectableJobs.every((job) => selectedJobIds.has(job.id));
+  const hasPartialSelection = selectedCount > 0 && !allSelectableChecked;
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+    selectAllRef.current.indeterminate = hasPartialSelection;
+  }, [hasPartialSelection]);
+
+  useEffect(() => {
+    const visibleSelectableIds = new Set(selectableJobs.map((job) => job.id));
+    setSelectedJobIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => visibleSelectableIds.has(id)));
+      if (next.size === prev.size) {
+        let unchanged = true;
+        for (const id of next) {
+          if (!prev.has(id)) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) {
+          return prev;
+        }
+      }
+      return next;
+    });
+  }, [selectableJobs]);
 
   const refreshJobs = async (nextKeyword = keyword) => {
     const data = await listJobs({
@@ -148,6 +189,30 @@ export function JobTable({ initialData }: Props) {
     setDeleteConfirmJob(job);
   };
 
+  const handleToggleSelectAll = () => {
+    setSelectedJobIds((prev) => {
+      if (selectableJobs.length === 0) {
+        return prev;
+      }
+      if (selectableJobs.every((job) => prev.has(job.id))) {
+        return new Set<number>();
+      }
+      return new Set(selectableJobs.map((job) => job.id));
+    });
+  };
+
+  const handleToggleSelectJob = (jobID: number) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobID)) {
+        next.delete(jobID);
+      } else {
+        next.add(jobID);
+      }
+      return next;
+    });
+  };
+
   const handleStartEditNumber = (job: JobItem) => {
     setEditingJobId(job.id);
     setEditingNumber(job.number);
@@ -181,6 +246,41 @@ export function JobTable({ initialData }: Props) {
       return;
     }
     handleSaveNumber(job);
+  };
+
+  const handleRunSelectedJobs = () => {
+    const pendingJobs = jobs.filter((job) => selectedJobIds.has(job.id) && canSelectJob(job));
+    if (pendingJobs.length === 0) {
+      return;
+    }
+    startTransition(async () => {
+      let success = 0;
+      let failed = 0;
+      try {
+        setMessage("");
+        for (const job of pendingJobs) {
+          try {
+            if (job.status === "failed") {
+              await rerunJob(job.id);
+            } else {
+              await runJob(job.id);
+            }
+            success += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+        setSelectedJobIds(new Set());
+        await refreshJobs();
+        if (failed > 0) {
+          setMessage(`已提交 ${success} 条，失败 ${failed} 条`);
+          return;
+        }
+        setMessage(`已提交 ${success} 条任务`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "批量提交失败");
+      }
+    });
   };
 
   const getNumberMeta = (job: JobItem) => {
@@ -327,6 +427,9 @@ export function JobTable({ initialData }: Props) {
               <option value="failed">Failed ({counts.failed ?? 0})</option>
             </select>
             {message ? <span style={{ color: "var(--danger)", fontSize: 14 }}>{message}</span> : null}
+            <button className="btn" onClick={handleRunSelectedJobs} disabled={selectedCount === 0 || isPending}>
+              提交已选 ({selectedCount})
+            </button>
             <button className="btn btn-primary" onClick={handleScan} disabled={isPending}>
               <RefreshCw size={16} />
               立即扫描
@@ -342,7 +445,19 @@ export function JobTable({ initialData }: Props) {
           <table className="table">
             <thead>
               <tr>
-                <th>Path</th>
+                <th>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allSelectableChecked}
+                      disabled={selectableJobs.length === 0 || isPending}
+                      title="选择当前列表中所有可批量提交的文件"
+                      onChange={handleToggleSelectAll}
+                    />
+                    <span>Path</span>
+                  </div>
+                </th>
                 <th>Number</th>
                 <th>Size</th>
                 <th>Status</th>
@@ -363,7 +478,16 @@ export function JobTable({ initialData }: Props) {
                 return (
                   <tr key={job.id}>
                     <td style={{ minWidth: 260, color: "var(--muted)" }}>
-                      <div className="cell-center">{job.rel_path}</div>
+                      <div className="cell-center" style={{ gap: 10 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedJobIds.has(job.id)}
+                          disabled={!canSelectJob(job) || isPending}
+                          title={!canSelectJob(job) ? "仅高置信度或手动编辑后的番号可加入批量提交" : "选择任务"}
+                          onChange={() => handleToggleSelectJob(job.id)}
+                        />
+                        <span>{job.rel_path}</span>
+                      </div>
                     </td>
                     <td style={{ width: 320 }}>
                       <div className="cell-center" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
