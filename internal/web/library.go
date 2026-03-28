@@ -174,35 +174,62 @@ func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
 	pathValue := strings.TrimSpace(r.URL.Query().Get("path"))
 	if pathValue == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing file path"})
 		return
 	}
-	_, absPath, err := a.resolveLibraryPath(pathValue)
+	relPath, absPath, err := a.resolveLibraryPath(pathValue)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 		return
 	}
-	info, err := os.Stat(absPath)
-	if err != nil || info.IsDir() {
-		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
-		return
+	switch r.Method {
+	case http.MethodGet:
+		info, err := os.Stat(absPath)
+		if err != nil || info.IsDir() {
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
+			return
+		}
+		file, err := os.Open(absPath)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "open library file failed"})
+			return
+		}
+		defer file.Close()
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		http.ServeContent(w, r, info.Name(), time.Time{}, file)
+	case http.MethodDelete:
+		info, err := os.Stat(absPath)
+		if err != nil || info.IsDir() {
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
+			return
+		}
+		if !strings.Contains(strings.ToLower(relPath), "/extrafanart/") {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "only extrafanart files can be deleted"})
+			return
+		}
+		if err := os.Remove(absPath); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "delete library file failed"})
+			return
+		}
+		itemAbsPath := filepath.Dir(filepath.Dir(absPath))
+		itemRelPath, err := filepath.Rel(a.saveDir, itemAbsPath)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+			return
+		}
+		detail, err := a.readLibraryDetail(filepath.ToSlash(itemRelPath), itemAbsPath)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library file deleted", "data": detail})
+	default:
+		writeMethodNotAllowed(w)
 	}
-	file, err := os.Open(absPath)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "open library file failed"})
-		return
-	}
-	defer file.Close()
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	http.ServeContent(w, r, info.Name(), time.Time{}, file)
 }
 
 func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {

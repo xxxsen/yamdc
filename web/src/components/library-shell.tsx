@@ -4,7 +4,7 @@ import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
-import { getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
+import { deleteLibraryFile, getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
@@ -274,6 +274,19 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
 
   const resolveLibraryImageSrc = (path: string) => assetOverrides[path] ?? getLibraryFileURL(path);
 
+  const clearAssetOverride = (path: string) => {
+    setAssetOverrides((prev) => {
+      const existing = prev[path];
+      if (!existing) {
+        return prev;
+      }
+      URL.revokeObjectURL(existing);
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+  };
+
   const syncDetail = (next: LibraryDetail) => {
     setDetail(next);
     detailRef.current = next;
@@ -440,6 +453,24 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
       unlock();
     }, { once: true });
     input.click();
+  };
+
+  const handleDeleteFanart = (path: string) => {
+    startTransition(async () => {
+      try {
+        setMessage("删除 extrafanart...");
+        const next = await deleteLibraryFile(path);
+        clearAssetOverride(path);
+        if (preview?.path === path) {
+          setPreview(null);
+        }
+        syncDetail(next);
+        setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
+        setMessage("Extrafanart 已删除");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "删除 extrafanart 失败");
+      }
+    });
   };
 
   return (
@@ -796,6 +827,16 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                               onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name }); }}
                             >
                               <img src={resolveLibraryImageSrc(file.rel_path)} alt={file.name} className="library-fanart-image" />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn review-inline-icon-btn review-fanart-delete"
+                              onClick={() => handleDeleteFanart(file.rel_path)}
+                              aria-label="删除 extrafanart"
+                              title="删除 extrafanart"
+                              disabled={isPending}
+                            >
+                              <X size={12} />
                             </button>
                             <div className="library-fanart-name">{file.name.split("/").pop()}</div>
                           </div>

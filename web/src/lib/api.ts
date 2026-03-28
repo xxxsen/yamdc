@@ -279,6 +279,18 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
   return data.data;
 }
 
+export async function deleteLibraryFile(path: string) {
+  const query = new URLSearchParams({ path });
+  const resp = await fetch(`${getBaseURL()}/api/library/file?${query.toString()}`, {
+    method: "DELETE",
+  });
+  const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `delete library file failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
 export async function triggerScan() {
   const resp = await fetch(`${getBaseURL()}/api/scan`, {
     method: "POST",
