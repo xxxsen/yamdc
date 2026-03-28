@@ -26,7 +26,7 @@ export function TopNav() {
     {
       href: "/library",
       title: "已入库",
-      subtitle: "查看与修改 savedir 内容",
+      subtitle: "查看与修改内容",
       icon: Archive,
     },
   ] as const;
