@@ -1,10 +1,13 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { TopNav } from "@/components/top-nav";
+
+const MEDIA_LIBRARY_RETURN_KEY = "yamdc.media-library.return-path";
 
 export function AppShell({
   children,
@@ -12,15 +15,39 @@ export function AppShell({
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const isMediaLibraryRoute = pathname.startsWith("/media-library");
   const currentTime = new Intl.DateTimeFormat("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(new Date());
 
+  useEffect(() => {
+    if (typeof window === "undefined" || isMediaLibraryRoute) {
+      return;
+    }
+    const nextPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.sessionStorage.setItem(MEDIA_LIBRARY_RETURN_KEY, nextPath);
+  }, [isMediaLibraryRoute, pathname]);
+
+  const handleExitMediaLibrary = () => {
+    if (typeof window === "undefined") {
+      router.push("/review");
+      return;
+    }
+    const target = window.sessionStorage.getItem(MEDIA_LIBRARY_RETURN_KEY);
+    if (target && !target.startsWith("/media-library")) {
+      router.push(target);
+      return;
+    }
+    router.push("/review");
+  };
+
   return (
-    <div className={`app-shell ${collapsed ? "app-shell-collapsed" : ""}`}>
-      {!collapsed ? (
+    <div className={`app-shell ${collapsed ? "app-shell-collapsed" : ""} ${isMediaLibraryRoute ? "app-shell-wide" : ""}`}>
+      {!collapsed && !isMediaLibraryRoute ? (
         <aside className="panel sidebar">
           <div className="sidebar-brand">
             <div className="sidebar-brand-top">
@@ -56,8 +83,13 @@ export function AppShell({
           </button>
         </aside>
       ) : null}
-      <main className="main-content">{children}</main>
-      {collapsed ? (
+      <main className={`main-content ${isMediaLibraryRoute ? "main-content-wide" : ""}`}>{children}</main>
+      {isMediaLibraryRoute ? (
+        <button className="workspace-close-btn" type="button" aria-label="退出媒体库工作区" onClick={handleExitMediaLibrary}>
+          <X size={18} />
+        </button>
+      ) : null}
+      {collapsed && !isMediaLibraryRoute ? (
         <button
           className="sidebar-edge-toggle sidebar-edge-toggle-open"
           onClick={() => setCollapsed(false)}

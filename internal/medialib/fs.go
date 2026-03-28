@@ -81,6 +81,7 @@ func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error
 	nfoPath := ""
 	videoCount := 0
 	fileCount := 0
+	totalSize := int64(0)
 	imageNames := make([]string, 0, 6)
 	for _, entry := range entries {
 		entryInfo, err := entry.Info()
@@ -91,6 +92,9 @@ func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error
 			continue
 		}
 		fileCount++
+		if entryInfo != nil {
+			totalSize += entryInfo.Size()
+		}
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
 		if ext == ".nfo" && !hasNFO {
@@ -113,6 +117,7 @@ func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error
 		Title:        filepath.Base(absPath),
 		UpdatedAt:    updatedAt,
 		HasNFO:       hasNFO,
+		TotalSize:    totalSize,
 		FileCount:    fileCount,
 		VideoCount:   videoCount,
 		VariantCount: 0,

@@ -8,10 +8,12 @@ type Item struct {
 	Number       string   `json:"number"`
 	ReleaseDate  string   `json:"release_date"`
 	Actors       []string `json:"actors"`
+	CreatedAt    int64    `json:"created_at"`
 	UpdatedAt    int64    `json:"updated_at"`
 	HasNFO       bool     `json:"has_nfo"`
 	PosterPath   string   `json:"poster_path"`
 	CoverPath    string   `json:"cover_path"`
+	TotalSize    int64    `json:"total_size"`
 	FileCount    int      `json:"file_count"`
 	VideoCount   int      `json:"video_count"`
 	VariantCount int      `json:"variant_count"`

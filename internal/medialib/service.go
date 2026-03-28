@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,14 +20,22 @@ const (
 )
 
 type Service struct {
-	db          *sql.DB
-	libraryDir  string
-	saveDir     string
+	db           *sql.DB
+	libraryDir   string
+	saveDir      string
 	pollInterval time.Duration
 
 	mu          sync.Mutex
 	syncRunning bool
 	moveRunning bool
+}
+
+type ListItemsOptions struct {
+	Keyword    string
+	Year       string
+	SizeFilter string
+	Sort       string
+	Order      string
 }
 
 func NewService(db *sql.DB, libraryDir string, saveDir string) *Service {
@@ -60,21 +70,23 @@ func (s *Service) Start(ctx context.Context) {
 	}()
 }
 
-func (s *Service) ListItems(ctx context.Context) ([]Item, error) {
+func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, item_json
+		SELECT id, item_json, created_at
 		FROM yamdc_media_library_tab
-		ORDER BY updated_at DESC, id DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list media library items failed: %w", err)
 	}
 	defer rows.Close()
 	items := make([]Item, 0, 32)
+	keyword := strings.ToLower(strings.TrimSpace(options.Keyword))
+	year := strings.TrimSpace(options.Year)
 	for rows.Next() {
 		var id int64
 		var raw string
-		if err := rows.Scan(&id, &raw); err != nil {
+		var createdAt int64
+		if err := rows.Scan(&id, &raw, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan media library item failed: %w", err)
 		}
 		var item Item
@@ -82,11 +94,29 @@ func (s *Service) ListItems(ctx context.Context) ([]Item, error) {
 			return nil, fmt.Errorf("decode media library item failed: %w", err)
 		}
 		item.ID = id
+		item.CreatedAt = createdAt
+		if keyword != "" {
+			haystack := strings.ToLower(strings.Join([]string{
+				item.Title,
+				item.Number,
+				item.Name,
+			}, " "))
+			if !strings.Contains(haystack, keyword) {
+				continue
+			}
+		}
+		if year != "" && year != "all" && releaseYear(item.ReleaseDate) != year {
+			continue
+		}
+		if !matchSizeFilter(item.TotalSize, options.SizeFilter) {
+			continue
+		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate media library items failed: %w", err)
 	}
+	sortItems(items, options.Sort, options.Order)
 	return items, nil
 }
 
@@ -331,12 +361,12 @@ func (s *Service) runMove(ctx context.Context) error {
 	}
 	startedAt := time.Now().UnixMilli()
 	state := TaskState{
-		TaskKey:    TaskMove,
-		Status:     "running",
-		Total:      len(itemDirs),
-		Message:    "移动到媒体库中",
-		StartedAt:  startedAt,
-		UpdatedAt:  startedAt,
+		TaskKey:   TaskMove,
+		Status:    "running",
+		Total:     len(itemDirs),
+		Message:   "移动到媒体库中",
+		StartedAt: startedAt,
+		UpdatedAt: startedAt,
 	}
 	_ = s.saveTaskState(ctx, state)
 	successCount := 0
@@ -585,4 +615,125 @@ func (s *Service) isSyncRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.syncRunning
+}
+
+func releaseYear(value string) string {
+	for start := 0; start+4 <= len(value); start++ {
+		chunk := value[start : start+4]
+		valid := true
+		for _, char := range chunk {
+			if char < '0' || char > '9' {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return chunk
+		}
+	}
+	return ""
+}
+
+func matchSizeFilter(totalSize int64, sizeFilter string) bool {
+	gb := float64(totalSize) / float64(1024*1024*1024)
+	switch sizeFilter {
+	case "", "all":
+		return true
+	case "lt-1":
+		return gb < 1
+	case "1-2":
+		return gb >= 1 && gb < 2
+	case "2-5":
+		return gb >= 2 && gb < 5
+	case "lt-5":
+		return gb < 5
+	case "5-10":
+		return gb >= 5 && gb < 10
+	case "10-20":
+		return gb >= 10 && gb < 20
+	case "5-20":
+		return gb >= 5 && gb < 20
+	case "20-50":
+		return gb >= 20 && gb < 50
+	case "50-plus":
+		return gb >= 50
+	default:
+		return true
+	}
+}
+
+func sortItems(items []Item, sortMode string, order string) {
+	if sortMode == "" {
+		sortMode = "ingested"
+	}
+	desc := order != "asc"
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i]
+		right := items[j]
+		compare := 0
+		switch sortMode {
+		case "title":
+			leftTitle := firstNonEmpty(left.Title, left.Name)
+			rightTitle := firstNonEmpty(right.Title, right.Name)
+			if leftTitle != rightTitle {
+				if leftTitle < rightTitle {
+					compare = -1
+				} else {
+					compare = 1
+				}
+			}
+		case "size":
+			if left.TotalSize != right.TotalSize {
+				if left.TotalSize < right.TotalSize {
+					compare = -1
+				} else {
+					compare = 1
+				}
+			}
+		case "year":
+			leftYear := releaseYear(left.ReleaseDate)
+			rightYear := releaseYear(right.ReleaseDate)
+			if leftYear != rightYear {
+				if leftYear < rightYear {
+					compare = -1
+				} else {
+					compare = 1
+				}
+			}
+		case "ingested":
+			if left.CreatedAt != right.CreatedAt {
+				if left.CreatedAt < right.CreatedAt {
+					compare = -1
+				} else {
+					compare = 1
+				}
+			}
+		default:
+			if left.UpdatedAt != right.UpdatedAt {
+				if left.UpdatedAt < right.UpdatedAt {
+					compare = -1
+				} else {
+					compare = 1
+				}
+			}
+		}
+		if compare == 0 && left.UpdatedAt != right.UpdatedAt {
+			if left.UpdatedAt < right.UpdatedAt {
+				compare = -1
+			} else {
+				compare = 1
+			}
+		}
+		if compare == 0 && left.ID != right.ID {
+			if left.ID < right.ID {
+				compare = -1
+			} else {
+				compare = 1
+			}
+		}
+		if desc {
+			return compare > 0
+		}
+		return compare < 0
+	})
 }

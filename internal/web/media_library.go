@@ -21,7 +21,18 @@ func (a *API) handleMediaLibraryList(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": []medialib.Item{}})
 		return
 	}
-	items, err := a.media.ListItems(r.Context())
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	year := strings.TrimSpace(r.URL.Query().Get("year"))
+	sizeFilter := strings.TrimSpace(r.URL.Query().Get("size"))
+	sortMode := strings.TrimSpace(r.URL.Query().Get("sort"))
+	order := strings.TrimSpace(r.URL.Query().Get("order"))
+	items, err := a.media.ListItems(r.Context(), medialib.ListItemsOptions{
+		Keyword:    keyword,
+		Year:       year,
+		SizeFilter: sizeFilter,
+		Sort:       sortMode,
+		Order:      order,
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
 		return

@@ -60,10 +60,12 @@ export interface LibraryListItem {
   number: string;
   release_date: string;
   actors: string[];
+  created_at: number;
   updated_at: number;
   has_nfo: boolean;
   poster_path: string;
   cover_path: string;
+  total_size: number;
   file_count: number;
   video_count: number;
   variant_count: number;
@@ -246,8 +248,31 @@ export async function listLibraryItems() {
   return data.data;
 }
 
-export async function listMediaLibraryItems() {
-  const resp = await fetch(`${getBaseURL()}/api/media-library`, {
+export async function listMediaLibraryItems(params?: {
+  keyword?: string;
+  year?: string;
+  size?: string;
+  sort?: string;
+  order?: string;
+}) {
+  const query = new URLSearchParams();
+  if (params?.keyword?.trim()) {
+    query.set("keyword", params.keyword.trim());
+  }
+  if (params?.year?.trim() && params.year !== "all") {
+    query.set("year", params.year.trim());
+  }
+  if (params?.size?.trim() && params.size !== "all") {
+    query.set("size", params.size.trim());
+  }
+  if (params?.sort?.trim() && params.sort !== "ingested") {
+    query.set("sort", params.sort.trim());
+  }
+  if (params?.order?.trim() && params.order !== "desc") {
+    query.set("order", params.order.trim());
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const resp = await fetch(`${getBaseURL()}/api/media-library${suffix}`, {
     cache: "no-store",
   });
   const data = (await resp.json()) as APIResponse<MediaLibraryItem[]>;
