@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, RefreshCw, Search, Upload, X } from "lucide-react";
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
 import { getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
@@ -165,6 +165,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const uploadActiveRef = useRef(false);
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
@@ -299,8 +300,13 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    uploadActiveRef.current = true;
+    const unlock = () => {
+      setTimeout(() => { uploadActiveRef.current = false; }, 300);
+    };
     input.addEventListener("change", () => {
       const file = input.files?.[0] ?? null;
+      unlock();
       if (!file) {
         return;
       }
@@ -315,6 +321,9 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
           setMessage(error instanceof Error ? error.message : "替换图片失败");
         }
       });
+    }, { once: true });
+    input.addEventListener("cancel", () => {
+      unlock();
     }, { once: true });
     input.click();
   };
@@ -602,7 +611,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     </div>
                     <div className="review-image-box review-image-box-poster">
                       {selectedPoster ? (
-                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: "海报", path: selectedPoster, name: "海报" })}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "海报", path: selectedPoster, name: "海报" }); }}>
                           <img src={getLibraryFileURL(selectedPoster)} alt="海报" className="library-poster-image" />
                         </button>
                       ) : (
@@ -633,7 +642,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     </div>
                     <div className="review-image-box review-image-box-cover">
                       {selectedCover ? (
-                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: "封面", path: selectedCover, name: "封面" })}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "封面", path: selectedCover, name: "封面" }); }}>
                           <img src={getLibraryFileURL(selectedCover)} alt="封面" className="library-cover-image" />
                         </button>
                       ) : (
@@ -665,7 +674,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                             <button
                               type="button"
                               className="review-image-hit"
-                              onClick={() => setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name })}
+                              onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name }); }}
                             >
                               <img src={getLibraryFileURL(file.rel_path)} alt={file.name} className="library-fanart-image" />
                             </button>

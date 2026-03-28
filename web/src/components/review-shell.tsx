@@ -173,6 +173,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const uploadActiveRef = useRef(false);
 
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
@@ -495,11 +496,19 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    uploadActiveRef.current = true;
+    const unlock = () => {
+      setTimeout(() => { uploadActiveRef.current = false; }, 300);
+    };
     input.addEventListener("change", () => {
       const file = input.files?.[0];
+      unlock();
       if (file) {
         void doUpload(file, target);
       }
+    }, { once: true });
+    input.addEventListener("cancel", () => {
+      unlock();
     }, { once: true });
     input.click();
   };
@@ -664,7 +673,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         <Crop size={14} />
                       </button>
                       <div className="review-image-box review-image-box-poster">
-                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("poster"), item: meta.poster! })}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("poster"), item: meta.poster! }); }}>
                           <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </button>
                         <button
@@ -713,7 +722,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                     <div className="panel review-image-card review-image-card-cover">
                       <span className="review-image-title">封面</span>
                       <div className="review-image-box review-image-box-cover">
-                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("cover"), item: meta.cover! })}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("cover"), item: meta.cover! }); }}>
                           <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </button>
                         <button
@@ -760,7 +769,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                     >
                       {(meta.sample_images ?? []).map((item) => (
                         <div key={item.key} className="review-fanart-item">
-                          <button type="button" className="review-image-hit" onClick={() => setPreview({ title: imageTitle("fanart"), item })}>
+                          <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("fanart"), item }); }}>
                             <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
                           </button>
                           <button
