@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Search, Upload } from "lucide-react";
+import { RefreshCw, Search, Upload, X } from "lucide-react";
 import { useDeferredValue, useEffect, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
@@ -44,17 +44,6 @@ function pickVariant(detail: LibraryDetail | null, key: string) {
   return detail.variants.find((item) => item.key === key) ?? detail.variants[0] ?? null;
 }
 
-function normalizeListInput(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatListInput(items: string[]) {
-  return items.join(", ");
-}
-
 function serializeMeta(meta: LibraryMeta) {
   return JSON.stringify({
     ...meta,
@@ -82,6 +71,87 @@ function hasTranslatedCopy(meta: LibraryMeta | null) {
   return Boolean(meta.title_translated.trim() || meta.plot_translated.trim());
 }
 
+function TokenEditor({
+  label,
+  placeholder,
+  value,
+  onChange,
+  onBlurSave,
+  singleLine = false,
+}: {
+  label: string;
+  placeholder: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+  onBlurSave: () => void;
+  singleLine?: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const commitDraft = () => {
+    const next = draft.trim();
+    if (!next) {
+      setDraft("");
+      return;
+    }
+    onChange([...value, next]);
+    setDraft("");
+  };
+
+  const removeAt = (idx: number) => {
+    onChange(value.filter((_, index) => index !== idx));
+    onBlurSave();
+  };
+
+  return (
+    <div className="review-field review-field-tokens">
+      <span className="review-label review-label-side">{label}</span>
+      <div className={`token-editor${singleLine ? " token-editor-single-line" : ""}`} onClick={() => document.getElementById(`library-token-${label}`)?.focus()}>
+        {value.map((item, idx) => (
+          <span key={`${item}-${idx}`} className="token-chip">
+            {item}
+            <button type="button" className="token-chip-remove" aria-label={`删除${item}`} onClick={() => removeAt(idx)}>
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        <input
+          id={`library-token-${label}`}
+          className="token-input"
+          placeholder={value.length === 0 ? placeholder : ""}
+          value={draft}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next.includes(",")) {
+              const parts = next.split(",");
+              const ready = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
+              if (ready.length > 0) {
+                onChange([...value, ...ready]);
+              }
+              setDraft(parts[parts.length - 1] ?? "");
+              return;
+            }
+            setDraft(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitDraft();
+              onBlurSave();
+            } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
+              onChange(value.slice(0, -1));
+            }
+          }}
+          onBlur={() => {
+            commitDraft();
+            onBlurSave();
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [items, setItems] = useState(initialItems);
   const [selectedPath, setSelectedPath] = useState(initialDetail?.item.rel_path ?? initialItems[0]?.rel_path ?? "");
@@ -93,6 +163,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [draftMeta, setDraftMeta] = useState<LibraryMeta>(cloneMeta(initialDetail?.meta ?? null));
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
+  const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const coverUploadRef = useRef<HTMLInputElement | null>(null);
   const posterUploadRef = useRef<HTMLInputElement | null>(null);
@@ -497,16 +568,14 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   </div>
                   <div className="review-main-side library-actors-side">
                     <div className="review-meta-row">
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">演员</span>
-                        <input
-                          className="input"
-                          placeholder="逗号分隔"
-                          value={formatListInput(draftMeta.actors)}
-                          onBlur={handleAutoSave}
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, actors: normalizeListInput(e.target.value) }))}
-                        />
-                      </div>
+                      <TokenEditor
+                        label="演员"
+                        placeholder="输入后回车或逗号确认"
+                        value={draftMeta.actors}
+                        onChange={(next) => setDraftMeta((prev) => ({ ...prev, actors: next }))}
+                        onBlurSave={handleAutoSave}
+                        singleLine
+                      />
                     </div>
                   </div>
                   <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
@@ -519,7 +588,9 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     </div>
                     <div className="review-image-box review-image-box-poster">
                       {selectedPoster ? (
-                        <img src={getLibraryFileURL(selectedPoster)} alt="海报" className="library-poster-image" />
+                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: "海报", path: selectedPoster, name: "海报" })}>
+                          <img src={getLibraryFileURL(selectedPoster)} alt="海报" className="library-poster-image" />
+                        </button>
                       ) : (
                         <div className="library-preview-empty">暂无海报</div>
                       )}
@@ -528,16 +599,13 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                 </div>
 
                 <div className="review-meta-row review-meta-row-full">
-                  <div className="review-field review-field-area">
-                    <span className="review-label review-label-side">标签</span>
-                    <input
-                      className="input"
-                      placeholder="逗号分隔"
-                      value={formatListInput(draftMeta.genres)}
-                      onBlur={handleAutoSave}
-                      onChange={(e) => setDraftMeta((prev) => ({ ...prev, genres: normalizeListInput(e.target.value) }))}
-                    />
-                  </div>
+                  <TokenEditor
+                    label="标签"
+                    placeholder="输入后回车或逗号确认"
+                    value={draftMeta.genres}
+                    onChange={(next) => setDraftMeta((prev) => ({ ...prev, genres: next }))}
+                    onBlurSave={handleAutoSave}
+                  />
                 </div>
 
                 <div className="review-media-offset review-cover-slot">
@@ -551,7 +619,9 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     </div>
                     <div className="review-image-box review-image-box-cover">
                       {selectedCover ? (
-                        <img src={getLibraryFileURL(selectedCover)} alt="封面" className="library-cover-image" />
+                        <button type="button" className="review-image-hit" onClick={() => setPreview({ title: "封面", path: selectedCover, name: "封面" })}>
+                          <img src={getLibraryFileURL(selectedCover)} alt="封面" className="library-cover-image" />
+                        </button>
                       ) : (
                         <div className="library-preview-empty">暂无封面</div>
                       )}
@@ -566,10 +636,25 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                       <div className="library-file-section-subtitle">目录里的扩展剧照资源。</div>
                     </div>
                     {fanartFiles.length > 0 ? (
-                      <div className="review-fanart-strip library-fanart-strip">
+                      <div
+                        className="review-fanart-strip library-fanart-strip"
+                        onWheel={(e) => {
+                          if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
+                            return;
+                          }
+                          e.currentTarget.scrollLeft += e.deltaY;
+                          e.preventDefault();
+                        }}
+                      >
                         {fanartFiles.map((file) => (
                           <div key={file.rel_path} className="review-fanart-item library-fanart-item">
-                            <img src={getLibraryFileURL(file.rel_path)} alt={file.name} className="library-fanart-image" />
+                            <button
+                              type="button"
+                              className="review-image-hit"
+                              onClick={() => setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name })}
+                            >
+                              <img src={getLibraryFileURL(file.rel_path)} alt={file.name} className="library-fanart-image" />
+                            </button>
                             <div className="library-fanart-name">{file.name.split("/").pop()}</div>
                           </div>
                         ))}
@@ -607,6 +692,23 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
           <div className="review-empty-state">当前没有可查看的已入库目录</div>
         )}
       </section>
+      {preview ? (
+        <div className="review-preview-overlay" onClick={() => setPreview(null)}>
+          <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={() => setPreview(null)}>
+            <X size={18} />
+          </button>
+          <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
+            <div className="review-preview-title">{preview.title}</div>
+            <div className="review-preview-frame">
+              <img
+                src={getLibraryFileURL(preview.path)}
+                alt={preview.name}
+                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
