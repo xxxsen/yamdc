@@ -241,7 +241,7 @@ export async function updateLibraryItem(path: string, meta: LibraryMeta) {
   return data.data;
 }
 
-export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover", file: File) {
+export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover" | "fanart", file: File) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   logUploadDebug("api", "replace-library-asset-start", {
     path,

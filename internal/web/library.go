@@ -193,8 +193,16 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=300")
-	http.ServeFile(w, r, absPath)
+	file, err := os.Open(absPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "open library file failed"})
+		return
+	}
+	defer file.Close()
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	http.ServeContent(w, r, info.Name(), time.Time{}, file)
 }
 
 func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +217,7 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing library path"})
 		return
 	}
-	if kind != "poster" && kind != "cover" {
+	if kind != "poster" && kind != "cover" && kind != "fanart" {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid asset kind"})
 		return
 	}
@@ -532,6 +540,20 @@ func (a *API) replaceLibraryArtwork(relPath string, absPath string, variantKey s
 	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("library item is not a directory")
+	}
+	if kind == "fanart" {
+		targetName, err := pickLibraryFanartTargetName(absPath, originalName)
+		if err != nil {
+			return nil, err
+		}
+		targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(targetPath, data, 0644); err != nil {
+			return nil, err
+		}
+		return a.readLibraryDetail(relPath, absPath)
 	}
 	detail, err := a.readLibraryDetail(relPath, absPath)
 	if err != nil {
@@ -1100,6 +1122,37 @@ func pickArtworkTargetName(detail *libraryDetail, variant libraryVariant, kind s
 		return fmt.Sprintf("%s-poster%s", base, ext)
 	}
 	return fmt.Sprintf("%s-fanart%s", base, ext)
+}
+
+func pickLibraryFanartTargetName(absPath string, originalName string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(originalName))
+	if _, ok := libraryImageExts[ext]; !ok {
+		ext = ".jpg"
+	}
+	base := strings.TrimSpace(strings.TrimSuffix(filepath.Base(originalName), filepath.Ext(originalName)))
+	base = strings.ReplaceAll(base, "/", "-")
+	base = strings.ReplaceAll(base, "\\", "-")
+	if base == "" || base == "." {
+		base = "fanart"
+	}
+	dirRelPath := "extrafanart"
+	dirAbsPath := filepath.Join(absPath, filepath.FromSlash(dirRelPath))
+	if _, err := os.Stat(dirAbsPath); err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	for index := 0; index < 1000; index++ {
+		name := base
+		if index > 0 {
+			name = fmt.Sprintf("%s-%d", base, index+1)
+		}
+		relPath := filepath.ToSlash(filepath.Join(dirRelPath, name+ext))
+		if _, err := os.Stat(filepath.Join(absPath, filepath.FromSlash(relPath))); os.IsNotExist(err) {
+			return relPath, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("unable to allocate extrafanart filename")
 }
 
 func firstNonEmpty(values ...string) string {

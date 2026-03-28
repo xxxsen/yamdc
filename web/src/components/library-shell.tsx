@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Search, Upload, X } from "lucide-react";
+import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
@@ -62,6 +62,26 @@ function normalizeMeta(meta: LibraryMeta): LibraryMeta {
 
 function getCardImage(item: LibraryListItem) {
   return item.poster_path || item.cover_path;
+}
+
+function getVariantPosterPath(detail: LibraryDetail | null, variantKey: string) {
+  const variant = pickVariant(detail, variantKey);
+  return variant?.poster_path || variant?.meta.poster_path || detail?.meta.poster_path || detail?.item.poster_path || "";
+}
+
+function getVariantCoverPath(detail: LibraryDetail | null, variantKey: string) {
+  const variant = pickVariant(detail, variantKey);
+  return (
+    variant?.cover_path ||
+    variant?.meta.cover_path ||
+    variant?.meta.fanart_path ||
+    variant?.meta.thumb_path ||
+    detail?.meta.cover_path ||
+    detail?.meta.fanart_path ||
+    detail?.meta.thumb_path ||
+    detail?.item.cover_path ||
+    ""
+  );
 }
 
 function hasTranslatedCopy(meta: LibraryMeta | null) {
@@ -165,6 +185,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
+  const [assetOverrides, setAssetOverrides] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
   const detailRef = useRef<LibraryDetail | null>(initialDetail);
@@ -172,6 +193,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
   const lastSavedMetaRef = useRef(initialDetail ? serializeMeta(initialDraftMeta) : "");
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const assetOverridesRef = useRef<Record<string, string>>({});
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
@@ -211,6 +233,16 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     "";
 
   useEffect(() => {
+    assetOverridesRef.current = assetOverrides;
+  }, [assetOverrides]);
+
+  useEffect(() => () => {
+    for (const url of Object.values(assetOverridesRef.current)) {
+      URL.revokeObjectURL(url);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!message || /失败|error/i.test(message)) {
       return;
     }
@@ -225,6 +257,22 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
       return next;
     });
   };
+
+  const setAssetOverride = (path: string, file: File) => {
+    if (!path) {
+      return;
+    }
+    const nextURL = URL.createObjectURL(file);
+    setAssetOverrides((prev) => {
+      const existing = prev[path];
+      if (existing) {
+        URL.revokeObjectURL(existing);
+      }
+      return { ...prev, [path]: nextURL };
+    });
+  };
+
+  const resolveLibraryImageSrc = (path: string) => assetOverrides[path] ?? getLibraryFileURL(path);
 
   const syncDetail = (next: LibraryDetail) => {
     setDetail(next);
@@ -342,7 +390,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     });
   };
 
-  const openUploadPicker = (kind: "poster" | "cover") => {
+  const openUploadPicker = (kind: "poster" | "cover" | "fanart") => {
     if (!detail) {
       return;
     }
@@ -361,11 +409,28 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
       }
       startTransition(async () => {
         try {
-          setMessage(kind === "poster" ? "替换当前实例海报..." : "替换当前实例封面...");
+          setMessage(
+            kind === "poster"
+              ? "替换当前实例海报..."
+              : kind === "cover"
+                ? "替换当前实例封面..."
+                : "上传 extrafanart...",
+          );
           const next = await replaceLibraryAsset(detail.item.rel_path, currentVariant?.key ?? "", kind, file);
           syncDetail(next);
           setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
-          setMessage(kind === "poster" ? "当前实例海报已更新" : "当前实例封面已更新");
+          if (kind === "poster") {
+            setAssetOverride(getVariantPosterPath(next, currentVariant?.key ?? ""), file);
+          } else if (kind === "cover") {
+            setAssetOverride(getVariantCoverPath(next, currentVariant?.key ?? ""), file);
+          }
+          setMessage(
+            kind === "poster"
+              ? "当前实例海报已更新"
+              : kind === "cover"
+                ? "当前实例封面已更新"
+                : "Extrafanart 已上传",
+          );
         } catch (error) {
           setMessage(error instanceof Error ? error.message : "替换图片失败");
         }
@@ -434,7 +499,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
               >
                 <div className="library-item-thumb">
                   {imagePath ? (
-                    <img src={getLibraryFileURL(imagePath)} alt={item.title} className="library-thumb-image" />
+                    <img src={resolveLibraryImageSrc(imagePath)} alt={item.title} className="library-thumb-image" />
                   ) : (
                     <div className="library-thumb-fallback">{(item.number || item.title || item.name).slice(0, 2).toUpperCase()}</div>
                   )}
@@ -646,19 +711,25 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
                     <div className="review-image-card-head">
                       <span className="review-image-title">海报</span>
-                      <button className="btn review-inline-btn" type="button" onClick={() => openUploadPicker("poster")} disabled={isPending}>
-                        <Upload size={14} />
-                        替换当前实例
-                      </button>
                     </div>
-                    <div className="review-image-box review-image-box-poster">
+                    <div className={`review-image-box review-image-box-poster${selectedPoster ? "" : " review-upload-empty"}`}>
                       {selectedPoster ? (
                         <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "海报", path: selectedPoster, name: "海报" }); }}>
-                          <img src={getLibraryFileURL(selectedPoster)} alt="海报" className="library-poster-image" />
+                          <img src={resolveLibraryImageSrc(selectedPoster)} alt="海报" className="library-poster-image" />
                         </button>
                       ) : (
                         <div className="library-preview-empty">暂无海报</div>
                       )}
+                      <button
+                        type="button"
+                        className="review-upload-overlay"
+                        onClick={() => openUploadPicker("poster")}
+                        aria-label="上传海报"
+                        title="上传海报"
+                        disabled={isPending}
+                      >
+                        <Plus size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -677,19 +748,25 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   <div className="panel review-image-card review-image-card-cover">
                     <div className="review-image-card-head">
                       <span className="review-image-title">封面</span>
-                      <button className="btn review-inline-btn" type="button" onClick={() => openUploadPicker("cover")} disabled={isPending}>
-                        <Upload size={14} />
-                        替换当前实例
-                      </button>
                     </div>
-                    <div className="review-image-box review-image-box-cover">
+                    <div className={`review-image-box review-image-box-cover${selectedCover ? "" : " review-upload-empty"}`}>
                       {selectedCover ? (
                         <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "封面", path: selectedCover, name: "封面" }); }}>
-                          <img src={getLibraryFileURL(selectedCover)} alt="封面" className="library-cover-image" />
+                          <img src={resolveLibraryImageSrc(selectedCover)} alt="封面" className="library-cover-image" />
                         </button>
                       ) : (
                         <div className="library-preview-empty">暂无封面</div>
                       )}
+                      <button
+                        type="button"
+                        className="review-upload-overlay"
+                        onClick={() => openUploadPicker("cover")}
+                        aria-label="上传封面"
+                        title="上传封面"
+                        disabled={isPending}
+                      >
+                        <Plus size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -718,14 +795,25 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                               className="review-image-hit"
                               onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name }); }}
                             >
-                              <img src={getLibraryFileURL(file.rel_path)} alt={file.name} className="library-fanart-image" />
+                              <img src={resolveLibraryImageSrc(file.rel_path)} alt={file.name} className="library-fanart-image" />
                             </button>
                             <div className="library-fanart-name">{file.name.split("/").pop()}</div>
                           </div>
                         ))}
+                        <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")} disabled={isPending}>
+                          <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
+                            <Plus size={18} />
+                          </span>
+                        </button>
                       </div>
                     ) : (
-                      <div className="review-empty-state library-inline-empty">当前目录没有 extrafanart</div>
+                      <div className="review-fanart-strip library-fanart-strip">
+                        <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")} disabled={isPending}>
+                          <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
+                            <Plus size={18} />
+                          </span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -747,7 +835,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
             <div className="review-preview-title">{preview.title}</div>
             <div className="review-preview-frame">
               <img
-                src={getLibraryFileURL(preview.path)}
+                src={resolveLibraryImageSrc(preview.path)}
                 alt={preview.name}
                 style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
               />
