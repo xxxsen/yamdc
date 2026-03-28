@@ -237,7 +237,7 @@ func (s *Service) listRootFiles(root string, absPath string) ([]FileItem, error)
 	return files, nil
 }
 
-func (s *Service) updateRootItem(root string, relPath string, absPath string, meta Meta) (*Detail, error) {
+func (s *Service) updateRootItem(root string, detail *Detail, absPath string, meta Meta) (*Detail, error) {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return nil, err
@@ -258,10 +258,10 @@ func (s *Service) updateRootItem(root string, relPath string, absPath string, me
 	meta.Director = strings.TrimSpace(meta.Director)
 	meta.Source = strings.TrimSpace(meta.Source)
 	meta.ScrapedAt = strings.TrimSpace(meta.ScrapedAt)
-	detail, err := s.readRootDetail(root, relPath, absPath)
-	if err != nil {
-		return nil, err
+	if detail == nil {
+		return nil, fmt.Errorf("library detail is required")
 	}
+	relPath := detail.Item.RelPath
 	variants := detail.Variants
 	if len(variants) == 0 {
 		variants = []Variant{{
@@ -306,7 +306,7 @@ func (s *Service) updateRootItem(root string, relPath string, absPath string, me
 	return s.readRootDetail(root, relPath, absPath)
 }
 
-func (s *Service) replaceRootArtwork(root string, relPath string, absPath string, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
+func (s *Service) replaceRootArtwork(root string, detail *Detail, absPath string, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return nil, err
@@ -314,6 +314,10 @@ func (s *Service) replaceRootArtwork(root string, relPath string, absPath string
 	if !info.IsDir() {
 		return nil, fmt.Errorf("library item is not a directory")
 	}
+	if detail == nil {
+		return nil, fmt.Errorf("library detail is required")
+	}
+	relPath := detail.Item.RelPath
 	if kind == "fanart" {
 		targetName, err := pickFanartTargetName(absPath, originalName)
 		if err != nil {
@@ -327,10 +331,6 @@ func (s *Service) replaceRootArtwork(root string, relPath string, absPath string
 			return nil, err
 		}
 		return s.readRootDetail(root, relPath, absPath)
-	}
-	detail, err := s.readRootDetail(root, relPath, absPath)
-	if err != nil {
-		return nil, err
 	}
 	variant, ok := pickVariant(detail, variantKey)
 	if !ok {

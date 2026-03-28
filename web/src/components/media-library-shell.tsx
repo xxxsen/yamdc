@@ -1,11 +1,11 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import Link from "next/link";
-import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
-import { getMediaLibraryFileURL, getMediaLibraryStatus, listMediaLibraryItems } from "@/lib/api";
+import { getMediaLibraryFileURL, getMediaLibraryStatus, listMediaLibraryItems, triggerMediaLibrarySync } from "@/lib/api";
 
 interface Props {
   items: MediaLibraryItem[];
@@ -42,6 +42,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [items, setItems] = useState(initialItems);
   const [yearOptions, setYearOptions] = useState(() => extractYearOptions(initialItems));
   const [configured, setConfigured] = useState(Boolean(initialStatus?.configured));
+  const [syncRunning, setSyncRunning] = useState(initialStatus?.sync.status === "running");
   const [keyword, setKeyword] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>("all");
@@ -49,6 +50,9 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncCompletedFlash, setSyncCompletedFlash] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const browserRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const yearPickerRef = useRef<HTMLDivElement | null>(null);
@@ -96,7 +100,9 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
       const next = await getMediaLibraryStatus();
       setConfigured(Boolean(next.configured));
       const syncRunning = next.sync.status === "running";
+      setSyncRunning(syncRunning);
       if (prevSyncRunningRef.current && !syncRunning) {
+        setSyncCompletedFlash(true);
         const nextItems = await listMediaLibraryItems({
           keyword: deferredKeyword,
           year: yearFilter,
@@ -113,11 +119,23 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   });
 
   useEffect(() => {
+    if (!syncMessage) {
+      return;
+    }
+    const timer = window.setTimeout(() => setSyncMessage(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [syncMessage]);
+
+  useEffect(() => {
+    if (!syncCompletedFlash) {
+      return;
+    }
+    const timer = window.setTimeout(() => setSyncCompletedFlash(false), 1000);
+    return () => window.clearTimeout(timer);
+  }, [syncCompletedFlash]);
+
+  useEffect(() => {
     void refreshStatus();
-    const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, 3000);
-    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -132,16 +150,23 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
       order: sortOrder,
     };
     void refreshItems(params);
-    const timer = window.setInterval(() => {
-      void refreshItems(params);
-    }, 12000);
-    return () => window.clearInterval(timer);
   }, [configured, deferredKeyword, yearFilter, sizeFilter, sortMode, sortOrder]);
+
+  useEffect(() => {
+    if (!syncRunning) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshStatus();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [syncRunning]);
 
   const filteredItems = items;
   const visibleYearOptions = yearOptions.slice(0, 13);
   const overflowYearOptions = yearOptions.slice(13);
   const isOverflowYearSelected = yearFilter !== "all" && overflowYearOptions.includes(yearFilter);
+  const syncButtonLabel = syncRunning ? "同步中..." : syncCompletedFlash ? "同步完成" : "同步媒体库";
 
   useEffect(() => {
     const root = browserRef.current;
@@ -176,124 +201,155 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           <div className="media-library-browser-shell">
             <aside className="media-library-filter-rail">
               <div className="media-library-filter-stack">
-                <label className="media-library-search-bar media-library-search-bar-rail">
-                  <Search size={16} />
-                  <input
-                    className="media-library-search-input"
-                    placeholder="搜索标题 / 番号"
-                    value={keyword}
-                    onChange={(e) => {
-                      setKeyword(e.target.value);
-                      resetViewport();
-                    }}
-                  />
-                </label>
+                <div className="media-library-filter-body">
+                  <label className="media-library-search-bar media-library-search-bar-rail">
+                    <Search size={16} />
+                    <input
+                      className="media-library-search-input"
+                      placeholder="搜索标题 / 番号"
+                      value={keyword}
+                      onChange={(e) => {
+                        setKeyword(e.target.value);
+                        resetViewport();
+                      }}
+                    />
+                  </label>
 
-                <div className="media-library-filter-group">
-                  <div className="media-library-filter-title">年份</div>
-                  <div className="media-library-filter-chips media-library-filter-chips-years" ref={yearPickerRef}>
-                    <button type="button" className="media-library-filter-chip" data-active={yearFilter === "all"} onClick={() => { setYearFilter("all"); resetViewport(); }}>
-                      全部
-                    </button>
-                    {visibleYearOptions.map((year) => (
-                      <button key={year} type="button" className="media-library-filter-chip" data-active={yearFilter === year} onClick={() => { setYearFilter(year); resetViewport(); }}>
-                        {year}
+                  <div className="media-library-filter-group">
+                    <div className="media-library-filter-title">年份</div>
+                    <div className="media-library-filter-chips media-library-filter-chips-years" ref={yearPickerRef}>
+                      <button type="button" className="media-library-filter-chip" data-active={yearFilter === "all"} onClick={() => { setYearFilter("all"); resetViewport(); }}>
+                        全部
                       </button>
-                    ))}
-                    {overflowYearOptions.length > 0 ? (
-                      <div className="media-library-year-overflow">
-                        <button
-                          type="button"
-                          className="media-library-filter-chip"
-                          data-active={isOverflowYearSelected || yearPickerOpen}
-                          onClick={() => setYearPickerOpen((current) => !current)}
-                        >
-                          其他
+                      {visibleYearOptions.map((year) => (
+                        <button key={year} type="button" className="media-library-filter-chip" data-active={yearFilter === year} onClick={() => { setYearFilter(year); resetViewport(); }}>
+                          {year}
                         </button>
-                        {yearPickerOpen ? (
-                          <div className="media-library-year-popover panel">
-                            <div className="media-library-year-popover-grid">
-                              {overflowYearOptions.map((year) => (
-                                <button
-                                  key={year}
-                                  type="button"
-                                  className="media-library-filter-chip"
-                                  data-active={yearFilter === year}
-                                  onClick={() => {
-                                    setYearFilter(year);
-                                    setYearPickerOpen(false);
-                                    resetViewport();
-                                  }}
-                                >
-                                  {year}
-                                </button>
-                              ))}
+                      ))}
+                      {overflowYearOptions.length > 0 ? (
+                        <div className="media-library-year-overflow">
+                          <button
+                            type="button"
+                            className="media-library-filter-chip"
+                            data-active={isOverflowYearSelected || yearPickerOpen}
+                            onClick={() => setYearPickerOpen((current) => !current)}
+                          >
+                            其他
+                          </button>
+                          {yearPickerOpen ? (
+                            <div className="media-library-year-popover panel">
+                              <div className="media-library-year-popover-grid">
+                                {overflowYearOptions.map((year) => (
+                                  <button
+                                    key={year}
+                                    type="button"
+                                    className="media-library-filter-chip"
+                                    data-active={yearFilter === year}
+                                    onClick={() => {
+                                      setYearFilter(year);
+                                      setYearPickerOpen(false);
+                                      resetViewport();
+                                    }}
+                                  >
+                                    {year}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="media-library-filter-group">
+                    <div className="media-library-filter-title">文件大小</div>
+                    <div className="media-library-filter-chips">
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "all"} onClick={() => { setSizeFilter("all"); resetViewport(); }}>
+                        全部
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "lt-1"} onClick={() => { setSizeFilter("lt-1"); resetViewport(); }}>
+                        &lt; 1 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "1-2"} onClick={() => { setSizeFilter("1-2"); resetViewport(); }}>
+                        1-2 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "2-5"} onClick={() => { setSizeFilter("2-5"); resetViewport(); }}>
+                        2-5 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "5-10"} onClick={() => { setSizeFilter("5-10"); resetViewport(); }}>
+                        5-10 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "10-20"} onClick={() => { setSizeFilter("10-20"); resetViewport(); }}>
+                        10-20 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "20-50"} onClick={() => { setSizeFilter("20-50"); resetViewport(); }}>
+                        20-50 GB
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "50-plus"} onClick={() => { setSizeFilter("50-plus"); resetViewport(); }}>
+                        50+ GB
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="media-library-filter-group">
+                    <div className="media-library-filter-title">排序</div>
+                    <div className="media-library-filter-chips">
+                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "ingested"} onClick={() => { setSortMode("ingested"); resetViewport(); }}>
+                        入库时间
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "year"} onClick={() => { setSortMode("year"); resetViewport(); }}>
+                        年份
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "size"} onClick={() => { setSortMode("size"); resetViewport(); }}>
+                        大小
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "title"} onClick={() => { setSortMode("title"); resetViewport(); }}>
+                        标题
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="media-library-filter-group">
+                    <div className="media-library-filter-title">排序顺序</div>
+                    <div className="media-library-filter-chips">
+                      <button type="button" className="media-library-filter-chip" data-active={sortOrder === "desc"} onClick={() => { setSortOrder("desc"); resetViewport(); }}>
+                        逆序
+                      </button>
+                      <button type="button" className="media-library-filter-chip" data-active={sortOrder === "asc"} onClick={() => { setSortOrder("asc"); resetViewport(); }}>
+                        顺序
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="media-library-filter-group">
-                  <div className="media-library-filter-title">文件大小</div>
-                  <div className="media-library-filter-chips">
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "all"} onClick={() => { setSizeFilter("all"); resetViewport(); }}>
-                      全部
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "lt-1"} onClick={() => { setSizeFilter("lt-1"); resetViewport(); }}>
-                      &lt; 1 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "1-2"} onClick={() => { setSizeFilter("1-2"); resetViewport(); }}>
-                      1-2 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "2-5"} onClick={() => { setSizeFilter("2-5"); resetViewport(); }}>
-                      2-5 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "5-10"} onClick={() => { setSizeFilter("5-10"); resetViewport(); }}>
-                      5-10 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "10-20"} onClick={() => { setSizeFilter("10-20"); resetViewport(); }}>
-                      10-20 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "20-50"} onClick={() => { setSizeFilter("20-50"); resetViewport(); }}>
-                      20-50 GB
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "50-plus"} onClick={() => { setSizeFilter("50-plus"); resetViewport(); }}>
-                      50+ GB
-                    </button>
-                  </div>
-                </div>
-
-                <div className="media-library-filter-group">
-                  <div className="media-library-filter-title">排序</div>
-                  <div className="media-library-filter-chips">
-                    <button type="button" className="media-library-filter-chip" data-active={sortMode === "ingested"} onClick={() => { setSortMode("ingested"); resetViewport(); }}>
-                      入库时间
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sortMode === "year"} onClick={() => { setSortMode("year"); resetViewport(); }}>
-                      年份
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sortMode === "size"} onClick={() => { setSortMode("size"); resetViewport(); }}>
-                      大小
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sortMode === "title"} onClick={() => { setSortMode("title"); resetViewport(); }}>
-                      标题
-                    </button>
-                  </div>
-                </div>
-
-                <div className="media-library-filter-group">
-                  <div className="media-library-filter-title">排序顺序</div>
-                  <div className="media-library-filter-chips">
-                    <button type="button" className="media-library-filter-chip" data-active={sortOrder === "desc"} onClick={() => { setSortOrder("desc"); resetViewport(); }}>
-                      逆序
-                    </button>
-                    <button type="button" className="media-library-filter-chip" data-active={sortOrder === "asc"} onClick={() => { setSortOrder("asc"); resetViewport(); }}>
-                      顺序
-                    </button>
-                  </div>
+                <div className="media-library-filter-footer">
+                  <button
+                    type="button"
+                    className="btn btn-primary media-library-sync-btn"
+                    disabled={isPending || syncRunning}
+                    onClick={() => {
+                      startTransition(async () => {
+                        try {
+                          setSyncCompletedFlash(false);
+                          setSyncMessage("");
+                          await triggerMediaLibrarySync();
+                          setSyncRunning(true);
+                          prevSyncRunningRef.current = true;
+                        } catch (error) {
+                          setSyncMessage(error instanceof Error ? error.message : "启动媒体库同步失败");
+                        }
+                      });
+                    }}
+                  >
+                    <RefreshCw size={16} className={syncRunning ? "media-library-sync-icon-spinning" : ""} />
+                    {syncButtonLabel}
+                  </button>
+                  {syncMessage ? (
+                    <span className="review-message" data-tone={/失败|error/i.test(syncMessage) ? "danger" : "info"}>
+                      {syncMessage}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </aside>

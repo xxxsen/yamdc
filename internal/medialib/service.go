@@ -20,10 +20,9 @@ const (
 )
 
 type Service struct {
-	db           *sql.DB
-	libraryDir   string
-	saveDir      string
-	pollInterval time.Duration
+	db         *sql.DB
+	libraryDir string
+	saveDir    string
 
 	mu          sync.Mutex
 	syncRunning bool
@@ -40,10 +39,9 @@ type ListItemsOptions struct {
 
 func NewService(db *sql.DB, libraryDir string, saveDir string) *Service {
 	return &Service{
-		db:           db,
-		libraryDir:   libraryDir,
-		saveDir:      saveDir,
-		pollInterval: 15 * time.Second,
+		db:         db,
+		libraryDir: libraryDir,
+		saveDir:    saveDir,
 	}
 }
 
@@ -52,22 +50,7 @@ func (s *Service) IsConfigured() bool {
 }
 
 func (s *Service) Start(ctx context.Context) {
-	if !s.IsConfigured() {
-		return
-	}
-	go func() {
-		_ = s.runFullSync(context.Background(), "startup")
-		ticker := time.NewTicker(s.pollInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				_ = s.runFullSync(context.Background(), "poll")
-			}
-		}
-	}()
+	_ = ctx
 }
 
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
@@ -169,14 +152,16 @@ func (s *Service) UpdateItem(ctx context.Context, id int64, meta Meta) (*Detail,
 		return nil, err
 	}
 	absPath := filepath.Join(s.libraryDir, filepath.FromSlash(detail.Item.RelPath))
-	next, err := s.updateRootItem(s.libraryDir, detail.Item.RelPath, absPath, meta)
+	next, err := s.updateRootItem(s.libraryDir, detail, absPath, meta)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.upsertDetail(ctx, next); err != nil {
 		return nil, err
 	}
-	return s.GetDetailByRelPath(ctx, next.Item.RelPath)
+	next.Item.ID = id
+	next.Item.CreatedAt = detail.Item.CreatedAt
+	return next, nil
 }
 
 func (s *Service) ReplaceAsset(ctx context.Context, id int64, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
@@ -185,14 +170,16 @@ func (s *Service) ReplaceAsset(ctx context.Context, id int64, variantKey string,
 		return nil, err
 	}
 	absPath := filepath.Join(s.libraryDir, filepath.FromSlash(detail.Item.RelPath))
-	next, err := s.replaceRootArtwork(s.libraryDir, detail.Item.RelPath, absPath, variantKey, kind, originalName, data)
+	next, err := s.replaceRootArtwork(s.libraryDir, detail, absPath, variantKey, kind, originalName, data)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.upsertDetail(ctx, next); err != nil {
 		return nil, err
 	}
-	return s.GetDetailByRelPath(ctx, next.Item.RelPath)
+	next.Item.ID = id
+	next.Item.CreatedAt = detail.Item.CreatedAt
+	return next, nil
 }
 
 func (s *Service) DeleteFile(ctx context.Context, id int64, fileRelPath string) (*Detail, error) {
@@ -207,7 +194,9 @@ func (s *Service) DeleteFile(ctx context.Context, id int64, fileRelPath string) 
 	if err := s.upsertDetail(ctx, next); err != nil {
 		return nil, err
 	}
-	return s.GetDetailByRelPath(ctx, next.Item.RelPath)
+	next.Item.ID = id
+	next.Item.CreatedAt = detail.Item.CreatedAt
+	return next, nil
 }
 
 func (s *Service) ResolveLibraryPath(raw string) (string, string, error) {
