@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Pencil, RefreshCw, Save, X } from "lucide-react";
+import { Check, ChevronLeft, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { type SetStateAction, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
@@ -249,18 +249,15 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
 
   const resolveImageSrc = (path: string) => getMediaLibraryFileURL(path);
 
-  const persistMeta = async (meta: LibraryMeta, messageText: string) => {
+  const persistMeta = async (meta: LibraryMeta) => {
     const normalizedMeta = normalizeMeta(meta);
     const serialized = serializeMeta(normalizedMeta);
     if (serialized === lastSavedMetaRef.current) {
-      setMessage("没有需要保存的更改");
       return true;
     }
     try {
-      setMessage("保存媒体库 NFO...");
       const next = await updateMediaLibraryItem(detailRef.current.item.id, normalizedMeta);
       syncDetail(next);
-      setMessage(messageText);
       return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存媒体库 NFO 失败");
@@ -270,7 +267,7 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
 
   const handleSaveEdit = () => {
     startTransition(async () => {
-      const saved = await persistMeta(draftMetaRef.current, "媒体库信息已保存");
+      const saved = await persistMeta(draftMetaRef.current);
       if (saved) {
         setIsEditing(false);
       }
@@ -282,20 +279,7 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
     setDraftMeta(nextDraftMeta);
     draftMetaRef.current = nextDraftMeta;
     setIsEditing(false);
-    setMessage("已取消编辑");
-  };
-
-  const handleRefresh = () => {
-    startTransition(async () => {
-      try {
-        setMessage("刷新媒体库详情...");
-        const next = await getMediaLibraryItem(detailRef.current.item.id);
-        syncDetail(next);
-        setMessage("媒体库详情已刷新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "刷新媒体库详情失败");
-      }
-    });
+    setMessage("");
   };
 
   const renderFanartSection = (extraClassName = "") => {
@@ -340,36 +324,6 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
             <h2 className="review-detail-title">{detailDisplayTitle}</h2>
           </div>
         </div>
-        <div className="media-library-header-actions">
-          {message ? (
-            <span className="review-message" data-tone={/失败|error/i.test(message) ? "danger" : "info"}>
-              {message}
-            </span>
-          ) : null}
-          {isEditing ? (
-            <>
-              <button className="btn" type="button" onClick={handleCancelEdit} disabled={isPending}>
-                <X size={16} />
-                取消
-              </button>
-              <button className="btn btn-primary" type="button" onClick={handleSaveEdit} disabled={isPending}>
-                <Save size={16} />
-                保存
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="btn" type="button" onClick={handleRefresh} disabled={isPending}>
-                <RefreshCw size={16} />
-                刷新详情
-              </button>
-              <button className="btn" type="button" onClick={() => setIsEditing(true)} disabled={isPending}>
-                <Pencil size={16} />
-                编辑
-              </button>
-            </>
-          )}
-        </div>
       </div>
 
       <div className={`panel media-library-detail-stage media-library-backdrop${selectedCover ? "" : " media-library-backdrop-empty"}`}>
@@ -381,6 +335,27 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
           <div className="library-preview-empty media-library-backdrop-fallback">暂无封面</div>
         )}
         <div className="media-library-backdrop-scrim" aria-hidden="true" />
+        <div className="media-library-stage-actions">
+          {message ? (
+            <span className="review-message" data-tone="danger">
+              {message}
+            </span>
+          ) : null}
+          {isEditing ? (
+            <>
+              <button className="media-library-stage-action-btn" type="button" onClick={handleCancelEdit} disabled={isPending} aria-label="取消编辑">
+                <X size={16} />
+              </button>
+              <button className="media-library-stage-action-btn media-library-stage-action-btn-primary" type="button" onClick={handleSaveEdit} disabled={isPending} aria-label="保存编辑">
+                <Check size={16} />
+              </button>
+            </>
+          ) : (
+            <button className="media-library-stage-action-btn" type="button" onClick={() => { setMessage(""); setIsEditing(true); }} disabled={isPending} aria-label="编辑">
+              <Pencil size={16} />
+            </button>
+          )}
+        </div>
         <div className="media-library-detail-workspace">
           <div className="media-library-hero">
             <aside className="media-library-hero-poster-column">
@@ -460,13 +435,13 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
                       <span className="review-label review-label-side">系列</span>
                       <input className="input" value={draftMeta.series} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, series: e.target.value }))} />
                     </div>
-                    <div className="review-field review-field-area media-library-field-span-2">
+                    <div className="review-field review-field-area media-library-inline-plot-field">
                       <span className="review-label review-label-side">原始简介</span>
-                      <textarea className="input review-textarea library-textarea" value={draftMeta.plot} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot: e.target.value }))} />
+                      <textarea className="input review-textarea library-textarea media-library-inline-plot-textarea" value={draftMeta.plot} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot: e.target.value }))} />
                     </div>
-                    <div className="review-field review-field-area media-library-field-span-2">
+                    <div className="review-field review-field-area media-library-inline-plot-field">
                       <span className="review-label review-label-side">翻译简介</span>
-                      <textarea className="input review-textarea library-textarea" value={draftMeta.plot_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot_translated: e.target.value }))} />
+                      <textarea className="input review-textarea library-textarea media-library-inline-plot-textarea" value={draftMeta.plot_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot_translated: e.target.value }))} />
                     </div>
                     <div className="media-library-field-span-2">
                       <TokenEditor label="演员" placeholder="输入后回车或逗号确认" value={draftMeta.actors} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))} singleLine readOnly={false} />
