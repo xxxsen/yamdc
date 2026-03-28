@@ -169,6 +169,8 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const lastSavedPayloadRef = useRef(buildPayload(initialMeta));
+  const lastSavedJobIDRef = useRef<number | null>(jobs[0]?.id ?? null);
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
@@ -194,6 +196,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     rawMetaRef.current = nextRawMeta;
     setHasRawMeta(nextRawMeta !== null);
     lastSavedPayloadRef.current = payload;
+    lastSavedJobIDRef.current = selectedRef.current?.id ?? null;
     setMessage(data ? "" : "该任务还没有 scrape_data");
   };
 
@@ -211,6 +214,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
         rawMetaRef.current = null;
         setHasRawMeta(false);
         lastSavedPayloadRef.current = "";
+        lastSavedJobIDRef.current = null;
         setMessage(error instanceof Error ? error.message : "加载失败");
       }
     });
@@ -228,6 +232,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
       rawMetaRef.current = null;
       setHasRawMeta(false);
       lastSavedPayloadRef.current = "";
+      lastSavedJobIDRef.current = null;
       return;
     }
     loadDetail(nextSelected);
@@ -241,31 +246,48 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     });
   };
 
-  const persistReview = async (options?: { silent?: boolean }) => {
-    if (!selectedRef.current || !metaRef.current) {
+  const persistReview = async (options?: { silent?: boolean; successText?: string }) => {
+    const selectedJob = selectedRef.current;
+    const currentMeta = metaRef.current;
+    if (!selectedJob || !currentMeta) {
       return true;
     }
-    const payload = buildPayload(metaRef.current);
-    if (payload === lastSavedPayloadRef.current) {
+    const jobID = selectedJob.id;
+    const payload = buildPayload(currentMeta);
+    if (jobID === lastSavedJobIDRef.current && payload === lastSavedPayloadRef.current) {
       return true;
     }
-    try {
-      if (!options?.silent) {
-        setMessage("保存 review 数据...");
+    const task = saveQueueRef.current.then(async () => {
+      if (jobID === lastSavedJobIDRef.current && payload === lastSavedPayloadRef.current) {
+        return true;
       }
-      await saveReviewJob(selectedRef.current.id, payload);
-      lastSavedPayloadRef.current = payload;
-      setMessage("已自动保存");
-      return true;
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "保存失败");
-      return false;
-    }
+      try {
+        if (!options?.silent) {
+          setMessage("保存 review 数据...");
+        }
+        await saveReviewJob(jobID, payload);
+        lastSavedPayloadRef.current = payload;
+        lastSavedJobIDRef.current = jobID;
+        setMessage(options?.successText ?? "已自动保存");
+        return true;
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "保存失败");
+        return false;
+      }
+    });
+    saveQueueRef.current = task.catch(() => true);
+    return task;
+  };
+
+  const handleBlurSave = () => {
+    startTransition(async () => {
+      await persistReview({ silent: true });
+    });
   };
 
   const handleManualSave = () => {
     startTransition(async () => {
-      await persistReview();
+      await persistReview({ successText: "已保存" });
     });
   };
 
@@ -611,6 +633,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         className="input review-input-strong"
                         value={meta.title ?? ""}
                         onChange={(e) => updateMeta({ title: e.target.value })}
+                        onBlur={handleBlurSave}
                       />
                     </div>
                     <div className="review-field">
@@ -619,30 +642,31 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         className="input"
                         value={meta.title_translated ?? ""}
                         onChange={(e) => updateMeta({ title_translated: e.target.value })}
+                        onBlur={handleBlurSave}
                       />
                     </div>
                     <div className="review-meta-row review-meta-row-2 review-meta-row-top">
                       <div className="review-field">
                         <span className="review-label review-label-side">导演</span>
-                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} />
+                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleBlurSave} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">制作商</span>
-                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} />
+                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleBlurSave} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">发行商</span>
-                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} />
+                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleBlurSave} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">系列</span>
-                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} />
+                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleBlurSave} />
                       </div>
                     </div>
                     <div className="review-meta-row review-meta-row-2">
                       <div className="review-field review-field-area">
                         <span className="review-label review-label-side">简介</span>
-                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} />
+                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleBlurSave} />
                       </div>
                       <div className="review-field review-field-area">
                         <span className="review-label review-label-side">翻译简介</span>
@@ -650,7 +674,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                           className="input review-textarea"
                           value={meta.plot_translated ?? ""}
                           onChange={(e) => updateMeta({ plot_translated: e.target.value })}
-                          onBlur={() => { }}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                     </div>
@@ -662,7 +686,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         placeholder="输入演员名后输入逗号"
                         value={normalizeList(meta.actors)}
                         onChange={(next) => updateMeta({ actors: next })}
-                        onBlurSave={() => { }}
+                        onBlurSave={handleBlurSave}
                       />
                     </div>
                   </div>
@@ -713,7 +737,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                     placeholder="输入标签后输入逗号"
                     value={normalizeList(meta.genres)}
                     onChange={(next) => updateMeta({ genres: next })}
-                    onBlurSave={() => { }}
+                    onBlurSave={handleBlurSave}
                     singleLine
                   />
                 </div>

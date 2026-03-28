@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, RefreshCw, Search, Upload, X } from "lucide-react";
-import { useDeferredValue, useEffect, useRef, useState, useTransition } from "react";
+import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
 import { getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
@@ -153,6 +153,7 @@ function TokenEditor({
 }
 
 export function LibraryShell({ items: initialItems, initialDetail }: Props) {
+  const initialDraftMeta = cloneMeta(initialDetail?.meta ?? null);
   const [items, setItems] = useState(initialItems);
   const [selectedPath, setSelectedPath] = useState(initialDetail?.item.rel_path ?? initialItems[0]?.rel_path ?? "");
   const [detail, setDetail] = useState<LibraryDetail | null>(initialDetail);
@@ -160,12 +161,17 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     initialDetail?.primary_variant_key ?? initialDetail?.variants[0]?.key ?? "",
   );
   const [copyMode, setCopyMode] = useState<"translated" | "original">(hasTranslatedCopy(initialDetail?.meta ?? null) ? "translated" : "original");
-  const [draftMeta, setDraftMeta] = useState<LibraryMeta>(cloneMeta(initialDetail?.meta ?? null));
+  const [draftMeta, setDraftMeta] = useState<LibraryMeta>(initialDraftMeta);
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
+  const detailRef = useRef<LibraryDetail | null>(initialDetail);
+  const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
+  const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
+  const lastSavedMetaRef = useRef(initialDetail ? serializeMeta(initialDraftMeta) : "");
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
@@ -213,16 +219,20 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  useEffect(() => {
-    if (!detail && items.length > 0 && selectedPath) {
-      loadDetail(selectedPath);
-    }
-  }, [detail, items.length, selectedPath]);
+  const updateDraftMeta = (updater: SetStateAction<LibraryMeta>) => {
+    setDraftMeta((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      draftMetaRef.current = next;
+      return next;
+    });
+  };
 
   const syncDetail = (next: LibraryDetail) => {
     setDetail(next);
+    detailRef.current = next;
     setSelectedPath(next.item.rel_path);
-    setDraftMeta(cloneMeta(next.meta));
+    const nextDraftMeta = cloneMeta(next.meta);
+    updateDraftMeta(nextDraftMeta);
     setCopyMode((current) => (current === "translated" && !hasTranslatedCopy(next.meta) ? "original" : current || "original"));
     setSelectedVariantKey((current) => {
       if (current && next.variants.some((item) => item.key === current)) {
@@ -230,22 +240,41 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
       }
       return next.primary_variant_key || next.variants[0]?.key || "";
     });
+    lastSavedPathRef.current = next.item.rel_path;
+    lastSavedMetaRef.current = serializeMeta(nextDraftMeta);
   };
 
-  const persistMeta = (meta: LibraryMeta, messageText: string) => {
-    if (!detail) {
-      return;
+  const persistMeta = (meta: LibraryMeta, messageText: string, options?: { silent?: boolean }) => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) {
+      return Promise.resolve(true);
     }
-    startTransition(async () => {
+    const path = currentDetail.item.rel_path;
+    const normalizedMeta = normalizeMeta(meta);
+    const serialized = serializeMeta(normalizedMeta);
+    if (path === lastSavedPathRef.current && serialized === lastSavedMetaRef.current) {
+      return Promise.resolve(true);
+    }
+    const task = saveQueueRef.current.then(async () => {
+      if (path === lastSavedPathRef.current && serialized === lastSavedMetaRef.current) {
+        return true;
+      }
       try {
-        const next = await updateLibraryItem(detail.item.rel_path, normalizeMeta(meta));
+        if (!options?.silent) {
+          setMessage("保存 NFO...");
+        }
+        const next = await updateLibraryItem(path, normalizedMeta);
         syncDetail(next);
         setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
         setMessage(messageText);
+        return true;
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "保存 NFO 失败");
+        return false;
       }
     });
+    saveQueueRef.current = task.catch(() => true);
+    return task;
   };
 
   const loadDetail = (path: string) => {
@@ -262,6 +291,25 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     });
   };
 
+  const loadInitialDetail = useEffectEvent(async (path: string) => {
+    try {
+      setMessage("加载已入库详情...");
+      const next = await getLibraryItem(path);
+      syncDetail(next);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "加载已入库详情失败");
+    }
+  });
+
+  useEffect(() => {
+    if (!detail && items.length > 0 && selectedPath) {
+      startTransition(async () => {
+        await loadInitialDetail(selectedPath);
+      });
+    }
+  }, [detail, items.length, selectedPath, startTransition]);
+
   const handleRefreshLibrary = () => {
     startTransition(async () => {
       try {
@@ -270,9 +318,12 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
         setItems(nextItems);
         if (nextItems.length === 0) {
           setDetail(null);
-          setDraftMeta(cloneMeta(null));
+          detailRef.current = null;
+          updateDraftMeta(cloneMeta(null));
           setSelectedPath("");
           setSelectedVariantKey("");
+          lastSavedPathRef.current = "";
+          lastSavedMetaRef.current = "";
           setMessage("当前 savedir 里还没有已入库内容");
           return;
         }
@@ -290,7 +341,15 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     if (!detail || !dirty || isPending) {
       return;
     }
-    persistMeta(draftMeta, "已保存");
+    startTransition(async () => {
+      await persistMeta(draftMetaRef.current, "已保存");
+    });
+  };
+
+  const handleBlurSave = () => {
+    startTransition(async () => {
+      await persistMeta(draftMetaRef.current, "已自动保存", { silent: true });
+    });
   };
 
   const openUploadPicker = (kind: "poster" | "cover") => {
@@ -481,17 +540,18 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   <div className="review-top-fields">
                     <div className="review-field">
                       <span className="review-label review-label-side">标题</span>
-                      <input
-                        className="input review-input-strong"
-                        placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
-                        value={activeTitleValue}
-                        onChange={(e) =>
-                          setDraftMeta((prev) => ({
+                        <input
+                          className="input review-input-strong"
+                          placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
+                          value={activeTitleValue}
+                          onChange={(e) =>
+                          updateDraftMeta((prev) => ({
                             ...prev,
                             [copyMode === "translated" ? "title_translated" : "title"]: e.target.value,
                           }))
-                        }
-                      />
+                          }
+                          onBlur={handleBlurSave}
+                        />
                     </div>
                     <div className="review-meta-row review-meta-row-2 review-meta-row-top">
                       <div className="review-field">
@@ -499,8 +559,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.director}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, director: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, director: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -508,8 +568,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.studio}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, studio: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, studio: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -517,8 +577,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.label}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, label: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, label: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -526,8 +586,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.series}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, series: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, series: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                     </div>
@@ -537,8 +597,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.number}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, number: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, number: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -547,8 +607,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           className="input"
                           placeholder="YYYY-MM-DD"
                           value={draftMeta.release_date}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, release_date: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, release_date: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -557,10 +617,10 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           className="input"
                           inputMode="numeric"
                           value={draftMeta.runtime ? String(draftMeta.runtime) : ""}
-
                           onChange={(e) =>
-                            setDraftMeta((prev) => ({ ...prev, runtime: Number.parseInt(e.target.value || "0", 10) || 0 }))
+                            updateDraftMeta((prev) => ({ ...prev, runtime: Number.parseInt(e.target.value || "0", 10) || 0 }))
                           }
+                          onBlur={handleBlurSave}
                         />
                       </div>
                       <div className="review-field">
@@ -568,8 +628,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.source}
-
-                          onChange={(e) => setDraftMeta((prev) => ({ ...prev, source: e.target.value }))}
+                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, source: e.target.value }))}
+                          onBlur={handleBlurSave}
                         />
                       </div>
                     </div>
@@ -581,11 +641,12 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           placeholder={copyMode === "translated" ? draftMeta.plot || "暂无中文简介" : "输入原始简介"}
                           value={activePlotValue}
                           onChange={(e) =>
-                            setDraftMeta((prev) => ({
+                            updateDraftMeta((prev) => ({
                               ...prev,
                               [copyMode === "translated" ? "plot_translated" : "plot"]: e.target.value,
                             }))
                           }
+                          onBlur={handleBlurSave}
                         />
                       </div>
                     </div>
@@ -596,8 +657,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         label="演员"
                         placeholder="输入后回车或逗号确认"
                         value={draftMeta.actors}
-                        onChange={(next) => setDraftMeta((prev) => ({ ...prev, actors: next }))}
-                        onBlurSave={() => { }} singleLine
+                        onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))}
+                        onBlurSave={handleBlurSave} singleLine
                       />
                     </div>
                   </div>
@@ -626,8 +687,8 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     label="标签"
                     placeholder="输入后回车或逗号确认"
                     value={draftMeta.genres}
-                    onChange={(next) => setDraftMeta((prev) => ({ ...prev, genres: next }))}
-                    onBlurSave={() => { }}
+                    onChange={(next) => updateDraftMeta((prev) => ({ ...prev, genres: next }))}
+                    onBlurSave={handleBlurSave}
                   />
                 </div>
 
