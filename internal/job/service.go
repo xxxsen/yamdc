@@ -26,6 +26,7 @@ type Service struct {
 	logRepo    *repository.LogRepository
 	scrapeRepo *repository.ScrapeDataRepository
 	capture    *capture.Capture
+	importGuard func(context.Context) error
 
 	mu      sync.Mutex
 	running map[int64]struct{}
@@ -78,6 +79,10 @@ func (s *Service) ListLogs(ctx context.Context, jobID int64) ([]repository.LogIt
 
 func (s *Service) GetScrapeData(ctx context.Context, jobID int64) (*repository.ScrapeData, error) {
 	return s.scrapeRepo.GetByJobID(ctx, jobID)
+}
+
+func (s *Service) SetImportGuard(fn func(context.Context) error) {
+	s.importGuard = fn
 }
 
 func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (*jobdef.Job, error) {
@@ -223,6 +228,11 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	}
 	if j.Status != jobdef.StatusReviewing {
 		return fmt.Errorf("job is not in reviewing status")
+	}
+	if s.importGuard != nil {
+		if err := s.importGuard(ctx); err != nil {
+			return err
+		}
 	}
 	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
 		return err

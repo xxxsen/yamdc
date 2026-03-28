@@ -94,6 +94,33 @@ func (s *SQLite) init(ctx context.Context) error {
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS yamdc_media_library_tab (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			rel_path TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL DEFAULT '',
+			release_date TEXT NOT NULL DEFAULT '',
+			updated_at INTEGER NOT NULL DEFAULT 0,
+			poster_path TEXT NOT NULL DEFAULT '',
+			cover_path TEXT NOT NULL DEFAULT '',
+			item_json TEXT NOT NULL DEFAULT '',
+			detail_json TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_yamdc_media_library_updated_at ON yamdc_media_library_tab(updated_at);`,
+		`CREATE TABLE IF NOT EXISTS yamdc_task_state_tab (
+			task_key TEXT PRIMARY KEY,
+			status TEXT NOT NULL DEFAULT '',
+			total INTEGER NOT NULL DEFAULT 0,
+			processed INTEGER NOT NULL DEFAULT 0,
+			success_count INTEGER NOT NULL DEFAULT 0,
+			conflict_count INTEGER NOT NULL DEFAULT 0,
+			error_count INTEGER NOT NULL DEFAULT 0,
+			current TEXT NOT NULL DEFAULT '',
+			message TEXT NOT NULL DEFAULT '',
+			started_at INTEGER NOT NULL DEFAULT 0,
+			finished_at INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL DEFAULT 0
+		);`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

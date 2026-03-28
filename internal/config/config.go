@@ -88,6 +88,7 @@ type NumberCleanerConfig struct {
 type Config struct {
 	ScanDir             string                   `json:"scan_dir"`
 	SaveDir             string                   `json:"save_dir"`
+	LibraryDir          string                   `json:"library_dir"`
 	DataDir             string                   `json:"data_dir"`
 	Naming              string                   `json:"naming"`
 	PluginConfig        map[string]PluginConfig  `json:"plugin_config"`

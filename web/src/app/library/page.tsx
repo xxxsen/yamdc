@@ -1,8 +1,9 @@
 import { LibraryShell } from "@/components/library-shell";
-import { getLibraryItem, listLibraryItems } from "@/lib/api";
+import { getLibraryItem, getMediaLibraryStatus, listLibraryItems } from "@/lib/api";
 
 export default async function LibraryPage() {
   const items = await listLibraryItems();
+  let initialMediaStatus = null;
   let initialDetail = null;
   if (items.length > 0) {
     try {
@@ -11,10 +12,15 @@ export default async function LibraryPage() {
       initialDetail = null;
     }
   }
+  try {
+    initialMediaStatus = await getMediaLibraryStatus();
+  } catch {
+    initialMediaStatus = null;
+  }
 
   return (
     <div style={{ height: "100%" }}>
-      <LibraryShell items={items} initialDetail={initialDetail} />
+      <LibraryShell items={items} initialDetail={initialDetail} initialMediaStatus={initialMediaStatus} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
+	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
@@ -22,10 +23,11 @@ type API struct {
 	scanner *scanner.Service
 	jobSvc  *job.Service
 	saveDir string
+	media   *medialib.Service
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir}
+func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service) *API {
+	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media}
 }
 
 func (a *API) Handler() http.Handler {
@@ -39,6 +41,13 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/api/library/item", a.handleLibraryItem)
 	mux.HandleFunc("/api/library/file", a.handleLibraryFile)
 	mux.HandleFunc("/api/library/asset", a.handleLibraryAsset)
+	mux.HandleFunc("/api/media-library", a.handleMediaLibraryList)
+	mux.HandleFunc("/api/media-library/item", a.handleMediaLibraryItem)
+	mux.HandleFunc("/api/media-library/file", a.handleMediaLibraryFile)
+	mux.HandleFunc("/api/media-library/asset", a.handleMediaLibraryAsset)
+	mux.HandleFunc("/api/media-library/sync", a.handleMediaLibrarySync)
+	mux.HandleFunc("/api/media-library/move", a.handleMediaLibraryMove)
+	mux.HandleFunc("/api/media-library/status", a.handleMediaLibraryStatus)
 	mux.HandleFunc("/api/assets/", a.handleAsset)
 	return withCORS(mux)
 }

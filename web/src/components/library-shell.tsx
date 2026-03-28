@@ -3,13 +3,14 @@
 import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
-import { deleteLibraryFile, getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
+import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
+import { deleteLibraryFile, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
   items: LibraryListItem[];
   initialDetail: LibraryDetail | null;
+  initialMediaStatus: MediaLibraryStatus | null;
 }
 
 function cloneMeta(meta: LibraryMeta | null): LibraryMeta {
@@ -89,6 +90,13 @@ function hasTranslatedCopy(meta: LibraryMeta | null) {
     return false;
   }
   return Boolean(meta.title_translated.trim() || meta.plot_translated.trim());
+}
+
+function taskPercent(state: TaskState | null) {
+  if (!state || state.total <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((state.processed / state.total) * 100)));
 }
 
 function TokenEditor({
@@ -172,7 +180,7 @@ function TokenEditor({
   );
 }
 
-export function LibraryShell({ items: initialItems, initialDetail }: Props) {
+export function LibraryShell({ items: initialItems, initialDetail, initialMediaStatus }: Props) {
   const initialDraftMeta = cloneMeta(initialDetail?.meta ?? null);
   const [items, setItems] = useState(initialItems);
   const [selectedPath, setSelectedPath] = useState(initialDetail?.item.rel_path ?? initialItems[0]?.rel_path ?? "");
@@ -185,6 +193,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
+  const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [assetOverrides, setAssetOverrides] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
@@ -231,6 +240,9 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     draftMeta.fanart_path ||
     detail?.item.cover_path ||
     "";
+  const moveState = mediaStatus?.move ?? null;
+  const moveRunning = moveState?.status === "running";
+  const mediaSyncRunning = mediaStatus?.sync.status === "running";
 
   useEffect(() => {
     assetOverridesRef.current = assetOverrides;
@@ -249,6 +261,23 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     const timer = window.setTimeout(() => setMessage(""), 2400);
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  const refreshMediaStatus = useEffectEvent(async () => {
+    try {
+      const next = await getMediaLibraryStatus();
+      setMediaStatus(next);
+    } catch {
+      // ignore polling errors
+    }
+  });
+
+  useEffect(() => {
+    void refreshMediaStatus();
+    const timer = window.setInterval(() => {
+      void refreshMediaStatus();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const updateDraftMeta = (updater: SetStateAction<LibraryMeta>) => {
     setDraftMeta((prev) => {
@@ -397,6 +426,52 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     });
   };
 
+  const handleMoveToMediaLibrary = () => {
+    startTransition(async () => {
+      try {
+        setMessage("启动移动到媒体库...");
+        await triggerMoveToMediaLibrary();
+        const next = await getMediaLibraryStatus();
+        setMediaStatus(next);
+        setMessage("已开始移动到媒体库");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "启动移动到媒体库失败");
+      }
+    });
+  };
+
+  const prevMoveRunningRef = useRef(moveRunning);
+
+  useEffect(() => {
+    if (prevMoveRunningRef.current && !moveRunning) {
+      startTransition(async () => {
+        try {
+          setMessage("重新扫描已入库目录...");
+          const nextItems = await listLibraryItems();
+          setItems(nextItems);
+          if (nextItems.length === 0) {
+            setDetail(null);
+            detailRef.current = null;
+            updateDraftMeta(cloneMeta(null));
+            setSelectedPath("");
+            setSelectedVariantKey("");
+            lastSavedPathRef.current = "";
+            lastSavedMetaRef.current = "";
+            setMessage("当前 savedir 里还没有已入库内容");
+            return;
+          }
+          const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
+          const nextDetail = await getLibraryItem(nextSelected);
+          syncDetail(nextDetail);
+          setMessage("已刷新 savedir");
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "刷新已入库目录失败");
+        }
+      });
+    }
+    prevMoveRunningRef.current = moveRunning;
+  }, [moveRunning, selectedPath, startTransition]);
+
   const handleBlurSave = () => {
     startTransition(async () => {
       await persistMeta(draftMetaRef.current, "已自动保存", { silent: true });
@@ -487,7 +562,30 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
             <RefreshCw size={16} />
             重新扫描库
           </button>
+          <button className="btn" type="button" onClick={handleMoveToMediaLibrary} disabled={isPending || moveRunning || mediaSyncRunning || !mediaStatus?.configured}>
+            <Plus size={16} />
+            移动到媒体库
+          </button>
         </div>
+
+        {moveState ? (
+          <div className="library-sync-panel">
+            <div className="library-sync-head">
+              <span className="library-sync-title">移动到媒体库</span>
+              <span className="library-sync-meta">
+                {moveRunning ? `进行中 ${moveState.processed}/${moveState.total || 0}` : moveState.message || "空闲"}
+              </span>
+            </div>
+            <div className="library-sync-bar">
+              <div className="library-sync-bar-fill" style={{ width: `${taskPercent(moveState)}%` }} />
+            </div>
+            <div className="library-sync-stats">
+              <span>成功 {moveState.success_count}</span>
+              <span>冲突 {moveState.conflict_count}</span>
+              <span>失败 {moveState.error_count}</span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="library-stat-row">
           <div className="library-stat-card">

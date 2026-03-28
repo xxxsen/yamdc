@@ -16,6 +16,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/job"
+	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
@@ -135,10 +136,18 @@ func runServer(c *config.Config) error {
 	scrapeRepo := repository.NewScrapeDataRepository(appDB.DB())
 	scanSvc := scanner.New(c.ScanDir, c.ExtraMediaExts, jobRepo, numCleaner)
 	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, cap)
+	mediaSvc := medialib.NewService(appDB.DB(), c.LibraryDir, c.SaveDir)
+	jobSvc.SetImportGuard(func(ctx context.Context) error {
+		if mediaSvc.IsMoveRunning() {
+			return fmt.Errorf("move to media library is running")
+		}
+		return nil
+	})
 	if err := jobSvc.Recover(context.Background()); err != nil {
 		logkit.Error("recover processing jobs failed", zap.Error(err))
 	}
-	api := web.NewAPI(jobRepo, scanSvc, jobSvc, c.SaveDir)
+	mediaSvc.Start(context.Background())
+	api := web.NewAPI(jobRepo, scanSvc, jobSvc, c.SaveDir, mediaSvc)
 	addr := os.Getenv("YAMDC_SERVER_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -261,6 +270,9 @@ func precheckDir(c *config.Config) error {
 	if len(c.SaveDir) == 0 {
 		return fmt.Errorf("no save dir")
 	}
+	if len(c.LibraryDir) == 0 {
+		return fmt.Errorf("no library dir")
+	}
 	return nil
 }
 
@@ -280,6 +292,12 @@ func normalizeDirPaths(c *config.Config) error {
 	}
 	if c.SaveDir != "" {
 		c.SaveDir, err = filepath.Abs(c.SaveDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.LibraryDir != "" {
+		c.LibraryDir, err = filepath.Abs(c.LibraryDir)
 		if err != nil {
 			return err
 		}

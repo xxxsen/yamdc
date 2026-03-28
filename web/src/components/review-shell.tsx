@@ -2,15 +2,16 @@
 
 import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Image from "next/image";
-import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useRef, useState, useTransition } from "react";
+import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import type { JobItem, MediaFileRef, ReviewMeta, ScrapeDataItem } from "@/lib/api";
-import { cropPosterFromCover, deleteJob, getAssetURL, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
+import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
+import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
   jobs: JobItem[];
   initialScrapeData: ScrapeDataItem | null;
+  initialMediaStatus: MediaLibraryStatus | null;
 }
 
 const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
@@ -147,7 +148,7 @@ function TokenEditor({
   );
 }
 
-export function ReviewShell({ jobs, initialScrapeData }: Props) {
+export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
   const initialRawMeta = initialScrapeData?.raw_data ? (() => {
     try {
@@ -162,6 +163,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const [hasRawMeta, setHasRawMeta] = useState(initialRawMeta !== null);
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
   const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
+  const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [cropOpen, setCropOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
@@ -179,6 +181,24 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
 
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
+  const moveRunning = mediaStatus?.move.status === "running";
+
+  const refreshMediaStatus = useEffectEvent(async () => {
+    try {
+      const next = await getMediaLibraryStatus();
+      setMediaStatus(next);
+    } catch {
+      // ignore polling errors
+    }
+  });
+
+  useEffect(() => {
+    void refreshMediaStatus();
+    const timer = window.setInterval(() => {
+      void refreshMediaStatus();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
@@ -287,6 +307,10 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
 
   const handleImport = () => {
     if (!selected || !meta) {
+      return;
+    }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可审批入库");
       return;
     }
     startTransition(async () => {
@@ -541,6 +565,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                 当前 {items.length} 条待复核任务
                 {selectedIndex >= 0 ? `，正在查看第 ${selectedIndex + 1} 条` : ""}
               </p>
+              {moveRunning ? <p className="review-list-subtitle">媒体库正在同步迁移，审批按钮已临时锁定。</p> : null}
             </div>
           </div>
           <div className="review-job-list">
@@ -564,9 +589,9 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                     type="button"
                     className="btn review-inline-icon-btn review-action-approve"
                     onClick={handleImport}
-                    disabled={isPending || selected?.id !== job.id}
+                    disabled={isPending || selected?.id !== job.id || moveRunning}
                     aria-label="入库"
-                    title="入库"
+                    title={moveRunning ? "媒体库移动进行中，暂不可审批" : "入库"}
                   >
                     <Check size={16} />
                   </button>

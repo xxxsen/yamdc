@@ -125,6 +125,39 @@ export interface LibraryDetail {
   files: LibraryFileItem[];
 }
 
+export interface MediaLibraryItem extends LibraryListItem {
+  id: number;
+}
+
+export interface MediaLibraryDetail {
+  item: MediaLibraryItem;
+  meta: LibraryMeta;
+  variants: LibraryVariant[];
+  primary_variant_key: string;
+  files: LibraryFileItem[];
+}
+
+export interface TaskState {
+  task_key: string;
+  status: string;
+  total: number;
+  processed: number;
+  success_count: number;
+  conflict_count: number;
+  error_count: number;
+  current: string;
+  message: string;
+  started_at: number;
+  finished_at: number;
+  updated_at: number;
+}
+
+export interface MediaLibraryStatus {
+  configured: boolean;
+  sync: TaskState;
+  move: TaskState;
+}
+
 export interface ReviewMeta {
   number?: string;
   title?: string;
@@ -211,6 +244,108 @@ export async function listLibraryItems() {
   }
   const data = (await resp.json()) as APIResponse<LibraryListItem[]>;
   return data.data;
+}
+
+export async function listMediaLibraryItems() {
+  const resp = await fetch(`${getBaseURL()}/api/media-library`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryItem[]>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `list media library failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function getMediaLibraryItem(id: number) {
+  const query = new URLSearchParams({ id: String(id) });
+  const resp = await fetch(`${getBaseURL()}/api/media-library/item?${query.toString()}`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `get media library item failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function updateMediaLibraryItem(id: number, meta: LibraryMeta) {
+  const query = new URLSearchParams({ id: String(id) });
+  const resp = await fetch(`${getBaseURL()}/api/media-library/item?${query.toString()}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ meta }),
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `update media library item failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function replaceMediaLibraryAsset(id: number, variant: string, kind: "poster" | "cover" | "fanart", file: File) {
+  const query = new URLSearchParams({ id: String(id), kind });
+  if (variant) {
+    query.set("variant", variant);
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(`${getBaseURL()}/api/media-library/asset?${query.toString()}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `replace media library asset failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function deleteMediaLibraryFile(id: number, path: string) {
+  const query = new URLSearchParams({ id: String(id), path });
+  const resp = await fetch(`${getBaseURL()}/api/media-library/file?${query.toString()}`, {
+    method: "DELETE",
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `delete media library file failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function getMediaLibraryStatus() {
+  const resp = await fetch(`${getBaseURL()}/api/media-library/status`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<MediaLibraryStatus>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `get media library status failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function triggerMediaLibrarySync() {
+  const resp = await fetch(`${getBaseURL()}/api/media-library/sync`, {
+    method: "POST",
+  });
+  const data = (await resp.json()) as APIResponse<unknown>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `trigger media library sync failed: ${resp.status}`);
+  }
+  return data;
+}
+
+export async function triggerMoveToMediaLibrary() {
+  const resp = await fetch(`${getBaseURL()}/api/media-library/move`, {
+    method: "POST",
+  });
+  const data = (await resp.json()) as APIResponse<unknown>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `trigger move to media library failed: ${resp.status}`);
+  }
+  return data;
 }
 
 export async function getLibraryItem(path: string) {
@@ -483,4 +618,8 @@ export function getAssetURL(key: string) {
 
 export function getLibraryFileURL(path: string) {
   return `/api/library/file?path=${encodeURIComponent(path)}`;
+}
+
+export function getMediaLibraryFileURL(path: string) {
+  return `/api/media-library/file?path=${encodeURIComponent(path)}`;
 }
