@@ -1,3 +1,5 @@
+import { logUploadDebug } from "@/lib/upload-debug";
+
 export type JobStatus = "init" | "processing" | "reviewing" | "done" | "failed";
 
 export interface JobItem {
@@ -240,6 +242,15 @@ export async function updateLibraryItem(path: string, meta: LibraryMeta) {
 }
 
 export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover", file: File) {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  logUploadDebug("api", "replace-library-asset-start", {
+    path,
+    variant,
+    kind,
+    fileName: file.name,
+    size: file.size,
+    type: file.type,
+  });
   const query = new URLSearchParams({ path, kind });
   if (variant) {
     query.set("variant", variant);
@@ -251,6 +262,17 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
     body: form,
   });
   const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+  logUploadDebug("api", "replace-library-asset-response", {
+    path,
+    variant,
+    kind,
+    ok: resp.ok,
+    status: resp.status,
+    code: data.code,
+    durationMs,
+    message: data.message,
+  });
   if (!resp.ok || data.code !== 0) {
     throw new Error(data.message || `replace library asset failed: ${resp.status}`);
   }
@@ -382,6 +404,12 @@ export async function cropPosterFromCover(
 }
 
 export async function uploadAsset(file: File) {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  logUploadDebug("api", "upload-asset-start", {
+    fileName: file.name,
+    size: file.size,
+    type: file.type,
+  });
   const form = new FormData();
   form.append("file", file);
   const resp = await fetch(`${getBaseURL()}/api/assets/upload`, {
@@ -389,8 +417,50 @@ export async function uploadAsset(file: File) {
     body: form,
   });
   const data = (await resp.json()) as APIResponse<MediaFileRef>;
+  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+  logUploadDebug("api", "upload-asset-response", {
+    ok: resp.ok,
+    status: resp.status,
+    code: data.code,
+    durationMs,
+    message: data.message,
+  });
   if (!resp.ok || data.code !== 0) {
     throw new Error(data.message || `upload asset failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function uploadReviewAsset(id: number, target: "cover" | "poster" | "fanart", file: File) {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  logUploadDebug("api", "upload-review-asset-start", {
+    id,
+    target,
+    fileName: file.name,
+    size: file.size,
+    type: file.type,
+  });
+  const form = new FormData();
+  form.append("file", file);
+  const query = new URLSearchParams({ target });
+  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/asset?${query.toString()}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await resp.json()) as APIResponse<MediaFileRef>;
+  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+  logUploadDebug("api", "upload-review-asset-response", {
+    id,
+    target,
+    ok: resp.ok,
+    status: resp.status,
+    code: data.code,
+    durationMs,
+    message: data.message,
+    key: data.data?.key ?? null,
+  });
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `upload review asset failed: ${resp.status}`);
   }
   return data.data;
 }

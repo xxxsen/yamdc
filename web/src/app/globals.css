@@ -1688,10 +1688,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
   border: 1px solid rgba(255, 248, 244, 0.4);
   border-radius: 999px;
   background: rgba(31, 26, 20, 0.34);
   color: #fff8f4;
+  appearance: none;
   backdrop-filter: blur(8px);
   cursor: pointer;
 }
@@ -1699,6 +1701,15 @@ textarea {
 .review-upload-overlay-static {
   position: static;
   transform: none;
+}
+
+.native-file-input {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 .review-upload-empty {

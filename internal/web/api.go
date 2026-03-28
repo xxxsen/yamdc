@@ -11,6 +11,7 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
+	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -240,6 +241,77 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "poster cropped", "data": poster})
+			return
+		case "asset":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			target := strings.TrimSpace(r.URL.Query().Get("target"))
+			if target != "cover" && target != "poster" && target != "fanart" {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid asset target"})
+				return
+			}
+			file, header, err := r.FormFile("file")
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid upload file"})
+				return
+			}
+			defer file.Close()
+			data, err := io.ReadAll(file)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "read upload file failed"})
+				return
+			}
+			if !strings.HasPrefix(http.DetectContentType(data), "image/") {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "upload file is not an image"})
+				return
+			}
+			scrapeData, err := a.jobSvc.GetScrapeData(r.Context(), id)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+				return
+			}
+			if scrapeData == nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "scrape data not found"})
+				return
+			}
+			payload := scrapeData.ReviewData
+			if strings.TrimSpace(payload) == "" {
+				payload = scrapeData.RawData
+			}
+			var meta model.MovieMeta
+			if err := json.Unmarshal([]byte(payload), &meta); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid review json"})
+				return
+			}
+			key, err := store.AnonymousPutData(r.Context(), data)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+				return
+			}
+			asset := &model.File{
+				Name: filepath.Base(header.Filename),
+				Key:  key,
+			}
+			switch target {
+			case "cover":
+				meta.Cover = asset
+			case "poster":
+				meta.Poster = asset
+			case "fanart":
+				meta.SampleImages = append(meta.SampleImages, asset)
+			}
+			reviewData, err := json.Marshal(meta)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "marshal review json failed"})
+				return
+			}
+			if err := a.jobSvc.SaveReviewData(r.Context(), id, string(reviewData)); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "review asset uploaded", "data": asset})
 			return
 		default:
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "route not found"})

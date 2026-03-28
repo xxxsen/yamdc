@@ -1,7 +1,7 @@
 "use client";
 
-import { RefreshCw, Search, Upload, X } from "lucide-react";
-import { useDeferredValue, useEffect, useRef, useState, useTransition } from "react";
+import { Check, RefreshCw, Search, Upload, X } from "lucide-react";
+import { useDeferredValue, useEffect, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
 import { getLibraryFileURL, getLibraryItem, listLibraryItems, replaceLibraryAsset, updateLibraryItem } from "@/lib/api";
@@ -165,26 +165,24 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const [message, setMessage] = useState(initialItems.length === 0 ? "当前 savedir 里还没有已入库内容" : "");
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
-  const coverUploadRef = useRef<HTMLInputElement | null>(null);
-  const posterUploadRef = useRef<HTMLInputElement | null>(null);
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
   const filteredItems = !query
     ? items
     : items.filter((item) => {
-        const haystack = [
-          item.title,
-          item.number,
-          item.rel_path,
-          item.name,
-          item.release_date,
-          item.actors.join(" "),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(query);
-      });
+      const haystack = [
+        item.title,
+        item.number,
+        item.rel_path,
+        item.name,
+        item.release_date,
+        item.actors.join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
 
   const totalCount = items.length;
   const nfoCount = items.filter((item) => item.has_nfo).length;
@@ -287,28 +285,38 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     });
   };
 
-  const handleAutoSave = () => {
+  const handleManualSave = () => {
     if (!detail || !dirty || isPending) {
       return;
     }
-    persistMeta(draftMeta, "已自动保存");
+    persistMeta(draftMeta, "已保存");
   };
 
-  const handleReplaceAsset = (kind: "poster" | "cover", file: File | null) => {
-    if (!detail || !file) {
+  const openUploadPicker = (kind: "poster" | "cover") => {
+    if (!detail) {
       return;
     }
-    startTransition(async () => {
-      try {
-        setMessage(kind === "poster" ? "替换当前实例海报..." : "替换当前实例封面...");
-        const next = await replaceLibraryAsset(detail.item.rel_path, currentVariant?.key ?? "", kind, file);
-        syncDetail(next);
-        setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
-        setMessage(kind === "poster" ? "当前实例海报已更新" : "当前实例封面已更新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "替换图片失败");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0] ?? null;
+      if (!file) {
+        return;
       }
-    });
+      startTransition(async () => {
+        try {
+          setMessage(kind === "poster" ? "替换当前实例海报..." : "替换当前实例封面...");
+          const next = await replaceLibraryAsset(detail.item.rel_path, currentVariant?.key ?? "", kind, file);
+          syncDetail(next);
+          setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
+          setMessage(kind === "poster" ? "当前实例海报已更新" : "当前实例封面已更新");
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : "替换图片失败");
+        }
+      });
+    }, { once: true });
+    input.click();
   };
 
   return (
@@ -405,6 +413,15 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     {message}
                   </span>
                 ) : null}
+                <button
+                  type="button"
+                  className="btn review-inline-btn"
+                  onClick={handleManualSave}
+                  disabled={!dirty || isPending}
+                >
+                  <Check size={14} />
+                  保存
+                </button>
               </div>
             </div>
 
@@ -459,7 +476,6 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         className="input review-input-strong"
                         placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
                         value={activeTitleValue}
-                        onBlur={handleAutoSave}
                         onChange={(e) =>
                           setDraftMeta((prev) => ({
                             ...prev,
@@ -474,7 +490,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.director}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, director: e.target.value }))}
                         />
                       </div>
@@ -483,7 +499,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.studio}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, studio: e.target.value }))}
                         />
                       </div>
@@ -492,7 +508,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.label}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, label: e.target.value }))}
                         />
                       </div>
@@ -501,7 +517,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.series}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, series: e.target.value }))}
                         />
                       </div>
@@ -512,7 +528,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.number}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, number: e.target.value }))}
                         />
                       </div>
@@ -522,7 +538,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           className="input"
                           placeholder="YYYY-MM-DD"
                           value={draftMeta.release_date}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, release_date: e.target.value }))}
                         />
                       </div>
@@ -532,7 +548,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           className="input"
                           inputMode="numeric"
                           value={draftMeta.runtime ? String(draftMeta.runtime) : ""}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) =>
                             setDraftMeta((prev) => ({ ...prev, runtime: Number.parseInt(e.target.value || "0", 10) || 0 }))
                           }
@@ -543,7 +559,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         <input
                           className="input"
                           value={draftMeta.source}
-                          onBlur={handleAutoSave}
+
                           onChange={(e) => setDraftMeta((prev) => ({ ...prev, source: e.target.value }))}
                         />
                       </div>
@@ -555,7 +571,6 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                           className="input review-textarea library-textarea"
                           placeholder={copyMode === "translated" ? draftMeta.plot || "暂无中文简介" : "输入原始简介"}
                           value={activePlotValue}
-                          onBlur={handleAutoSave}
                           onChange={(e) =>
                             setDraftMeta((prev) => ({
                               ...prev,
@@ -573,15 +588,14 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                         placeholder="输入后回车或逗号确认"
                         value={draftMeta.actors}
                         onChange={(next) => setDraftMeta((prev) => ({ ...prev, actors: next }))}
-                        onBlurSave={handleAutoSave}
-                        singleLine
+                        onBlurSave={() => { }} singleLine
                       />
                     </div>
                   </div>
                   <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
                     <div className="review-image-card-head">
                       <span className="review-image-title">海报</span>
-                      <button className="btn review-inline-btn" type="button" onClick={() => posterUploadRef.current?.click()} disabled={isPending}>
+                      <button className="btn review-inline-btn" type="button" onClick={() => openUploadPicker("poster")} disabled={isPending}>
                         <Upload size={14} />
                         替换当前实例
                       </button>
@@ -604,7 +618,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     placeholder="输入后回车或逗号确认"
                     value={draftMeta.genres}
                     onChange={(next) => setDraftMeta((prev) => ({ ...prev, genres: next }))}
-                    onBlurSave={handleAutoSave}
+                    onBlurSave={() => { }}
                   />
                 </div>
 
@@ -612,7 +626,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   <div className="panel review-image-card review-image-card-cover">
                     <div className="review-image-card-head">
                       <span className="review-image-title">封面</span>
-                      <button className="btn review-inline-btn" type="button" onClick={() => coverUploadRef.current?.click()} disabled={isPending}>
+                      <button className="btn review-inline-btn" type="button" onClick={() => openUploadPicker("cover")} disabled={isPending}>
                         <Upload size={14} />
                         替换当前实例
                       </button>
@@ -665,26 +679,7 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                   </div>
                 </div>
 
-                <input
-                  ref={posterUploadRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    handleReplaceAsset("poster", e.target.files?.[0] ?? null);
-                    e.target.value = "";
-                  }}
-                />
-                <input
-                  ref={coverUploadRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    handleReplaceAsset("cover", e.target.files?.[0] ?? null);
-                    e.target.value = "";
-                  }}
-                />
+
               </div>
             </div>
           </>

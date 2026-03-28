@@ -173,9 +173,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
-  const coverUploadRef = useRef<HTMLInputElement | null>(null);
-  const posterUploadRef = useRef<HTMLInputElement | null>(null);
-  const fanartUploadRef = useRef<HTMLInputElement | null>(null);
+
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
 
@@ -264,7 +262,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     }
   };
 
-  const handleAutoSave = () => {
+  const handleManualSave = () => {
     startTransition(async () => {
       await persistReview();
     });
@@ -467,8 +465,8 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     });
   };
 
-  const handleUpload = async (file: File | undefined, target: "cover" | "poster" | "fanart") => {
-    if (!file || !meta || !selected) {
+  const doUpload = async (file: File, target: "cover" | "poster" | "fanart") => {
+    if (!meta || !selected) {
       return;
     }
     startTransition(async () => {
@@ -491,6 +489,19 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
         setMessage(error instanceof Error ? error.message : "上传失败");
       }
     });
+  };
+
+  const openUploadPicker = (target: "cover" | "poster" | "fanart") => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) {
+        void doUpload(file, target);
+      }
+    }, { once: true });
+    input.click();
   };
 
   return (
@@ -561,6 +572,16 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
               <button
                 type="button"
                 className="btn review-inline-icon-btn"
+                onClick={handleManualSave}
+                disabled={!selected || !meta || isPending}
+                aria-label="保存"
+                title="保存"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                type="button"
+                className="btn review-inline-icon-btn"
                 onClick={handleRestoreRaw}
                 disabled={!selected || isPending || !hasRawMeta}
                 aria-label="恢复原始刮削内容"
@@ -581,7 +602,6 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         className="input review-input-strong"
                         value={meta.title ?? ""}
                         onChange={(e) => updateMeta({ title: e.target.value })}
-                        onBlur={handleAutoSave}
                       />
                     </div>
                     <div className="review-field">
@@ -590,31 +610,30 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         className="input"
                         value={meta.title_translated ?? ""}
                         onChange={(e) => updateMeta({ title_translated: e.target.value })}
-                        onBlur={handleAutoSave}
                       />
                     </div>
                     <div className="review-meta-row review-meta-row-2 review-meta-row-top">
                       <div className="review-field">
                         <span className="review-label review-label-side">导演</span>
-                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleAutoSave} />
+                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">制作商</span>
-                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleAutoSave} />
+                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">发行商</span>
-                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleAutoSave} />
+                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} />
                       </div>
                       <div className="review-field">
                         <span className="review-label review-label-side">系列</span>
-                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleAutoSave} />
+                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} />
                       </div>
                     </div>
                     <div className="review-meta-row review-meta-row-2">
                       <div className="review-field review-field-area">
                         <span className="review-label review-label-side">简介</span>
-                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleAutoSave} />
+                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} />
                       </div>
                       <div className="review-field review-field-area">
                         <span className="review-label review-label-side">翻译简介</span>
@@ -622,7 +641,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                           className="input review-textarea"
                           value={meta.plot_translated ?? ""}
                           onChange={(e) => updateMeta({ plot_translated: e.target.value })}
-                          onBlur={handleAutoSave}
+                          onBlur={() => { }}
                         />
                       </div>
                     </div>
@@ -634,7 +653,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         placeholder="输入演员名后输入逗号"
                         value={normalizeList(meta.actors)}
                         onChange={(next) => updateMeta({ actors: next })}
-                        onBlurSave={handleAutoSave}
+                        onBlurSave={() => { }}
                       />
                     </div>
                   </div>
@@ -651,7 +670,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         <button
                           type="button"
                           className="review-upload-overlay"
-                          onClick={() => posterUploadRef.current?.click()}
+                          onClick={() => openUploadPicker("poster")}
                           aria-label="上传海报"
                           title="上传海报"
                         >
@@ -669,7 +688,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         <button
                           type="button"
                           className="review-upload-overlay"
-                          onClick={() => posterUploadRef.current?.click()}
+                          onClick={() => openUploadPicker("poster")}
                           aria-label="上传海报"
                           title="上传海报"
                         >
@@ -685,7 +704,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                     placeholder="输入标签后输入逗号"
                     value={normalizeList(meta.genres)}
                     onChange={(next) => updateMeta({ genres: next })}
-                    onBlurSave={handleAutoSave}
+                    onBlurSave={() => { }}
                     singleLine
                   />
                 </div>
@@ -702,7 +721,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                           className="review-upload-overlay"
                           onClick={(e) => {
                             e.stopPropagation();
-                            coverUploadRef.current?.click();
+                            openUploadPicker("cover");
                           }}
                           aria-label="上传封面"
                           title="上传封面"
@@ -717,7 +736,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                         <button
                           type="button"
                           className="review-upload-overlay"
-                          onClick={() => coverUploadRef.current?.click()}
+                          onClick={() => openUploadPicker("cover")}
                           aria-label="上传封面"
                           title="上传封面"
                         >
@@ -755,7 +774,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
                           </button>
                         </div>
                       ))}
-                      <button type="button" className="review-fanart-item review-upload-empty" onClick={() => fanartUploadRef.current?.click()}>
+                      <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")}>
                         <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
                           <Plus size={18} />
                         </span>
@@ -783,36 +802,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
           </div>
         </div>
       ) : null}
-      <input
-        ref={coverUploadRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          void handleUpload(e.target.files?.[0], "cover");
-          e.currentTarget.value = "";
-        }}
-      />
-      <input
-        ref={posterUploadRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          void handleUpload(e.target.files?.[0], "poster");
-          e.currentTarget.value = "";
-        }}
-      />
-      <input
-        ref={fanartUploadRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          void handleUpload(e.target.files?.[0], "fanart");
-          e.currentTarget.value = "";
-        }}
-      />
+
       {cropOpen && meta?.cover ? (
         <div className="review-preview-overlay" onClick={() => setCropOpen(false)}>
           <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
