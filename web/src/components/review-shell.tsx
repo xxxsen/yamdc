@@ -482,7 +482,7 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
         } else {
           nextMeta = {
             ...metaRef.current!,
-            sample_images: [...(metaRef.current?.sample_images ?? []), asset],
+            sample_images: [...(metaRef.current?.sample_images ?? []).filter((s) => s.key !== asset.key), asset],
           };
         }
         persistMetaPatch(nextMeta, "图片已更新");
