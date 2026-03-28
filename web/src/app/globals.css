@@ -2745,6 +2745,13 @@ textarea {
   filter: saturate(1.02);
 }
 
+.media-library-card-button {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
 .media-library-card-poster {
   overflow: hidden;
   border-radius: 16px;
@@ -3016,6 +3023,11 @@ textarea {
   min-height: 760px;
 }
 
+.media-library-detail-stage-inline {
+  width: 100%;
+  margin: 0;
+}
+
 .media-library-backdrop-empty {
   min-height: 180px;
 }
@@ -3096,6 +3108,36 @@ textarea {
 
 .media-library-stage-action-btn-primary:hover {
   background: rgba(156, 62, 28, 0.96);
+}
+
+.media-library-stage-only-shell {
+  width: 100%;
+}
+
+.media-library-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(12, 8, 6, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.media-library-detail-modal-frame {
+  position: relative;
+  width: min(92vw, 1820px);
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+}
+
+.media-library-detail-modal-state {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .media-library-backdrop-fallback {

@@ -1,11 +1,11 @@
 "use client";
 
 import { RefreshCw, Search } from "lucide-react";
-import Link from "next/link";
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import type { MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
-import { getMediaLibraryFileURL, getMediaLibraryStatus, listMediaLibraryItems, triggerMediaLibrarySync } from "@/lib/api";
+import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
+import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
+import { getMediaLibraryFileURL, getMediaLibraryItem, getMediaLibraryStatus, listMediaLibraryItems, triggerMediaLibrarySync } from "@/lib/api";
 
 interface Props {
   items: MediaLibraryItem[];
@@ -52,6 +52,10 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncCompletedFlash, setSyncCompletedFlash] = useState(false);
+  const [activeDetail, setActiveDetail] = useState<MediaLibraryDetail | null>(null);
+  const [activeDetailID, setActiveDetailID] = useState<number | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const [isPending, startTransition] = useTransition();
   const browserRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -76,6 +80,22 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [yearPickerOpen]);
+
+  useEffect(() => {
+    if (!activeDetail && activeDetailID === null) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveDetail(null);
+        setActiveDetailID(null);
+        setDetailError("");
+        setDetailLoading(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeDetail, activeDetailID]);
 
   const refreshItems = useEffectEvent(async (nextParams?: {
     keyword?: string;
@@ -191,6 +211,30 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   }, [filteredItems.length, visibleCount]);
 
   const visibleItems = filteredItems.slice(0, visibleCount);
+
+  const closeDetailModal = () => {
+    setActiveDetail(null);
+    setActiveDetailID(null);
+    setDetailError("");
+    setDetailLoading(false);
+  };
+
+  const openDetailModal = (id: number) => {
+    setActiveDetailID(id);
+    setActiveDetail(null);
+    setDetailError("");
+    setDetailLoading(true);
+    void (async () => {
+      try {
+        const next = await getMediaLibraryItem(id);
+        setActiveDetail(next);
+      } catch (error) {
+        setDetailError(error instanceof Error ? error.message : "加载媒体详情失败");
+      } finally {
+        setDetailLoading(false);
+      }
+    })();
+  };
 
   return (
     <div className="media-library-page media-library-page-wide">
@@ -359,7 +403,12 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                 {visibleItems.map((item) => {
                   const posterPath = item.poster_path || item.cover_path;
                   return (
-                    <Link key={item.id} href={`/media-library/${item.id}`} className="media-library-card media-library-card-wide">
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="media-library-card media-library-card-wide media-library-card-button"
+                      onClick={() => openDetailModal(item.id)}
+                    >
                       <div className="media-library-card-poster">
                         {posterPath ? (
                           <img src={getMediaLibraryFileURL(posterPath)} alt={item.title || item.name} className="media-library-card-image" />
@@ -374,7 +423,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                           <div className="media-library-card-year">{getReleaseYear(item.release_date) || "----"}</div>
                         </div>
                       </div>
-                    </Link>
+                    </button>
                   );
                 })}
 
@@ -386,6 +435,48 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           </div>
         )}
       </section>
+
+      {activeDetailID !== null ? (
+        <div className="media-library-detail-modal" onClick={closeDetailModal}>
+          <div className="media-library-detail-modal-frame" onClick={(event) => event.stopPropagation()}>
+            {detailLoading ? (
+              <div className="media-library-detail-modal-state panel">
+                <div className="list-loading-spinner" aria-hidden="true" />
+              </div>
+            ) : detailError ? (
+              <div className="media-library-detail-modal-state panel">
+                <span className="review-message" data-tone="danger">
+                  {detailError}
+                </span>
+              </div>
+            ) : activeDetail ? (
+              <MediaLibraryDetailShell
+                initialDetail={activeDetail}
+                stageOnly
+                onDetailChange={(next) => {
+                  setActiveDetail(next);
+                  setItems((current) =>
+                    current.map((item) =>
+                      item.id === next.item.id
+                        ? {
+                            ...item,
+                            title: next.item.title,
+                            number: next.item.number,
+                            release_date: next.item.release_date,
+                            actors: next.item.actors,
+                            updated_at: next.item.updated_at,
+                            poster_path: next.item.poster_path,
+                            cover_path: next.item.cover_path,
+                          }
+                        : item,
+                    ),
+                  );
+                }}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

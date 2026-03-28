@@ -9,6 +9,8 @@ import { getMediaLibraryFileURL, getMediaLibraryItem, updateMediaLibraryItem } f
 
 interface Props {
   initialDetail: MediaLibraryDetail;
+  stageOnly?: boolean;
+  onDetailChange?: (detail: MediaLibraryDetail) => void;
 }
 
 function cloneMeta(meta: LibraryMeta | null): LibraryMeta {
@@ -165,7 +167,7 @@ function TokenEditor({
   );
 }
 
-export function MediaLibraryDetailShell({ initialDetail }: Props) {
+export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDetailChange }: Props) {
   const initialDraftMeta = cloneMeta(initialDetail.meta);
   const [detail, setDetail] = useState<MediaLibraryDetail>(initialDetail);
   const [selectedVariantKey, setSelectedVariantKey] = useState(initialDetail.primary_variant_key || initialDetail.variants[0]?.key || "");
@@ -218,6 +220,7 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
       return next.primary_variant_key || next.variants[0]?.key || "";
     });
     lastSavedMetaRef.current = serializeMeta(nextDraftMeta);
+    onDetailChange?.(next);
   };
 
   const refreshDetail = useEffectEvent(async () => {
@@ -311,22 +314,8 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
     );
   };
 
-  return (
-    <section className="panel library-detail-panel media-library-detail-shell">
-      <div className="media-library-detail-topbar media-library-detail-topbar-wide">
-        <div className="media-library-detail-heading">
-          <Link href="/media-library" className="media-library-back-link">
-            <ChevronLeft size={16} />
-            返回媒体库
-          </Link>
-          <div className="media-library-detail-copy">
-            <div className="review-list-kicker">Media Library Item</div>
-            <h2 className="review-detail-title">{detailDisplayTitle}</h2>
-          </div>
-        </div>
-      </div>
-
-      <div className={`panel media-library-detail-stage media-library-backdrop${selectedCover ? "" : " media-library-backdrop-empty"}`}>
+  const stage = (
+      <div className={`panel media-library-detail-stage media-library-backdrop${selectedCover ? "" : " media-library-backdrop-empty"}${stageOnly ? " media-library-detail-stage-inline" : ""}`}>
         {selectedCover ? (
           <button type="button" className="media-library-backdrop-hit" onClick={() => setPreview({ title: "封面", path: selectedCover, name: "封面" })}>
             <img src={resolveImageSrc(selectedCover)} alt="封面" className="media-library-backdrop-image" />
@@ -498,6 +487,31 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
           </div>
         </div>
       </div>
+  );
+
+  return (
+    <>
+      {!stageOnly ? (
+        <section className="panel library-detail-panel media-library-detail-shell">
+          <div className="media-library-detail-topbar media-library-detail-topbar-wide">
+            <div className="media-library-detail-heading">
+              <Link href="/media-library" className="media-library-back-link">
+                <ChevronLeft size={16} />
+                返回媒体库
+              </Link>
+              <div className="media-library-detail-copy">
+                <div className="review-list-kicker">Media Library Item</div>
+                <h2 className="review-detail-title">{detailDisplayTitle}</h2>
+              </div>
+            </div>
+          </div>
+          {stage}
+        </section>
+      ) : (
+        <div className="media-library-stage-only-shell">
+          {stage}
+        </div>
+      )}
 
       {preview ? (
         <div className="review-preview-overlay" onClick={() => setPreview(null)}>
@@ -516,6 +530,6 @@ export function MediaLibraryDetailShell({ initialDetail }: Props) {
           </div>
         </div>
       ) : null}
-    </section>
+    </>
   );
 }
