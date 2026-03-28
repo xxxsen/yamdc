@@ -285,12 +285,6 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
     });
   };
 
-  const handleManualSave = () => {
-    startTransition(async () => {
-      await persistReview({ successText: "已保存" });
-    });
-  };
-
   const handleImport = () => {
     if (!selected || !meta) {
       return;
@@ -600,16 +594,6 @@ export function ReviewShell({ jobs, initialScrapeData }: Props) {
             </div>
             <div className="review-actions">
               {message ? <span className="review-message" data-tone={messageTone}>{message}</span> : null}
-              <button
-                type="button"
-                className="btn review-inline-icon-btn"
-                onClick={handleManualSave}
-                disabled={!selected || !meta || isPending}
-                aria-label="保存"
-                title="保存"
-              >
-                <Check size={14} />
-              </button>
               <button
                 type="button"
                 className="btn review-inline-icon-btn"

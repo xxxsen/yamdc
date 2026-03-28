@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, RefreshCw, Search, Upload, X } from "lucide-react";
+import { RefreshCw, Search, Upload, X } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta } from "@/lib/api";
@@ -194,7 +194,6 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
   const totalCount = items.length;
   const nfoCount = items.filter((item) => item.has_nfo).length;
   const artworkCount = items.filter((item) => item.poster_path || item.cover_path).length;
-  const dirty = detail ? serializeMeta(draftMeta) !== serializeMeta(cloneMeta(detail.meta)) : false;
   const currentVariant = pickVariant(detail, selectedVariantKey);
   const showVariantSwitch = (detail?.variants.length ?? 0) > 1;
   const activeTitleValue = copyMode === "translated" ? draftMeta.title_translated : draftMeta.title;
@@ -337,15 +336,6 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
     });
   };
 
-  const handleManualSave = () => {
-    if (!detail || !dirty || isPending) {
-      return;
-    }
-    startTransition(async () => {
-      await persistMeta(draftMetaRef.current, "已保存");
-    });
-  };
-
   const handleBlurSave = () => {
     startTransition(async () => {
       await persistMeta(draftMetaRef.current, "已自动保存", { silent: true });
@@ -481,15 +471,6 @@ export function LibraryShell({ items: initialItems, initialDetail }: Props) {
                     {message}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn review-inline-btn"
-                  onClick={handleManualSave}
-                  disabled={!dirty || isPending}
-                >
-                  <Check size={14} />
-                  保存
-                </button>
               </div>
             </div>
 
