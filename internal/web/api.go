@@ -13,6 +13,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -25,10 +26,11 @@ type API struct {
 	saveDir string
 	media   *medialib.Service
 	store   store.IStorage
+	cleaner numbercleaner.Cleaner
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage}
+func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage, cleaner numbercleaner.Cleaner) *API {
+	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage, cleaner: cleaner}
 }
 
 func (a *API) Handler() http.Handler {
@@ -50,6 +52,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/api/media-library/sync", a.handleMediaLibrarySync)
 	mux.HandleFunc("/api/media-library/move", a.handleMediaLibraryMove)
 	mux.HandleFunc("/api/media-library/status", a.handleMediaLibraryStatus)
+	mux.HandleFunc("/api/debug/number-cleaner/explain", a.handleNumberCleanerExplain)
 	mux.HandleFunc("/api/assets/", a.handleAsset)
 	return withCORS(mux)
 }
@@ -61,6 +64,51 @@ func (a *API) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 		"data": map[string]string{
 			"status": "ok",
 		},
+	})
+}
+
+func (a *API) handleNumberCleanerExplain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.cleaner == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"code":    1,
+			"message": "number cleaner is not available",
+		})
+		return
+	}
+	var req struct {
+		Input string `json:"input"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"code":    1,
+			"message": "invalid json body",
+		})
+		return
+	}
+	req.Input = strings.TrimSpace(req.Input)
+	if req.Input == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"code":    1,
+			"message": "input is required",
+		})
+		return
+	}
+	result, err := a.cleaner.Explain(req.Input)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"code":    1,
+			"message": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"code":    0,
+		"message": "ok",
+		"data":    result,
 	})
 }
 

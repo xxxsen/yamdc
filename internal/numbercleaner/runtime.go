@@ -21,6 +21,13 @@ func (r *RuntimeCleaner) Clean(input string) (*Result, error) {
 	return inner.Clean(input)
 }
 
+func (r *RuntimeCleaner) Explain(input string) (*ExplainResult, error) {
+	r.mu.RLock()
+	inner := r.inner
+	r.mu.RUnlock()
+	return inner.Explain(input)
+}
+
 func (r *RuntimeCleaner) Swap(inner Cleaner) {
 	if inner == nil {
 		return

@@ -2,12 +2,15 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
@@ -62,4 +65,29 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, "image/png", resp.Header.Get("Content-Type"))
+}
+
+func TestHandleNumberCleanerExplain(t *testing.T) {
+	rs, err := numbercleaner.LoadRuleSetFromPath("../../rules/ruleset")
+	require.NoError(t, err)
+	cl, err := numbercleaner.NewCleaner(rs)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/number-cleaner/explain", strings.NewReader(`{"input":"fc2ppv12345 中文字幕"}`))
+	rec := httptest.NewRecorder()
+
+	api := &API{cleaner: cl}
+	api.handleNumberCleanerExplain(rec, req)
+
+	resp := rec.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload struct {
+		Code int                         `json:"code"`
+		Data numbercleaner.ExplainResult `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.Equal(t, "FC2-PPV-12345-C", payload.Data.Final.Normalized)
+	require.NotEmpty(t, payload.Data.Steps)
 }

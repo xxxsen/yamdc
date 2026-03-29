@@ -9,7 +9,6 @@ FROM alpine:3.13
 WORKDIR /app
 
 COPY --from=0 /build/yamdc /app/yamdc
-COPY --from=0 /build/rules /app/rules
 
 RUN apk add --no-cache ffmpeg
 

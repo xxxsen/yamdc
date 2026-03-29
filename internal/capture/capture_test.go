@@ -47,6 +47,17 @@ func (c *staticCleaner) Clean(input string) (*numbercleaner.Result, error) {
 	}, nil
 }
 
+func (c *staticCleaner) Explain(input string) (*numbercleaner.ExplainResult, error) {
+	final, err := c.Clean(input)
+	if err != nil {
+		return nil, err
+	}
+	return &numbercleaner.ExplainResult{
+		Input: input,
+		Final: final,
+	}, nil
+}
+
 func newTestCapture(t *testing.T, cleaner numbercleaner.Cleaner) *Capture {
 	t.Helper()
 	cap, err := New(

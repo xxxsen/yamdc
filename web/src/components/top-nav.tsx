@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Clapperboard, ClipboardCheck, FolderKanban } from "lucide-react";
+import { Archive, Bug, Clapperboard, ClipboardCheck, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -36,28 +36,43 @@ export function TopNav() {
       icon: Clapperboard,
     },
   ] as const;
+  const toolItems = [
+    {
+      href: "/debug",
+      title: "调试工具",
+      subtitle: "测试、排查与诊断",
+      icon: Bug,
+    },
+  ] as const;
+
+  const renderItems = (navItems: readonly { href: string; title: string; subtitle: string; icon: typeof Bug }[]) =>
+    navItems.map((item) => {
+      const Icon = item.icon;
+      return (
+        <Link
+          key={item.href}
+          className={`sidebar-link ${isActive(pathname, item.href) ? "sidebar-link-active" : ""}`}
+          href={item.href}
+          title={item.title}
+        >
+          <span className="sidebar-link-icon">
+            <Icon size={16} />
+          </span>
+          <span className="sidebar-link-copy">
+            <span className="sidebar-link-title">{item.title}</span>
+            <span className="sidebar-link-subtitle">{item.subtitle}</span>
+          </span>
+        </Link>
+      );
+    });
 
   return (
-    <nav className="sidebar-nav">
-      {items.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            className={`sidebar-link ${isActive(pathname, item.href) ? "sidebar-link-active" : ""}`}
-            href={item.href}
-            title={item.title}
-          >
-            <span className="sidebar-link-icon">
-              <Icon size={16} />
-            </span>
-            <span className="sidebar-link-copy">
-              <span className="sidebar-link-title">{item.title}</span>
-              <span className="sidebar-link-subtitle">{item.subtitle}</span>
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="sidebar-nav-stack">
+      <nav className="sidebar-nav">{renderItems(items)}</nav>
+      <div className="sidebar-nav-secondary">
+        <div className="sidebar-nav-section-title">工具</div>
+        <nav className="sidebar-nav">{renderItems(toolItems)}</nav>
+      </div>
+    </div>
   );
 }

@@ -165,6 +165,59 @@ func TestCleanerNoMatch(t *testing.T) {
 	require.Empty(t, res.Normalized)
 }
 
+func TestCleanerExplain(t *testing.T) {
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
+	require.NoError(t, err)
+
+	explain, err := cl.Explain("[JAV] fc2ppv12345 中文字幕.mp4")
+	require.NoError(t, err)
+	require.NotNil(t, explain)
+	require.NotNil(t, explain.Final)
+	require.Equal(t, "FC2-PPV-12345-C", explain.Final.Normalized)
+	require.NotEmpty(t, explain.Steps)
+
+	var hasSuffix bool
+	var hasMatcher bool
+	var hasSelected bool
+	var hasParse bool
+	for _, step := range explain.Steps {
+		switch {
+		case step.Stage == "suffix_rules" && step.Matched:
+			hasSuffix = true
+		case step.Stage == "matchers" && step.Candidate != nil:
+			hasMatcher = true
+		case step.Stage == "result" && step.Rule == "selected_candidate" && step.Selected:
+			hasSelected = true
+		case step.Stage == "result" && step.Rule == "number_parse" && step.Matched:
+			hasParse = true
+		}
+	}
+	require.True(t, hasSuffix)
+	require.True(t, hasMatcher)
+	require.True(t, hasSelected)
+	require.True(t, hasParse)
+}
+
+func TestCleanerExplainNoMatch(t *testing.T) {
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
+	require.NoError(t, err)
+
+	explain, err := cl.Explain("pure-noise-file-name")
+	require.NoError(t, err)
+	require.NotNil(t, explain)
+	require.NotNil(t, explain.Final)
+	require.Equal(t, StatusNoMatch, explain.Final.Status)
+
+	var hasNoMatch bool
+	for _, step := range explain.Steps {
+		if step.Stage == "result" && step.Rule == "selected_candidate" && !step.Matched {
+			hasNoMatch = true
+			require.Equal(t, "no candidate matched", step.Summary)
+		}
+	}
+	require.True(t, hasNoMatch)
+}
+
 func TestCleanerRewriteCompatibility(t *testing.T) {
 	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)

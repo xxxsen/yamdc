@@ -272,7 +272,7 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		}
 		return nil
 	})
-	ysctx.API = web.NewAPI(ysctx.JobRepo, ysctx.ScanSvc, ysctx.JobSvc, ysctx.Config.SaveDir, ysctx.MediaSvc, ysctx.CacheStore)
+	ysctx.API = web.NewAPI(ysctx.JobRepo, ysctx.ScanSvc, ysctx.JobSvc, ysctx.Config.SaveDir, ysctx.MediaSvc, ysctx.CacheStore, ysctx.NumberCleaner)
 	return nil
 }
 

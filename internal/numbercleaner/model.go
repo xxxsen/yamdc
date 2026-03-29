@@ -52,35 +52,54 @@ func (e *CleanError) Unwrap() error {
 }
 
 type Result struct {
-	RawInput   string
-	InputNoExt string
-	Normalized string
-	NumberID   string
-	Suffixes   []string
-	Category   string
-	Uncensor   bool
+	RawInput   string   `json:"raw_input"`
+	InputNoExt string   `json:"input_no_ext"`
+	Normalized string   `json:"normalized"`
+	NumberID   string   `json:"number_id"`
+	Suffixes   []string `json:"suffixes"`
+	Category   string   `json:"category"`
+	Uncensor   bool     `json:"uncensor"`
 
-	CategoryMatched bool
-	UncensorMatched bool
-	Confidence      Confidence
-	Status          Status
-	RuleHits        []string
-	Warnings        []string
-	Candidates      []Candidate
+	CategoryMatched bool        `json:"category_matched"`
+	UncensorMatched bool        `json:"uncensor_matched"`
+	Confidence      Confidence  `json:"confidence"`
+	Status          Status      `json:"status"`
+	RuleHits        []string    `json:"rule_hits"`
+	Warnings        []string    `json:"warnings"`
+	Candidates      []Candidate `json:"candidates"`
+}
+
+type ExplainResult struct {
+	Input      string        `json:"input"`
+	InputNoExt string        `json:"input_no_ext"`
+	Steps      []ExplainStep `json:"steps"`
+	Final      *Result       `json:"final"`
+}
+
+type ExplainStep struct {
+	Stage     string     `json:"stage"`
+	Rule      string     `json:"rule"`
+	Input     string     `json:"input"`
+	Output    string     `json:"output"`
+	Matched   bool       `json:"matched"`
+	Selected  bool       `json:"selected"`
+	Summary   string     `json:"summary"`
+	Values    []string   `json:"values"`
+	Candidate *Candidate `json:"candidate"`
 }
 
 type Candidate struct {
-	NumberID string
-	Score    int
-	RuleHits []string
-	Matcher  string
-	Start    int
-	End      int
+	NumberID string   `json:"number_id"`
+	Score    int      `json:"score"`
+	RuleHits []string `json:"rule_hits"`
+	Matcher  string   `json:"matcher"`
+	Start    int      `json:"start"`
+	End      int      `json:"end"`
 
-	Category        string
-	CategoryMatched bool
-	Uncensor        bool
-	UncensorMatched bool
+	Category        string `json:"category"`
+	CategoryMatched bool   `json:"category_matched"`
+	Uncensor        bool   `json:"uncensor"`
+	UncensorMatched bool   `json:"uncensor_matched"`
 }
 
 type Options struct {
@@ -156,6 +175,7 @@ type PostProcessRule struct {
 
 type Cleaner interface {
 	Clean(input string) (*Result, error)
+	Explain(input string) (*ExplainResult, error)
 }
 
 type Loader interface {

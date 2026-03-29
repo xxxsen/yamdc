@@ -179,6 +179,55 @@ export interface ReviewMeta {
   sample_images?: MediaFileRef[];
 }
 
+export interface NumberCleanerCandidate {
+  number_id: string;
+  score: number;
+  rule_hits: string[];
+  matcher: string;
+  start: number;
+  end: number;
+  category: string;
+  category_matched: boolean;
+  uncensor: boolean;
+  uncensor_matched: boolean;
+}
+
+export interface NumberCleanerExplainStep {
+  stage: string;
+  rule: string;
+  input: string;
+  output: string;
+  matched: boolean;
+  selected: boolean;
+  summary: string;
+  values: string[];
+  candidate?: NumberCleanerCandidate | null;
+}
+
+export interface NumberCleanerResult {
+  raw_input: string;
+  input_no_ext: string;
+  normalized: string;
+  number_id: string;
+  suffixes: string[];
+  category: string;
+  uncensor: boolean;
+  category_matched: boolean;
+  uncensor_matched: boolean;
+  confidence: string;
+  status: string;
+  rule_hits: string[];
+  warnings: string[];
+  candidates: NumberCleanerCandidate[];
+}
+
+export interface NumberCleanerExplainResult {
+  input: string;
+  input_no_ext: string;
+  steps: NumberCleanerExplainStep[];
+  final: NumberCleanerResult;
+}
+
 interface APIResponse<T> {
   code: number;
   message: string;
@@ -482,6 +531,21 @@ export async function triggerScan() {
     throw new Error(`scan failed: ${resp.status}`);
   }
   return (await resp.json()) as APIResponse<unknown>;
+}
+
+export async function explainNumberCleaner(input: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/number-cleaner/explain`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ input }),
+  });
+  const data = (await resp.json()) as APIResponse<NumberCleanerExplainResult>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `explain number cleaner failed: ${resp.status}`);
+  }
+  return data.data;
 }
 
 export async function runJob(id: number) {
