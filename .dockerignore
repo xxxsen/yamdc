@@ -1,0 +1,9 @@
+.git
+.gitignore
+.cache
+bin
+docker
+web
+node_modules
+*.log
+*.db

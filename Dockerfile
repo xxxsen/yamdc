@@ -6,8 +6,14 @@ RUN CGO_LDFLAGS="-static" CGO_ENABLED=0 go build -a -tags netgo -ldflags '-w' -o
 
 FROM alpine:3.13
 
-COPY --from=0 /build/yamdc /bin/
+WORKDIR /app
+
+COPY --from=0 /build/yamdc /app/yamdc
+COPY --from=0 /build/rules /app/rules
 
 RUN apk add --no-cache ffmpeg
 
-ENTRYPOINT [ "/bin/yamdc" ]
+EXPOSE 8080
+
+ENTRYPOINT ["/app/yamdc"]
+CMD ["server", "--config", "/config/config.json"]
