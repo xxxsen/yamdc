@@ -215,49 +215,53 @@ export function SearcherDebugShell() {
           </div>
           {result ? (
             <div className="ruleset-debug-summary">
-              <div className="ruleset-debug-summary-row">
-                <span>最终番号</span>
-                <strong>{result.number_id || "-"}</strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>清洗结果</span>
-                <strong>{result.cleaner_result?.normalized || "-"}</strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>插件链</span>
-                <strong>{result.used_plugins.length ? result.used_plugins.join(", ") : "-"}</strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>命中插件</span>
-                <strong>{result.matched_plugin || "-"}</strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>分类 / 无码</span>
-                <strong>
-                  {result.category || "-"} / {result.uncensor ? "true" : "false"}
-                </strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>标题</span>
-                <strong>{result.meta?.title || "-"}</strong>
-              </div>
-              <div className="ruleset-debug-summary-row">
-                <span>来源</span>
-                <strong>{result.meta?.ext_info?.scrape_info?.source || "-"}</strong>
+              <div className="searcher-debug-summary-body">
+                <div className="ruleset-debug-summary-row">
+                  <span>最终番号</span>
+                  <strong>{result.number_id || "-"}</strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>清洗结果</span>
+                  <strong>{result.cleaner_result?.normalized || "-"}</strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>插件链</span>
+                  <strong>{result.used_plugins.length ? result.used_plugins.join(", ") : "-"}</strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>命中插件</span>
+                  <strong>{result.matched_plugin || "-"}</strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>分类 / 无码</span>
+                  <strong>
+                    {result.category || "-"} / {result.uncensor ? "true" : "false"}
+                  </strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>标题</span>
+                  <strong>{result.meta?.title || "-"}</strong>
+                </div>
+                <div className="ruleset-debug-summary-row">
+                  <span>来源</span>
+                  <strong>{result.meta?.ext_info?.scrape_info?.source || "-"}</strong>
+                </div>
               </div>
               {result.meta ? (
-                <div className="searcher-debug-summary-actions">
-                  <button className="btn" type="button" onClick={() => void handleCopyMeta()}>
-                    <Copy size={16} />
-                    <span>复制 Meta JSON</span>
-                  </button>
-                  <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
-                    <ArrowRight size={16} />
-                    <span>发送到 Handler 测试</span>
-                  </button>
+                <div className="searcher-debug-summary-footer">
+                  <div className="searcher-debug-summary-actions">
+                    <button className="btn btn-primary" type="button" onClick={() => void handleCopyMeta()}>
+                      <Copy size={16} />
+                      <span>复制 Meta JSON</span>
+                    </button>
+                    <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
+                      <ArrowRight size={16} />
+                      <span>发送到 Handler 测试</span>
+                    </button>
+                  </div>
+                  {metaActionMessage ? <div className="handler-debug-message">{metaActionMessage}</div> : null}
                 </div>
               ) : null}
-              {metaActionMessage ? <div className="handler-debug-message">{metaActionMessage}</div> : null}
             </div>
           ) : (
             <div className="ruleset-debug-empty">运行后会展示 cleaner 结果、插件链顺序、最终命中插件和抓到的标题。</div>

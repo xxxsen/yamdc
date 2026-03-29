@@ -4737,6 +4737,24 @@ textarea.input {
   gap: 12px;
 }
 
+.searcher-debug-grid > .ruleset-debug-summary-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.searcher-debug-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.searcher-debug-summary-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
 .ruleset-debug-summary-row {
   display: flex;
   flex-direction: column;
@@ -4765,7 +4783,7 @@ textarea.input {
 
 .searcher-debug-summary-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 10px;
   margin-top: 4px;
 }
