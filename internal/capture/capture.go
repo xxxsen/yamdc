@@ -411,7 +411,7 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 	images = append(images, fc.Meta.SampleImages...)
 	for _, image := range images {
 		target := filepath.Join(fc.SaveDir, image.Name)
-		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
+		logger := logutil.GetLogger(ctx).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
 
 		data, err := c.c.Storage.GetData(ctx, image.Key)
 		if err != nil {

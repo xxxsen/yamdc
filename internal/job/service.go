@@ -383,13 +383,12 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		s.finish(jobID)
 		return fmt.Errorf("job status is not runnable")
 	}
-	go s.runOne(jobID)
+	go s.runOne(context.WithoutCancel(ctx), jobID)
 	return nil
 }
 
-func (s *Service) runOne(jobID int64) {
+func (s *Service) runOne(ctx context.Context, jobID int64) {
 	defer s.finish(jobID)
-	ctx := context.Background()
 	_ = s.logRepo.Add(ctx, jobID, "info", "job", "job started", "")
 
 	j, err := s.jobRepo.GetByID(ctx, jobID)

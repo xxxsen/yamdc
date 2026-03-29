@@ -222,7 +222,7 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 	}
 	logger.Info("media library sync triggered")
 	go func() {
-		_ = s.runFullSync(context.Background(), "manual")
+		_ = s.runFullSync(context.WithoutCancel(ctx), "manual")
 	}()
 	return nil
 }
@@ -247,7 +247,7 @@ func (s *Service) TriggerMove(ctx context.Context) error {
 	}
 	logger.Info("move to media library triggered")
 	go func() {
-		_ = s.runMove(context.Background())
+		_ = s.runMove(context.WithoutCancel(ctx))
 	}()
 	return nil
 }

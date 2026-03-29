@@ -310,7 +310,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx context.Context, urls []string) 
 		if len(url) == 0 {
 			continue
 		}
-		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
+		logger := logutil.GetLogger(ctx).With(zap.String("url", url))
 		key := hasher.ToSha1(url)
 		if ok, _ := p.cc.storage.IsDataExist(ctx, key); ok {
 			rs[url] = key

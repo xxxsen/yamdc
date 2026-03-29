@@ -332,6 +332,14 @@ interface APIResponse<T> {
   data: T;
 }
 
+async function readAPIResponse<T>(resp: Response, fallbackMessage: string): Promise<APIResponse<T>> {
+  const data = (await resp.json()) as APIResponse<T>;
+  if (data.code !== 0) {
+    throw new Error(data.message || fallbackMessage);
+  }
+  return data;
+}
+
 export interface JobListResponse {
   items: JobItem[];
   total: number;
@@ -377,10 +385,7 @@ export async function listJobs(params?: {
   const resp = await fetch(`${getBaseURL()}/api/jobs${suffix}`, {
     cache: "no-store",
   });
-  if (!resp.ok) {
-    throw new Error(`list jobs failed: ${resp.status}`);
-  }
-  const data = (await resp.json()) as APIResponse<JobListResponse>;
+  const data = await readAPIResponse<JobListResponse>(resp, "list jobs failed");
   return data.data;
 }
 
@@ -388,10 +393,7 @@ export async function listLibraryItems() {
   const resp = await fetch(`${getBaseURL()}/api/library`, {
     cache: "no-store",
   });
-  if (!resp.ok) {
-    throw new Error(`list library failed: ${resp.status}`);
-  }
-  const data = (await resp.json()) as APIResponse<LibraryListItem[]>;
+  const data = await readAPIResponse<LibraryListItem[]>(resp, "list library failed");
   return data.data;
 }
 
@@ -422,10 +424,7 @@ export async function listMediaLibraryItems(params?: {
   const resp = await fetch(`${getBaseURL()}/api/media-library${suffix}`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryItem[]>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `list media library failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryItem[]>(resp, "list media library failed");
   return data.data;
 }
 
@@ -434,10 +433,7 @@ export async function getMediaLibraryItem(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/media-library/item?${query.toString()}`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `get media library item failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryDetail>(resp, "get media library item failed");
   return data.data;
 }
 
@@ -450,10 +446,7 @@ export async function updateMediaLibraryItem(id: number, meta: LibraryMeta) {
     },
     body: JSON.stringify({ meta }),
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `update media library item failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryDetail>(resp, "update media library item failed");
   return data.data;
 }
 
@@ -468,10 +461,7 @@ export async function replaceMediaLibraryAsset(id: number, variant: string, kind
     method: "POST",
     body: form,
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `replace media library asset failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryDetail>(resp, "replace media library asset failed");
   return data.data;
 }
 
@@ -480,10 +470,7 @@ export async function deleteMediaLibraryFile(id: number, path: string) {
   const resp = await fetch(`${getBaseURL()}/api/media-library/file?${query.toString()}`, {
     method: "DELETE",
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `delete media library file failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryDetail>(resp, "delete media library file failed");
   return data.data;
 }
 
@@ -491,10 +478,7 @@ export async function getMediaLibraryStatus() {
   const resp = await fetch(`${getBaseURL()}/api/media-library/status`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<MediaLibraryStatus>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `get media library status failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaLibraryStatus>(resp, "get media library status failed");
   return data.data;
 }
 
@@ -502,10 +486,7 @@ export async function triggerMediaLibrarySync() {
   const resp = await fetch(`${getBaseURL()}/api/media-library/sync`, {
     method: "POST",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `trigger media library sync failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "trigger media library sync failed");
   return data;
 }
 
@@ -513,10 +494,7 @@ export async function triggerMoveToMediaLibrary() {
   const resp = await fetch(`${getBaseURL()}/api/media-library/move`, {
     method: "POST",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `trigger move to media library failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "trigger move to media library failed");
   return data;
 }
 
@@ -525,10 +503,7 @@ export async function getLibraryItem(path: string) {
   const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<LibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `get library item failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<LibraryDetail>(resp, "get library item failed");
   return data.data;
 }
 
@@ -541,10 +516,7 @@ export async function updateLibraryItem(path: string, meta: LibraryMeta) {
     },
     body: JSON.stringify({ meta }),
   });
-  const data = (await resp.json()) as APIResponse<LibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `update library item failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<LibraryDetail>(resp, "update library item failed");
   return data.data;
 }
 
@@ -580,8 +552,8 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
     durationMs,
     message: data.message,
   });
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `replace library asset failed: ${resp.status}`);
+  if (data.code !== 0) {
+    throw new Error(data.message || "replace library asset failed");
   }
   return data.data;
 }
@@ -602,10 +574,7 @@ export async function cropLibraryPosterFromCover(
     },
     body: JSON.stringify(rect),
   });
-  const data = (await resp.json()) as APIResponse<LibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `crop library poster failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<LibraryDetail>(resp, "crop library poster failed");
   return data.data;
 }
 
@@ -614,10 +583,7 @@ export async function deleteLibraryFile(path: string) {
   const resp = await fetch(`${getBaseURL()}/api/library/file?${query.toString()}`, {
     method: "DELETE",
   });
-  const data = (await resp.json()) as APIResponse<LibraryDetail>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `delete library file failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<LibraryDetail>(resp, "delete library file failed");
   return data.data;
 }
 
@@ -625,10 +591,7 @@ export async function triggerScan() {
   const resp = await fetch(`${getBaseURL()}/api/scan`, {
     method: "POST",
   });
-  if (!resp.ok) {
-    throw new Error(`scan failed: ${resp.status}`);
-  }
-  return (await resp.json()) as APIResponse<unknown>;
+  return await readAPIResponse<unknown>(resp, "scan failed");
 }
 
 export async function explainNumberCleaner(input: string) {
@@ -639,10 +602,7 @@ export async function explainNumberCleaner(input: string) {
     },
     body: JSON.stringify({ input }),
   });
-  const data = (await resp.json()) as APIResponse<NumberCleanerExplainResult>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `explain number cleaner failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<NumberCleanerExplainResult>(resp, "explain number cleaner failed");
   return data.data;
 }
 
@@ -650,10 +610,7 @@ export async function getSearcherDebugPlugins() {
   const resp = await fetch(`${getBaseURL()}/api/debug/searcher/plugins`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<SearcherDebugPluginCollection>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `get searcher debug plugins failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<SearcherDebugPluginCollection>(resp, "get searcher debug plugins failed");
   return data.data;
 }
 
@@ -665,10 +622,7 @@ export async function debugSearcher(input: string, plugins: string[], useCleaner
     },
     body: JSON.stringify({ input, plugins, use_cleaner: useCleaner }),
   });
-  const data = (await resp.json()) as APIResponse<SearcherDebugResult>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `debug searcher failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<SearcherDebugResult>(resp, "debug searcher failed");
   return data.data;
 }
 
@@ -676,10 +630,7 @@ export async function getHandlerDebugHandlers() {
   const resp = await fetch(`${getBaseURL()}/api/debug/handlers`, {
     cache: "no-store",
   });
-  const data = (await resp.json()) as APIResponse<HandlerDebugInstance[]>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `get handler debug handlers failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<HandlerDebugInstance[]>(resp, "get handler debug handlers failed");
   return data.data;
 }
 
@@ -691,10 +642,7 @@ export async function debugHandler(payload: HandlerDebugRequest) {
     },
     body: JSON.stringify(payload),
   });
-  const data = (await resp.json()) as APIResponse<HandlerDebugResult>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `debug handler failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<HandlerDebugResult>(resp, "debug handler failed");
   return data.data;
 }
 
@@ -702,10 +650,7 @@ export async function runJob(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/run`, {
     method: "POST",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `run job failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "run job failed");
   return data;
 }
 
@@ -713,10 +658,7 @@ export async function rerunJob(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/rerun`, {
     method: "POST",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `rerun job failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "rerun job failed");
   return data;
 }
 
@@ -724,10 +666,7 @@ export async function deleteJob(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/jobs/${id}`, {
     method: "DELETE",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `delete job failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "delete job failed");
   return data;
 }
 
@@ -739,10 +678,7 @@ export async function updateJobNumber(id: number, number: string) {
     },
     body: JSON.stringify({ number }),
   });
-  const data = (await resp.json()) as APIResponse<JobItem>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `update job number failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<JobItem>(resp, "update job number failed");
   return data.data;
 }
 
@@ -750,10 +686,7 @@ export async function listJobLogs(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/logs`, {
     cache: "no-store",
   });
-  if (!resp.ok) {
-    throw new Error(`list logs failed: ${resp.status}`);
-  }
-  const data = (await resp.json()) as APIResponse<JobLogItem[]>;
+  const data = await readAPIResponse<JobLogItem[]>(resp, "list logs failed");
   return data.data;
 }
 
@@ -761,10 +694,7 @@ export async function getReviewJob(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}`, {
     cache: "no-store",
   });
-  if (!resp.ok) {
-    throw new Error(`get review job failed: ${resp.status}`);
-  }
-  const data = (await resp.json()) as APIResponse<ScrapeDataItem | null>;
+  const data = await readAPIResponse<ScrapeDataItem | null>(resp, "get review job failed");
   return data.data;
 }
 
@@ -776,10 +706,7 @@ export async function saveReviewJob(id: number, reviewData: string) {
     },
     body: JSON.stringify({ review_data: reviewData }),
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `save review job failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "save review job failed");
   return data;
 }
 
@@ -787,10 +714,7 @@ export async function importReviewJob(id: number) {
   const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/import`, {
     method: "POST",
   });
-  const data = (await resp.json()) as APIResponse<unknown>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `import review job failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<unknown>(resp, "import review job failed");
   return data;
 }
 
@@ -805,10 +729,7 @@ export async function cropPosterFromCover(
     },
     body: JSON.stringify(rect),
   });
-  const data = (await resp.json()) as APIResponse<MediaFileRef>;
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `crop poster failed: ${resp.status}`);
-  }
+  const data = await readAPIResponse<MediaFileRef>(resp, "crop poster failed");
   return data.data;
 }
 
@@ -834,8 +755,8 @@ export async function uploadAsset(file: File) {
     durationMs,
     message: data.message,
   });
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `upload asset failed: ${resp.status}`);
+  if (data.code !== 0) {
+    throw new Error(data.message || "upload asset failed");
   }
   return data.data;
 }
@@ -868,8 +789,8 @@ export async function uploadReviewAsset(id: number, target: "cover" | "poster" |
     message: data.message,
     key: data.data?.key ?? null,
   });
-  if (!resp.ok || data.code !== 0) {
-    throw new Error(data.message || `upload review asset failed: ${resp.status}`);
+  if (data.code !== 0) {
+    throw new Error(data.message || "upload review asset failed");
   }
   return data.data;
 }

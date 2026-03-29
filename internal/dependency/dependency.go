@@ -16,10 +16,10 @@ type Dependency struct {
 	Refresh bool
 }
 
-func Resolve(cli client.IHTTPClient, deps []*Dependency) error {
+func Resolve(ctx context.Context, cli client.IHTTPClient, deps []*Dependency) error {
 	m := downloadmgr.NewManager(cli)
 	for _, dep := range deps {
-		if err := handleFileDownload(context.Background(), m, dep); err != nil {
+		if err := handleFileDownload(ctx, m, dep); err != nil {
 			return fmt.Errorf("download link:%s to target:%s failed, err:%w", dep.URL, dep.Target, err)
 		}
 	}

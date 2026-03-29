@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -77,11 +78,11 @@ func buildRulesetTestCleaner(configPath string, ruleset string, override string)
 		}
 		return loadNumberCleanerFromPaths(c.DataDir, resolved, c.NumberCleanerConfig.OverrideRulePath)
 	}
-	cli, err := buildHTTPClient(c)
+	cli, err := buildHTTPClient(context.Background(), c)
 	if err != nil {
 		return nil, fmt.Errorf("build http client failed: %w", err)
 	}
-	cleaner, _, err := buildNumberCleaner(cli, c)
+	cleaner, _, err := buildNumberCleaner(context.Background(), cli, c)
 	if err != nil {
 		return nil, err
 	}

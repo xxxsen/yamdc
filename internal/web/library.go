@@ -129,51 +129,51 @@ func (a *API) handleListLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.scanLibrary()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeListLibraryFailed, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": items})
+	writeSuccess(w, http.StatusOK, "ok", items)
 }
 
 func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 	pathValue := strings.TrimSpace(r.URL.Query().Get("path"))
 	if pathValue == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing library path"})
+		writeFail(w, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	relPath, absPath, err := a.resolveLibraryPath(pathValue)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeResolveLibraryPathFailed, err.Error())
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		detail, err := a.readLibraryDetail(relPath, absPath)
 		if err != nil {
-			status := http.StatusInternalServerError
 			if os.IsNotExist(err) {
-				status = http.StatusNotFound
+				writeFail(w, errCodeLibraryItemNotFound, err.Error())
+				return
 			}
-			writeJSON(w, status, map[string]interface{}{"code": 1, "message": err.Error()})
+			writeFail(w, errCodeLibraryItemReadFailed, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": detail})
+		writeSuccess(w, http.StatusOK, "ok", detail)
 	case http.MethodPatch:
 		var req struct {
 			Meta libraryMeta `json:"meta"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid json body"})
+			writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 			return
 		}
 		detail, err := a.updateLibraryItem(relPath, absPath, req.Meta)
 		if err != nil {
 			logutil.GetLogger(r.Context()).Warn("library item update failed", zap.String("path", relPath), zap.Error(err))
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+			writeFail(w, errCodeLibraryUpdateFailed, err.Error())
 			return
 		}
 		logutil.GetLogger(r.Context()).Info("library item updated", zap.String("path", relPath))
-		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library item updated", "data": detail})
+		writeSuccess(w, http.StatusOK, "library item updated", detail)
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -182,24 +182,24 @@ func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 	pathValue := strings.TrimSpace(r.URL.Query().Get("path"))
 	if pathValue == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing file path"})
+		writeFail(w, errCodeMissingFilePath, "missing file path")
 		return
 	}
 	relPath, absPath, err := a.resolveLibraryPath(pathValue)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeResolveLibraryPathFailed, err.Error())
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
 		info, err := os.Stat(absPath)
 		if err != nil || info.IsDir() {
-			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
+			writeFail(w, errCodeLibraryFileNotFound, "library file not found")
 			return
 		}
 		file, err := os.Open(absPath)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "open library file failed"})
+			writeFail(w, errCodeLibraryFileOpenFailed, "open library file failed")
 			return
 		}
 		defer file.Close()
@@ -210,32 +210,32 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		info, err := os.Stat(absPath)
 		if err != nil || info.IsDir() {
-			writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "library file not found"})
+			writeFail(w, errCodeLibraryFileNotFound, "library file not found")
 			return
 		}
 		if !strings.Contains(strings.ToLower(relPath), "/extrafanart/") {
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "only extrafanart files can be deleted"})
+			writeFail(w, errCodeLibraryFileDeleteDenied, "only extrafanart files can be deleted")
 			return
 		}
 		if err := os.Remove(absPath); err != nil {
 			logutil.GetLogger(r.Context()).Error("library file delete failed", zap.String("path", relPath), zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "delete library file failed"})
+			writeFail(w, errCodeLibraryFileDeleteFailed, "delete library file failed")
 			return
 		}
 		itemAbsPath := filepath.Dir(filepath.Dir(absPath))
 		itemRelPath, err := filepath.Rel(a.saveDir, itemAbsPath)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+			writeFail(w, errCodeLibraryDetailReloadFailed, err.Error())
 			return
 		}
 		detail, err := a.readLibraryDetail(filepath.ToSlash(itemRelPath), itemAbsPath)
 		if err != nil {
 			logutil.GetLogger(r.Context()).Error("library detail reload after file delete failed", zap.String("path", relPath), zap.Error(err))
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
+			writeFail(w, errCodeLibraryDetailReloadFailed, err.Error())
 			return
 		}
 		logutil.GetLogger(r.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", filepath.ToSlash(itemRelPath)))
-		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library file deleted", "data": detail})
+		writeSuccess(w, http.StatusOK, "library file deleted", detail)
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -250,31 +250,31 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
 	variantKey := strings.TrimSpace(r.URL.Query().Get("variant"))
 	if itemPath == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing library path"})
+		writeFail(w, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	if kind != "poster" && kind != "cover" && kind != "fanart" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid asset kind"})
+		writeFail(w, errCodeInvalidAssetKind, "invalid asset kind")
 		return
 	}
 	relPath, absPath, err := a.resolveLibraryPath(itemPath)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeResolveLibraryPathFailed, err.Error())
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid upload file"})
+		writeFail(w, errCodeInvalidUploadFile, "invalid upload file")
 		return
 	}
 	defer file.Close()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "read upload file failed"})
+		writeFail(w, errCodeReadUploadFileFailed, "read upload file failed")
 		return
 	}
 	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "upload file is not an image"})
+		writeFail(w, errCodeUploadFileNotImage, "upload file is not an image")
 		return
 	}
 	detail, err := a.replaceLibraryArtwork(relPath, absPath, variantKey, kind, header.Filename, data)
@@ -286,7 +286,7 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 			zap.String("file_name", header.Filename),
 			zap.Error(err),
 		)
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeLibraryAssetReplaceFailed, err.Error())
 		return
 	}
 	logutil.GetLogger(r.Context()).Info("library asset replaced",
@@ -295,7 +295,7 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 		zap.String("kind", kind),
 		zap.String("file_name", header.Filename),
 	)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library asset replaced", "data": detail})
+	writeSuccess(w, http.StatusOK, "library asset replaced", detail)
 }
 
 func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
@@ -306,12 +306,12 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 	itemPath := strings.TrimSpace(r.URL.Query().Get("path"))
 	variantKey := strings.TrimSpace(r.URL.Query().Get("variant"))
 	if itemPath == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing library path"})
+		writeFail(w, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	relPath, absPath, err := a.resolveLibraryPath(itemPath)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeResolveLibraryPathFailed, err.Error())
 		return
 	}
 	var req struct {
@@ -321,11 +321,11 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 		Height int `json:"height"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid json body"})
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Width <= 0 || req.Height <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid crop rectangle"})
+		writeFail(w, errCodeInvalidCropRectangle, "invalid crop rectangle")
 		return
 	}
 	detail, err := a.cropLibraryPosterFromCover(relPath, absPath, variantKey, req.X, req.Y, req.Width, req.Height)
@@ -339,7 +339,7 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 			zap.Int("height", req.Height),
 			zap.Error(err),
 		)
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		writeFail(w, errCodeLibraryPosterCropFailed, err.Error())
 		return
 	}
 	logutil.GetLogger(r.Context()).Info("library poster cropped",
@@ -350,7 +350,7 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 		zap.Int("width", req.Width),
 		zap.Int("height", req.Height),
 	)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library poster cropped", "data": detail})
+	writeSuccess(w, http.StatusOK, "library poster cropped", detail)
 }
 
 func (a *API) scanLibrary() ([]libraryListItem, error) {

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -145,8 +144,8 @@ func precheckDirsAction(_ context.Context, ysctx *YamdcStartContext) error {
 	return precheckDir(ysctx.Config)
 }
 
-func buildHTTPClientAction(_ context.Context, ysctx *YamdcStartContext) error {
-	cli, err := buildHTTPClient(ysctx.Config)
+func buildHTTPClientAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	cli, err := buildHTTPClient(ctx, ysctx.Config)
 	if err != nil {
 		return err
 	}
@@ -154,12 +153,12 @@ func buildHTTPClientAction(_ context.Context, ysctx *YamdcStartContext) error {
 	return nil
 }
 
-func initDependenciesAction(_ context.Context, ysctx *YamdcStartContext) error {
-	return initDependencies(ysctx.HTTPClient, ysctx.Config.DataDir, ysctx.Config.Dependencies)
+func initDependenciesAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	return initDependencies(ctx, ysctx.HTTPClient, ysctx.Config.DataDir, ysctx.Config.Dependencies)
 }
 
-func buildAIEngineAction(_ context.Context, ysctx *YamdcStartContext) error {
-	engine, err := buildAIEngine(ysctx.HTTPClient, ysctx.Config)
+func buildAIEngineAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	engine, err := buildAIEngine(ctx, ysctx.HTTPClient, ysctx.Config)
 	if err != nil {
 		return err
 	}
@@ -177,7 +176,7 @@ func buildCacheStoreAction(_ context.Context, ysctx *YamdcStartContext) error {
 }
 
 func buildTranslatorAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	tr, err := buildTranslator(ysctx.Config, ysctx.AIEngine)
+	tr, err := buildTranslator(ctx, ysctx.Config, ysctx.AIEngine)
 	if err != nil {
 		if ysctx.Logger != nil {
 			ysctx.Logger.Error("setup translator failed", zap.Error(err))
@@ -191,7 +190,7 @@ func buildTranslatorAction(ctx context.Context, ysctx *YamdcStartContext) error 
 }
 
 func buildFaceRecognizerAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	faceRec, err := buildFaceRecognizer(ysctx.Config, filepath.Join(ysctx.Config.DataDir, "models"))
+	faceRec, err := buildFaceRecognizer(ctx, ysctx.Config, filepath.Join(ysctx.Config.DataDir, "models"))
 	if err != nil {
 		if ysctx.Logger != nil {
 			ysctx.Logger.Error("init face recognizer failed", zap.Error(err))
@@ -204,12 +203,12 @@ func buildFaceRecognizerAction(ctx context.Context, ysctx *YamdcStartContext) er
 	return nil
 }
 
-func buildSearchersAction(_ context.Context, ysctx *YamdcStartContext) error {
-	ss, err := buildSearcher(ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.Plugins, ysctx.Config.PluginConfig)
+func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	ss, err := buildSearcher(ctx, ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.Plugins, ysctx.Config.PluginConfig)
 	if err != nil {
 		return err
 	}
-	catSs, err := buildCatSearcher(ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.CategoryPlugins, ysctx.Config.PluginConfig)
+	catSs, err := buildCatSearcher(ctx, ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.CategoryPlugins, ysctx.Config.PluginConfig)
 	if err != nil {
 		return err
 	}
@@ -218,8 +217,8 @@ func buildSearchersAction(_ context.Context, ysctx *YamdcStartContext) error {
 	return nil
 }
 
-func buildProcessorsAction(_ context.Context, ysctx *YamdcStartContext) error {
-	ps, err := buildProcessor(appdeps.Runtime{
+func buildProcessorsAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	ps, err := buildProcessor(ctx, appdeps.Runtime{
 		HTTPClient: ysctx.HTTPClient,
 		Storage:    ysctx.CacheStore,
 		Translator: ysctx.Translator,
@@ -233,8 +232,8 @@ func buildProcessorsAction(_ context.Context, ysctx *YamdcStartContext) error {
 	return nil
 }
 
-func buildNumberCleanerAction(_ context.Context, ysctx *YamdcStartContext) error {
-	cleaner, syncLoop, err := buildNumberCleaner(ysctx.HTTPClient, ysctx.Config)
+func buildNumberCleanerAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	cleaner, syncLoop, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
 	if err != nil {
 		return err
 	}
@@ -334,7 +333,11 @@ func serveHTTPAction(_ context.Context, ysctx *YamdcStartContext) error {
 	if ysctx.Logger != nil {
 		ysctx.Logger.Info("yamdc server start", zap.String("addr", addr), zap.String("scan_dir", ysctx.Config.ScanDir), zap.String("data_dir", ysctx.Config.DataDir))
 	}
-	if err := http.ListenAndServe(addr, ysctx.API.Handler()); err != nil {
+	engine, err := ysctx.API.Engine(addr)
+	if err != nil {
+		return fmt.Errorf("init web engine failed, err:%w", err)
+	}
+	if err := engine.Run(); err != nil {
 		return fmt.Errorf("listen and serve failed, err:%w", err)
 	}
 	return nil

@@ -109,10 +109,10 @@ func buildCapture(c *config.Config, storage store.IStorage, ss []searcher.ISearc
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
+func buildCatSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
-		ss, err := buildSearcher(cli, storage, c, plg.Plugins, m)
+		ss, err := buildSearcher(ctx, cli, storage, c, plg.Plugins, m)
 		if err != nil {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func buildCatSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.
 	return rs, nil
 }
 
-func buildSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
+func buildSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
@@ -132,7 +132,7 @@ func buildSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Con
 			plugc = defc
 		}
 		if plugc.Disable {
-			logutil.GetLogger(context.Background()).Info("plugin is disabled, skip create", zap.String("plugin", name))
+			logutil.GetLogger(ctx).Info("plugin is disabled, skip create", zap.String("plugin", name))
 			continue
 		}
 		plg, err := factory.CreatePlugin(name, struct{}{})
@@ -147,13 +147,13 @@ func buildSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Con
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(context.Background())))
+		logutil.GetLogger(ctx).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(ctx)))
 		rs = append(rs, sr)
 	}
 	return rs, nil
 }
 
-func buildProcessor(deps appdeps.Runtime, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(ctx context.Context, deps appdeps.Runtime, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
@@ -164,7 +164,7 @@ func buildProcessor(deps appdeps.Runtime, hs []string, m map[string]config.Handl
 			handlec = defc
 		}
 		if handlec.Disable {
-			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
+			logutil.GetLogger(ctx).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
 		h, err := handler.CreateHandler(name, handlec.Args, deps)
@@ -172,7 +172,7 @@ func buildProcessor(deps appdeps.Runtime, hs []string, m map[string]config.Handl
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
 		p := processor.NewProcessor(name, h)
-		logutil.GetLogger(context.Background()).Info("create processor succ", zap.String("handler", name))
+		logutil.GetLogger(ctx).Info("create processor succ", zap.String("handler", name))
 		rs = append(rs, p)
 	}
 	return rs, nil
@@ -231,7 +231,7 @@ func normalizeDirPaths(c *config.Config) error {
 	return nil
 }
 
-func initDependencies(cli client.IHTTPClient, datadir string, cdeps []config.Dependency) error {
+func initDependencies(ctx context.Context, cli client.IHTTPClient, datadir string, cdeps []config.Dependency) error {
 	deps := make([]*dependency.Dependency, 0, len(cdeps))
 	for _, item := range cdeps {
 		deps = append(deps, &dependency.Dependency{
@@ -240,10 +240,10 @@ func initDependencies(cli client.IHTTPClient, datadir string, cdeps []config.Dep
 			Refresh: item.Refresh,
 		})
 	}
-	return dependency.Resolve(cli, deps)
+	return dependency.Resolve(ctx, cli, deps)
 }
 
-func buildFaceRecognizer(c *config.Config, models string) (face.IFaceRec, error) {
+func buildFaceRecognizer(ctx context.Context, c *config.Config, models string) (face.IFaceRec, error) {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
 	if c.SwitchConfig.EnablePigoFaceRecognizer {
@@ -254,10 +254,10 @@ func buildFaceRecognizer(c *config.Config, models string) (face.IFaceRec, error)
 	for index, creator := range faceRecCreator {
 		impl, err := creator()
 		if err != nil {
-			logutil.GetLogger(context.Background()).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
+			logutil.GetLogger(ctx).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
 			continue
 		}
-		logutil.GetLogger(context.Background()).Info("use face recognizer", zap.String("name", impl.Name()))
+		logutil.GetLogger(ctx).Info("use face recognizer", zap.String("name", impl.Name()))
 		impls = append(impls, impl)
 	}
 	if len(impls) == 0 {
@@ -266,7 +266,7 @@ func buildFaceRecognizer(c *config.Config, models string) (face.IFaceRec, error)
 	return face.NewGroup(impls), nil
 }
 
-func buildHTTPClient(c *config.Config) (client.IHTTPClient, error) {
+func buildHTTPClient(ctx context.Context, c *config.Config) (client.IHTTPClient, error) {
 	opts := make([]client.Option, 0, 4)
 	if c.NetworkConfig.Timeout > 0 {
 		opts = append(opts, client.WithTimeout(time.Duration(c.NetworkConfig.Timeout)*time.Second))
@@ -289,18 +289,18 @@ func buildHTTPClient(c *config.Config) (client.IHTTPClient, error) {
 				continue
 			}
 			domainList = append(domainList, domain)
-			logutil.GetLogger(context.Background()).Debug("add domain to flaresolverr", zap.String("domain", domain))
+			logutil.GetLogger(ctx).Debug("add domain to flaresolverr", zap.String("domain", domain))
 		}
 		flarerr.MustAddToSolverList(bpc, domainList...)
 		clientImpl = bpc
-		logutil.GetLogger(context.Background()).Info("enable flaresolverr client")
+		logutil.GetLogger(ctx).Info("enable flaresolverr client")
 	}
 	return clientImpl, nil
 }
 
-func buildAIEngine(cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine, error) {
+func buildAIEngine(ctx context.Context, cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine, error) {
 	if len(c.AIEngine.Name) == 0 {
-		logutil.GetLogger(context.Background()).Info("ai engine is disabled, skip init")
+		logutil.GetLogger(ctx).Info("ai engine is disabled, skip init")
 		return nil, nil
 	}
 	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args, aiengine.WithHTTPClient(cli))
@@ -310,7 +310,7 @@ func buildAIEngine(cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine
 	return engine, nil
 }
 
-func buildTranslator(c *config.Config, engine aiengine.IAIEngine) (translator.ITranslator, error) {
+func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIEngine) (translator.ITranslator, error) {
 	if !c.TranslateConfig.Enable {
 		return nil, nil
 	}
@@ -335,7 +335,7 @@ func buildTranslator(c *config.Config, engine aiengine.IAIEngine) (translator.IT
 	for _, name := range engineNames {
 		e, ok := allEngines[strings.ToLower(name)]
 		if !ok {
-			logutil.GetLogger(context.Background()).Error("spec engine not found, skip", zap.String("name", name))
+			logutil.GetLogger(ctx).Error("spec engine not found, skip", zap.String("name", name))
 			continue
 		}
 		useEngines = append(useEngines, e)
@@ -346,7 +346,7 @@ func buildTranslator(c *config.Config, engine aiengine.IAIEngine) (translator.IT
 	return translator.NewGroup(useEngines...), nil
 }
 
-func buildNumberCleaner(cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, func(context.Context), error) {
+func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, func(context.Context), error) {
 	cc := c.NumberCleanerConfig
 	if cc.Disabled {
 		return numbercleaner.NewPassthroughCleaner(), nil, nil
@@ -375,20 +375,20 @@ func buildNumberCleaner(cli client.IHTTPClient, c *config.Config) (numbercleaner
 	case numbercleaner.SourceTypeRemote:
 		manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeRemote, cc.RemoteBundleURL, "")
 		var err error
-		basePath, _, err = manager.SyncRemote(context.Background())
+		basePath, _, err = manager.SyncRemote(ctx)
 		if err != nil {
 			syncErr := err
 			basePath, err = manager.CurrentRulePath()
 			if err != nil {
 				return nil, nil, fmt.Errorf("sync remote number cleaner bundle failed: %w", syncErr)
 			}
-			logutil.GetLogger(context.Background()).Warn("sync remote number cleaner bundle failed, use active local bundle", zap.Error(syncErr))
+			logutil.GetLogger(ctx).Warn("sync remote number cleaner bundle failed, use active local bundle", zap.Error(syncErr))
 		}
 		syncLoop = buildNumberCleanerRemoteSyncLoop(cli, c, manager)
 	default:
 		return nil, nil, fmt.Errorf("unsupported number cleaner source type: %s", sourceType)
 	}
-	logutil.GetLogger(context.Background()).Info("load number cleaner base rule", zap.String("path", basePath))
+	logutil.GetLogger(ctx).Info("load number cleaner base rule", zap.String("path", basePath))
 	base, err := numbercleaner.LoadRuleSetFromPath(basePath)
 	if err != nil {
 		return nil, nil, err
@@ -397,7 +397,7 @@ func buildNumberCleaner(cli client.IHTTPClient, c *config.Config) (numbercleaner
 	if len(strings.TrimSpace(cc.OverrideRulePath)) != 0 {
 		overridePath, err := resolveRuleSourcePath(c.DataDir, cc.OverrideRulePath)
 		if err == nil {
-			logutil.GetLogger(context.Background()).Info("load number cleaner override rule", zap.String("path", overridePath))
+			logutil.GetLogger(ctx).Info("load number cleaner override rule", zap.String("path", overridePath))
 			override, err := numbercleaner.LoadRuleSetFromPath(overridePath)
 			if err != nil {
 				return nil, nil, err
