@@ -1293,6 +1293,64 @@ textarea.input {
   margin-bottom: 14px;
 }
 
+.review-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(91, 67, 44, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.review-bulk-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.review-bulk-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.review-bulk-count {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.review-bulk-approve-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-color: rgba(180, 79, 45, 0.3);
+  background: linear-gradient(180deg, rgba(198, 94, 54, 0.96), rgba(180, 79, 45, 0.94));
+  color: #fff8f4;
+  box-shadow: 0 8px 18px rgba(180, 79, 45, 0.18);
+}
+
+.review-bulk-approve-btn:hover {
+  background: linear-gradient(180deg, rgba(166, 63, 28, 0.98), rgba(139, 54, 24, 0.96));
+}
+
+.review-bulk-delete-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-color: rgba(157, 43, 43, 0.18);
+  color: var(--danger);
+}
+
 .review-list-kicker {
   font-size: 12px;
   letter-spacing: 0.16em;
@@ -1335,8 +1393,8 @@ textarea.input {
 
 .review-job-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
   gap: 12px;
   padding: 12px;
   border-radius: 14px;
@@ -1360,6 +1418,17 @@ textarea.input {
   border-color: rgba(180, 79, 45, 0.26);
   background: rgba(180, 79, 45, 0.1);
   box-shadow: 0 10px 22px rgba(180, 79, 45, 0.08);
+}
+
+.review-job-card[data-selected="true"] {
+  border-color: rgba(180, 79, 45, 0.2);
+  background: rgba(180, 79, 45, 0.08);
+}
+
+.review-job-card-select {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 3px;
 }
 
 .review-job-card-main {

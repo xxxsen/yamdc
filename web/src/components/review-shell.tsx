@@ -164,8 +164,9 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
   const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [cropOpen, setCropOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<number[] | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
@@ -178,12 +179,17 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const uploadActiveRef = useRef(false);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
   const moveRunning = mediaStatus?.move.status === "running";
   const syncRunning = mediaStatus?.sync.status === "running";
   const shouldPollMediaStatus = moveRunning || syncRunning;
+  const selectableJobs = items;
+  const selectedCount = selectedJobIds.size;
+  const allSelectableChecked = selectableJobs.length > 0 && selectableJobs.every((job) => selectedJobIds.has(job.id));
+  const hasPartialSelection = selectedCount > 0 && !allSelectableChecked;
 
   const refreshMediaStatus = useEffectEvent(async () => {
     try {
@@ -204,6 +210,13 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     }, 3000);
     return () => window.clearInterval(timer);
   }, [shouldPollMediaStatus]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+    selectAllRef.current.indeterminate = hasPartialSelection;
+  }, [hasPartialSelection]);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
@@ -245,9 +258,18 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
-  const removeJobFromList = (jobID: number) => {
-    const next = items.filter((item) => item.id !== jobID);
+  const removeJobsFromList = (jobIDs: number[]) => {
+    const removedIDs = new Set(jobIDs);
+    const next = items.filter((item) => !removedIDs.has(item.id));
     setItems(next);
+    setSelectedJobIds((prev) => {
+      const nextSelectedIDs = new Set(Array.from(prev).filter((id) => !removedIDs.has(id)));
+      return nextSelectedIDs;
+    });
+    const currentSelected = selectedRef.current;
+    if (currentSelected && next.some((item) => item.id === currentSelected.id)) {
+      return;
+    }
     const nextSelected = next[0] ?? null;
     if (!nextSelected) {
       setSelected(null);
@@ -261,6 +283,10 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
       return;
     }
     loadDetail(nextSelected);
+  };
+
+  const removeJobFromList = (jobID: number) => {
+    removeJobsFromList([jobID]);
   };
 
   const updateMeta = (patch: Partial<ReviewMeta>) => {
@@ -334,11 +360,88 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
+  const handleToggleSelectAll = () => {
+    setSelectedJobIds((prev) => {
+      if (selectableJobs.length === 0) {
+        return prev;
+      }
+      if (selectableJobs.every((job) => prev.has(job.id))) {
+        return new Set<number>();
+      }
+      return new Set(selectableJobs.map((job) => job.id));
+    });
+  };
+
+  const handleToggleSelectJob = (jobID: number) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobID)) {
+        next.delete(jobID);
+      } else {
+        next.add(jobID);
+      }
+      return next;
+    });
+  };
+
+  const handleImportSelected = () => {
+    if (selectedCount === 0) {
+      return;
+    }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可批量审批入库");
+      return;
+    }
+    startTransition(async () => {
+      const targetIDs = Array.from(selectedJobIds);
+      if (targetIDs.length === 0) {
+        return;
+      }
+      if (selected && meta && selectedJobIds.has(selected.id)) {
+        const ok = await persistReview({ silent: true });
+        if (!ok) {
+          return;
+        }
+      }
+      const successIDs: number[] = [];
+      const failures: string[] = [];
+      for (let index = 0; index < targetIDs.length; index += 1) {
+        const id = targetIDs[index];
+        try {
+          setMessage(`批量审批中 ${index + 1}/${targetIDs.length}...`);
+          await importReviewJob(id);
+          successIDs.push(id);
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : `任务 #${id} 入库失败`);
+        }
+      }
+      if (successIDs.length > 0) {
+        removeJobsFromList(successIDs);
+      }
+      if (failures.length === 0) {
+        setMessage(`批量审批完成，已入库 ${successIDs.length} 项`);
+        return;
+      }
+      if (successIDs.length === 0) {
+        setMessage(failures[0] ?? "批量审批失败");
+        return;
+      }
+      setMessage(`已入库 ${successIDs.length} 项，${failures.length} 项失败`);
+    });
+  };
+
   const handleDelete = () => {
     if (!selected) {
       return;
     }
-    setDeleteConfirmOpen(true);
+    setDeleteTargetIds([selected.id]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedCount === 0) {
+      return;
+    }
+    setDeleteTargetIds(Array.from(selectedJobIds));
   };
 
   const handleRestoreRaw = () => {
@@ -370,19 +473,36 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   };
 
   const confirmDelete = () => {
-    if (!selected) {
+    if (!deleteTargetIds || deleteTargetIds.length === 0) {
       return;
     }
-    setDeleteConfirmOpen(false);
+    const targetIDs = deleteTargetIds;
+    setDeleteTargetIds(null);
     startTransition(async () => {
-      try {
-        setMessage("删除任务...");
-        await deleteJob(selected.id);
-        removeJobFromList(selected.id);
-        setMessage("任务已删除");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "删除失败");
+      const successIDs: number[] = [];
+      const failures: string[] = [];
+      for (let index = 0; index < targetIDs.length; index += 1) {
+        const id = targetIDs[index];
+        try {
+          setMessage(targetIDs.length > 1 ? `批量删除中 ${index + 1}/${targetIDs.length}...` : "删除任务...");
+          await deleteJob(id);
+          successIDs.push(id);
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : `任务 #${id} 删除失败`);
+        }
       }
+      if (successIDs.length > 0) {
+        removeJobsFromList(successIDs);
+      }
+      if (failures.length === 0) {
+        setMessage(targetIDs.length > 1 ? `已删除 ${successIDs.length} 项` : "任务已删除");
+        return;
+      }
+      if (successIDs.length === 0) {
+        setMessage(failures[0] ?? "删除失败");
+        return;
+      }
+      setMessage(`已删除 ${successIDs.length} 项，${failures.length} 项失败`);
     });
   };
 
@@ -573,6 +693,42 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
               {moveRunning ? <p className="review-list-subtitle">媒体库正在同步迁移，审批按钮已临时锁定。</p> : null}
             </div>
           </div>
+            <div className="review-bulk-toolbar">
+              <label className="review-bulk-select-all">
+                <input
+                  ref={selectAllRef}
+                type="checkbox"
+                checked={allSelectableChecked}
+                disabled={items.length === 0 || isPending || moveRunning}
+                title="选择当前列表中的全部 review 任务"
+                onChange={handleToggleSelectAll}
+                />
+                <span>全选</span>
+              </label>
+              <div className="review-bulk-toolbar-actions">
+                {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
+                <button
+                  type="button"
+                  className="btn review-inline-icon-btn review-bulk-approve-btn"
+                  onClick={handleImportSelected}
+                  disabled={selectedCount === 0 || isPending || moveRunning}
+                  aria-label="批量审批"
+                  title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
+                >
+                  <Check size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn review-inline-icon-btn review-bulk-delete-btn"
+                  onClick={handleDeleteSelected}
+                  disabled={selectedCount === 0 || isPending}
+                  aria-label="批量删除"
+                  title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
           <div className="review-job-list">
             {items.length === 0 ? <div className="review-empty-state">当前没有待 review 的任务</div> : null}
             {items.map((job, index) => (
@@ -580,7 +736,17 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                 key={job.id}
                 className="panel review-job-card"
                 data-active={selected?.id === job.id}
+                data-selected={selectedJobIds.has(job.id)}
               >
+                <div className="review-job-card-select">
+                  <input
+                    type="checkbox"
+                    checked={selectedJobIds.has(job.id)}
+                    disabled={isPending || moveRunning}
+                    title={moveRunning ? "媒体库移动进行中，暂不可选择" : "选择任务"}
+                    onChange={() => handleToggleSelectJob(job.id)}
+                  />
+                </div>
                 <button className="review-job-card-main" onClick={() => loadDetail(job)} disabled={isPending}>
                   <div className="review-job-card-topline">
                     <span className="review-job-card-index">#{index + 1}</span>
@@ -898,17 +1064,25 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
           </div>
         </div>
       ) : null}
-      {deleteConfirmOpen && selected ? (
-        <div className="review-preview-overlay" onClick={() => setDeleteConfirmOpen(false)}>
+      {deleteTargetIds && deleteTargetIds.length > 0 ? (
+        <div className="review-preview-overlay" onClick={() => setDeleteTargetIds(null)}>
           <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="review-confirm-title">确认删除</div>
             <div className="review-confirm-body">
-              这会删除当前任务以及对应的源文件。
-              <br />
-              <span className="review-confirm-path">{selected.rel_path}</span>
+              {deleteTargetIds.length > 1 ? (
+                <>
+                  这会删除已选中的 {deleteTargetIds.length} 个任务以及各自对应的源文件。
+                </>
+              ) : (
+                <>
+                  这会删除当前任务以及对应的源文件。
+                  <br />
+                  <span className="review-confirm-path">{selected?.rel_path}</span>
+                </>
+              )}
             </div>
             <div className="review-confirm-actions">
-              <button type="button" className="btn" onClick={() => setDeleteConfirmOpen(false)}>
+              <button type="button" className="btn" onClick={() => setDeleteTargetIds(null)}>
                 取消
               </button>
               <button type="button" className="btn btn-primary" onClick={confirmDelete} disabled={isPending}>
