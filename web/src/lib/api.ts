@@ -439,6 +439,29 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
   return data.data;
 }
 
+export async function cropLibraryPosterFromCover(
+  path: string,
+  variant: string,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  const query = new URLSearchParams({ path });
+  if (variant) {
+    query.set("variant", variant);
+  }
+  const resp = await fetch(`${getBaseURL()}/api/library/poster-crop?${query.toString()}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(rect),
+  });
+  const data = (await resp.json()) as APIResponse<LibraryDetail>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `crop library poster failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
 export async function deleteLibraryFile(path: string) {
   const query = new URLSearchParams({ path });
   const resp = await fetch(`${getBaseURL()}/api/library/file?${query.toString()}`, {

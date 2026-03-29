@@ -182,6 +182,8 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
   const selectedIndex = selected ? items.findIndex((item) => item.id === selected.id) : -1;
   const moveRunning = mediaStatus?.move.status === "running";
+  const syncRunning = mediaStatus?.sync.status === "running";
+  const shouldPollMediaStatus = moveRunning || syncRunning;
 
   const refreshMediaStatus = useEffectEvent(async () => {
     try {
@@ -193,12 +195,15 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   });
 
   useEffect(() => {
+    if (!shouldPollMediaStatus) {
+      return;
+    }
     void refreshMediaStatus();
     const timer = window.setInterval(() => {
       void refreshMediaStatus();
     }, 3000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [shouldPollMediaStatus]);
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);

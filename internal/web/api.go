@@ -41,6 +41,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/api/library/item", a.handleLibraryItem)
 	mux.HandleFunc("/api/library/file", a.handleLibraryFile)
 	mux.HandleFunc("/api/library/asset", a.handleLibraryAsset)
+	mux.HandleFunc("/api/library/poster-crop", a.handleLibraryPosterCrop)
 	mux.HandleFunc("/api/media-library", a.handleMediaLibraryList)
 	mux.HandleFunc("/api/media-library/item", a.handleMediaLibraryItem)
 	mux.HandleFunc("/api/media-library/file", a.handleMediaLibraryFile)

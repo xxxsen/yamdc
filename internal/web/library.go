@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
+	stdimage "image"
 	"io"
 	"io/fs"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/nfo"
 )
 
@@ -274,6 +276,44 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library asset replaced", "data": detail})
+}
+
+func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	itemPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	variantKey := strings.TrimSpace(r.URL.Query().Get("variant"))
+	if itemPath == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "missing library path"})
+		return
+	}
+	relPath, absPath, err := a.resolveLibraryPath(itemPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		return
+	}
+	var req struct {
+		X      int `json:"x"`
+		Y      int `json:"y"`
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid json body"})
+		return
+	}
+	if req.Width <= 0 || req.Height <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid crop rectangle"})
+		return
+	}
+	detail, err := a.cropLibraryPosterFromCover(relPath, absPath, variantKey, req.X, req.Y, req.Width, req.Height)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library poster cropped", "data": detail})
 }
 
 func (a *API) scanLibrary() ([]libraryListItem, error) {
@@ -616,6 +656,90 @@ func (a *API) replaceLibraryArtwork(relPath string, absPath string, variantKey s
 		mov.Fanart = targetName
 		mov.Thumb = targetName
 	}
+	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
+		return nil, err
+	}
+	return a.readLibraryDetail(relPath, absPath)
+}
+
+func (a *API) cropLibraryPosterFromCover(relPath string, absPath string, variantKey string, x int, y int, width int, height int) (*libraryDetail, error) {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("library item is not a directory")
+	}
+	detail, err := a.readLibraryDetail(relPath, absPath)
+	if err != nil {
+		return nil, err
+	}
+	variant, ok := pickLibraryVariant(detail, variantKey)
+	if !ok {
+		return nil, fmt.Errorf("library variant not found")
+	}
+	coverPath := firstNonEmpty(
+		variant.CoverPath,
+		variant.Meta.CoverPath,
+		variant.Meta.FanartPath,
+		variant.Meta.ThumbPath,
+		detail.Meta.CoverPath,
+		detail.Meta.FanartPath,
+		detail.Meta.ThumbPath,
+	)
+	if coverPath == "" {
+		return nil, fmt.Errorf("cover not found")
+	}
+	coverRelPath := coverPath
+	prefix := detail.Item.RelPath + "/"
+	if strings.HasPrefix(coverRelPath, prefix) {
+		coverRelPath = strings.TrimPrefix(coverRelPath, prefix)
+	}
+	coverRelPath = filepath.ToSlash(coverRelPath)
+	coverAbsPath := filepath.Join(absPath, filepath.FromSlash(coverRelPath))
+	raw, err := os.ReadFile(coverAbsPath)
+	if err != nil {
+		return nil, fmt.Errorf("read cover failed: %w", err)
+	}
+	img, err := imgutil.LoadImage(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode cover failed: %w", err)
+	}
+	rect := stdimage.Rect(x, y, x+width, y+height)
+	bounds := img.Bounds()
+	if rect.Min.X < bounds.Min.X || rect.Min.Y < bounds.Min.Y || rect.Max.X > bounds.Max.X || rect.Max.Y > bounds.Max.Y {
+		return nil, fmt.Errorf("crop rectangle out of bounds")
+	}
+	cropped, err := imgutil.CutImageViaRectangle(img, rect)
+	if err != nil {
+		return nil, fmt.Errorf("crop poster failed: %w", err)
+	}
+	croppedRaw, err := imgutil.WriteImageToBytes(cropped)
+	if err != nil {
+		return nil, fmt.Errorf("encode poster failed: %w", err)
+	}
+	ext := strings.ToLower(filepath.Ext(coverRelPath))
+	if _, ok := libraryImageExts[ext]; !ok {
+		ext = ".jpg"
+	}
+	targetName := pickArtworkTargetName(detail, variant, "poster", ext)
+	if strings.EqualFold(filepath.ToSlash(targetName), coverRelPath) {
+		targetName = fmt.Sprintf("%s-poster%s", firstNonEmpty(variant.BaseName, detail.Item.Number, detail.Item.Name), ext)
+	}
+	targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
+	if err := os.WriteFile(targetPath, croppedRaw, 0644); err != nil {
+		return nil, fmt.Errorf("write poster failed: %w", err)
+	}
+	mov := &nfo.Movie{}
+	nfoPath := selectLibraryVariantNFOPath(absPath, variant, detail.PrimaryVariantKey)
+	if variant.NFOAbsPath != "" {
+		nfoPath = variant.NFOAbsPath
+	}
+	if existing, parseErr := nfo.ParseMovie(nfoPath); parseErr == nil {
+		mov = existing
+	}
+	mov.Poster = targetName
+	mov.Art.Poster = targetName
 	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
 		return nil, err
 	}

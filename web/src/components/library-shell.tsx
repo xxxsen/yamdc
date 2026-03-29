@@ -1,10 +1,10 @@
 "use client";
 
-import { Plus, RefreshCw, Search, X } from "lucide-react";
-import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import { Crop, Plus, RefreshCw, Search, X } from "lucide-react";
+import { type PointerEvent as ReactPointerEvent, type SetStateAction, type SyntheticEvent, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
-import { deleteLibraryFile, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
+import { cropLibraryPosterFromCover, deleteLibraryFile, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
@@ -98,6 +98,8 @@ function taskPercent(state: TaskState | null) {
   }
   return Math.max(0, Math.min(100, Math.round((state.processed / state.total) * 100)));
 }
+
+const POSTER_ASPECT = 2 / 3;
 
 function TokenEditor({
   label,
@@ -195,8 +197,18 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [assetOverrides, setAssetOverrides] = useState<Record<string, string>>({});
+  const [assetVersions, setAssetVersions] = useState<Record<string, number>>({});
+  const [refreshRunning, setRefreshRunning] = useState(false);
+  const [refreshCompletedFlash, setRefreshCompletedFlash] = useState(false);
+  const [moveStarting, setMoveStarting] = useState(false);
+  const [moveCompletedFlash, setMoveCompletedFlash] = useState(false);
+  const [moveProgressVisible, setMoveProgressVisible] = useState(initialMediaStatus?.move.status === "running");
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
+  const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const detailRef = useRef<LibraryDetail | null>(initialDetail);
   const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
   const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
@@ -212,9 +224,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
       const haystack = [
         item.title,
         item.number,
-        item.rel_path,
-        item.name,
-        item.release_date,
         item.actors.join(" "),
       ]
         .join(" ")
@@ -222,9 +231,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
       return haystack.includes(query);
     });
 
-  const totalCount = items.length;
-  const nfoCount = items.filter((item) => item.has_nfo).length;
-  const artworkCount = items.filter((item) => item.poster_path || item.cover_path).length;
   const currentVariant = pickVariant(detail, selectedVariantKey);
   const showVariantSwitch = (detail?.variants.length ?? 0) > 1;
   const activeTitleValue = copyMode === "translated" ? draftMeta.title_translated : draftMeta.title;
@@ -243,6 +249,18 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const moveState = mediaStatus?.move ?? null;
   const moveRunning = moveState?.status === "running";
   const mediaSyncRunning = mediaStatus?.sync.status === "running";
+  const shouldPollMediaStatus = moveRunning || mediaSyncRunning;
+  const refreshBusy = refreshRunning;
+  const moveBusy = moveStarting || moveRunning;
+  const moveProgress = moveState ? taskPercent(moveState) : 0;
+  const refreshButtonLabel = refreshRunning ? "扫描中..." : refreshCompletedFlash ? "扫描完成" : "重新扫描库";
+  const moveButtonLabel = moveStarting
+    ? "启动中..."
+    : moveRunning
+      ? `移动中 ${moveState?.processed ?? 0}/${moveState?.total ?? 0}`
+      : moveCompletedFlash
+        ? "移动完成"
+        : "移动到媒体库";
 
   useEffect(() => {
     assetOverridesRef.current = assetOverrides;
@@ -272,12 +290,37 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   });
 
   useEffect(() => {
+    if (!shouldPollMediaStatus) {
+      return;
+    }
     void refreshMediaStatus();
     const timer = window.setInterval(() => {
       void refreshMediaStatus();
     }, 3000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [shouldPollMediaStatus]);
+
+  useEffect(() => {
+    if (moveRunning) {
+      setMoveProgressVisible(true);
+    }
+  }, [moveRunning]);
+
+  useEffect(() => {
+    if (!refreshCompletedFlash) {
+      return;
+    }
+    const timer = window.setTimeout(() => setRefreshCompletedFlash(false), 1000);
+    return () => window.clearTimeout(timer);
+  }, [refreshCompletedFlash]);
+
+  useEffect(() => {
+    if (!moveCompletedFlash) {
+      return;
+    }
+    const timer = window.setTimeout(() => setMoveCompletedFlash(false), 1000);
+    return () => window.clearTimeout(timer);
+  }, [moveCompletedFlash]);
 
   const updateDraftMeta = (updater: SetStateAction<LibraryMeta>) => {
     setDraftMeta((prev) => {
@@ -301,7 +344,24 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     });
   };
 
-  const resolveLibraryImageSrc = (path: string) => assetOverrides[path] ?? getLibraryFileURL(path);
+  const resolveLibraryImageSrc = (path: string) => {
+    const overrideURL = assetOverrides[path];
+    if (overrideURL) {
+      return overrideURL;
+    }
+    const version = assetVersions[path];
+    if (!version) {
+      return getLibraryFileURL(path);
+    }
+    return `${getLibraryFileURL(path)}&v=${version}`;
+  };
+
+  const bumpAssetVersion = (path: string) => {
+    if (!path) {
+      return;
+    }
+    setAssetVersions((prev) => ({ ...prev, [path]: Date.now() }));
+  };
 
   const clearAssetOverride = (path: string) => {
     setAssetOverrides((prev) => {
@@ -332,6 +392,10 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     lastSavedPathRef.current = next.item.rel_path;
     lastSavedMetaRef.current = serializeMeta(nextDraftMeta);
   };
+
+  const syncDetailFromEffect = useEffectEvent((next: LibraryDetail) => {
+    syncDetail(next);
+  });
 
   const persistMeta = (meta: LibraryMeta, messageText: string, options?: { silent?: boolean }) => {
     const currentDetail = detailRef.current;
@@ -399,43 +463,54 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     }
   }, [detail, items.length, selectedPath, startTransition]);
 
+  const refreshLibrary = async () => {
+    const nextItems = await listLibraryItems();
+    setItems(nextItems);
+    if (nextItems.length === 0) {
+      setDetail(null);
+      detailRef.current = null;
+      updateDraftMeta(cloneMeta(null));
+      setSelectedPath("");
+      setSelectedVariantKey("");
+      lastSavedPathRef.current = "";
+      lastSavedMetaRef.current = "";
+      setMessage("当前 savedir 里还没有已入库内容");
+      return;
+    }
+    const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
+    const nextDetail = await getLibraryItem(nextSelected);
+    syncDetail(nextDetail);
+  };
+
   const handleRefreshLibrary = () => {
+    setRefreshRunning(true);
     startTransition(async () => {
       try {
-        setMessage("重新扫描已入库目录...");
-        const nextItems = await listLibraryItems();
-        setItems(nextItems);
-        if (nextItems.length === 0) {
-          setDetail(null);
-          detailRef.current = null;
-          updateDraftMeta(cloneMeta(null));
-          setSelectedPath("");
-          setSelectedVariantKey("");
-          lastSavedPathRef.current = "";
-          lastSavedMetaRef.current = "";
-          setMessage("当前 savedir 里还没有已入库内容");
-          return;
-        }
-        const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
-        const nextDetail = await getLibraryItem(nextSelected);
-        syncDetail(nextDetail);
-        setMessage("已刷新 savedir");
+        await refreshLibrary();
+        setRefreshCompletedFlash(true);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "刷新已入库目录失败");
+      } finally {
+        setRefreshRunning(false);
       }
     });
   };
 
   const handleMoveToMediaLibrary = () => {
+    setMoveStarting(true);
+    setMoveProgressVisible(true);
+    setMoveCompletedFlash(false);
     startTransition(async () => {
       try {
-        setMessage("启动移动到媒体库...");
         await triggerMoveToMediaLibrary();
         const next = await getMediaLibraryStatus();
         setMediaStatus(next);
-        setMessage("已开始移动到媒体库");
+        setMoveProgressVisible(next.move.status === "running");
       } catch (error) {
+        setMoveProgressVisible(false);
         setMessage(error instanceof Error ? error.message : "启动移动到媒体库失败");
+      } finally {
+        setMoveStarting(false);
       }
     });
   };
@@ -444,9 +519,9 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
 
   useEffect(() => {
     if (prevMoveRunningRef.current && !moveRunning) {
+      setRefreshRunning(true);
       startTransition(async () => {
         try {
-          setMessage("重新扫描已入库目录...");
           const nextItems = await listLibraryItems();
           setItems(nextItems);
           if (nextItems.length === 0) {
@@ -462,10 +537,13 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
           }
           const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
           const nextDetail = await getLibraryItem(nextSelected);
-          syncDetail(nextDetail);
-          setMessage("已刷新 savedir");
+          syncDetailFromEffect(nextDetail);
         } catch (error) {
           setMessage(error instanceof Error ? error.message : "刷新已入库目录失败");
+        } finally {
+          setRefreshRunning(false);
+          setMoveProgressVisible(false);
+          setMoveCompletedFlash(true);
         }
       });
     }
@@ -536,6 +614,14 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         setMessage("删除 extrafanart...");
         const next = await deleteLibraryFile(path);
         clearAssetOverride(path);
+        setAssetVersions((prev) => {
+          if (!(path in prev)) {
+            return prev;
+          }
+          const nextVersions = { ...prev };
+          delete nextVersions[path];
+          return nextVersions;
+        });
         if (preview?.path === path) {
           setPreview(null);
         }
@@ -544,6 +630,105 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         setMessage("Extrafanart 已删除");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "删除 extrafanart 失败");
+      }
+    });
+  };
+
+  const openCropper = () => {
+    if (!selectedCover) {
+      return;
+    }
+    setCropOpen(true);
+  };
+
+  const handleCropImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+    const displayWidth = img.clientWidth;
+    const displayHeight = img.clientHeight;
+    let width = 0;
+    let height = 0;
+    let x = 0;
+    let y = 0;
+    if (naturalWidth >= naturalHeight) {
+      height = displayHeight;
+      width = height * POSTER_ASPECT;
+      x = Math.max(0, (displayWidth - width) / 2);
+      y = 0;
+    } else {
+      width = displayWidth;
+      height = width / POSTER_ASPECT;
+      x = 0;
+      y = Math.max(0, (displayHeight - height) / 2);
+    }
+    setCropImageSize({ displayWidth, displayHeight, naturalWidth, naturalHeight });
+    setCropRect({ x, y, width, height });
+  };
+
+  const beginCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    cropDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: cropRect.x,
+      originY: cropRect.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = cropDragRef.current;
+    if (!dragState) {
+      return;
+    }
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+    setCropRect((prev) => {
+      const next = { ...prev };
+      if (cropImageSize.naturalWidth >= cropImageSize.naturalHeight) {
+        next.x = Math.min(Math.max(0, dragState.originX + deltaX), cropImageSize.displayWidth - prev.width);
+      } else {
+        next.y = Math.min(Math.max(0, dragState.originY + deltaY), cropImageSize.displayHeight - prev.height);
+      }
+      return next;
+    });
+  };
+
+  const endCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!cropDragRef.current) {
+      return;
+    }
+    cropDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleConfirmCrop = () => {
+    if (!detail || !selectedCover || cropImageSize.displayWidth === 0 || cropImageSize.displayHeight === 0) {
+      return;
+    }
+    const scaleX = cropImageSize.naturalWidth / cropImageSize.displayWidth;
+    const scaleY = cropImageSize.naturalHeight / cropImageSize.displayHeight;
+    const payload = {
+      x: Math.round(cropRect.x * scaleX),
+      y: Math.round(cropRect.y * scaleY),
+      width: Math.round(cropRect.width * scaleX),
+      height: Math.round(cropRect.height * scaleY),
+    };
+    startTransition(async () => {
+      try {
+        setMessage("从封面截取海报...");
+        const currentPosterPath = getVariantPosterPath(detailRef.current, currentVariant?.key ?? selectedVariantKey);
+        const next = await cropLibraryPosterFromCover(detail.item.rel_path, currentVariant?.key ?? "", payload);
+        clearAssetOverride(currentPosterPath);
+        syncDetail(next);
+        setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
+        bumpAssetVersion(getVariantPosterPath(next, currentVariant?.key ?? selectedVariantKey));
+        setCropOpen(false);
+        setMessage("海报已更新");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "海报截取失败");
       }
     });
   };
@@ -557,59 +742,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
           <p className="library-list-subtitle">浏览 `savedir` 下的媒体目录，并直接修改目录内全部 NFO 的共享元数据。</p>
         </div>
 
-        <div className="library-list-actions">
-          <button className="btn" type="button" onClick={handleRefreshLibrary} disabled={isPending}>
-            <RefreshCw size={16} />
-            重新扫描库
-          </button>
-          <button className="btn" type="button" onClick={handleMoveToMediaLibrary} disabled={isPending || moveRunning || mediaSyncRunning || !mediaStatus?.configured}>
-            <Plus size={16} />
-            移动到媒体库
-          </button>
-        </div>
-
-        {moveState ? (
-          <div className="library-sync-panel">
-            <div className="library-sync-head">
-              <span className="library-sync-title">移动到媒体库</span>
-              <span className="library-sync-meta">
-                {moveRunning ? `进行中 ${moveState.processed}/${moveState.total || 0}` : moveState.message || "空闲"}
-              </span>
-            </div>
-            <div className="library-sync-bar">
-              <div className="library-sync-bar-fill" style={{ width: `${taskPercent(moveState)}%` }} />
-            </div>
-            <div className="library-sync-stats">
-              <span>成功 {moveState.success_count}</span>
-              <span>冲突 {moveState.conflict_count}</span>
-              <span>失败 {moveState.error_count}</span>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="library-stat-row">
-          <div className="library-stat-card">
-            <span className="library-stat-label">目录总数</span>
-            <strong className="library-stat-value">{totalCount}</strong>
-            <span className="library-stat-hint">按电影目录聚合</span>
-          </div>
-          <div className="library-stat-card">
-            <span className="library-stat-label">NFO 完整</span>
-            <strong className="library-stat-value">{nfoCount}</strong>
-            <span className="library-stat-hint">可直接编辑元数据</span>
-          </div>
-          <div className="library-stat-card">
-            <span className="library-stat-label">有封面</span>
-            <strong className="library-stat-value">{artworkCount}</strong>
-            <span className="library-stat-hint">支持缩略图预览</span>
-          </div>
-        </div>
-
         <label className="file-list-search library-search">
           <Search size={16} />
           <input
             className="input file-list-search-input"
-            placeholder="按标题 / 番号 / 演员 / 路径搜索"
+            placeholder="按标题 / 番号 / 演员搜索"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -638,7 +775,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     <span className="library-item-number">{item.number || "未命名番号"}</span>
                     <span className="library-item-time">{formatUnixMillis(item.updated_at)}</span>
                   </div>
-                  <div className="library-item-title">{item.title || item.name}</div>
+                  <div className="library-item-title" title={item.title || item.name}>{item.title || item.name}</div>
                   <div className="library-item-meta">{item.actors.length > 0 ? item.actors.join(" / ") : "暂无演员信息"}</div>
                   <div className="library-item-path">{item.rel_path}</div>
                   <div className="library-item-footnote">{item.variant_count > 1 ? `${item.variant_count} 个文件实例` : "单实例目录"}</div>
@@ -647,6 +784,29 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
             );
           })}
           {filteredItems.length === 0 ? <div className="review-empty-state">没有匹配的已入库项目</div> : null}
+        </div>
+
+        <div className="library-bottom-actions">
+          <button className="btn btn-primary media-library-sync-btn library-action-btn" type="button" onClick={handleRefreshLibrary} disabled={refreshBusy || moveBusy}>
+            <RefreshCw size={16} className={refreshBusy ? "media-library-sync-icon-spinning" : ""} />
+            {refreshButtonLabel}
+          </button>
+          <button
+            className="btn btn-primary media-library-sync-btn library-action-btn library-action-btn-progress"
+            type="button"
+            onClick={handleMoveToMediaLibrary}
+            disabled={refreshBusy || moveBusy || mediaSyncRunning || !mediaStatus?.configured}
+          >
+            {moveProgressVisible && moveState ? (
+              <span className="library-action-progress" aria-hidden="true">
+                <span className="library-action-progress-fill" style={{ width: `${moveProgress}%` }} />
+              </span>
+            ) : null}
+            <span className="library-action-btn-content">
+              {moveBusy ? <RefreshCw size={16} className="media-library-sync-icon-spinning" /> : <Plus size={16} />}
+              <span>{moveButtonLabel}</span>
+            </span>
+          </button>
         </div>
       </section>
 
@@ -660,6 +820,24 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                 <div className="review-subtitle">{detail.item.rel_path}</div>
               </div>
               <div className="review-actions library-detail-actions">
+                <div className="library-copy-toggle" role="tablist" aria-label="标题与简介语言切换">
+                  <button
+                    type="button"
+                    className="library-copy-toggle-btn"
+                    data-active={copyMode === "translated"}
+                    onClick={() => setCopyMode("translated")}
+                  >
+                    中文
+                  </button>
+                  <button
+                    type="button"
+                    className="library-copy-toggle-btn"
+                    data-active={copyMode === "original"}
+                    onClick={() => setCopyMode("original")}
+                  >
+                    原文
+                  </button>
+                </div>
                 {message ? (
                   <span className="review-message" data-tone={/失败|error/i.test(message) ? "danger" : "info"}>
                     {message}
@@ -689,28 +867,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
 
             <div className="review-content review-content-single">
               <div className="review-form library-detail-form">
-                <div className="library-info-strip">
-                  <div className="library-info-chip">目录级字段保存时会同步写入全部实例 NFO</div>
-                  <div className="library-copy-toggle" role="tablist" aria-label="标题与简介语言切换">
-                    <button
-                      type="button"
-                      className="library-copy-toggle-btn"
-                      data-active={copyMode === "translated"}
-                      onClick={() => setCopyMode("translated")}
-                    >
-                      中文
-                    </button>
-                    <button
-                      type="button"
-                      className="library-copy-toggle-btn"
-                      data-active={copyMode === "original"}
-                      onClick={() => setCopyMode("original")}
-                    >
-                      原文
-                    </button>
-                  </div>
-                </div>
-
                 <div className="review-main-layout library-main-layout">
                   <div className="review-top-fields">
                     <div className="review-field">
@@ -840,6 +996,16 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
                     <div className="review-image-card-head">
                       <span className="review-image-title">海报</span>
+                      <button
+                        type="button"
+                        className="btn review-inline-icon-btn review-image-crop-btn"
+                        onClick={openCropper}
+                        aria-label="从封面截取海报"
+                        title="从封面截取海报"
+                        disabled={!selectedCover || isPending}
+                      >
+                        <Crop size={14} />
+                      </button>
                     </div>
                     <div className={`review-image-box review-image-box-poster${selectedPoster ? "" : " review-upload-empty"}`}>
                       {selectedPoster ? (
@@ -978,6 +1144,55 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                 alt={preview.name}
                 style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
               />
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {cropOpen && selectedCover ? (
+        <div className="review-preview-overlay" onClick={() => setCropOpen(false)}>
+          <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="review-crop-head">
+              <div className="review-preview-title">从封面截取海报</div>
+            </div>
+            <div className="review-crop-stage">
+              <div className="review-crop-canvas">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={resolveLibraryImageSrc(selectedCover)}
+                  alt="cover crop preview"
+                  className="review-crop-image"
+                  onLoad={handleCropImageLoad}
+                />
+                {cropRect.width > 0 && cropRect.height > 0 ? (
+                  <div
+                    className="review-crop-selection"
+                    style={{
+                      left: cropRect.x,
+                      top: cropRect.y,
+                      width: cropRect.width,
+                      height: cropRect.height,
+                    }}
+                    onPointerDown={beginCropDrag}
+                    onPointerMove={handleCropDrag}
+                    onPointerUp={endCropDrag}
+                    onPointerCancel={endCropDrag}
+                  />
+                ) : null}
+                {cropRect.width > 0 && cropRect.height > 0 ? (
+                  <button
+                    type="button"
+                    className="btn review-crop-confirm"
+                    style={{
+                      left: cropRect.x + cropRect.width - 54,
+                      top: cropRect.y + 8,
+                    }}
+                    onClick={handleConfirmCrop}
+                    disabled={isPending}
+                  >
+                    截取
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
