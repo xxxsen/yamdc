@@ -14,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/common/logutil"
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/nfo"
+	"go.uber.org/zap"
 )
 
 var libraryVideoExts = map[string]struct{}{
@@ -166,9 +168,11 @@ func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 		}
 		detail, err := a.updateLibraryItem(relPath, absPath, req.Meta)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Warn("library item update failed", zap.String("path", relPath), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("library item updated", zap.String("path", relPath))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library item updated", "data": detail})
 	default:
 		writeMethodNotAllowed(w)
@@ -214,6 +218,7 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := os.Remove(absPath); err != nil {
+			logutil.GetLogger(r.Context()).Error("library file delete failed", zap.String("path", relPath), zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": "delete library file failed"})
 			return
 		}
@@ -225,9 +230,11 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 		}
 		detail, err := a.readLibraryDetail(filepath.ToSlash(itemRelPath), itemAbsPath)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Error("library detail reload after file delete failed", zap.String("path", relPath), zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", filepath.ToSlash(itemRelPath)))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library file deleted", "data": detail})
 	default:
 		writeMethodNotAllowed(w)
@@ -272,9 +279,22 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := a.replaceLibraryArtwork(relPath, absPath, variantKey, kind, header.Filename, data)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("library asset replace failed",
+			zap.String("path", relPath),
+			zap.String("variant", variantKey),
+			zap.String("kind", kind),
+			zap.String("file_name", header.Filename),
+			zap.Error(err),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("library asset replaced",
+		zap.String("path", relPath),
+		zap.String("variant", variantKey),
+		zap.String("kind", kind),
+		zap.String("file_name", header.Filename),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library asset replaced", "data": detail})
 }
 
@@ -310,9 +330,26 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := a.cropLibraryPosterFromCover(relPath, absPath, variantKey, req.X, req.Y, req.Width, req.Height)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("library poster crop failed",
+			zap.String("path", relPath),
+			zap.String("variant", variantKey),
+			zap.Int("x", req.X),
+			zap.Int("y", req.Y),
+			zap.Int("width", req.Width),
+			zap.Int("height", req.Height),
+			zap.Error(err),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("library poster cropped",
+		zap.String("path", relPath),
+		zap.String("variant", variantKey),
+		zap.Int("x", req.X),
+		zap.Int("y", req.Y),
+		zap.Int("width", req.Width),
+		zap.Int("height", req.Height),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "library poster cropped", "data": detail})
 }
 

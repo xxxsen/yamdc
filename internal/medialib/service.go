@@ -12,6 +12,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
 )
 
 const (
@@ -204,15 +207,20 @@ func (s *Service) ResolveLibraryPath(raw string) (string, string, error) {
 }
 
 func (s *Service) TriggerFullSync(ctx context.Context) error {
+	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", "manual"))
 	if !s.IsConfigured() {
+		logger.Warn("media library sync skipped because library dir is not configured")
 		return fmt.Errorf("library dir is not configured")
 	}
 	if s.isMoveRunning() {
+		logger.Warn("media library sync skipped because move task is running")
 		return fmt.Errorf("move to media library is running")
 	}
 	if syncState, err := s.getTaskState(ctx, TaskSync); err == nil && syncState.Status == "running" {
+		logger.Warn("media library sync skipped because sync task is already running")
 		return fmt.Errorf("media library sync is already running")
 	}
+	logger.Info("media library sync triggered")
 	go func() {
 		_ = s.runFullSync(context.Background(), "manual")
 	}()
@@ -220,18 +228,24 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 }
 
 func (s *Service) TriggerMove(ctx context.Context) error {
+	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskMove))
 	if !s.IsConfigured() {
+		logger.Warn("move to media library skipped because library dir is not configured")
 		return fmt.Errorf("library dir is not configured")
 	}
 	if s.saveDir == "" {
+		logger.Warn("move to media library skipped because save dir is not configured")
 		return fmt.Errorf("save dir is not configured")
 	}
 	if s.isSyncRunning() {
+		logger.Warn("move to media library skipped because sync task is running")
 		return fmt.Errorf("media library sync is running")
 	}
 	if !s.claimMove() {
+		logger.Warn("move to media library skipped because move task is already running")
 		return fmt.Errorf("move to media library is already running")
 	}
+	logger.Info("move to media library triggered")
 	go func() {
 		_ = s.runMove(context.Background())
 	}()
@@ -259,6 +273,7 @@ func (s *Service) GetStatusSnapshot(ctx context.Context) (*StatusSnapshot, error
 }
 
 func (s *Service) runFullSync(ctx context.Context, reason string) error {
+	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", reason))
 	if !s.IsConfigured() {
 		return nil
 	}
@@ -272,6 +287,7 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 
 	itemDirs, err := s.listRootItemDirs(s.libraryDir)
 	if err != nil {
+		logger.Error("list media library directories failed", zap.Error(err))
 		_ = s.saveTaskState(ctx, TaskState{
 			TaskKey:    TaskSync,
 			Status:     "failed",
@@ -281,6 +297,7 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 		})
 		return err
 	}
+	logger.Info("media library sync started", zap.Int("total", len(itemDirs)))
 	startedAt := time.Now().UnixMilli()
 	state := TaskState{
 		TaskKey:    TaskSync,
@@ -300,14 +317,17 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	for index, absPath := range itemDirs {
 		relPath, err := filepath.Rel(s.libraryDir, absPath)
 		if err != nil {
+			logger.Warn("resolve media library relative path failed", zap.String("abs_path", absPath), zap.Error(err))
 			errorCount++
 			continue
 		}
 		relPath = filepath.ToSlash(relPath)
 		detail, err := s.readRootDetail(s.libraryDir, relPath, absPath)
 		if err != nil {
+			logger.Warn("read media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
 			errorCount++
 		} else if err := s.upsertDetail(ctx, detail); err != nil {
+			logger.Warn("upsert media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
 			errorCount++
 		} else {
 			keep[relPath] = struct{}{}
@@ -321,6 +341,7 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 		_ = s.saveTaskState(ctx, state)
 	}
 	if err := s.deleteMissing(ctx, keep); err != nil {
+		logger.Warn("delete stale media library items failed", zap.Error(err))
 		errorCount++
 	}
 	state.Status = "completed"
@@ -331,14 +352,21 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	state.UpdatedAt = time.Now().UnixMilli()
 	state.FinishedAt = state.UpdatedAt
 	_ = s.saveTaskState(ctx, state)
+	logger.Info("media library sync completed",
+		zap.Int("total", state.Total),
+		zap.Int("success_count", state.SuccessCount),
+		zap.Int("error_count", state.ErrorCount),
+	)
 	return nil
 }
 
 func (s *Service) runMove(ctx context.Context) error {
+	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskMove))
 	defer s.finishMove()
 
 	itemDirs, err := s.listRootItemDirs(s.saveDir)
 	if err != nil {
+		logger.Error("list save directories before move failed", zap.Error(err))
 		_ = s.saveTaskState(ctx, TaskState{
 			TaskKey:    TaskMove,
 			Status:     "failed",
@@ -348,6 +376,7 @@ func (s *Service) runMove(ctx context.Context) error {
 		})
 		return err
 	}
+	logger.Info("move to media library started", zap.Int("total", len(itemDirs)))
 	startedAt := time.Now().UnixMilli()
 	state := TaskState{
 		TaskKey:   TaskMove,
@@ -364,6 +393,7 @@ func (s *Service) runMove(ctx context.Context) error {
 	for index, absPath := range itemDirs {
 		relPath, err := filepath.Rel(s.saveDir, absPath)
 		if err != nil {
+			logger.Warn("resolve save relative path failed", zap.String("abs_path", absPath), zap.Error(err))
 			errorCount++
 			continue
 		}
@@ -372,11 +402,14 @@ func (s *Service) runMove(ctx context.Context) error {
 		if _, err := os.Stat(targetAbs); err == nil {
 			conflictCount++
 		} else if !os.IsNotExist(err) {
+			logger.Warn("check target media library path failed", zap.String("rel_path", relPath), zap.Error(err))
 			errorCount++
 		} else {
 			if err := os.MkdirAll(filepath.Dir(targetAbs), 0755); err != nil {
+				logger.Warn("create media library parent directory failed", zap.String("rel_path", relPath), zap.Error(err))
 				errorCount++
 			} else if err := moveDirectory(absPath, targetAbs); err != nil {
+				logger.Warn("move directory to media library failed", zap.String("rel_path", relPath), zap.Error(err))
 				errorCount++
 			} else {
 				successCount++
@@ -400,6 +433,12 @@ func (s *Service) runMove(ctx context.Context) error {
 	state.ConflictCount = conflictCount
 	state.ErrorCount = errorCount
 	_ = s.saveTaskState(ctx, state)
+	logger.Info("move to media library completed",
+		zap.Int("total", state.Total),
+		zap.Int("success_count", state.SuccessCount),
+		zap.Int("conflict_count", state.ConflictCount),
+		zap.Int("error_count", state.ErrorCount),
+	)
 	return nil
 }
 

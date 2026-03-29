@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -19,6 +20,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
+	"go.uber.org/zap"
 )
 
 type API struct {
@@ -107,12 +109,19 @@ func (a *API) handleNumberCleanerExplain(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := a.cleaner.Explain(req.Input)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("number cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"code":    1,
 			"message": err.Error(),
 		})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("number cleaner explain completed",
+		zap.String("input", req.Input),
+		zap.Int("steps", len(result.Steps)),
+		zap.String("number_id", result.Final.NumberID),
+		zap.String("status", string(result.Final.Status)),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"code":    0,
 		"message": "ok",
@@ -161,12 +170,25 @@ func (a *API) handleSearcherDebugSearch(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := a.debugger.DebugSearch(r.Context(), req)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("searcher debug search failed",
+			zap.String("input", strings.TrimSpace(req.Input)),
+			zap.Strings("plugins", req.Plugins),
+			zap.Bool("use_cleaner", req.UseCleaner),
+			zap.Error(err),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"code":    1,
 			"message": err.Error(),
 		})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("searcher debug search completed",
+		zap.String("input", result.Input),
+		zap.String("number_id", result.NumberID),
+		zap.Bool("found", result.Found),
+		zap.String("matched_plugin", result.MatchedPlugin),
+		zap.Strings("used_plugins", result.UsedPlugins),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"code":    0,
 		"message": "ok",
@@ -202,9 +224,22 @@ func (a *API) handleHandlerDebugRun(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := a.handlers.Debug(r.Context(), req)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("handler debug run failed",
+			zap.String("mode", strings.TrimSpace(req.Mode)),
+			zap.String("handler_id", strings.TrimSpace(req.HandlerID)),
+			zap.Strings("handler_ids", req.HandlerIDs),
+			zap.Error(err),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("handler debug run completed",
+		zap.String("mode", result.Mode),
+		zap.String("handler_id", result.HandlerID),
+		zap.Int("steps", len(result.Steps)),
+		zap.String("number_id", result.NumberID),
+		zap.String("result_error", result.Error),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": result})
 }
 
@@ -213,13 +248,16 @@ func (a *API) handleScan(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("manual scan requested")
 	if err := a.scanner.Scan(r.Context()); err != nil {
+		logutil.GetLogger(r.Context()).Error("manual scan failed", zap.Error(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"code":    1,
 			"message": err.Error(),
 		})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("manual scan completed")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"code":    0,
 		"message": "scan triggered",
@@ -284,9 +322,11 @@ func (a *API) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.jobSvc.Run(r.Context(), id); err != nil {
+			logutil.GetLogger(r.Context()).Warn("job run failed", zap.Int64("job_id", id), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("job run requested", zap.Int64("job_id", id))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "job started"})
 	case "rerun":
 		if r.Method != http.MethodPost {
@@ -294,9 +334,11 @@ func (a *API) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.jobSvc.Rerun(r.Context(), id); err != nil {
+			logutil.GetLogger(r.Context()).Warn("job rerun failed", zap.Int64("job_id", id), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("job rerun requested", zap.Int64("job_id", id))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "job restarted"})
 	case "logs":
 		if r.Method != http.MethodGet {
@@ -328,9 +370,11 @@ func (a *API) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		item, err := a.jobSvc.UpdateNumber(r.Context(), id, req.Number)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Warn("job number update failed", zap.Int64("job_id", id), zap.String("number", strings.TrimSpace(req.Number)), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("job number updated", zap.Int64("job_id", id), zap.String("number", strings.TrimSpace(req.Number)))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "job number updated", "data": item})
 	case "":
 		if r.Method != http.MethodDelete {
@@ -338,9 +382,11 @@ func (a *API) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.jobSvc.Delete(r.Context(), id); err != nil {
+			logutil.GetLogger(r.Context()).Warn("job delete failed", zap.Int64("job_id", id), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("job deleted", zap.Int64("job_id", id))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "job deleted"})
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "route not found"})
@@ -361,9 +407,11 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := a.jobSvc.Import(r.Context(), id); err != nil {
+				logutil.GetLogger(r.Context()).Warn("review import failed", zap.Int64("job_id", id), zap.Error(err))
 				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 				return
 			}
+			logutil.GetLogger(r.Context()).Info("review import completed", zap.Int64("job_id", id))
 			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "import completed"})
 			return
 		case "poster-crop":
@@ -392,9 +440,25 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 			}
 			poster, err := a.jobSvc.CropPosterFromCover(r.Context(), id, req.X, req.Y, req.Width, req.Height)
 			if err != nil {
+				logutil.GetLogger(r.Context()).Warn("review poster crop failed",
+					zap.Int64("job_id", id),
+					zap.Int("x", req.X),
+					zap.Int("y", req.Y),
+					zap.Int("width", req.Width),
+					zap.Int("height", req.Height),
+					zap.Error(err),
+				)
 				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 				return
 			}
+			logutil.GetLogger(r.Context()).Info("review poster cropped",
+				zap.Int64("job_id", id),
+				zap.Int("x", req.X),
+				zap.Int("y", req.Y),
+				zap.Int("width", req.Width),
+				zap.Int("height", req.Height),
+				zap.String("poster_key", poster.Key),
+			)
 			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "poster cropped", "data": poster})
 			return
 		case "asset":
@@ -463,9 +527,22 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := a.jobSvc.SaveReviewData(r.Context(), id, string(reviewData)); err != nil {
+				logutil.GetLogger(r.Context()).Warn("review asset upload save failed",
+					zap.Int64("job_id", id),
+					zap.String("target", target),
+					zap.String("file_name", header.Filename),
+					zap.String("asset_key", key),
+					zap.Error(err),
+				)
 				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 				return
 			}
+			logutil.GetLogger(r.Context()).Info("review asset uploaded",
+				zap.Int64("job_id", id),
+				zap.String("target", target),
+				zap.String("file_name", header.Filename),
+				zap.String("asset_key", key),
+			)
 			writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "review asset uploaded", "data": asset})
 			return
 		default:
@@ -495,9 +572,11 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.jobSvc.SaveReviewData(r.Context(), id, req.ReviewData); err != nil {
+			logutil.GetLogger(r.Context()).Warn("review data save failed", zap.Int64("job_id", id), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("review data saved", zap.Int64("job_id", id))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "review data saved"})
 	default:
 		writeMethodNotAllowed(w)
@@ -523,9 +602,11 @@ func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
 		}
 		key, err := store.AnonymousPutDataTo(r.Context(), a.store, data)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Error("debug asset upload failed", zap.String("file_name", header.Filename), zap.Error(err))
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("debug asset uploaded", zap.String("file_name", header.Filename), zap.String("asset_key", key))
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"code":    0,
 			"message": "asset uploaded",

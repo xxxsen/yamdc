@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/capture"
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
@@ -19,6 +20,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -89,8 +91,10 @@ func (s *Service) SetImportGuard(fn func(context.Context) error) {
 }
 
 func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (*jobdef.Job, error) {
+	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID), zap.String("number", strings.TrimSpace(input)))
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
+		logger.Error("load job before number update failed", zap.Error(err))
 		return nil, err
 	}
 	if j == nil {
@@ -109,9 +113,11 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 	}
 	numberText := fc.Number.GenerateFileName()
 	if err := s.jobRepo.UpdateNumber(ctx, jobID, numberText, "manual", "success", "high", ""); err != nil {
+		logger.Error("persist updated job number failed", zap.Error(err))
 		return nil, err
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "number", "job number updated", numberText)
+	logger.Info("job number updated", zap.String("normalized_number", numberText))
 	updated, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
 		return nil, err
@@ -126,8 +132,10 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 }
 
 func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData string) error {
+	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
+		logger.Error("load job before saving review data failed", zap.Error(err))
 		return err
 	}
 	if j == nil {
@@ -141,15 +149,25 @@ func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData st
 		return fmt.Errorf("invalid review json: %w", err)
 	}
 	if err := s.scrapeRepo.SaveReviewData(ctx, jobID, reviewData); err != nil {
+		logger.Error("save review data failed", zap.Error(err))
 		return err
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "review", "review data saved", "")
+	logger.Info("review data saved", zap.String("number", meta.Number), zap.String("title", meta.Title))
 	return nil
 }
 
 func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, width, height int) (*model.File, error) {
+	logger := logutil.GetLogger(ctx).With(
+		zap.Int64("job_id", jobID),
+		zap.Int("x", x),
+		zap.Int("y", y),
+		zap.Int("width", width),
+		zap.Int("height", height),
+	)
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
+		logger.Error("load job before poster crop failed", zap.Error(err))
 		return nil, err
 	}
 	if j == nil {
@@ -210,20 +228,25 @@ func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, wi
 		return nil, fmt.Errorf("marshal review meta failed: %w", err)
 	}
 	if err := s.scrapeRepo.SaveReviewData(ctx, jobID, string(reviewData)); err != nil {
+		logger.Error("save cropped poster review data failed", zap.Error(err))
 		return nil, err
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "review", "poster cropped from cover", fmt.Sprintf("%d,%d,%d,%d", x, y, width, height))
+	logger.Info("poster cropped from cover", zap.String("poster_key", meta.Poster.Key))
 	return meta.Poster, nil
 }
 
 func (s *Service) Import(ctx context.Context, jobID int64) error {
+	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
 	if !s.claim(jobID) {
+		logger.Warn("import skipped because job is already running")
 		return fmt.Errorf("job is already running")
 	}
 	defer s.finish(jobID)
 
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
+		logger.Error("load job before import failed", zap.Error(err))
 		return err
 	}
 	if j == nil {
@@ -234,12 +257,15 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	}
 	if s.importGuard != nil {
 		if err := s.importGuard(ctx); err != nil {
+			logger.Warn("import blocked by guard", zap.Error(err))
 			return err
 		}
 	}
 	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
+		logger.Error("check job conflict before import failed", zap.Error(err))
 		return err
 	} else if conflict != nil {
+		logger.Warn("import blocked by conflict", zap.String("reason", conflict.Reason), zap.String("target", conflict.Target))
 		return fmt.Errorf("%s: %s", conflict.Reason, conflict.Target)
 	}
 	data, err := s.scrapeRepo.GetByJobID(ctx, jobID)
@@ -267,8 +293,10 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	}
 	fc.Meta = &meta
 	_ = s.logRepo.Add(ctx, jobID, "info", "import", "import started", "")
+	logger.Info("import started", zap.String("number", j.Number))
 	if err := s.capture.ImportMeta(ctx, fc); err != nil {
 		_ = s.logRepo.Add(ctx, jobID, "error", "import", "import failed", err.Error())
+		logger.Error("import failed", zap.Error(err))
 		return err
 	}
 	if err := s.scrapeRepo.SaveFinalData(ctx, jobID, payload); err != nil {
@@ -278,12 +306,15 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 		return err
 	}
 	_ = s.logRepo.Add(ctx, jobID, "info", "import", "import completed", fc.SaveDir)
+	logger.Info("import completed", zap.String("save_dir", fc.SaveDir))
 	return nil
 }
 
 func (s *Service) Delete(ctx context.Context, jobID int64) error {
+	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
+		logger.Error("load job before delete failed", zap.Error(err))
 		return err
 	}
 	if j == nil {
@@ -296,6 +327,7 @@ func (s *Service) Delete(ctx context.Context, jobID int64) error {
 	}
 
 	if !s.claim(jobID) {
+		logger.Warn("delete skipped because job is currently running")
 		return fmt.Errorf("job is currently running")
 	}
 	defer s.finish(jobID)
@@ -310,8 +342,10 @@ func (s *Service) Delete(ctx context.Context, jobID int64) error {
 		return err
 	}
 	if err := s.jobRepo.SoftDelete(ctx, jobID); err != nil {
+		logger.Error("soft delete job failed", zap.Error(err))
 		return err
 	}
+	logger.Info("job deleted", zap.String("path", j.AbsPath))
 	return nil
 }
 

@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/medialib"
+	"go.uber.org/zap"
 )
 
 func (a *API) handleMediaLibraryList(w http.ResponseWriter, r *http.Request) {
@@ -72,9 +74,11 @@ func (a *API) handleMediaLibraryItem(w http.ResponseWriter, r *http.Request) {
 		}
 		detail, err := a.media.UpdateItem(r.Context(), id, req.Meta)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Warn("media library item update failed", zap.Int64("media_library_id", id), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("media library item updated", zap.Int64("media_library_id", id), zap.String("rel_path", detail.Item.RelPath))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "media library item updated", "data": detail})
 	default:
 		writeMethodNotAllowed(w)
@@ -121,9 +125,11 @@ func (a *API) handleMediaLibraryFile(w http.ResponseWriter, r *http.Request) {
 		}
 		detail, err := a.media.DeleteFile(r.Context(), id, pathValue)
 		if err != nil {
+			logutil.GetLogger(r.Context()).Warn("media library file delete failed", zap.Int64("media_library_id", id), zap.String("path", pathValue), zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("media library file deleted", zap.Int64("media_library_id", id), zap.String("path", pathValue), zap.String("rel_path", detail.Item.RelPath))
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "media library file deleted", "data": detail})
 	default:
 		writeMethodNotAllowed(w)
@@ -167,9 +173,23 @@ func (a *API) handleMediaLibraryAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := a.media.ReplaceAsset(r.Context(), id, variantKey, kind, header.Filename, data)
 	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("media library asset replace failed",
+			zap.Int64("media_library_id", id),
+			zap.String("variant", variantKey),
+			zap.String("kind", kind),
+			zap.String("file_name", header.Filename),
+			zap.Error(err),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 		return
 	}
+	logutil.GetLogger(r.Context()).Info("media library asset replaced",
+		zap.Int64("media_library_id", id),
+		zap.String("variant", variantKey),
+		zap.String("kind", kind),
+		zap.String("file_name", header.Filename),
+		zap.String("rel_path", detail.Item.RelPath),
+	)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "media library asset replaced", "data": detail})
 }
 
@@ -188,9 +208,11 @@ func (a *API) handleMediaLibrarySync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": state.Sync})
 	case http.MethodPost:
 		if err := a.media.TriggerFullSync(r.Context()); err != nil {
+			logutil.GetLogger(r.Context()).Warn("media library sync trigger failed", zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("media library sync triggered")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "media library sync started"})
 	default:
 		writeMethodNotAllowed(w)
@@ -212,9 +234,11 @@ func (a *API) handleMediaLibraryMove(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "ok", "data": state.Move})
 	case http.MethodPost:
 		if err := a.media.TriggerMove(r.Context()); err != nil {
+			logutil.GetLogger(r.Context()).Warn("move to media library trigger failed", zap.Error(err))
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
 		}
+		logutil.GetLogger(r.Context()).Info("move to media library triggered")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "message": "move to media library started"})
 	default:
 		writeMethodNotAllowed(w)
