@@ -228,6 +228,62 @@ export interface NumberCleanerExplainResult {
   final: NumberCleanerResult;
 }
 
+export interface SearcherDebugPluginCollection {
+  available: string[];
+  default: string[];
+  category: Record<string, string[]>;
+}
+
+export interface SearcherDebugStep {
+  stage: string;
+  ok: boolean;
+  message: string;
+  url?: string;
+  status_code?: number;
+  duration_ms?: number;
+}
+
+export interface SearcherDebugMovieMeta {
+  number: string;
+  title: string;
+  release_date: number;
+  studio: string;
+  label: string;
+  series: string;
+  director: string;
+  actors: string[];
+  genres: string[];
+  ext_info: {
+    scrape_info: {
+      source: string;
+      date_ts: number;
+    };
+  };
+}
+
+export interface SearcherDebugPluginResult {
+  plugin: string;
+  found: boolean;
+  error?: string;
+  meta?: SearcherDebugMovieMeta | null;
+  steps: SearcherDebugStep[];
+}
+
+export interface SearcherDebugResult {
+  input: string;
+  number_id: string;
+  requested_input: string;
+  used_plugins: string[];
+  matched_plugin: string;
+  found: boolean;
+  category: string;
+  uncensor: boolean;
+  cleaner_result?: NumberCleanerResult | null;
+  meta?: SearcherDebugMovieMeta | null;
+  plugin_results: SearcherDebugPluginResult[];
+  available_tools: SearcherDebugPluginCollection;
+}
+
 interface APIResponse<T> {
   code: number;
   message: string;
@@ -544,6 +600,32 @@ export async function explainNumberCleaner(input: string) {
   const data = (await resp.json()) as APIResponse<NumberCleanerExplainResult>;
   if (!resp.ok || data.code !== 0) {
     throw new Error(data.message || `explain number cleaner failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function getSearcherDebugPlugins() {
+  const resp = await fetch(`${getBaseURL()}/api/debug/searcher/plugins`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<SearcherDebugPluginCollection>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `get searcher debug plugins failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function debugSearcher(input: string, plugins: string[], useCleaner: boolean) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/searcher/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ input, plugins, use_cleaner: useCleaner }),
+  });
+  const data = (await resp.json()) as APIResponse<SearcherDebugResult>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `debug searcher failed: ${resp.status}`);
   }
   return data.data;
 }

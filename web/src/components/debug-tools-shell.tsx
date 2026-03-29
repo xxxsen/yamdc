@@ -11,6 +11,11 @@ const TOOL_ITEMS = [
     title: "规则集测试",
     description: "查看番号清洗规则的逐步执行链路。",
   },
+  {
+    href: "/debug/searcher",
+    title: "插件检索测试",
+    description: "输入番号后，直接验证 searcher 插件链的检索结果。",
+  },
 ] as const;
 
 export function DebugToolsShell({ children }: Readonly<{ children: ReactNode }>) {

@@ -16,21 +16,23 @@ import (
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
+	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
 type API struct {
-	jobRepo *repository.JobRepository
-	scanner *scanner.Service
-	jobSvc  *job.Service
-	saveDir string
-	media   *medialib.Service
-	store   store.IStorage
-	cleaner numbercleaner.Cleaner
+	jobRepo  *repository.JobRepository
+	scanner  *scanner.Service
+	jobSvc   *job.Service
+	saveDir  string
+	media    *medialib.Service
+	store    store.IStorage
+	cleaner  numbercleaner.Cleaner
+	debugger *searcher.Debugger
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage, cleaner numbercleaner.Cleaner) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage, cleaner: cleaner}
+func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage, cleaner numbercleaner.Cleaner, debugger *searcher.Debugger) *API {
+	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage, cleaner: cleaner, debugger: debugger}
 }
 
 func (a *API) Handler() http.Handler {
@@ -53,6 +55,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/api/media-library/move", a.handleMediaLibraryMove)
 	mux.HandleFunc("/api/media-library/status", a.handleMediaLibraryStatus)
 	mux.HandleFunc("/api/debug/number-cleaner/explain", a.handleNumberCleanerExplain)
+	mux.HandleFunc("/api/debug/searcher/plugins", a.handleSearcherDebugPlugins)
+	mux.HandleFunc("/api/debug/searcher/search", a.handleSearcherDebugSearch)
 	mux.HandleFunc("/api/assets/", a.handleAsset)
 	return withCORS(mux)
 }
@@ -98,6 +102,60 @@ func (a *API) handleNumberCleanerExplain(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	result, err := a.cleaner.Explain(req.Input)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"code":    1,
+			"message": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"code":    0,
+		"message": "ok",
+		"data":    result,
+	})
+}
+
+func (a *API) handleSearcherDebugPlugins(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.debugger == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"code":    1,
+			"message": "searcher debugger is not available",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"code":    0,
+		"message": "ok",
+		"data":    a.debugger.Plugins(),
+	})
+}
+
+func (a *API) handleSearcherDebugSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.debugger == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"code":    1,
+			"message": "searcher debugger is not available",
+		})
+		return
+	}
+	var req searcher.DebugSearchOptions
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"code":    1,
+			"message": "invalid json body",
+		})
+		return
+	}
+	result, err := a.debugger.DebugSearch(r.Context(), req)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"code":    1,

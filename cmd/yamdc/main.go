@@ -52,7 +52,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newServerCmd(), newRulesetTestCmd())
+	cmd.AddCommand(newServerCmd(), newRulesetTestCmd(), newSearcherTestCmd())
 	return cmd
 }
 
@@ -176,6 +176,14 @@ func buildProcessor(deps appdeps.Runtime, hs []string, m map[string]config.Handl
 		rs = append(rs, p)
 	}
 	return rs, nil
+}
+
+func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, c *config.Config) *searcher.Debugger {
+	categoryPlugins := make(map[string][]string, len(c.CategoryPlugins))
+	for _, item := range c.CategoryPlugins {
+		categoryPlugins[item.Name] = append([]string(nil), item.Plugins...)
+	}
+	return searcher.NewDebugger(cli, storage, cleaner, c.Plugins, categoryPlugins)
 }
 
 func precheckDir(c *config.Config) error {

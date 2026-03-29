@@ -43,6 +43,7 @@ type YamdcStartContext struct {
 	Processors        []processor.IProcessor
 	NumberCleaner     numbercleaner.Cleaner
 	NumberCleanerSync func(context.Context)
+	SearcherDebugger  *searcher.Debugger
 
 	Capture *capture.Capture
 
@@ -103,6 +104,7 @@ func newYamdcInitActions() []YamdcInitAction {
 		{Name: "build_searchers", Fn: buildSearchersAction},
 		{Name: "build_processors", Fn: buildProcessorsAction},
 		{Name: "build_number_cleaner", Fn: buildNumberCleanerAction},
+		{Name: "build_searcher_debugger", Fn: buildSearcherDebuggerAction},
 		{Name: "build_capture", Fn: buildCaptureAction},
 		{Name: "open_app_db", Fn: openAppDBAction},
 		{Name: "assemble_services", Fn: assembleServicesAction},
@@ -238,6 +240,11 @@ func buildNumberCleanerAction(_ context.Context, ysctx *YamdcStartContext) error
 	return nil
 }
 
+func buildSearcherDebuggerAction(_ context.Context, ysctx *YamdcStartContext) error {
+	ysctx.SearcherDebugger = buildSearcherDebugger(ysctx.HTTPClient, ysctx.CacheStore, ysctx.NumberCleaner, ysctx.Config)
+	return nil
+}
+
 func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
 	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, ysctx.Searchers, ysctx.CategorySearchers, ysctx.Processors, ysctx.NumberCleaner)
 	if err != nil {
@@ -272,7 +279,16 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		}
 		return nil
 	})
-	ysctx.API = web.NewAPI(ysctx.JobRepo, ysctx.ScanSvc, ysctx.JobSvc, ysctx.Config.SaveDir, ysctx.MediaSvc, ysctx.CacheStore, ysctx.NumberCleaner)
+	ysctx.API = web.NewAPI(
+		ysctx.JobRepo,
+		ysctx.ScanSvc,
+		ysctx.JobSvc,
+		ysctx.Config.SaveDir,
+		ysctx.MediaSvc,
+		ysctx.CacheStore,
+		ysctx.NumberCleaner,
+		ysctx.SearcherDebugger,
+	)
 	return nil
 }
 
