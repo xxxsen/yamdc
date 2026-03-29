@@ -52,7 +52,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newServerCmd(), newRulesetTestCmd(), newSearcherTestCmd())
+	cmd.AddCommand(newServerCmd(), newRulesetTestCmd())
 	return cmd
 }
 
