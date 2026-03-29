@@ -141,7 +141,7 @@ func initLoggerAction(_ context.Context, ysctx *YamdcStartContext) error {
 }
 
 func precheckDirsAction(_ context.Context, ysctx *YamdcStartContext) error {
-	return precheckDir(ysctx.Config)
+	return precheckServerDir(ysctx.Config)
 }
 
 func buildHTTPClientAction(ctx context.Context, ysctx *YamdcStartContext) error {

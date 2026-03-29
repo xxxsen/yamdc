@@ -52,7 +52,24 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newServerCmd(), newRulesetTestCmd())
+	cmd.AddCommand(newRunCmd(), newServerCmd(), newRulesetTestCmd())
+	return cmd
+}
+
+func newRunCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run one full scraping pass from scan dir to save dir",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := config.Parse(configPath)
+			if err != nil {
+				return fmt.Errorf("parse config failed, err:%w", err)
+			}
+			return runCapture(c)
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
 	return cmd
 }
 
@@ -84,6 +101,77 @@ func runServer(c *config.Config) error {
 	if err := executeYamdcInitActions(context.Background(), ysctx, newYamdcInitActions()); err != nil {
 		return err
 	}
+	return nil
+}
+
+func runCapture(c *config.Config) error {
+	rewriteEnvFlagToConfig(&c.SwitchConfig)
+	ctx := context.Background()
+	logkit := loggerInit(c)
+	if logkit != nil {
+		defer func() { _ = logkit.Sync() }()
+	}
+	if err := normalizeDirPaths(c); err != nil {
+		return err
+	}
+	if err := precheckCaptureDir(c); err != nil {
+		return err
+	}
+	logutil.GetLogger(ctx).Info("start capture run", zap.String("scan_dir", c.ScanDir), zap.String("save_dir", c.SaveDir), zap.String("data_dir", c.DataDir))
+
+	cli, err := buildHTTPClient(ctx, c)
+	if err != nil {
+		return err
+	}
+	if err := initDependencies(ctx, cli, c.DataDir, c.Dependencies); err != nil {
+		return err
+	}
+	engine, err := buildAIEngine(ctx, cli, c)
+	if err != nil {
+		return err
+	}
+	cacheStore, err := store.NewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db"))
+	if err != nil {
+		return err
+	}
+	tr, err := buildTranslator(ctx, c, engine)
+	if err != nil {
+		logutil.GetLogger(ctx).Error("setup translator failed", zap.Error(err))
+	}
+	faceRec, err := buildFaceRecognizer(ctx, c, filepath.Join(c.DataDir, "models"))
+	if err != nil {
+		logutil.GetLogger(ctx).Error("init face recognizer failed", zap.Error(err))
+	}
+	searchers, err := buildSearcher(ctx, cli, cacheStore, c, c.Plugins, c.PluginConfig)
+	if err != nil {
+		return err
+	}
+	catSearchers, err := buildCatSearcher(ctx, cli, cacheStore, c, c.CategoryPlugins, c.PluginConfig)
+	if err != nil {
+		return err
+	}
+	processors, err := buildProcessor(ctx, appdeps.Runtime{
+		HTTPClient: cli,
+		Storage:    cacheStore,
+		Translator: tr,
+		AIEngine:   engine,
+		FaceRec:    faceRec,
+	}, c.Handlers, c.HandlerConfig)
+	if err != nil {
+		return err
+	}
+	cleaner, _, err := buildNumberCleaner(ctx, cli, c)
+	if err != nil {
+		return err
+	}
+	cap, err := buildCapture(c, cacheStore, searchers, catSearchers, processors, cleaner)
+	if err != nil {
+		return err
+	}
+	if err := cap.Run(ctx); err != nil {
+		return err
+	}
+	logutil.GetLogger(ctx).Info("capture run finished")
 	return nil
 }
 
@@ -186,7 +274,7 @@ func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, clean
 	return searcher.NewDebugger(cli, storage, cleaner, c.Plugins, categoryPlugins)
 }
 
-func precheckDir(c *config.Config) error {
+func precheckCaptureDir(c *config.Config) error {
 	if len(c.DataDir) == 0 {
 		return fmt.Errorf("no data dir")
 	}
@@ -195,6 +283,13 @@ func precheckDir(c *config.Config) error {
 	}
 	if len(c.SaveDir) == 0 {
 		return fmt.Errorf("no save dir")
+	}
+	return nil
+}
+
+func precheckServerDir(c *config.Config) error {
+	if err := precheckCaptureDir(c); err != nil {
+		return err
 	}
 	if len(c.LibraryDir) == 0 {
 		return fmt.Errorf("no library dir")
