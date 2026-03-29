@@ -3934,8 +3934,8 @@ textarea.input {
 }
 
 .handler-debug-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   padding: 24px;
 }
@@ -3945,10 +3945,30 @@ textarea.input {
   font-size: 28px;
 }
 
+.handler-debug-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .handler-debug-copy p {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.handler-debug-run-inline {
+  align-self: flex-start;
+  color: #fff8f4 !important;
+}
+
+.handler-debug-run-inline span {
+  color: #fff8f4 !important;
+}
+
+.handler-debug-run-inline svg {
+  color: #fff8f4 !important;
 }
 
 .handler-debug-controls {
@@ -3974,23 +3994,109 @@ textarea.input {
   font-weight: 700;
 }
 
-.handler-debug-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-}
-
 .handler-debug-select {
   appearance: none;
 }
 
-.handler-debug-switch {
+.handler-debug-chain-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.handler-debug-chain-workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.handler-debug-chain-column,
+.handler-debug-chain-meta {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.handler-debug-chain-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.handler-debug-chain-head strong {
+  font-size: 13px;
+}
+
+.handler-debug-chain-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.handler-debug-chain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 340px;
+  height: 340px;
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.handler-debug-chain-card {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 248, 236, 0.72);
   color: var(--foreground);
-  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+}
+
+.handler-debug-chain-card-selected {
+  background: rgba(176, 88, 39, 0.12);
+  border-color: rgba(176, 88, 39, 0.2);
+}
+
+.handler-debug-chain-grip {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.handler-debug-chain-name-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.handler-debug-chain-name {
+  display: inline-block;
+  min-width: 100%;
+  white-space: nowrap;
+}
+
+.handler-debug-chain-card:hover .handler-debug-chain-name-scroll,
+.handler-debug-chain-card:focus-visible .handler-debug-chain-name-scroll {
+  animation: handler-debug-chain-name-scroll 3.2s ease-in-out infinite alternate;
 }
 
 .handler-debug-textarea {
@@ -3998,14 +4104,19 @@ textarea.input {
   resize: vertical;
 }
 
-.handler-debug-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.handler-debug-textarea-compact {
+  min-height: 340px;
+  height: 340px;
+  max-height: 340px;
 }
 
-.handler-debug-upload-btn {
-  position: relative;
+@keyframes handler-debug-chain-name-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--handler-chain-scroll-distance, 0px) * -1));
+  }
 }
 
 .handler-debug-message,
@@ -4016,8 +4127,8 @@ textarea.input {
 }
 
 .handler-debug-results {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   flex: 1 1 auto;
   min-height: 0;
@@ -4027,8 +4138,38 @@ textarea.input {
 .handler-debug-preview-panel {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   padding: 20px;
   min-height: 0;
+}
+
+.handler-debug-step-list {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.handler-debug-step-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.handler-debug-step-card-error {
+  border-color: rgba(152, 57, 46, 0.18);
+}
+
+.handler-debug-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .handler-debug-preview-grid {
@@ -4144,10 +4285,6 @@ textarea.input {
 .handler-debug-tab-active {
   background: rgba(176, 88, 39, 0.14);
   color: #9d4f1f;
-}
-
-.handler-debug-run-inline {
-  align-self: end;
 }
 
 .handler-debug-pic-diff {
@@ -4752,6 +4889,8 @@ textarea.input {
 
 @media (max-width: 1120px) {
   .debug-tools-page,
+  .handler-debug-chain-top,
+  .handler-debug-chain-workspace,
   .handler-debug-hero,
   .handler-debug-pic-diff-compare,
   .handler-debug-results,
@@ -4778,12 +4917,11 @@ textarea.input {
   }
 
   .handler-debug-grid-2,
-  .handler-debug-toolbar,
   .handler-debug-results {
     grid-template-columns: 1fr;
   }
 
-  .handler-debug-actions {
+  .handler-debug-title-row {
     flex-direction: column;
     align-items: stretch;
   }

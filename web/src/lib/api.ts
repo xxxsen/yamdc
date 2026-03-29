@@ -296,7 +296,9 @@ export interface SearcherDebugResult {
 }
 
 export interface HandlerDebugRequest {
+  mode?: "single" | "chain";
   handler_id: string;
+  handler_ids?: string[];
   meta: SearcherDebugMovieMeta;
 }
 
@@ -306,6 +308,7 @@ export interface HandlerDebugInstance {
 }
 
 export interface HandlerDebugResult {
+  mode: "single" | "chain";
   handler_id: string;
   handler_name: string;
   number_id: string;
@@ -314,6 +317,13 @@ export interface HandlerDebugResult {
   before_meta: SearcherDebugMovieMeta;
   after_meta: SearcherDebugMovieMeta;
   error: string;
+  steps: Array<{
+    handler_id: string;
+    handler_name: string;
+    before_meta: SearcherDebugMovieMeta;
+    after_meta: SearcherDebugMovieMeta;
+    error: string;
+  }>;
 }
 
 interface APIResponse<T> {

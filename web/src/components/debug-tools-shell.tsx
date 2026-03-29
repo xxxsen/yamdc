@@ -18,8 +18,8 @@ const TOOL_ITEMS = [
   },
   {
     href: "/debug/handler",
-    title: "Handler 调试",
-    description: "手动构造 FileContext，测试单个 handler 的前后变化。",
+    title: "Handler 测试",
+    description: "编辑当前 handler 链和 Meta JSON，直接观察处理前后的差异。",
   },
 ] as const;
 

@@ -20,11 +20,22 @@ type DebugHandlerInstance struct {
 }
 
 type DebugRequest struct {
-	HandlerID string           `json:"handler_id"`
-	Meta      *model.MovieMeta `json:"meta"`
+	Mode       string           `json:"mode"`
+	HandlerID  string           `json:"handler_id"`
+	HandlerIDs []string         `json:"handler_ids"`
+	Meta       *model.MovieMeta `json:"meta"`
+}
+
+type DebugStep struct {
+	HandlerID   string           `json:"handler_id"`
+	HandlerName string           `json:"handler_name"`
+	BeforeMeta  *model.MovieMeta `json:"before_meta"`
+	AfterMeta   *model.MovieMeta `json:"after_meta"`
+	Error       string           `json:"error"`
 }
 
 type DebugResult struct {
+	Mode        string           `json:"mode"`
 	HandlerID   string           `json:"handler_id"`
 	HandlerName string           `json:"handler_name"`
 	NumberID    string           `json:"number_id"`
@@ -33,6 +44,7 @@ type DebugResult struct {
 	BeforeMeta  *model.MovieMeta `json:"before_meta"`
 	AfterMeta   *model.MovieMeta `json:"after_meta"`
 	Error       string           `json:"error"`
+	Steps       []DebugStep      `json:"steps"`
 }
 
 type Debugger struct {
@@ -74,8 +86,12 @@ func (d *Debugger) Handlers() []DebugHandlerInstance {
 }
 
 func (d *Debugger) Debug(ctx context.Context, req DebugRequest) (*DebugResult, error) {
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "single"
+	}
 	handlerID := strings.TrimSpace(req.HandlerID)
-	if handlerID == "" {
+	if mode == "single" && handlerID == "" {
 		return nil, fmt.Errorf("handler_id is required")
 	}
 	metaInput := req.Meta
@@ -90,35 +106,102 @@ func (d *Debugger) Debug(ctx context.Context, req DebugRequest) (*DebugResult, e
 	if err != nil {
 		return nil, err
 	}
-	instance, handlerCfg, err := d.lookupHandler(handlerID)
-	if err != nil {
-		return nil, err
-	}
 	num, err := d.parseNumber(afterMeta.Number)
 	if err != nil {
 		return nil, err
+	}
+	debugResult := &DebugResult{
+		Mode:       mode,
+		NumberID:   num.GetNumberID(),
+		Category:   num.GetExternalFieldCategory(),
+		Uncensor:   num.GetExternalFieldUncensor(),
+		BeforeMeta: beforeMeta,
+		AfterMeta:  afterMeta,
 	}
 	fc := &model.FileContext{
 		Meta:   afterMeta,
 		Number: num,
 	}
+	switch mode {
+	case "single":
+		instance, handlerCfg, lookupErr := d.lookupHandler(handlerID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		debugResult.HandlerID = instance.ID
+		debugResult.HandlerName = instance.Name
+		step, runErr := d.runOne(ctx, fc, *instance, handlerCfg)
+		if runErr != nil {
+			return nil, runErr
+		}
+		debugResult.Steps = []DebugStep{*step}
+		debugResult.Error = step.Error
+	case "chain":
+		chain := d.resolveChain(req.HandlerIDs)
+		failCount := 0
+		for _, instance := range chain {
+			step, runErr := d.runOne(ctx, fc, instance, d.configs[instance.ID])
+			if runErr != nil {
+				return nil, runErr
+			}
+			debugResult.Steps = append(debugResult.Steps, *step)
+			if step.Error != "" {
+				failCount++
+			}
+		}
+		if failCount > 0 {
+			debugResult.Error = fmt.Sprintf("%d handlers failed", failCount)
+		}
+	default:
+		return nil, fmt.Errorf("invalid mode: %s", mode)
+	}
+	return debugResult, nil
+}
+
+func (d *Debugger) resolveChain(handlerIDs []string) []DebugHandlerInstance {
+	if len(handlerIDs) == 0 {
+		return append([]DebugHandlerInstance(nil), d.instances...)
+	}
+	allowed := make(map[string]struct{}, len(handlerIDs))
+	for _, id := range handlerIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		allowed[id] = struct{}{}
+	}
+	chain := make([]DebugHandlerInstance, 0, len(allowed))
+	for _, instance := range d.instances {
+		if _, ok := allowed[instance.ID]; ok {
+			chain = append(chain, instance)
+		}
+	}
+	return chain
+}
+
+func (d *Debugger) runOne(ctx context.Context, fc *model.FileContext, instance DebugHandlerInstance, handlerCfg config.HandlerConfig) (*DebugStep, error) {
+	beforeMeta, err := cloneMovieMeta(fc.Meta)
+	if err != nil {
+		return nil, err
+	}
 	h, err := CreateHandler(instance.Name, handlerCfg.Args, d.deps)
 	if err != nil {
 		return nil, err
 	}
-	debugResult := &DebugResult{
+	step := &DebugStep{
 		HandlerID:   instance.ID,
 		HandlerName: instance.Name,
-		NumberID:    num.GetNumberID(),
-		Category:    num.GetExternalFieldCategory(),
-		Uncensor:    num.GetExternalFieldUncensor(),
 		BeforeMeta:  beforeMeta,
-		AfterMeta:   afterMeta,
 	}
 	if err := h.Handle(ctx, fc); err != nil {
-		debugResult.Error = err.Error()
+		step.Error = err.Error()
 	}
-	return debugResult, nil
+	afterMeta, err := cloneMovieMeta(fc.Meta)
+	if err != nil {
+		return nil, err
+	}
+	step.AfterMeta = afterMeta
+	return step, nil
 }
 
 func (d *Debugger) lookupHandler(handlerID string) (*DebugHandlerInstance, config.HandlerConfig, error) {

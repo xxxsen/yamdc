@@ -12,12 +12,32 @@ import {
 } from "@/lib/api";
 
 const DEFAULT_INPUT = "FC2-PPV-12345";
+const SEARCHER_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.searcher.input";
+const SEARCHER_DEBUG_PLUGINS_STORAGE_KEY = "yamdc.debug.searcher.plugins";
+const SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY = "yamdc.debug.searcher.use_cleaner";
 
 export function SearcherDebugShell() {
   const router = useRouter();
-  const [input, setInput] = useState(DEFAULT_INPUT);
-  const [customPlugins, setCustomPlugins] = useState("");
-  const [useCleaner, setUseCleaner] = useState(true);
+  const [input, setInput] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_INPUT;
+    }
+    const stored = window.localStorage.getItem(SEARCHER_DEBUG_INPUT_STORAGE_KEY);
+    return stored && stored.trim() ? stored : DEFAULT_INPUT;
+  });
+  const [customPlugins, setCustomPlugins] = useState(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+    return window.localStorage.getItem(SEARCHER_DEBUG_PLUGINS_STORAGE_KEY) ?? "";
+  });
+  const [useCleaner, setUseCleaner] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const stored = window.localStorage.getItem(SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY);
+    return stored === "true" || stored === "false" ? stored === "true" : true;
+  });
   const [pluginCatalog, setPluginCatalog] = useState<SearcherDebugPluginCollection | null>(null);
   const [result, setResult] = useState<SearcherDebugResult | null>(null);
   const [error, setError] = useState("");
@@ -34,6 +54,27 @@ export function SearcherDebugShell() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SEARCHER_DEBUG_INPUT_STORAGE_KEY, input);
+  }, [input]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SEARCHER_DEBUG_PLUGINS_STORAGE_KEY, customPlugins);
+  }, [customPlugins]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY, String(useCleaner));
+  }, [useCleaner]);
 
   const selectedPlugins = useMemo(
     () =>
@@ -212,7 +253,7 @@ export function SearcherDebugShell() {
                   </button>
                   <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
                     <ArrowRight size={16} />
-                    <span>发送到 Handler 调试</span>
+                    <span>发送到 Handler 测试</span>
                   </button>
                 </div>
               ) : null}

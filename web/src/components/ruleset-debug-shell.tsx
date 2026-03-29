@@ -1,18 +1,32 @@
 "use client";
 
 import { Bug, LoaderCircle, Play } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { explainNumberCleaner, type NumberCleanerExplainResult } from "@/lib/api";
 
 const DEFAULT_INPUT = "FC2PPV12345 中文字幕.mp4";
+const RULESET_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.ruleset.input";
 
 export function RulesetDebugShell() {
-  const [input, setInput] = useState(DEFAULT_INPUT);
+  const [input, setInput] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_INPUT;
+    }
+    const stored = window.localStorage.getItem(RULESET_DEBUG_INPUT_STORAGE_KEY);
+    return stored && stored.trim() ? stored : DEFAULT_INPUT;
+  });
   const [result, setResult] = useState<NumberCleanerExplainResult | null>(null);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const steps = result?.steps ?? [];
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(RULESET_DEBUG_INPUT_STORAGE_KEY, input);
+  }, [input]);
 
   const handleRun = () => {
     const nextInput = input.trim();

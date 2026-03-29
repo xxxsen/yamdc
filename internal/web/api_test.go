@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,10 +13,17 @@ import (
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/jobdef"
+	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/store"
 )
+
+type testHandlerFn func(ctx context.Context, fc *model.FileContext) error
+
+func (fn testHandlerFn) Handle(ctx context.Context, fc *model.FileContext) error {
+	return fn(ctx, fc)
+}
 
 func phandlerDebugRuntime() appdeps.Runtime {
 	return appdeps.Runtime{
@@ -103,6 +111,7 @@ func TestHandleNumberCleanerExplain(t *testing.T) {
 
 func TestHandleHandlerDebugRun(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+		"mode":"single",
 		"handler_id":"number_title",
 		"meta":{"number":"ABC-123","title":"sample title"}
 	}`))
@@ -121,4 +130,45 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	require.Equal(t, 0, payload.Code)
 	require.Equal(t, "ABC-123 sample title", payload.Data.AfterMeta.Title)
+}
+
+func TestHandleHandlerDebugRunChain(t *testing.T) {
+	phandler.Register("test_chain_fail", func(args interface{}, deps appdeps.Runtime) (phandler.IHandler, error) {
+		return testHandlerFn(func(ctx context.Context, fc *model.FileContext) error {
+			fc.Meta.Title = fc.Meta.Title + "-failed"
+			return fmt.Errorf("boom")
+		}), nil
+	})
+	phandler.Register("test_chain_ok", func(args interface{}, deps appdeps.Runtime) (phandler.IHandler, error) {
+		return testHandlerFn(func(ctx context.Context, fc *model.FileContext) error {
+			fc.Meta.Title = fc.Meta.Title + "-ok"
+			return nil
+		}), nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+		"mode":"chain",
+		"handler_ids":["test_chain_fail","test_chain_ok"],
+		"meta":{"number":"ABC-123","title":"sample title"}
+	}`))
+	rec := httptest.NewRecorder()
+
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]config.HandlerConfig{})}
+	api.handleHandlerDebugRun(rec, req)
+
+	resp := rec.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload struct {
+		Code int                  `json:"code"`
+		Data phandler.DebugResult `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.Equal(t, "chain", payload.Data.Mode)
+	require.Len(t, payload.Data.Steps, 2)
+	require.Equal(t, "1 handlers failed", payload.Data.Error)
+	require.Equal(t, "sample title-failed-ok", payload.Data.AfterMeta.Title)
+	require.Equal(t, "boom", payload.Data.Steps[0].Error)
+	require.Empty(t, payload.Data.Steps[1].Error)
 }
