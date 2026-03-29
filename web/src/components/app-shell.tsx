@@ -8,6 +8,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { TopNav } from "@/components/top-nav";
 
 const MEDIA_LIBRARY_RETURN_KEY = "yamdc.media-library.return-path";
+const INITIAL_CURRENT_TIME = "--:--";
+
+function formatCurrentTime() {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
 
 export function AppShell({
   children,
@@ -15,14 +24,21 @@ export function AppShell({
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const [currentTime, setCurrentTime] = useState(INITIAL_CURRENT_TIME);
   const pathname = usePathname();
   const router = useRouter();
   const isMediaLibraryRoute = pathname.startsWith("/media-library");
-  const currentTime = new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date());
+
+  useEffect(() => {
+    const updateCurrentTime = () => {
+      setCurrentTime(formatCurrentTime());
+    };
+
+    updateCurrentTime();
+
+    const timer = window.setInterval(updateCurrentTime, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || isMediaLibraryRoute) {
