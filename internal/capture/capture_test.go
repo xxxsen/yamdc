@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
@@ -27,15 +26,23 @@ func (s *testSearcher) Check(context.Context) error {
 }
 
 type staticCleaner struct {
-	normalized string
+	normalized      string
+	category        string
+	categoryMatched bool
+	uncensor        bool
+	uncensorMatched bool
 }
 
 func (c *staticCleaner) Clean(input string) (*numbercleaner.Result, error) {
 	return &numbercleaner.Result{
-		RawInput:   input,
-		Normalized: c.normalized,
-		Status:     numbercleaner.StatusSuccess,
-		Confidence: numbercleaner.ConfidenceHigh,
+		RawInput:        input,
+		Normalized:      c.normalized,
+		Category:        c.category,
+		CategoryMatched: c.categoryMatched,
+		Uncensor:        c.uncensor,
+		UncensorMatched: c.uncensorMatched,
+		Status:          numbercleaner.StatusSuccess,
+		Confidence:      numbercleaner.ConfidenceHigh,
 	}, nil
 }
 
@@ -46,9 +53,6 @@ func newTestCapture(t *testing.T, cleaner numbercleaner.Cleaner) *Capture {
 		WithSaveDir(t.TempDir()),
 		WithSeacher(&testSearcher{}),
 		WithNumberCleaner(cleaner),
-		WithNumberRewriter(ruleapi.WrapFuncAsRewriter(func(in string) (string, error) { return in, nil })),
-		WithUncensorTester(ruleapi.WrapFuncAsTester(func(string) (bool, error) { return false, nil })),
-		WithNumberCategorier(ruleapi.WrapFuncAsMatcher(func(string) (string, bool, error) { return "", false, nil })),
 	)
 	require.NoError(t, err)
 	return cap
@@ -68,4 +72,19 @@ func TestResolveFileContextSkipsCleanerForPreferredNumber(t *testing.T) {
 	fc, err := cap.ResolveFileContext(filepath.Join(t.TempDir(), "ignored.mp4"), "XYZ-999")
 	require.NoError(t, err)
 	require.Equal(t, "XYZ-999", fc.Number.GenerateFileName())
+}
+
+func TestResolveFileContextUsesCleanerDerivedFields(t *testing.T) {
+	cap := newTestCapture(t, &staticCleaner{
+		normalized:      "FC2-PPV-12345",
+		category:        "FC2",
+		categoryMatched: true,
+		uncensor:        true,
+		uncensorMatched: true,
+	})
+
+	fc, err := cap.ResolveFileContext(filepath.Join(t.TempDir(), "ignored.mp4"))
+	require.NoError(t, err)
+	require.Equal(t, "FC2", fc.Number.GetExternalFieldCategory())
+	require.True(t, fc.Number.GetExternalFieldUncensor())
 }

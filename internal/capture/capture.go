@@ -68,9 +68,11 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 	fc.FileExt = filepath.Ext(file)
 	fileNoExt := strings.TrimSpace(preferredNumber)
 	useCleaner := len(fileNoExt) == 0
+	var cleaned *numbercleaner.Result
 	if useCleaner {
 		fileNoExt = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
-		cleaned, err := c.c.NumberCleaner.Clean(fileNoExt)
+		var err error
+		cleaned, err = c.c.NumberCleaner.Clean(fileNoExt)
 		if err != nil {
 			return fmt.Errorf("clean number before rewrite failed, err:%w", err)
 		}
@@ -78,24 +80,19 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 			fileNoExt = cleaned.Normalized
 		}
 	}
-	//番号改写
-	var err error
-	fileNoExt, err = c.c.NumberRewriter.Rewrite(fileNoExt)
-	if err != nil {
-		return fmt.Errorf("rewrite number before parse failed, err:%w", err)
-	}
 	//番号解析
 	info, err := number.Parse(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
-	//规则测试
-	//是否无码
-	ok, _ := c.c.UncensorTester.Test(info.GetNumberID())
-	info.SetExternalFieldUncensor(ok)
-	//尝试分类
-	cat, _, _ := c.c.NumberCategorier.Match(info.GetNumberID())
-	info.SetExternalFieldCategory(cat)
+	if cleaned != nil {
+		if cleaned.UncensorMatched {
+			info.SetExternalFieldUncensor(cleaned.Uncensor)
+		}
+		if cleaned.CategoryMatched {
+			info.SetExternalFieldCategory(cleaned.Category)
+		}
+	}
 
 	fc.Number = info
 	fc.SaveFileBase = fc.Number.GenerateFileName()

@@ -2,7 +2,6 @@ package capture
 
 import (
 	"fmt"
-	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -29,9 +28,6 @@ type config struct {
 	SaveDir                string
 	Naming                 string
 	ExtraMediaExtList      []string
-	UncensorTester         ruleapi.ITester
-	NumberRewriter         ruleapi.IRewriter
-	NumberCategorier       ruleapi.IMatcher
 	NumberCleaner          numbercleaner.Cleaner
 	DiscardTranslatedTitle bool
 	DiscardTranslatedPlot  bool
@@ -73,24 +69,6 @@ func WithNamingRule(r string) Option {
 func WithExtraMediaExtList(lst []string) Option {
 	return func(c *config) {
 		c.ExtraMediaExtList = lst
-	}
-}
-
-func WithUncensorTester(t ruleapi.ITester) Option {
-	return func(c *config) {
-		c.UncensorTester = t
-	}
-}
-
-func WithNumberRewriter(t ruleapi.IRewriter) Option {
-	return func(c *config) {
-		c.NumberRewriter = t
-	}
-}
-
-func WithNumberCategorier(t ruleapi.IMatcher) Option {
-	return func(c *config) {
-		c.NumberCategorier = t
 	}
 }
 

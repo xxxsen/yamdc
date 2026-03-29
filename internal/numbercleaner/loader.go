@@ -50,6 +50,7 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
 	}
 	out.Options = mergeOptions(base.Options, override.Options)
 	out.Normalizers = mergeNamedRules(base.Normalizers, override.Normalizers, func(v NormalizerRule) string { return v.Name }, func(v NormalizerRule) bool { return v.Disabled })
+	out.RewriteRules = mergeNamedRules(base.RewriteRules, override.RewriteRules, func(v RewriteRule) string { return v.Name }, func(v RewriteRule) bool { return v.Disabled })
 	out.SuffixRules = mergeNamedRules(base.SuffixRules, override.SuffixRules, func(v SuffixRule) string { return v.Name }, func(v SuffixRule) bool { return v.Disabled })
 	out.NoiseRules = mergeNamedRules(base.NoiseRules, override.NoiseRules, func(v NoiseRule) string { return v.Name }, func(v NoiseRule) bool { return v.Disabled })
 	out.Matchers = mergeNamedRules(base.Matchers, override.Matchers, func(v MatcherRule) string { return v.Name }, func(v MatcherRule) bool { return v.Disabled })
@@ -97,6 +98,26 @@ func validateRuleSet(rs *RuleSet) error {
 			}
 		}
 	}
+	seen = make(map[string]struct{})
+	for _, item := range rs.RewriteRules {
+		if item.Disabled {
+			continue
+		}
+		if strings.TrimSpace(item.Name) == "" {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: "rewrite rule name is required"}
+		}
+		if _, ok := seen[item.Name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate rewrite rule name: %s", item.Name), Rule: item.Name}
+		}
+		seen[item.Name] = struct{}{}
+		if strings.TrimSpace(item.Pattern) == "" {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: "rewrite rule pattern is required", Rule: item.Name}
+		}
+		if _, err := regexp.Compile(item.Pattern); err != nil {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule regexp failed", Rule: item.Name, Cause: err}
+		}
+	}
+	seen = make(map[string]struct{})
 	for _, item := range rs.SuffixRules {
 		if item.Disabled {
 			continue
@@ -226,6 +247,7 @@ func cloneRuleSet(in *RuleSet) *RuleSet {
 	}
 	out := *in
 	out.Normalizers = slices.Clone(in.Normalizers)
+	out.RewriteRules = slices.Clone(in.RewriteRules)
 	out.SuffixRules = slices.Clone(in.SuffixRules)
 	out.NoiseRules = slices.Clone(in.NoiseRules)
 	out.Matchers = slices.Clone(in.Matchers)

@@ -7,11 +7,9 @@ import (
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
 	"github.com/xxxsen/yamdc/internal/capture"
-	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/dependency"
-	"github.com/xxxsen/yamdc/internal/dynscript"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/flarerr"
@@ -160,19 +158,6 @@ func runServer(c *config.Config) error {
 }
 
 func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
-	numberUncensorRule, err := buildNumberUncensorRule(c)
-	if err != nil {
-		return nil, err
-	}
-	numberCategoryRule, err := buildNumberCategoryRule(c)
-	if err != nil {
-		return nil, err
-	}
-	numberRewriteRule, err := buildNumberRewriteRule(c)
-	if err != nil {
-		return nil, err
-	}
-
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
@@ -181,10 +166,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
-		capture.WithUncensorTester(numberUncensorRule),
-		capture.WithNumberCategorier(numberCategoryRule),
 		capture.WithNumberCleaner(numCleaner),
-		capture.WithNumberRewriter(numberRewriteRule),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
 		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
 		capture.WithLinkMode(c.SwitchConfig.EnableLinkMode),
@@ -435,56 +417,6 @@ func readScriptStreamWithPath(datadir string, relpath string) ([]byte, string, e
 		return data, p, nil
 	}
 	return nil, "", fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
-}
-
-func readScriptStream(datadir string, relpath string) ([]byte, error) {
-	data, _, err := readScriptStreamWithPath(datadir, relpath)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberUncensorTesterConfig)
-	if err != nil {
-		return nil, err
-	}
-	ck, err := dynscript.NewNumberUncensorChecker(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsTester(func(res string) (bool, error) {
-		return ck.IsMatch(context.Background(), res)
-	}), nil
-}
-
-func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberCategorierConfig)
-	if err != nil {
-		return nil, err
-	}
-	cater, err := dynscript.NewNumberCategorier(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsMatcher(func(res string) (string, bool, error) {
-		return cater.Category(context.Background(), res)
-	}), nil
-}
-
-func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberRewriterConfig)
-	if err != nil {
-		return nil, err
-	}
-	rewriter, err := dynscript.NewNumberRewriter(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsRewriter(func(res string) (string, error) {
-		return rewriter.Rewrite(context.Background(), res)
-	}), nil
 }
 
 func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, error) {

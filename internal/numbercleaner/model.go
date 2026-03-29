@@ -57,11 +57,16 @@ type Result struct {
 	Normalized string
 	NumberID   string
 	Suffixes   []string
-	Confidence Confidence
-	Status     Status
-	RuleHits   []string
-	Warnings   []string
-	Candidates []Candidate
+	Category   string
+	Uncensor   bool
+
+	CategoryMatched bool
+	UncensorMatched bool
+	Confidence      Confidence
+	Status          Status
+	RuleHits        []string
+	Warnings        []string
+	Candidates      []Candidate
 }
 
 type Candidate struct {
@@ -71,6 +76,11 @@ type Candidate struct {
 	Matcher  string
 	Start    int
 	End      int
+
+	Category        string
+	CategoryMatched bool
+	Uncensor        bool
+	UncensorMatched bool
 }
 
 type Options struct {
@@ -84,6 +94,7 @@ type RuleSet struct {
 	Version        string            `yaml:"version"`
 	Options        Options           `yaml:"options"`
 	Normalizers    []NormalizerRule  `yaml:"normalizers"`
+	RewriteRules   []RewriteRule     `yaml:"rewrite_rules"`
 	SuffixRules    []SuffixRule      `yaml:"suffix_rules"`
 	NoiseRules     []NoiseRule       `yaml:"noise_rules"`
 	Matchers       []MatcherRule     `yaml:"matchers"`
@@ -96,6 +107,13 @@ type NormalizerRule struct {
 	Builtin  string            `yaml:"builtin"`
 	Pairs    map[string]string `yaml:"pairs"`
 	Disabled bool              `yaml:"disabled"`
+}
+
+type RewriteRule struct {
+	Name     string `yaml:"name"`
+	Pattern  string `yaml:"pattern"`
+	Replace  string `yaml:"replace"`
+	Disabled bool   `yaml:"disabled"`
 }
 
 type SuffixRule struct {
@@ -120,6 +138,7 @@ type NoiseRule struct {
 type MatcherRule struct {
 	Name              string   `yaml:"name"`
 	Category          string   `yaml:"category"`
+	Uncensor          *bool    `yaml:"uncensor"`
 	Pattern           string   `yaml:"pattern"`
 	NormalizeTemplate string   `yaml:"normalize_template"`
 	Score             int      `yaml:"score"`

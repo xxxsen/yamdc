@@ -102,7 +102,6 @@ type Config struct {
 	Dependencies        []Dependency             `json:"dependencies"`
 	NetworkConfig       NetworkConfig            `json:"network_config"`
 	TranslateConfig     TranslateConfig          `json:"translate_config"`
-	RuleConfig          RuleConfig               `json:"rule_config"`
 	SwitchConfig        SwitchConfig             `json:"switch_config"`
 	FlareSolverrConfig  FlareSolverrConfig       `json:"flare_solverr_config"`
 	TagMappingConfig    TagMappingConfig         `json:"tag_mapping_config"`
@@ -116,12 +115,6 @@ type SwitchConfig struct {
 	EnableSearcherCheck      bool `json:"enable_searcher_check"`       //测试场景使用, 检查插件的目标域名是否还能访问
 }
 
-type RuleConfig struct {
-	NumberRewriterConfig       string `json:"number_rewriter"`
-	NumberCategorierConfig     string `json:"number_categorier"`
-	NumberUncensorTesterConfig string `json:"number_uncensor_tester"`
-}
-
 func defaultConfig() *Config {
 	return &Config{
 		Plugins:         sysPlugins,
@@ -129,7 +122,6 @@ func defaultConfig() *Config {
 		Handlers:        sysHandler,
 		LogConfig:       sysLogConfig,
 		Dependencies:    sysDependencies,
-		RuleConfig:      sysRuleConfig,
 		SwitchConfig: SwitchConfig{
 			EnableSearchMetaCache:    true,
 			EnableLinkMode:           false,
