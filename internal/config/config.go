@@ -83,6 +83,12 @@ type NumberCleanerConfig struct {
 	Disabled         bool   `json:"disabled"`
 	RulePath         string `json:"rule_path"`
 	OverrideRulePath string `json:"override_rule_path"`
+	SourceType       string `json:"source_type"`
+	RemoteBundleURL  string `json:"remote_bundle_url"`
+	LocalBundlePath  string `json:"local_bundle_path"`
+	ActiveBundle     string `json:"active_bundle"`
+	AutoSync         bool   `json:"auto_sync"`
+	SyncIntervalHour int    `json:"sync_interval_hour"`
 }
 
 type Config struct {
@@ -156,8 +162,14 @@ func defaultConfig() *Config {
 		},
 		NumberCleanerConfig: NumberCleanerConfig{
 			Disabled:         false,
-			RulePath:         "rules/number_cleaner.yaml",
+			RulePath:         "rules/ruleset",
 			OverrideRulePath: "",
+			SourceType:       "remote",
+			RemoteBundleURL:  "https://github.com/xxxsen/yamdc-script",
+			LocalBundlePath:  "",
+			ActiveBundle:     "",
+			AutoSync:         true,
+			SyncIntervalHour: 24,
 		},
 	}
 }

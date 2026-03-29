@@ -10,13 +10,20 @@ import (
 
 func loadDefaultRule(t *testing.T) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "rules", "number_cleaner.yaml"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "rules", "ruleset", "001-base.yaml"))
 	require.NoError(t, err)
 	return data
 }
 
+func loadDefaultRuleSet(t *testing.T) *RuleSet {
+	t.Helper()
+	rs, err := LoadRuleSetFromPath(filepath.Join("..", "..", "rules", "ruleset"))
+	require.NoError(t, err)
+	return rs
+}
+
 func TestCleanerClean(t *testing.T) {
-	cl, err := NewCleanerFromBytes(loadDefaultRule(t))
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)
 
 	cases := map[string]struct {
@@ -148,7 +155,7 @@ func TestCleanerClean(t *testing.T) {
 }
 
 func TestCleanerNoMatch(t *testing.T) {
-	cl, err := NewCleanerFromBytes(loadDefaultRule(t))
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)
 
 	res, err := cl.Clean("pure-noise-file-name")
@@ -159,7 +166,7 @@ func TestCleanerNoMatch(t *testing.T) {
 }
 
 func TestCleanerRewriteCompatibility(t *testing.T) {
-	cl, err := NewCleanerFromBytes(loadDefaultRule(t))
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)
 
 	cases := map[string]string{
@@ -188,7 +195,7 @@ func TestCleanerRewriteCompatibility(t *testing.T) {
 }
 
 func TestCleanerCategoryCompatibility(t *testing.T) {
-	cl, err := NewCleanerFromBytes(loadDefaultRule(t))
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)
 
 	cases := map[string]struct {
@@ -220,7 +227,7 @@ func TestCleanerCategoryCompatibility(t *testing.T) {
 }
 
 func TestCleanerUncensorCompatibility(t *testing.T) {
-	cl, err := NewCleanerFromBytes(loadDefaultRule(t))
+	cl, err := NewCleaner(loadDefaultRuleSet(t))
 	require.NoError(t, err)
 
 	cases := map[string]bool{
@@ -272,8 +279,7 @@ func TestCleanerUncensorCompatibility(t *testing.T) {
 }
 
 func TestMergeRuleSets(t *testing.T) {
-	base, err := NewLoader().Load(loadDefaultRule(t))
-	require.NoError(t, err)
+	base := loadDefaultRuleSet(t)
 
 	overrideRaw := []byte(`
 version: v1

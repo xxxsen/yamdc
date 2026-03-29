@@ -2,8 +2,12 @@ package numbercleaner
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -34,6 +38,21 @@ func NewCleanerFromBytes(data []byte) (Cleaner, error) {
 	return NewCleaner(rs)
 }
 
+func LoadRuleSetFromPath(path string) (*RuleSet, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return loadRuleSetFromDir(path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return NewLoader().Load(data)
+}
+
 func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
 	if base == nil && override == nil {
 		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "empty rule sets"}
@@ -59,6 +78,132 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func loadRuleSetFromDir(dir string) (*RuleSet, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".yaml") && !strings.HasSuffix(strings.ToLower(name), ".yml") {
+			continue
+		}
+		files = append(files, filepath.Join(dir, name))
+	}
+	sort.Strings(files)
+	if len(files) == 0 {
+		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("no yaml files found in dir: %s", dir)}
+	}
+	var merged *RuleSet
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		part, err := NewLoader().Load(data)
+		if err != nil {
+			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("load rule fragment failed: %s", file), Cause: err}
+		}
+		if merged == nil {
+			merged = cloneRuleSet(part)
+			continue
+		}
+		merged, err = mergeRuleSetFragments(merged, part)
+		if err != nil {
+			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("merge rule fragment failed: %s", file), Cause: err}
+		}
+	}
+	if err := validateRuleSet(merged); err != nil {
+		return nil, err
+	}
+	return merged, nil
+}
+
+func mergeRuleSetFragments(base *RuleSet, part *RuleSet) (*RuleSet, error) {
+	if base == nil {
+		return cloneRuleSet(part), nil
+	}
+	if part == nil {
+		return cloneRuleSet(base), nil
+	}
+	if strings.TrimSpace(base.Version) == "" {
+		base.Version = part.Version
+	}
+	if strings.TrimSpace(part.Version) == "" {
+		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "rule fragment version is required"}
+	}
+	if base.Version != part.Version {
+		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("rule fragment version mismatch: %s != %s", base.Version, part.Version)}
+	}
+	out := cloneRuleSet(base)
+	if !isZeroOptions(part.Options) {
+		if isZeroOptions(out.Options) {
+			out.Options = part.Options
+		} else if !reflect.DeepEqual(out.Options, part.Options) {
+			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "options conflict across rule fragments"}
+		}
+	}
+	var err error
+	out.Normalizers, err = appendUniqueNamedRules(out.Normalizers, part.Normalizers, func(v NormalizerRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	out.RewriteRules, err = appendUniqueNamedRules(out.RewriteRules, part.RewriteRules, func(v RewriteRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	out.SuffixRules, err = appendUniqueNamedRules(out.SuffixRules, part.SuffixRules, func(v SuffixRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	out.NoiseRules, err = appendUniqueNamedRules(out.NoiseRules, part.NoiseRules, func(v NoiseRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	out.Matchers, err = appendUniqueNamedRules(out.Matchers, part.Matchers, func(v MatcherRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	out.PostProcessors, err = appendUniqueNamedRules(out.PostProcessors, part.PostProcessors, func(v PostProcessRule) string { return v.Name })
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func appendUniqueNamedRules[T any](base []T, extra []T, nameFn func(T) string) ([]T, error) {
+	out := slices.Clone(base)
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	for _, item := range base {
+		name := strings.TrimSpace(nameFn(item))
+		if name == "" {
+			continue
+		}
+		seen[name] = struct{}{}
+	}
+	for _, item := range extra {
+		name := strings.TrimSpace(nameFn(item))
+		if name == "" {
+			out = append(out, item)
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate rule name across fragments: %s", name), Rule: name}
+		}
+		seen[name] = struct{}{}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func isZeroOptions(opts Options) bool {
+	return reflect.DeepEqual(opts, Options{})
 }
 
 func validateRuleSet(rs *RuleSet) error {
