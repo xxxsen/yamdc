@@ -4742,6 +4742,11 @@ textarea.input {
   flex-direction: column;
 }
 
+.searcher-debug-grid > .ruleset-debug-summary-panel .ruleset-debug-summary {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .searcher-debug-summary-body {
   display: flex;
   flex-direction: column;
