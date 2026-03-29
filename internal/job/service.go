@@ -22,10 +22,11 @@ import (
 )
 
 type Service struct {
-	jobRepo    *repository.JobRepository
-	logRepo    *repository.LogRepository
-	scrapeRepo *repository.ScrapeDataRepository
-	capture    *capture.Capture
+	jobRepo     *repository.JobRepository
+	logRepo     *repository.LogRepository
+	scrapeRepo  *repository.ScrapeDataRepository
+	capture     *capture.Capture
+	storage     store.IStorage
 	importGuard func(context.Context) error
 
 	mu      sync.Mutex
@@ -42,12 +43,14 @@ func NewService(
 	logRepo *repository.LogRepository,
 	scrapeRepo *repository.ScrapeDataRepository,
 	cap *capture.Capture,
+	storage store.IStorage,
 ) *Service {
 	return &Service{
 		jobRepo:    jobRepo,
 		logRepo:    logRepo,
 		scrapeRepo: scrapeRepo,
 		capture:    cap,
+		storage:    storage,
 		running:    make(map[int64]struct{}),
 	}
 }
@@ -173,7 +176,7 @@ func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, wi
 	if meta.Cover == nil || meta.Cover.Key == "" {
 		return nil, fmt.Errorf("cover not found")
 	}
-	raw, err := store.GetData(ctx, meta.Cover.Key)
+	raw, err := store.GetDataFrom(ctx, s.storage, meta.Cover.Key)
 	if err != nil {
 		return nil, fmt.Errorf("load cover failed: %w", err)
 	}
@@ -194,7 +197,7 @@ func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, wi
 	if err != nil {
 		return nil, fmt.Errorf("encode poster failed: %w", err)
 	}
-	key, err := store.AnonymousPutData(ctx, croppedRaw)
+	key, err := store.AnonymousPutDataTo(ctx, s.storage, croppedRaw)
 	if err != nil {
 		return nil, fmt.Errorf("store poster failed: %w", err)
 	}

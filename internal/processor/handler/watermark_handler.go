@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -11,6 +12,7 @@ import (
 )
 
 type watermark struct {
+	storage store.IStorage
 }
 
 func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
@@ -43,7 +45,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 		logutil.GetLogger(ctx).Debug("no watermark tag found, skip watermark proc")
 		return nil
 	}
-	key, err := store.AnonymousDataRewrite(ctx, fc.Meta.Poster.Key, func(ctx context.Context, data []byte) ([]byte, error) {
+	key, err := store.AnonymousDataRewriteWithStorage(ctx, h.storage, fc.Meta.Poster.Key, func(ctx context.Context, data []byte) ([]byte, error) {
 		return image.AddWatermarkFromBytes(data, tags)
 	})
 	if err != nil {
@@ -54,5 +56,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 }
 
 func init() {
-	Register(HWatermakrMaker, HandlerToCreator(&watermark{}))
+	Register(HWatermakrMaker, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &watermark{storage: deps.Storage}, nil
+	})
 }

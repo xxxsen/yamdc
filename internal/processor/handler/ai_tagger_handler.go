@@ -3,10 +3,11 @@ package handler
 import (
 	"context"
 	"fmt"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/model"
 	"strings"
 	"unicode/utf8"
-	"github.com/xxxsen/yamdc/internal/aiengine"
-	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -36,10 +37,11 @@ const (
 )
 
 type aiTaggerHandler struct {
+	engine aiengine.IAIEngine
 }
 
 func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) error {
-	if !aiengine.IsAIEngineEnabled() {
+	if a.engine == nil {
 		return nil
 	}
 	title := fc.Meta.Title
@@ -53,7 +55,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 	if utf8.RuneCountInString(title) < defaultMinTitleLengthForAITagging && utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
 		return nil
 	}
-	res, err := aiengine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
+	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
 		"TITLE": title,
 		"PLOT":  plot,
 	})
@@ -72,5 +74,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 }
 
 func init() {
-	Register(HAITagger, HandlerToCreator(&aiTaggerHandler{}))
+	Register(HAITagger, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &aiTaggerHandler{engine: deps.AIEngine}, nil
+	})
 }

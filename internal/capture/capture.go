@@ -9,7 +9,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
-	"github.com/xxxsen/yamdc/internal/store"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -50,6 +49,9 @@ func New(opts ...Option) (*Capture, error) {
 	}
 	if c.Processor == nil {
 		c.Processor = processor.DefaultProcessor
+	}
+	if c.Storage == nil {
+		return nil, fmt.Errorf("no storage found")
 	}
 	if c.NumberCleaner == nil {
 		c.NumberCleaner = numbercleaner.NewPassthroughCleaner()
@@ -411,7 +413,7 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 		target := filepath.Join(fc.SaveDir, image.Name)
 		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
 
-		data, err := store.GetData(ctx, image.Key)
+		data, err := c.c.Storage.GetData(ctx, image.Key)
 		if err != nil {
 			logger.Error("read image data failed", zap.Error(err))
 			return err

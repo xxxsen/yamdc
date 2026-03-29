@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/client"
+	"net/http"
+	"strings"
 
 	"github.com/xxxsen/common/utils"
 )
@@ -37,7 +37,7 @@ func (g *ollamaEngine) Complete(ctx context.Context, prompt string, args map[str
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	rsp, err := client.DefaultClient().Do(req)
+	rsp, err := g.c.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -71,13 +71,20 @@ func newOllamaEngine(c *config) (*ollamaEngine, error) {
 	if len(c.Model) == 0 {
 		return nil, fmt.Errorf("model is empty")
 	}
+	if c.HTTPClient == nil {
+		c.HTTPClient = client.MustNewClient()
+	}
 	return &ollamaEngine{c: c}, nil
 }
 
-func createOllamaEngine(args interface{}) (aiengine.IAIEngine, error) {
+func createOllamaEngine(args interface{}, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
 	c := &config{}
 	if err := utils.ConvStructJson(args, c); err != nil {
 		return nil, err
+	}
+	createCfg := aiengine.ResolveCreateConfig(opts...)
+	if createCfg.HTTPClient != nil {
+		c.HTTPClient = createCfg.HTTPClient
 	}
 	return newOllamaEngine(c)
 }

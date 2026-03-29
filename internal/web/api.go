@@ -24,10 +24,11 @@ type API struct {
 	jobSvc  *job.Service
 	saveDir string
 	media   *medialib.Service
+	store   store.IStorage
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media}
+func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage) *API {
+	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage}
 }
 
 func (a *API) Handler() http.Handler {
@@ -295,7 +296,7 @@ func (a *API) handleReviewRoutes(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid review json"})
 				return
 			}
-			key, err := store.AnonymousPutData(r.Context(), data)
+			key, err := store.AnonymousPutDataTo(r.Context(), a.store, data)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
 				return
@@ -376,7 +377,7 @@ func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "upload file is not an image"})
 			return
 		}
-		key, err := store.AnonymousPutData(r.Context(), data)
+		key, err := store.AnonymousPutDataTo(r.Context(), a.store, data)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 1, "message": err.Error()})
 			return
@@ -401,7 +402,7 @@ func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 1, "message": "invalid asset key"})
 		return
 	}
-	data, err := store.GetData(r.Context(), key)
+	data, err := store.GetDataFrom(r.Context(), a.store, key)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 1, "message": "asset not found"})
 		return

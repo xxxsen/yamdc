@@ -5,6 +5,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 const (
@@ -25,6 +26,7 @@ type config struct {
 	ScanDir                string
 	Searcher               searcher.ISearcher
 	Processor              processor.IProcessor
+	Storage                store.IStorage
 	SaveDir                string
 	Naming                 string
 	ExtraMediaExtList      []string
@@ -57,6 +59,12 @@ func WithSeacher(ss searcher.ISearcher) Option {
 func WithProcessor(p processor.IProcessor) Option {
 	return func(c *config) {
 		c.Processor = p
+	}
+}
+
+func WithStorage(s store.IStorage) Option {
+	return func(c *config) {
+		c.Storage = s
 	}
 }
 

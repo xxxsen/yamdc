@@ -2,11 +2,12 @@ package handler
 
 import (
 	"context"
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/model"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +25,7 @@ func TestDurationFixer(t *testing.T) {
 		FullFilePath: tmpVideo,
 		Meta:         &model.MovieMeta{},
 	}
-	h, err := CreateHandler(HDurationFixer, nil)
+	h, err := CreateHandler(HDurationFixer, nil, appdeps.Runtime{})
 	assert.NoError(t, err)
 	err = h.Handle(context.Background(), fc)
 	assert.NoError(t, err)

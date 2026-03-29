@@ -6,6 +6,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
@@ -13,21 +14,15 @@ import (
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/flarerr"
-	"github.com/xxxsen/yamdc/internal/job"
-	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
-	"github.com/xxxsen/yamdc/internal/repository"
-	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
 	"github.com/xxxsen/yamdc/internal/translator/google"
-	"github.com/xxxsen/yamdc/internal/web"
 	"log"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -80,87 +75,23 @@ func newServerCmd() *cobra.Command {
 
 func runServer(c *config.Config) error {
 	rewriteEnvFlagToConfig(&c.SwitchConfig)
-	if err := normalizeDirPaths(c); err != nil {
-		return fmt.Errorf("normalize dir paths failed, err:%w", err)
-	}
-	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
-	if err := precheckDir(c); err != nil {
-		return fmt.Errorf("precheck dir failed, err:%w", err)
-	}
-	if err := setupHTTPClient(c); err != nil {
-		return fmt.Errorf("setup http client failed, err:%w", err)
-	}
-	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
-		return fmt.Errorf("ensure dependencies failed, err:%w", err)
-	}
-	if err := setupAIEngine(c); err != nil {
-		return fmt.Errorf("setup ai engine failed, err:%w", err)
-	}
-	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
-	if err := setupTranslator(c); err != nil {
-		logkit.Error("setup translator failed", zap.Error(err))
-	}
-	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
-		logkit.Error("init face recognizer failed", zap.Error(err))
-	}
-	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
-	if err != nil {
-		return fmt.Errorf("build searcher failed, err:%w", err)
-	}
-	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
-	if err != nil {
-		return fmt.Errorf("build cat searcher failed, err:%w", err)
-	}
-	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
-	if err != nil {
-		return fmt.Errorf("build processor failed, err:%w", err)
-	}
-	numCleaner, cleanerSync, err := buildNumberCleaner(c)
-	if err != nil {
-		return fmt.Errorf("build number cleaner failed, err:%w", err)
-	}
-	if cleanerSync != nil {
-		go cleanerSync(context.Background())
-	}
-	cap, err := buildCapture(c, ss, catSs, ps, numCleaner)
-	if err != nil {
-		return fmt.Errorf("build capture runner failed, err:%w", err)
-	}
-	appDB, err := repository.NewSQLite(filepath.Join(c.DataDir, "app", "app.db"))
-	if err != nil {
-		return fmt.Errorf("init app db failed, err:%w", err)
-	}
-	defer appDB.Close()
-
-	jobRepo := repository.NewJobRepository(appDB.DB())
-	logRepo := repository.NewLogRepository(appDB.DB())
-	scrapeRepo := repository.NewScrapeDataRepository(appDB.DB())
-	scanSvc := scanner.New(c.ScanDir, c.ExtraMediaExts, jobRepo, numCleaner)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, cap)
-	mediaSvc := medialib.NewService(appDB.DB(), c.LibraryDir, c.SaveDir)
-	jobSvc.SetImportGuard(func(ctx context.Context) error {
-		if mediaSvc.IsMoveRunning() {
-			return fmt.Errorf("move to media library is running")
+	ysctx := NewYamdcStartContext(c)
+	defer func() {
+		if err := ysctx.Cleanup(context.Background()); err != nil && ysctx.Logger != nil {
+			ysctx.Logger.Error("cleanup yamdc start context failed", zap.Error(err))
 		}
-		return nil
-	})
-	if err := jobSvc.Recover(context.Background()); err != nil {
-		logkit.Error("recover processing jobs failed", zap.Error(err))
-	}
-	mediaSvc.Start(context.Background())
-	api := web.NewAPI(jobRepo, scanSvc, jobSvc, c.SaveDir, mediaSvc)
-	addr := os.Getenv("YAMDC_SERVER_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
-	logkit.Info("yamdc server start", zap.String("addr", addr), zap.String("scan_dir", c.ScanDir), zap.String("data_dir", c.DataDir))
-	if err := http.ListenAndServe(addr, api.Handler()); err != nil {
-		return fmt.Errorf("listen and serve failed, err:%w", err)
+	}()
+	if err := executeYamdcInitActions(context.Background(), ysctx, newYamdcInitActions()); err != nil {
+		return err
 	}
 	return nil
 }
 
-func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
+func loggerInit(c *config.Config) *zap.Logger {
+	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
+}
+
+func buildCapture(c *config.Config, storage store.IStorage, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
@@ -168,6 +99,7 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithSaveDir(c.SaveDir),
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
+		capture.WithStorage(storage),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
 		capture.WithNumberCleaner(numCleaner),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
@@ -177,10 +109,10 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
+func buildCatSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
-		ss, err := buildSearcher(c, plg.Plugins, m)
+		ss, err := buildSearcher(cli, storage, c, plg.Plugins, m)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +121,7 @@ func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[str
 	return rs, nil
 }
 
-func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
+func buildSearcher(cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
@@ -208,7 +140,8 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
 		sr, err := searcher.NewDefaultSearcher(name, plg,
-			searcher.WithHTTPClient(client.DefaultClient()),
+			searcher.WithHTTPClient(cli),
+			searcher.WithStorage(storage),
 			searcher.WithSearchCache(c.SwitchConfig.EnableSearchMetaCache),
 		)
 		if err != nil {
@@ -220,7 +153,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 	return rs, nil
 }
 
-func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(deps appdeps.Runtime, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
@@ -234,7 +167,7 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, handlec.Args)
+		h, err := handler.CreateHandler(name, handlec.Args, deps)
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
@@ -290,7 +223,7 @@ func normalizeDirPaths(c *config.Config) error {
 	return nil
 }
 
-func initDependencies(datadir string, cdeps []config.Dependency) error {
+func initDependencies(cli client.IHTTPClient, datadir string, cdeps []config.Dependency) error {
 	deps := make([]*dependency.Dependency, 0, len(cdeps))
 	for _, item := range cdeps {
 		deps = append(deps, &dependency.Dependency{
@@ -299,10 +232,10 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 			Refresh: item.Refresh,
 		})
 	}
-	return dependency.Resolve(client.DefaultClient(), deps)
+	return dependency.Resolve(cli, deps)
 }
 
-func setupFace(c *config.Config, models string) error {
+func buildFaceRecognizer(c *config.Config, models string) (face.IFaceRec, error) {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
 	if c.SwitchConfig.EnablePigoFaceRecognizer {
@@ -320,13 +253,12 @@ func setupFace(c *config.Config, models string) error {
 		impls = append(impls, impl)
 	}
 	if len(impls) == 0 {
-		return fmt.Errorf("no face rec impl inited")
+		return nil, fmt.Errorf("no face rec impl inited")
 	}
-	face.SetFaceRec(face.NewGroup(impls))
-	return nil
+	return face.NewGroup(impls), nil
 }
 
-func setupHTTPClient(c *config.Config) error {
+func buildHTTPClient(c *config.Config) (client.IHTTPClient, error) {
 	opts := make([]client.Option, 0, 4)
 	if c.NetworkConfig.Timeout > 0 {
 		opts = append(opts, client.WithTimeout(time.Duration(c.NetworkConfig.Timeout)*time.Second))
@@ -336,12 +268,12 @@ func setupHTTPClient(c *config.Config) error {
 	}
 	clientImpl, err := client.NewClient(opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if c.FlareSolverrConfig.Enable {
 		bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
 		if err != nil {
-			return fmt.Errorf("create flaresolverr client failed, err:%w", err)
+			return nil, fmt.Errorf("create flaresolverr client failed, err:%w", err)
 		}
 		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
 		for domain, ok := range c.FlareSolverrConfig.Domains {
@@ -355,26 +287,24 @@ func setupHTTPClient(c *config.Config) error {
 		clientImpl = bpc
 		logutil.GetLogger(context.Background()).Info("enable flaresolverr client")
 	}
-	client.SetDefault(clientImpl)
-	return nil
+	return clientImpl, nil
 }
 
-func setupAIEngine(c *config.Config) error {
+func buildAIEngine(cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine, error) {
 	if len(c.AIEngine.Name) == 0 {
 		logutil.GetLogger(context.Background()).Info("ai engine is disabled, skip init")
-		return nil
+		return nil, nil
 	}
-	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args)
+	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args, aiengine.WithHTTPClient(cli))
 	if err != nil {
-		return fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
+		return nil, fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
 	}
-	aiengine.SetAIEngine(engine)
-	return nil
+	return engine, nil
 }
 
-func setupTranslator(c *config.Config) error {
+func buildTranslator(c *config.Config, engine aiengine.IAIEngine) (translator.ITranslator, error) {
 	if !c.TranslateConfig.Enable {
-		return nil
+		return nil, nil
 	}
 	allEngines := make(map[string]translator.ITranslator, 4)
 	enginec := c.TranslateConfig.EngineConfig
@@ -386,7 +316,7 @@ func setupTranslator(c *config.Config) error {
 		allEngines[translator.TrNameGoogle] = google.New(opts...)
 	}
 	if enginec.AI.Enable {
-		allEngines[translator.TrNameAI] = ai.New(ai.WithPrompt(enginec.AI.Prompt))
+		allEngines[translator.TrNameAI] = ai.New(engine, ai.WithPrompt(enginec.AI.Prompt))
 	}
 	useEngines := make([]translator.ITranslator, 0, len(allEngines))
 	engineNames := []string{
@@ -403,26 +333,12 @@ func setupTranslator(c *config.Config) error {
 		useEngines = append(useEngines, e)
 	}
 	if len(useEngines) == 0 {
-		return fmt.Errorf("no engine used, need to check engine config")
+		return nil, fmt.Errorf("no engine used, need to check engine config")
 	}
-	tr := translator.NewGroup(useEngines...)
-	translator.SetTranslator(tr)
-	return nil
+	return translator.NewGroup(useEngines...), nil
 }
 
-func readScriptStreamWithPath(datadir string, relpath string) ([]byte, string, error) {
-	paths := []string{relpath, path.Join(datadir, relpath)} //尝试从所有的路径种查找脚本, relpath可以被用户传入, 所以优先查找
-	for _, p := range paths {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		return data, p, nil
-	}
-	return nil, "", fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
-}
-
-func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, func(context.Context), error) {
+func buildNumberCleaner(cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, func(context.Context), error) {
 	cc := c.NumberCleanerConfig
 	if cc.Disabled {
 		return numbercleaner.NewPassthroughCleaner(), nil, nil
@@ -443,13 +359,13 @@ func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, func(context.C
 		if err != nil {
 			return nil, nil, err
 		}
-		manager := numbercleaner.NewBundleManager(c.DataDir, client.DefaultClient(), numbercleaner.SourceTypeLocal, "", resolved)
+		manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeLocal, "", resolved)
 		basePath, err = manager.CurrentRulePath()
 		if err != nil {
 			return nil, nil, err
 		}
 	case numbercleaner.SourceTypeRemote:
-		manager := numbercleaner.NewBundleManager(c.DataDir, client.DefaultClient(), numbercleaner.SourceTypeRemote, cc.RemoteBundleURL, "")
+		manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeRemote, cc.RemoteBundleURL, "")
 		var err error
 		basePath, _, err = manager.SyncRemote(context.Background())
 		if err != nil {
@@ -460,7 +376,7 @@ func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, func(context.C
 			}
 			logutil.GetLogger(context.Background()).Warn("sync remote number cleaner bundle failed, use active local bundle", zap.Error(syncErr))
 		}
-		syncLoop = buildNumberCleanerRemoteSyncLoop(c, manager)
+		syncLoop = buildNumberCleanerRemoteSyncLoop(cli, c, manager)
 	default:
 		return nil, nil, fmt.Errorf("unsupported number cleaner source type: %s", sourceType)
 	}
@@ -490,12 +406,12 @@ func buildNumberCleaner(c *config.Config) (numbercleaner.Cleaner, func(context.C
 	}
 	runtimeCleaner := numbercleaner.NewRuntimeCleaner(inner)
 	if syncLoop != nil {
-		syncLoop = wrapNumberCleanerRemoteSyncLoop(syncLoop, runtimeCleaner, c)
+		syncLoop = wrapNumberCleanerRemoteSyncLoop(cli, syncLoop, runtimeCleaner, c)
 	}
 	return runtimeCleaner, syncLoop, nil
 }
 
-func buildNumberCleanerRemoteSyncLoop(c *config.Config, manager *numbercleaner.BundleManager) func(context.Context) {
+func buildNumberCleanerRemoteSyncLoop(cli client.IHTTPClient, c *config.Config, manager *numbercleaner.BundleManager) func(context.Context) {
 	cc := c.NumberCleanerConfig
 	if !cc.AutoSync {
 		return nil
@@ -507,11 +423,11 @@ func buildNumberCleanerRemoteSyncLoop(c *config.Config, manager *numbercleaner.B
 	return func(ctx context.Context) { runNumberCleanerRemoteSyncLoop(ctx, interval, manager, nil, c) }
 }
 
-func wrapNumberCleanerRemoteSyncLoop(baseLoop func(context.Context), runtime *numbercleaner.RuntimeCleaner, c *config.Config) func(context.Context) {
+func wrapNumberCleanerRemoteSyncLoop(cli client.IHTTPClient, baseLoop func(context.Context), runtime *numbercleaner.RuntimeCleaner, c *config.Config) func(context.Context) {
 	if baseLoop == nil {
 		return nil
 	}
-	manager := numbercleaner.NewBundleManager(c.DataDir, client.DefaultClient(), numbercleaner.SourceTypeRemote, c.NumberCleanerConfig.RemoteBundleURL, "")
+	manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeRemote, c.NumberCleanerConfig.RemoteBundleURL, "")
 	cc := c.NumberCleanerConfig
 	interval := time.Duration(cc.SyncIntervalHour) * time.Hour
 	if interval <= 0 {

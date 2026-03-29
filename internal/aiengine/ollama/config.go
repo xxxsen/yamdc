@@ -1,8 +1,11 @@
 package ollama
 
+import "github.com/xxxsen/yamdc/internal/client"
+
 type config struct {
-	Host  string `json:"host"`
-	Model string `json:"model"`
+	Host       string             `json:"host"`
+	Model      string             `json:"model"`
+	HTTPClient client.IHTTPClient `json:"-"`
 }
 
 type Option func(*config)
@@ -16,6 +19,12 @@ func WithHost(host string) Option {
 func WithModel(model string) Option {
 	return func(c *config) {
 		c.Model = model
+	}
+}
+
+func WithHTTPClient(cli client.IHTTPClient) Option {
+	return func(c *config) {
+		c.HTTPClient = cli
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+
 	"github.com/xxxsen/yamdc/internal/face"
 )
 
@@ -87,12 +88,15 @@ func CutCensoredImage(img image.Image) (image.Image, error) {
 	return CutImageViaRectangle(img, cutFrame)
 }
 
-func CutImageWithFaceRec(ctx context.Context, img image.Image) (image.Image, error) {
+func CutImageWithFaceRecUsing(ctx context.Context, faceRec face.IFaceRec, img image.Image) (image.Image, error) {
+	if faceRec == nil {
+		return nil, fmt.Errorf("no face recognizer")
+	}
 	data, err := toJpegData(img)
 	if err != nil {
 		return nil, err
 	}
-	fs, err := face.SearchFaces(ctx, data)
+	fs, err := faceRec.SearchFaces(ctx, data)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +115,12 @@ func CutImageWithFaceRec(ctx context.Context, img image.Image) (image.Image, err
 	return CutImageViaRectangle(img, cutFrame)
 }
 
-func CutImageWithFaceRecFromBytes(ctx context.Context, data []byte) ([]byte, error) {
+func CutImageWithFaceRecFromBytesWithFaceRec(ctx context.Context, faceRec face.IFaceRec, data []byte) ([]byte, error) {
 	img, err := LoadImage(data)
 	if err != nil {
 		return nil, err
 	}
-	cutted, err := CutImageWithFaceRec(ctx, img)
+	cutted, err := CutImageWithFaceRecUsing(ctx, faceRec, img)
 	if err != nil {
 		return nil, err
 	}

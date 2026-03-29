@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
@@ -22,7 +23,7 @@ func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
 	jobRepo := repository.NewJobRepository(sqlite.DB())
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
-	return NewService(jobRepo, logRepo, scrapeRepo, nil), jobRepo
+	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo
 }
 
 func insertJob(t *testing.T, repo *repository.JobRepository, absPath string, status jobdef.Status) int64 {

@@ -6,14 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/resource"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"github.com/xxxsen/yamdc/internal/client"
-	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/resource"
 
 	"github.com/antchfx/htmlquery"
 	"github.com/xxxsen/common/logutil"
@@ -31,6 +32,7 @@ var (
 type chineseTitleTranslateOptimizer struct {
 	once sync.Once
 	m    map[string]string
+	cli  client.IHTTPClient
 }
 
 func (c *chineseTitleTranslateOptimizer) tryInitCNumber(ctx context.Context) {
@@ -85,7 +87,7 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(ctx context.Context
 	if err != nil {
 		return "", false, err
 	}
-	rsp, err := client.DefaultClient().Do(req)
+	rsp, err := c.cli.Do(req)
 	if err != nil {
 		return "", false, err
 	}
@@ -146,5 +148,7 @@ func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.F
 }
 
 func init() {
-	Register(HChineseTitleTranslateOptimizer, HandlerToCreator(&chineseTitleTranslateOptimizer{}))
+	Register(HChineseTitleTranslateOptimizer, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &chineseTitleTranslateOptimizer{cli: deps.HTTPClient}, nil
+	})
 }

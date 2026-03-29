@@ -50,13 +50,13 @@ func TestParseJobRouteInvalid(t *testing.T) {
 }
 
 func TestHandleAssetDetectContentType(t *testing.T) {
-	store.SetStorage(store.NewMemStorage())
-	require.NoError(t, store.PutData(context.Background(), "img-key", []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}))
+	memStore := store.NewMemStorage()
+	require.NoError(t, store.PutDataTo(context.Background(), memStore, "img-key", []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/assets/img-key", nil)
 	rec := httptest.NewRecorder()
 
-	api := &API{}
+	api := &API{store: memStore}
 	api.handleAsset(rec, req)
 
 	resp := rec.Result()

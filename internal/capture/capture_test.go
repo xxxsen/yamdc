@@ -9,6 +9,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 type testSearcher struct{}
@@ -52,6 +53,7 @@ func newTestCapture(t *testing.T, cleaner numbercleaner.Cleaner) *Capture {
 		WithScanDir(t.TempDir()),
 		WithSaveDir(t.TempDir()),
 		WithSeacher(&testSearcher{}),
+		WithStorage(store.NewMemStorage()),
 		WithNumberCleaner(cleaner),
 	)
 	require.NoError(t, err)

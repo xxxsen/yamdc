@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
+
 	"github.com/xxxsen/yamdc/internal/hasher"
 )
 
@@ -14,63 +16,58 @@ type IStorage interface {
 	IsDataExist(ctx context.Context, key string) (bool, error)
 }
 
-func init() {
-	SetStorage(NewMemStorage())
+func PutDataTo(ctx context.Context, storage IStorage, key string, value []byte) error {
+	return PutDataWithExpireTo(ctx, storage, key, value, time.Duration(0))
 }
 
-var defaultInst IStorage
-
-func SetStorage(impl IStorage) {
-	defaultInst = impl
+func PutDataWithExpireTo(ctx context.Context, storage IStorage, key string, value []byte, expire time.Duration) error {
+	if storage == nil {
+		return fmt.Errorf("storage is nil")
+	}
+	return storage.PutData(ctx, key, value, expire)
 }
 
-func getDefaultInst() IStorage {
-	return defaultInst
-}
-
-func PutData(ctx context.Context, key string, value []byte) error {
-	return PutDataWithExpire(ctx, key, value, time.Duration(0))
-}
-
-func PutDataWithExpire(ctx context.Context, key string, value []byte, expire time.Duration) error {
-	return getDefaultInst().PutData(ctx, key, value, expire)
-}
-
-func AnonymousPutData(ctx context.Context, value []byte) (string, error) {
+func AnonymousPutDataTo(ctx context.Context, storage IStorage, value []byte) (string, error) {
 	key := hasher.ToSha1Bytes(value)
-	if ok, _ := IsDataExist(ctx, key); ok {
+	if ok, _ := IsDataExistIn(ctx, storage, key); ok {
 		return key, nil
 	}
-	if err := PutData(ctx, key, value); err != nil {
+	if err := PutDataTo(ctx, storage, key, value); err != nil {
 		return "", err
 	}
 	return key, nil
 }
 
-func GetData(ctx context.Context, key string) ([]byte, error) {
-	return getDefaultInst().GetData(ctx, key)
+func GetDataFrom(ctx context.Context, storage IStorage, key string) ([]byte, error) {
+	if storage == nil {
+		return nil, fmt.Errorf("storage is nil")
+	}
+	return storage.GetData(ctx, key)
 }
 
-func LoadData(ctx context.Context, key string, expire time.Duration, cb func() ([]byte, error)) ([]byte, error) {
-	if v, err := GetData(ctx, key); err == nil {
+func LoadDataFrom(ctx context.Context, storage IStorage, key string, expire time.Duration, cb func() ([]byte, error)) ([]byte, error) {
+	if v, err := GetDataFrom(ctx, storage, key); err == nil {
 		return v, nil
 	}
 	data, err := cb()
 	if err != nil {
 		return nil, err
 	}
-	if err := PutDataWithExpire(ctx, key, data, expire); err != nil {
+	if err := PutDataWithExpireTo(ctx, storage, key, data, expire); err != nil {
 		return nil, err
 	}
 	return data, nil
 }
 
-func IsDataExist(ctx context.Context, key string) (bool, error) {
-	return getDefaultInst().IsDataExist(ctx, key)
+func IsDataExistIn(ctx context.Context, storage IStorage, key string) (bool, error) {
+	if storage == nil {
+		return false, fmt.Errorf("storage is nil")
+	}
+	return storage.IsDataExist(ctx, key)
 }
 
-func AnonymousDataRewrite(ctx context.Context, key string, fn DataRewriteFunc) (string, error) {
-	raw, err := GetData(ctx, key)
+func AnonymousDataRewriteWithStorage(ctx context.Context, storage IStorage, key string, fn DataRewriteFunc) (string, error) {
+	raw, err := GetDataFrom(ctx, storage, key)
 	if err != nil {
 		return key, err
 	}
@@ -78,7 +75,7 @@ func AnonymousDataRewrite(ctx context.Context, key string, fn DataRewriteFunc) (
 	if err != nil {
 		return key, err
 	}
-	newKey, err := AnonymousPutData(ctx, newData)
+	newKey, err := AnonymousPutDataTo(ctx, storage, newData)
 	if err != nil {
 		return key, err
 	}
