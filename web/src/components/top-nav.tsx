@@ -32,7 +32,7 @@ export function TopNav() {
     {
       href: "/media-library",
       title: "媒体库",
-      subtitle: "最终归档与元数据维护",
+      subtitle: "数据归档与维护",
       icon: Clapperboard,
     },
   ] as const;
