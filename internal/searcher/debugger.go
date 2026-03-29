@@ -303,6 +303,13 @@ func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number) *
 	p.fixMeta(ctx, req, metaInfo)
 	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "fix_meta", OK: true, Message: "meta normalized"})
 
+	p.storeImageData(ctx, metaInfo)
+	trace.Steps = append(trace.Steps, PluginDebugStep{
+		Stage:   "store_assets",
+		OK:      metaHasAssets(metaInfo),
+		Message: fmt.Sprintf("cover=%t poster=%t sample_images=%d", hasFileKey(metaInfo.Cover), hasFileKey(metaInfo.Poster), countSampleKeys(metaInfo.SampleImages)),
+	})
+
 	if err := p.verifyMeta(metaInfo); err != nil {
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "verify_meta", OK: false, Message: err.Error()})
 		return trace
@@ -362,6 +369,30 @@ func requestURL(req *http.Request) string {
 		return ""
 	}
 	return req.URL.String()
+}
+
+func hasFileKey(file *model.File) bool {
+	return file != nil && strings.TrimSpace(file.Key) != ""
+}
+
+func countSampleKeys(items []*model.File) int {
+	if len(items) == 0 {
+		return 0
+	}
+	total := 0
+	for _, item := range items {
+		if hasFileKey(item) {
+			total++
+		}
+	}
+	return total
+}
+
+func metaHasAssets(meta *model.MovieMeta) bool {
+	if meta == nil {
+		return false
+	}
+	return hasFileKey(meta.Cover) || hasFileKey(meta.Poster) || countSampleKeys(meta.SampleImages) > 0
 }
 
 func boolMessage(ok bool, trueText string, falseText string) string {

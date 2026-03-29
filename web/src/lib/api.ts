@@ -244,16 +244,27 @@ export interface SearcherDebugStep {
 }
 
 export interface SearcherDebugMovieMeta {
-  number: string;
-  title: string;
-  release_date: number;
-  studio: string;
-  label: string;
-  series: string;
-  director: string;
-  actors: string[];
-  genres: string[];
-  ext_info: {
+  number?: string;
+  title?: string;
+  title_lang?: string;
+  title_translated?: string;
+  release_date?: number;
+  duration?: number;
+  studio?: string;
+  label?: string;
+  series?: string;
+  director?: string;
+  actors?: string[];
+  actors_lang?: string;
+  genres?: string[];
+  genres_lang?: string;
+  plot?: string;
+  plot_lang?: string;
+  plot_translated?: string;
+  cover?: MediaFileRef | null;
+  poster?: MediaFileRef | null;
+  sample_images?: MediaFileRef[];
+  ext_info?: {
     scrape_info: {
       source: string;
       date_ts: number;
@@ -282,6 +293,27 @@ export interface SearcherDebugResult {
   meta?: SearcherDebugMovieMeta | null;
   plugin_results: SearcherDebugPluginResult[];
   available_tools: SearcherDebugPluginCollection;
+}
+
+export interface HandlerDebugRequest {
+  handler_id: string;
+  meta: SearcherDebugMovieMeta;
+}
+
+export interface HandlerDebugInstance {
+  id: string;
+  name: string;
+}
+
+export interface HandlerDebugResult {
+  handler_id: string;
+  handler_name: string;
+  number_id: string;
+  category: string;
+  uncensor: boolean;
+  before_meta: SearcherDebugMovieMeta;
+  after_meta: SearcherDebugMovieMeta;
+  error: string;
 }
 
 interface APIResponse<T> {
@@ -626,6 +658,32 @@ export async function debugSearcher(input: string, plugins: string[], useCleaner
   const data = (await resp.json()) as APIResponse<SearcherDebugResult>;
   if (!resp.ok || data.code !== 0) {
     throw new Error(data.message || `debug searcher failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function getHandlerDebugHandlers() {
+  const resp = await fetch(`${getBaseURL()}/api/debug/handlers`, {
+    cache: "no-store",
+  });
+  const data = (await resp.json()) as APIResponse<HandlerDebugInstance[]>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `get handler debug handlers failed: ${resp.status}`);
+  }
+  return data.data;
+}
+
+export async function debugHandler(payload: HandlerDebugRequest) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/handler/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await resp.json()) as APIResponse<HandlerDebugResult>;
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(data.message || `debug handler failed: ${resp.status}`);
   }
   return data.data;
 }

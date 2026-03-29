@@ -9,10 +9,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/store"
 )
+
+func phandlerDebugRuntime() appdeps.Runtime {
+	return appdeps.Runtime{
+		Storage: store.NewMemStorage(),
+	}
+}
 
 func TestParseStatusesDefault(t *testing.T) {
 	items := parseStatuses("")
@@ -90,4 +99,26 @@ func TestHandleNumberCleanerExplain(t *testing.T) {
 	require.Equal(t, 0, payload.Code)
 	require.Equal(t, "FC2-PPV-12345-C", payload.Data.Final.Normalized)
 	require.NotEmpty(t, payload.Data.Steps)
+}
+
+func TestHandleHandlerDebugRun(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+		"handler_id":"number_title",
+		"meta":{"number":"ABC-123","title":"sample title"}
+	}`))
+	rec := httptest.NewRecorder()
+
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]config.HandlerConfig{})}
+	api.handleHandlerDebugRun(rec, req)
+
+	resp := rec.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload struct {
+		Code int                  `json:"code"`
+		Data phandler.DebugResult `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.Equal(t, "ABC-123 sample title", payload.Data.AfterMeta.Title)
 }

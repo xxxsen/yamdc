@@ -19,6 +19,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
+	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -44,6 +45,7 @@ type YamdcStartContext struct {
 	NumberCleaner     numbercleaner.Cleaner
 	NumberCleanerSync func(context.Context)
 	SearcherDebugger  *searcher.Debugger
+	HandlerDebugger   *handler.Debugger
 
 	Capture *capture.Capture
 
@@ -105,6 +107,7 @@ func newYamdcInitActions() []YamdcInitAction {
 		{Name: "build_processors", Fn: buildProcessorsAction},
 		{Name: "build_number_cleaner", Fn: buildNumberCleanerAction},
 		{Name: "build_searcher_debugger", Fn: buildSearcherDebuggerAction},
+		{Name: "build_handler_debugger", Fn: buildHandlerDebuggerAction},
 		{Name: "build_capture", Fn: buildCaptureAction},
 		{Name: "open_app_db", Fn: openAppDBAction},
 		{Name: "assemble_services", Fn: assembleServicesAction},
@@ -245,6 +248,17 @@ func buildSearcherDebuggerAction(_ context.Context, ysctx *YamdcStartContext) er
 	return nil
 }
 
+func buildHandlerDebuggerAction(_ context.Context, ysctx *YamdcStartContext) error {
+	ysctx.HandlerDebugger = handler.NewDebugger(appdeps.Runtime{
+		HTTPClient: ysctx.HTTPClient,
+		Storage:    ysctx.CacheStore,
+		Translator: ysctx.Translator,
+		AIEngine:   ysctx.AIEngine,
+		FaceRec:    ysctx.FaceRec,
+	}, ysctx.NumberCleaner, ysctx.Config.Handlers, ysctx.Config.HandlerConfig)
+	return nil
+}
+
 func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
 	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, ysctx.Searchers, ysctx.CategorySearchers, ysctx.Processors, ysctx.NumberCleaner)
 	if err != nil {
@@ -288,6 +302,7 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		ysctx.CacheStore,
 		ysctx.NumberCleaner,
 		ysctx.SearcherDebugger,
+		ysctx.HandlerDebugger,
 	)
 	return nil
 }

@@ -39,5 +39,6 @@ func Handlers() []string {
 	for k := range mp {
 		rs = append(rs, k)
 	}
-	return sort.StringSlice(rs)
+	sort.Strings(rs)
+	return rs
 }

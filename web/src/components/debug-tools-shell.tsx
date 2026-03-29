@@ -16,6 +16,11 @@ const TOOL_ITEMS = [
     title: "插件检索测试",
     description: "输入番号后，直接验证 searcher 插件链的检索结果。",
   },
+  {
+    href: "/debug/handler",
+    title: "Handler 调试",
+    description: "手动构造 FileContext，测试单个 handler 的前后变化。",
+  },
 ] as const;
 
 export function DebugToolsShell({ children }: Readonly<{ children: ReactNode }>) {

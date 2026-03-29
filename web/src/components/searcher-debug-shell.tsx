@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, LoaderCircle, WandSparkles } from "lucide-react";
+import { Search, LoaderCircle, WandSparkles, Copy, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -13,12 +14,14 @@ import {
 const DEFAULT_INPUT = "FC2-PPV-12345";
 
 export function SearcherDebugShell() {
+  const router = useRouter();
   const [input, setInput] = useState(DEFAULT_INPUT);
   const [customPlugins, setCustomPlugins] = useState("");
   const [useCleaner, setUseCleaner] = useState(true);
   const [pluginCatalog, setPluginCatalog] = useState<SearcherDebugPluginCollection | null>(null);
   const [result, setResult] = useState<SearcherDebugResult | null>(null);
   const [error, setError] = useState("");
+  const [metaActionMessage, setMetaActionMessage] = useState("");
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
@@ -40,6 +43,8 @@ export function SearcherDebugShell() {
         .filter(Boolean),
     [customPlugins],
   );
+
+  const resultMetaJSON = useMemo(() => (result?.meta ? JSON.stringify(result.meta, null, 2) : ""), [result]);
 
   const appendPlugin = (name: string) => {
     setCustomPlugins((current) => {
@@ -74,6 +79,28 @@ export function SearcherDebugShell() {
         setIsRunning(false);
       }
     })();
+  };
+
+  const handleCopyMeta = async () => {
+    if (!resultMetaJSON) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(resultMetaJSON);
+      setMetaActionMessage("Meta JSON 已复制。");
+    } catch {
+      setMetaActionMessage("复制失败，请手动展开下方 JSON。");
+    }
+  };
+
+  const handleOpenHandlerDebug = () => {
+    if (!resultMetaJSON) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("yamdc.debug.handler_meta", resultMetaJSON);
+    }
+    router.push("/debug/handler?prefill=searcher");
   };
 
   return (
@@ -177,6 +204,19 @@ export function SearcherDebugShell() {
                 <span>来源</span>
                 <strong>{result.meta?.ext_info?.scrape_info?.source || "-"}</strong>
               </div>
+              {result.meta ? (
+                <div className="searcher-debug-summary-actions">
+                  <button className="btn" type="button" onClick={() => void handleCopyMeta()}>
+                    <Copy size={16} />
+                    <span>复制 Meta JSON</span>
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
+                    <ArrowRight size={16} />
+                    <span>发送到 Handler 调试</span>
+                  </button>
+                </div>
+              ) : null}
+              {metaActionMessage ? <div className="handler-debug-message">{metaActionMessage}</div> : null}
             </div>
           ) : (
             <div className="ruleset-debug-empty">运行后会展示 cleaner 结果、插件链顺序、最终命中插件和抓到的标题。</div>
