@@ -2,6 +2,10 @@ package numbercleaner
 
 import "sync"
 
+type ISwapableCleaner interface {
+	Swap(Cleaner)
+}
+
 type RuntimeCleaner struct {
 	mu    sync.RWMutex
 	inner Cleaner

@@ -80,15 +80,8 @@ type TagMappingConfig struct {
 }
 
 type NumberCleanerConfig struct {
-	Disabled         bool   `json:"disabled"`
-	RulePath         string `json:"rule_path"`
-	OverrideRulePath string `json:"override_rule_path"`
-	SourceType       string `json:"source_type"`
-	RemoteBundleURL  string `json:"remote_bundle_url"`
-	LocalBundlePath  string `json:"local_bundle_path"`
-	ActiveBundle     string `json:"active_bundle"`
-	AutoSync         bool   `json:"auto_sync"`
-	SyncIntervalHour int    `json:"sync_interval_hour"`
+	SourceType string `json:"source_type"`
+	Location   string `json:"location"`
 }
 
 type Config struct {
@@ -161,15 +154,8 @@ func defaultConfig() *Config {
 			FilePath: "",    // 如果启用,需要指定配置文件路径
 		},
 		NumberCleanerConfig: NumberCleanerConfig{
-			Disabled:         false,
-			RulePath:         "rules/ruleset",
-			OverrideRulePath: "",
-			SourceType:       "remote",
-			RemoteBundleURL:  "https://github.com/xxxsen/yamdc-script",
-			LocalBundlePath:  "",
-			ActiveBundle:     "",
-			AutoSync:         true,
-			SyncIntervalHour: 24,
+			SourceType: "remote",
+			Location:   "https://github.com/xxxsen/yamdc-script",
 		},
 	}
 }

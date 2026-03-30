@@ -2,8 +2,9 @@ package numbercleaner
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
+	"path"
 	"reflect"
 	"regexp"
 	"slices"
@@ -44,13 +45,21 @@ func LoadRuleSetFromPath(path string) (*RuleSet, error) {
 		return nil, err
 	}
 	if info.IsDir() {
-		return loadRuleSetFromDir(path)
+		return LoadRuleSetFromDir(path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	return NewLoader().Load(data)
+}
+
+func LoadRuleSetFromDir(dir string) (*RuleSet, error) {
+	return LoadRuleSetFromFS(os.DirFS(dir), ".")
+}
+
+func ListRuleSetFilesFromDir(dir string) ([]string, error) {
+	return ListRuleSetFilesFromFS(os.DirFS(dir), ".")
 }
 
 func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
@@ -80,29 +89,14 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
 	return out, nil
 }
 
-func loadRuleSetFromDir(dir string) (*RuleSet, error) {
-	entries, err := os.ReadDir(dir)
+func LoadRuleSetFromFS(fsys fs.FS, dir string) (*RuleSet, error) {
+	files, err := collectRuleSetFilesFromFS(fsys, dir)
 	if err != nil {
 		return nil, err
 	}
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".yaml") && !strings.HasSuffix(strings.ToLower(name), ".yml") {
-			continue
-		}
-		files = append(files, filepath.Join(dir, name))
-	}
-	sort.Strings(files)
-	if len(files) == 0 {
-		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("no yaml files found in dir: %s", dir)}
-	}
 	var merged *RuleSet
 	for _, file := range files {
-		data, err := os.ReadFile(file)
+		data, err := fs.ReadFile(fsys, file)
 		if err != nil {
 			return nil, err
 		}
@@ -123,6 +117,37 @@ func loadRuleSetFromDir(dir string) (*RuleSet, error) {
 		return nil, err
 	}
 	return merged, nil
+}
+
+func ListRuleSetFilesFromFS(fsys fs.FS, dir string) ([]string, error) {
+	files, err := collectRuleSetFilesFromFS(fsys, dir)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(files), nil
+}
+
+func collectRuleSetFilesFromFS(fsys fs.FS, dir string) ([]string, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".yaml") && !strings.HasSuffix(strings.ToLower(name), ".yml") {
+			continue
+		}
+		files = append(files, path.Join(dir, name))
+	}
+	sort.Strings(files)
+	if len(files) == 0 {
+		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("no yaml files found in dir: %s", dir)}
+	}
+	return files, nil
 }
 
 func mergeRuleSetFragments(base *RuleSet, part *RuleSet) (*RuleSet, error) {

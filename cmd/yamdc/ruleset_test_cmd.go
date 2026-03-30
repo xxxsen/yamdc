@@ -16,7 +16,6 @@ func newRulesetTestCmd() *cobra.Command {
 	var (
 		configPath string
 		ruleset    string
-		override   string
 		output     string
 	)
 
@@ -33,7 +32,7 @@ func newRulesetTestCmd() *cobra.Command {
 				return fmt.Errorf("unsupported output format: %s", output)
 			}
 
-			cleaner, err := buildRulesetTestCleaner(configPath, ruleset, override)
+			cleaner, err := buildRulesetTestCleaner(configPath, ruleset)
 			if err != nil {
 				return fmt.Errorf("build number cleaner failed: %w", err)
 			}
@@ -46,37 +45,37 @@ func newRulesetTestCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
 	cmd.Flags().StringVar(&ruleset, "ruleset", "", "path to ruleset file or directory")
-	cmd.Flags().StringVar(&override, "override", "", "path to override ruleset file or directory")
 	cmd.Flags().StringVar(&output, "output", "text", "output format: text or json")
 	return cmd
 }
 
-func buildRulesetTestCleaner(configPath string, ruleset string, override string) (numbercleaner.Cleaner, error) {
+func buildRulesetTestCleaner(configPath string, ruleset string) (numbercleaner.Cleaner, error) {
 	if strings.TrimSpace(ruleset) != "" {
 		resolved, err := resolveRuleSourcePath(".", strings.TrimSpace(ruleset))
 		if err != nil {
 			return nil, err
 		}
-		return loadNumberCleanerFromPaths(".", resolved, strings.TrimSpace(override))
+		rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
+		if err != nil {
+			return nil, err
+		}
+		return numbercleaner.NewCleaner(rs)
 	}
 	c, err := config.Parse(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse config failed: %w", err)
 	}
-	if strings.TrimSpace(override) != "" {
-		c.NumberCleanerConfig.OverrideRulePath = strings.TrimSpace(override)
-	}
 	sourceType := strings.ToLower(strings.TrimSpace(c.NumberCleanerConfig.SourceType))
 	if sourceType == "" || sourceType == numbercleaner.SourceTypeLocal {
-		localPath := strings.TrimSpace(c.NumberCleanerConfig.LocalBundlePath)
-		if localPath == "" {
-			localPath = c.NumberCleanerConfig.RulePath
-		}
-		resolved, err := resolveRuleSourcePath(c.DataDir, localPath)
+		resolved, err := resolveRuleSourcePath(c.DataDir, c.NumberCleanerConfig.Location)
 		if err != nil {
 			return nil, err
 		}
-		return loadNumberCleanerFromPaths(c.DataDir, resolved, c.NumberCleanerConfig.OverrideRulePath)
+		rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
+		if err != nil {
+			return nil, err
+		}
+		return numbercleaner.NewCleaner(rs)
 	}
 	cli, err := buildHTTPClient(context.Background(), c)
 	if err != nil {

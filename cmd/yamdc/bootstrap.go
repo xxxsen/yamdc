@@ -42,7 +42,6 @@ type YamdcStartContext struct {
 	CategorySearchers map[string][]searcher.ISearcher
 	Processors        []processor.IProcessor
 	NumberCleaner     numbercleaner.Cleaner
-	NumberCleanerSync func(context.Context)
 	SearcherDebugger  *searcher.Debugger
 	HandlerDebugger   *handler.Debugger
 
@@ -112,7 +111,6 @@ func newYamdcInitActions() []YamdcInitAction {
 		{Name: "assemble_services", Fn: assembleServicesAction},
 		{Name: "recover_jobs", Fn: recoverJobsAction},
 		{Name: "start_media_service", Fn: startMediaServiceAction},
-		{Name: "start_number_cleaner_sync", Fn: startNumberCleanerSyncAction},
 		{Name: "serve_http", Fn: serveHTTPAction},
 	}
 }
@@ -233,12 +231,26 @@ func buildProcessorsAction(ctx context.Context, ysctx *YamdcStartContext) error 
 }
 
 func buildNumberCleanerAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	cleaner, syncLoop, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
+	cleaner, manager, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
 	if err != nil {
 		return err
 	}
 	ysctx.NumberCleaner = cleaner
-	ysctx.NumberCleanerSync = syncLoop
+	swapableCleaner, ok := cleaner.(numbercleaner.ISwapableCleaner)
+	if !ok {
+		return nil
+	}
+	logutil.GetLogger(ctx).Debug("start ruleset watch")
+	go manager.StartWatch(ctx, func(next *numbercleaner.RuleSet, files []string) {
+		nextCleaner, err := numbercleaner.NewCleaner(next)
+		if err != nil {
+			logutil.GetLogger(ctx).Error("reload number cleaner after remote sync failed", zap.Error(err))
+			return
+		}
+		swapableCleaner.Swap(nextCleaner)
+		logutil.GetLogger(ctx).Debug("reload number cleaner rules", zap.Strings("files", files))
+		logutil.GetLogger(ctx).Info("reload number cleaner after remote sync")
+	})
 	return nil
 }
 
@@ -315,13 +327,6 @@ func recoverJobsAction(ctx context.Context, ysctx *YamdcStartContext) error {
 
 func startMediaServiceAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	ysctx.MediaSvc.Start(ctx)
-	return nil
-}
-
-func startNumberCleanerSyncAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	if ysctx.NumberCleanerSync != nil {
-		go ysctx.NumberCleanerSync(ctx)
-	}
 	return nil
 }
 

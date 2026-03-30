@@ -441,154 +441,35 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 	return translator.NewGroup(useEngines...), nil
 }
 
-func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, func(context.Context), error) {
+func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, numbercleaner.BundleManager, error) {
 	cc := c.NumberCleanerConfig
-	if cc.Disabled {
-		return numbercleaner.NewPassthroughCleaner(), nil, nil
-	}
 	sourceType := strings.ToLower(strings.TrimSpace(cc.SourceType))
 	if sourceType == "" {
 		sourceType = numbercleaner.SourceTypeLocal
 	}
-	var basePath string
-	var syncLoop func(context.Context)
-	switch sourceType {
-	case numbercleaner.SourceTypeLocal:
-		localPath := strings.TrimSpace(cc.LocalBundlePath)
-		if localPath == "" {
-			localPath = cc.RulePath
-		}
-		resolved, err := resolveRuleSourcePath(c.DataDir, localPath)
+	location := strings.TrimSpace(cc.Location)
+	if sourceType == numbercleaner.SourceTypeLocal {
+		resolved, err := resolveRuleSourcePath(c.DataDir, location)
 		if err != nil {
 			return nil, nil, err
 		}
-		manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeLocal, "", resolved)
-		basePath, err = manager.CurrentRulePath()
-		if err != nil {
-			return nil, nil, err
-		}
-	case numbercleaner.SourceTypeRemote:
-		manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeRemote, cc.RemoteBundleURL, "")
-		var err error
-		basePath, _, err = manager.SyncRemote(ctx)
-		if err != nil {
-			syncErr := err
-			basePath, err = manager.CurrentRulePath()
-			if err != nil {
-				return nil, nil, fmt.Errorf("sync remote number cleaner bundle failed: %w", syncErr)
-			}
-			logutil.GetLogger(ctx).Warn("sync remote number cleaner bundle failed, use active local bundle", zap.Error(syncErr))
-		}
-		syncLoop = buildNumberCleanerRemoteSyncLoop(cli, c, manager)
-	default:
-		return nil, nil, fmt.Errorf("unsupported number cleaner source type: %s", sourceType)
+		location = resolved
 	}
-	logutil.GetLogger(ctx).Info("load number cleaner base rule", zap.String("path", basePath))
-	base, err := numbercleaner.LoadRuleSetFromPath(basePath)
+	manager, err := numbercleaner.NewBundleManager(c.DataDir, cli, sourceType, location)
 	if err != nil {
 		return nil, nil, err
 	}
-	finalRules := base
-	if len(strings.TrimSpace(cc.OverrideRulePath)) != 0 {
-		overridePath, err := resolveRuleSourcePath(c.DataDir, cc.OverrideRulePath)
-		if err == nil {
-			logutil.GetLogger(ctx).Info("load number cleaner override rule", zap.String("path", overridePath))
-			override, err := numbercleaner.LoadRuleSetFromPath(overridePath)
-			if err != nil {
-				return nil, nil, err
-			}
-			finalRules, err = numbercleaner.MergeRuleSets(base, override)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
+	rs, files, err := manager.Load(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
-	inner, err := numbercleaner.NewCleaner(finalRules)
+	logutil.GetLogger(ctx).Debug("load number cleaner rules", zap.Strings("files", files))
+	inner, err := numbercleaner.NewCleaner(rs)
 	if err != nil {
 		return nil, nil, err
 	}
 	runtimeCleaner := numbercleaner.NewRuntimeCleaner(inner)
-	if syncLoop != nil {
-		syncLoop = wrapNumberCleanerRemoteSyncLoop(cli, syncLoop, runtimeCleaner, c)
-	}
-	return runtimeCleaner, syncLoop, nil
-}
-
-func buildNumberCleanerRemoteSyncLoop(cli client.IHTTPClient, c *config.Config, manager *numbercleaner.BundleManager) func(context.Context) {
-	cc := c.NumberCleanerConfig
-	if !cc.AutoSync {
-		return nil
-	}
-	interval := time.Duration(cc.SyncIntervalHour) * time.Hour
-	if interval <= 0 {
-		interval = 24 * time.Hour
-	}
-	return func(ctx context.Context) { runNumberCleanerRemoteSyncLoop(ctx, interval, manager, nil, c) }
-}
-
-func wrapNumberCleanerRemoteSyncLoop(cli client.IHTTPClient, baseLoop func(context.Context), runtime *numbercleaner.RuntimeCleaner, c *config.Config) func(context.Context) {
-	if baseLoop == nil {
-		return nil
-	}
-	manager := numbercleaner.NewBundleManager(c.DataDir, cli, numbercleaner.SourceTypeRemote, c.NumberCleanerConfig.RemoteBundleURL, "")
-	cc := c.NumberCleanerConfig
-	interval := time.Duration(cc.SyncIntervalHour) * time.Hour
-	if interval <= 0 {
-		interval = 24 * time.Hour
-	}
-	return func(ctx context.Context) { runNumberCleanerRemoteSyncLoop(ctx, interval, manager, runtime, c) }
-}
-
-func runNumberCleanerRemoteSyncLoop(ctx context.Context, interval time.Duration, manager *numbercleaner.BundleManager, runtime *numbercleaner.RuntimeCleaner, c *config.Config) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			rulePath, updated, err := manager.SyncRemote(ctx)
-			if err != nil {
-				logutil.GetLogger(ctx).Error("sync number cleaner remote bundle failed", zap.Error(err))
-				continue
-			}
-			if !updated {
-				continue
-			}
-			if runtime == nil {
-				continue
-			}
-			nextCleaner, err := loadNumberCleanerFromPaths(c.DataDir, rulePath, c.NumberCleanerConfig.OverrideRulePath)
-			if err != nil {
-				logutil.GetLogger(ctx).Error("reload number cleaner after remote sync failed", zap.Error(err))
-				continue
-			}
-			runtime.Swap(nextCleaner)
-			logutil.GetLogger(ctx).Info("reload number cleaner after remote sync", zap.String("path", rulePath))
-		}
-	}
-}
-
-func loadNumberCleanerFromPaths(datadir string, basePath string, overridePath string) (numbercleaner.Cleaner, error) {
-	base, err := numbercleaner.LoadRuleSetFromPath(basePath)
-	if err != nil {
-		return nil, err
-	}
-	finalRules := base
-	if strings.TrimSpace(overridePath) != "" {
-		resolvedOverride, err := resolveRuleSourcePath(datadir, overridePath)
-		if err == nil {
-			override, err := numbercleaner.LoadRuleSetFromPath(resolvedOverride)
-			if err != nil {
-				return nil, err
-			}
-			finalRules, err = numbercleaner.MergeRuleSets(base, override)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return numbercleaner.NewCleaner(finalRules)
+	return runtimeCleaner, manager, nil
 }
 
 func resolveRuleSourcePath(datadir string, raw string) (string, error) {

@@ -4,15 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/client"
 )
 
 func TestLoadRuleSetFromDir(t *testing.T) {
@@ -70,32 +69,67 @@ matchers:
 	require.Contains(t, err.Error(), "duplicate rule name across fragments")
 }
 
-func TestBundleManagerRemoteSync(t *testing.T) {
-	dataDir := t.TempDir()
-	archive := buildTestBundleZip(t, map[string]string{
-		"manifest.yaml": `name: test-rules
-version: 2026.03.29
-format: yamdc-ruleset-v1
-entry: ruleset`,
-		"ruleset/001-base.yaml": `
+func TestLoadRuleSetFromZipUsesManifestEntry(t *testing.T) {
+	zipPath := filepath.Join(t.TempDir(), "rules.zip")
+	require.NoError(t, os.WriteFile(zipPath, buildTestBundleZip(t, map[string]string{
+		"yamdc-script-v1/manifest.yaml": `entry: custom-rules`,
+		"yamdc-script-v1/custom-rules/001-base.yaml": `
 version: v1
 options:
   case_mode: upper
 `,
-		"ruleset/002-normalizers.yaml": `
+		"yamdc-script-v1/custom-rules/002-matchers.yaml": `
 version: v1
-normalizers:
-  - name: basename
-    type: builtin
-    builtin: basename
-  - name: strip_ext
-    type: builtin
-    builtin: strip_ext
-  - name: to_upper
-    type: builtin
-    builtin: to_upper
+matchers:
+  - name: generic
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80
 `,
-		"ruleset/003-matchers.yaml": `
+	}), 0644))
+
+	rs, files, err := LoadRuleSetFromZip(zipPath)
+	require.NoError(t, err)
+	require.Equal(t, "v1", rs.Version)
+	require.Len(t, rs.Matchers, 1)
+	require.Equal(t, []string{"yamdc-script-v1/custom-rules/001-base.yaml", "yamdc-script-v1/custom-rules/002-matchers.yaml"}, files)
+}
+
+func TestLoadRuleSetFromZipUsesDefaultRulesetEntry(t *testing.T) {
+	zipPath := filepath.Join(t.TempDir(), "rules.zip")
+	require.NoError(t, os.WriteFile(zipPath, buildTestBundleZip(t, map[string]string{
+		"yamdc-script-v1/ruleset/001-base.yaml": `
+version: v1
+options:
+  case_mode: upper
+`,
+		"yamdc-script-v1/ruleset/002-matchers.yaml": `
+version: v1
+matchers:
+  - name: generic
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80
+`,
+	}), 0644))
+
+	rs, files, err := LoadRuleSetFromZip(zipPath)
+	require.NoError(t, err)
+	require.Equal(t, "v1", rs.Version)
+	require.Len(t, rs.Matchers, 1)
+	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, files)
+}
+
+func TestRemoteBundleManagerLoadFallsBackToCachedZip(t *testing.T) {
+	dataDir := t.TempDir()
+	archive := buildTestBundleZip(t, map[string]string{
+		"yamdc-script-v1/manifest.yaml": `entry: ruleset`,
+		"yamdc-script-v1/ruleset/001-base.yaml": `
+version: v1
+options:
+  case_mode: upper
+`,
+		"yamdc-script-v1/ruleset/002-matchers.yaml": `
 version: v1
 matchers:
   - name: generic
@@ -104,56 +138,40 @@ matchers:
     score: 80
 `,
 	})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/zip")
-		_, _ = w.Write(archive)
-	}))
-	defer server.Close()
-
-	manager := NewBundleManager(dataDir, client.MustNewClient(), SourceTypeRemote, server.URL+"/rules.zip", "")
-	rulePath, updated, err := manager.SyncRemote(context.Background())
+	fail := false
+	manager, err := NewBundleManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
+		if fail {
+			return nil, fmt.Errorf("network down")
+		}
+		switch {
+		case req.URL.Host == "api.github.com" && req.URL.Path == "/repos/xxxsen/yamdc-script/tags":
+			return newHTTPResponse(http.StatusOK, []byte(`[{"name":"v2026.03.31"}]`), "application/json"), nil
+		case req.URL.Host == "codeload.github.com" && req.URL.Path == "/xxxsen/yamdc-script/zip/refs/tags/v2026.03.31":
+			return newHTTPResponse(http.StatusOK, archive, "application/zip"), nil
+		default:
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}
+	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script")
 	require.NoError(t, err)
-	require.True(t, updated)
-	require.DirExists(t, rulePath)
 
-	activePath, err := manager.CurrentRulePath()
-	require.NoError(t, err)
-	require.Equal(t, rulePath, activePath)
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "remote-rules"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"), []byte("stale"), 0644))
 
-	raw, err := os.ReadFile(filepath.Join(dataDir, "rule-bundles", "state.json"))
+	rs, files, err := manager.Load(context.Background())
 	require.NoError(t, err)
-	state := &BundleState{}
-	require.NoError(t, json.Unmarshal(raw, state))
-	require.Equal(t, SourceTypeRemote, state.SourceType)
-	require.Equal(t, "2026.03.29", state.ActiveVersion)
-	require.Equal(t, rulePath, state.ActiveRulePath)
+	require.Equal(t, "v1", rs.Version)
+	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, files)
+	require.FileExists(t, filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip"))
+	require.NoFileExists(t, filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"))
+
+	fail = true
+	rs, files, err = manager.Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "v1", rs.Version)
+	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, files)
 }
 
-func TestResolveBundleEntryWithoutManifest(t *testing.T) {
-	root := t.TempDir()
-	rulesetDir := filepath.Join(root, "yamdc-script-v1", "ruleset")
-	require.NoError(t, os.MkdirAll(rulesetDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(rulesetDir, "001-base.yaml"), []byte(`
-version: v1
-options:
-  case_mode: upper
-`), 0644))
-
-	entry, version, err := resolveBundleEntry(root, "v2026.03.29")
-	require.NoError(t, err)
-	require.Equal(t, rulesetDir, entry)
-	require.Equal(t, "v2026.03.29", version)
-}
-
-func TestParseGitHubRepoURL(t *testing.T) {
-	repo, ok := parseGitHubRepoURL("https://github.com/xxxsen/yamdc-script")
-	require.True(t, ok)
-	require.Equal(t, "xxxsen", repo.owner)
-	require.Equal(t, "yamdc-script", repo.repo)
-}
-
-func TestBundleManagerLocalState(t *testing.T) {
-	dataDir := t.TempDir()
+func TestLocalBundleManagerLoad(t *testing.T) {
 	ruleDir := filepath.Join(t.TempDir(), "rules")
 	require.NoError(t, os.MkdirAll(ruleDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "001-base.yaml"), []byte(`
@@ -162,17 +180,36 @@ options:
   case_mode: upper
 `), 0644))
 
-	manager := NewBundleManager(dataDir, client.MustNewClient(), SourceTypeLocal, "", ruleDir)
-	path, err := manager.CurrentRulePath()
+	manager, err := NewBundleManager(t.TempDir(), stubHTTPClient{}, SourceTypeLocal, ruleDir)
 	require.NoError(t, err)
-	require.Equal(t, ruleDir, path)
 
-	raw, err := os.ReadFile(filepath.Join(dataDir, "rule-bundles", "state.json"))
+	rs, files, err := manager.Load(context.Background())
 	require.NoError(t, err)
-	state := &BundleState{}
-	require.NoError(t, json.Unmarshal(raw, state))
-	require.Equal(t, SourceTypeLocal, state.SourceType)
-	require.Equal(t, ruleDir, state.ActiveRulePath)
+	require.Equal(t, "v1", rs.Version)
+	require.Equal(t, []string{"001-base.yaml"}, files)
+}
+
+type stubHTTPClient struct {
+	do func(req *http.Request) (*http.Response, error)
+}
+
+func (s stubHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if s.do == nil {
+		return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+	}
+	return s.do(req)
+}
+
+func newHTTPResponse(status int, body []byte, contentType string) *http.Response {
+	header := make(http.Header)
+	if contentType != "" {
+		header.Set("Content-Type", contentType)
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     header,
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
 }
 
 func buildTestBundleZip(t *testing.T, files map[string]string) []byte {

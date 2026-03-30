@@ -1,14 +1,10 @@
 package numbercleaner
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -25,215 +21,179 @@ import (
 const (
 	SourceTypeLocal  = "local"
 	SourceTypeRemote = "remote"
+
+	defaultRemoteEntry        = "ruleset"
+	defaultRemoteSyncInterval = 24 * time.Hour
 )
 
-type BundleState struct {
-	SourceType     string `json:"source_type"`
-	SourceID       string `json:"source_id"`
-	ActiveVersion  string `json:"active_version"`
-	ActiveRulePath string `json:"active_rule_path"`
-	UpdatedAt      int64  `json:"updated_at"`
+type BundleManager interface {
+	Load(context.Context) (*RuleSet, []string, error)
+	StartWatch(context.Context, func(*RuleSet, []string))
 }
 
 type BundleManifest struct {
-	Name             string `yaml:"name"`
-	Version          string `yaml:"version"`
-	MinEngineVersion int    `yaml:"min_engine_version"`
-	Format           string `yaml:"format"`
-	Entry            string `yaml:"entry"`
+	Entry string `yaml:"entry"`
 }
 
-type BundleManager struct {
-	dataDir    string
-	sourceType string
-	sourceID   string
-	remoteURL  string
-	localPath  string
-	cli        client.IHTTPClient
+type localBundleManager struct {
+	dir string
 }
 
-type remoteBundleMeta struct {
-	downloadURL string
-	version     string
+type remoteBundleManager struct {
+	cli      client.IHTTPClient
+	repo     githubRepo
+	cacheDir string
+	zipPath  string
+	tempPath string
 }
 
-func NewBundleManager(dataDir string, cli client.IHTTPClient, sourceType string, remoteURL string, localPath string) *BundleManager {
-	manager := &BundleManager{
-		dataDir:    dataDir,
-		sourceType: strings.ToLower(strings.TrimSpace(sourceType)),
-		remoteURL:  strings.TrimSpace(remoteURL),
-		localPath:  strings.TrimSpace(localPath),
-		cli:        cli,
-	}
-	switch manager.sourceType {
-	case SourceTypeLocal:
-		manager.sourceID = normalizeSourceID(SourceTypeLocal, localPath)
+type githubRepo struct {
+	owner string
+	repo  string
+}
+
+func NewBundleManager(dataDir string, cli client.IHTTPClient, sourceType string, location string) (BundleManager, error) {
+	switch strings.ToLower(strings.TrimSpace(sourceType)) {
+	case "", SourceTypeLocal:
+		return &localBundleManager{dir: strings.TrimSpace(location)}, nil
 	case SourceTypeRemote:
-		manager.sourceID = normalizeSourceID(SourceTypeRemote, remoteURL)
-	}
-	return manager
-}
-
-func (m *BundleManager) CurrentRulePath() (string, error) {
-	switch m.sourceType {
-	case SourceTypeLocal:
-		if strings.TrimSpace(m.localPath) == "" {
-			return "", fmt.Errorf("local bundle path is empty")
+		repo, ok := parseGitHubRepoURL(location)
+		if !ok {
+			return nil, fmt.Errorf("invalid remote number cleaner location: %s", location)
 		}
-		path, err := filepath.Abs(m.localPath)
-		if err != nil {
-			return "", err
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return "", err
-		}
-		if !info.IsDir() && !isYAMLPath(path) {
-			return "", fmt.Errorf("local rule path must be a yaml file or directory: %s", path)
-		}
-		if err := m.writeState(&BundleState{
-			SourceType:     SourceTypeLocal,
-			SourceID:       m.sourceID,
-			ActiveVersion:  "local",
-			ActiveRulePath: path,
-			UpdatedAt:      time.Now().Unix(),
-		}); err != nil {
-			return "", err
-		}
-		return path, nil
-	case SourceTypeRemote:
-		state, err := m.readState()
-		if err != nil {
-			return "", err
-		}
-		if state == nil {
-			return "", fmt.Errorf("no active remote rule bundle found")
-		}
-		if state.SourceType != SourceTypeRemote || state.SourceID != m.sourceID {
-			return "", fmt.Errorf("active rule bundle source mismatch")
-		}
-		if strings.TrimSpace(state.ActiveRulePath) == "" {
-			return "", fmt.Errorf("active remote rule path is empty")
-		}
-		if _, err := os.Stat(state.ActiveRulePath); err != nil {
-			return "", err
-		}
-		return state.ActiveRulePath, nil
+		cacheDir := filepath.Join(dataDir, "remote-rules")
+		filename := fmt.Sprintf("%s-%s.zip", repo.owner, repo.repo)
+		return &remoteBundleManager{
+			cli:      cli,
+			repo:     *repo,
+			cacheDir: cacheDir,
+			zipPath:  filepath.Join(cacheDir, filename),
+			tempPath: filepath.Join(cacheDir, filename+".temp"),
+		}, nil
 	default:
-		return "", fmt.Errorf("unsupported rule source type: %s", m.sourceType)
+		return nil, fmt.Errorf("unsupported rule source type: %s", sourceType)
 	}
 }
 
-func (m *BundleManager) SyncRemote(ctx context.Context) (string, bool, error) {
-	if m.sourceType != SourceTypeRemote {
-		return "", false, nil
-	}
-	if strings.TrimSpace(m.remoteURL) == "" {
-		return "", false, fmt.Errorf("remote bundle url is empty")
-	}
-	meta, err := m.resolveRemoteBundleMeta(ctx)
+func (m *localBundleManager) Load(_ context.Context) (*RuleSet, []string, error) {
+	dir, err := filepath.Abs(strings.TrimSpace(m.dir))
 	if err != nil {
-		return "", false, err
+		return nil, nil, err
 	}
-	raw, err := m.downloadBundle(ctx, meta.downloadURL)
+	info, err := os.Stat(dir)
 	if err != nil {
-		return "", false, err
+		return nil, nil, err
 	}
-	root := m.bundleRootDir()
-	if err := os.MkdirAll(root, 0755); err != nil {
-		return "", false, err
+	if !info.IsDir() {
+		return nil, nil, fmt.Errorf("local rule path must be a directory: %s", dir)
 	}
-	tempDir, err := os.MkdirTemp(root, "bundle-*")
+	rs, err := LoadRuleSetFromDir(dir)
 	if err != nil {
-		return "", false, err
+		return nil, nil, err
 	}
+	files, err := ListRuleSetFilesFromDir(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rs, files, nil
+}
+
+func (m *localBundleManager) StartWatch(_ context.Context, _ func(*RuleSet, []string)) {}
+
+func (m *remoteBundleManager) Load(ctx context.Context) (*RuleSet, []string, error) {
+	if err := m.cleanupTemp(); err != nil {
+		return nil, nil, err
+	}
+	if _, err := m.sync(ctx); err != nil {
+		if _, statErr := os.Stat(m.zipPath); statErr != nil {
+			return nil, nil, fmt.Errorf("sync remote number cleaner bundle failed: %w", err)
+		}
+	}
+	return LoadRuleSetFromZip(m.zipPath)
+}
+
+func (m *remoteBundleManager) StartWatch(ctx context.Context, onUpdate func(*RuleSet, []string)) {
+	if onUpdate == nil {
+		return
+	}
+	ticker := time.NewTicker(defaultRemoteSyncInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			updated, err := m.sync(ctx)
+			if err != nil || !updated {
+				continue
+			}
+			rs, files, err := LoadRuleSetFromZip(m.zipPath)
+			if err != nil {
+				continue
+			}
+			onUpdate(rs, files)
+		}
+	}
+}
+
+func (m *remoteBundleManager) sync(ctx context.Context) (bool, error) {
+	if err := os.MkdirAll(m.cacheDir, 0755); err != nil {
+		return false, err
+	}
+	if err := m.cleanupTemp(); err != nil {
+		return false, err
+	}
+	tag, err := m.fetchLatestGitHubTag(ctx)
+	if err != nil {
+		return false, err
+	}
+	downloadURL := fmt.Sprintf("https://codeload.github.com/%s/%s/zip/refs/tags/%s", m.repo.owner, m.repo.repo, url.PathEscape(tag))
+	raw, err := m.downloadBundle(ctx, downloadURL)
+	if err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(m.tempPath, raw, 0644); err != nil {
+		return false, err
+	}
+	validated := false
 	defer func() {
-		_ = os.RemoveAll(tempDir)
+		if !validated {
+			_ = os.Remove(m.tempPath)
+		}
 	}()
-	if err := extractBundleArchive(raw, tempDir); err != nil {
-		return "", false, err
+	if _, _, err := LoadRuleSetFromZip(m.tempPath); err != nil {
+		return false, fmt.Errorf("validate remote number cleaner bundle failed: %w", err)
 	}
-	entryPath, version, err := resolveBundleEntry(tempDir, meta.version)
-	if err != nil {
-		return "", false, err
-	}
-	if _, err := LoadRuleSetFromPath(entryPath); err != nil {
-		return "", false, fmt.Errorf("validate bundle rule set failed: %w", err)
-	}
-	versionDir := filepath.Join(root, "versions", sanitizeVersion(version))
-	entryRel, err := filepath.Rel(tempDir, entryPath)
-	if err != nil {
-		return "", false, err
-	}
-	activeRulePath := filepath.Join(versionDir, entryRel)
-	if _, err := os.Stat(versionDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(versionDir), 0755); err != nil {
-			return "", false, err
+	if exists, err := fileExists(m.zipPath); err != nil {
+		return false, err
+	} else if exists {
+		same, err := filesEqual(m.zipPath, m.tempPath)
+		if err != nil {
+			return false, err
 		}
-		if err := os.Rename(tempDir, versionDir); err != nil {
-			return "", false, err
+		if same {
+			validated = true
+			if err := os.Remove(m.tempPath); err != nil && !os.IsNotExist(err) {
+				return false, err
+			}
+			return false, nil
 		}
-		tempDir = ""
 	}
-	prev, err := m.readState()
-	if err != nil {
-		return "", false, err
+	if err := os.Rename(m.tempPath, m.zipPath); err != nil {
+		return false, err
 	}
-	updated := prev == nil || prev.SourceType != SourceTypeRemote || prev.SourceID != m.sourceID || prev.ActiveVersion != version || prev.ActiveRulePath != activeRulePath
-	if err := m.writeState(&BundleState{
-		SourceType:     SourceTypeRemote,
-		SourceID:       m.sourceID,
-		ActiveVersion:  version,
-		ActiveRulePath: activeRulePath,
-		UpdatedAt:      time.Now().Unix(),
-	}); err != nil {
-		return "", false, err
-	}
-	return activeRulePath, updated, nil
+	validated = true
+	return true, nil
 }
 
-func (m *BundleManager) readState() (*BundleState, error) {
-	raw, err := os.ReadFile(m.statePath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	state := &BundleState{}
-	if err := json.Unmarshal(raw, state); err != nil {
-		return nil, err
-	}
-	return state, nil
-}
-
-func (m *BundleManager) writeState(state *BundleState) error {
-	if state == nil {
-		return nil
-	}
-	if err := os.MkdirAll(m.bundleRootDir(), 0755); err != nil {
+func (m *remoteBundleManager) cleanupTemp() error {
+	if err := os.Remove(m.tempPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	raw, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	temp := m.statePath() + ".tmp"
-	if err := os.WriteFile(temp, raw, 0644); err != nil {
-		return err
-	}
-	return os.Rename(temp, m.statePath())
+	return nil
 }
 
-func (m *BundleManager) statePath() string {
-	return filepath.Join(m.bundleRootDir(), "state.json")
-}
-
-func (m *BundleManager) bundleRootDir() string {
-	return filepath.Join(m.dataDir, "rule-bundles")
-}
-
-func (m *BundleManager) downloadBundle(ctx context.Context, downloadURL string) ([]byte, error) {
+func (m *remoteBundleManager) downloadBundle(ctx context.Context, downloadURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
 		return nil, err
@@ -242,49 +202,15 @@ func (m *BundleManager) downloadBundle(ctx context.Context, downloadURL string) 
 	if err != nil {
 		return nil, err
 	}
+	if rsp.StatusCode != http.StatusOK {
+		defer rsp.Body.Close()
+		return nil, fmt.Errorf("download number cleaner bundle failed, status:%d", rsp.StatusCode)
+	}
 	return client.ReadHTTPData(rsp)
 }
 
-func (m *BundleManager) resolveRemoteBundleMeta(ctx context.Context) (*remoteBundleMeta, error) {
-	repo, ok := parseGitHubRepoURL(m.remoteURL)
-	if !ok {
-		return &remoteBundleMeta{
-			downloadURL: m.remoteURL,
-			version:     "",
-		}, nil
-	}
-	tag, err := m.fetchLatestGitHubTag(ctx, repo.owner, repo.repo)
-	if err != nil {
-		return nil, err
-	}
-	return &remoteBundleMeta{
-		downloadURL: fmt.Sprintf("https://codeload.github.com/%s/%s/tar.gz/refs/tags/%s", repo.owner, repo.repo, url.PathEscape(tag)),
-		version:     tag,
-	}, nil
-}
-
-type githubRepo struct {
-	owner string
-	repo  string
-}
-
-func parseGitHubRepoURL(raw string) (*githubRepo, bool) {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return nil, false
-	}
-	if !strings.EqualFold(u.Host, "github.com") {
-		return nil, false
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 2 {
-		return nil, false
-	}
-	return &githubRepo{owner: parts[0], repo: strings.TrimSuffix(parts[1], ".git")}, true
-}
-
-func (m *BundleManager) fetchLatestGitHubTag(ctx context.Context, owner string, repo string) (string, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=1", owner, repo)
+func (m *remoteBundleManager) fetchLatestGitHubTag(ctx context.Context) (string, error) {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=1", m.repo.owner, m.repo.repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", err
@@ -308,241 +234,164 @@ func (m *BundleManager) fetchLatestGitHubTag(ctx context.Context, owner string, 
 		return "", err
 	}
 	if len(tags) == 0 || strings.TrimSpace(tags[0].Name) == "" {
-		return "", fmt.Errorf("no github tags found for repo: %s/%s", owner, repo)
+		return "", fmt.Errorf("no github tags found for repo: %s/%s", m.repo.owner, m.repo.repo)
 	}
 	return tags[0].Name, nil
 }
 
-func extractBundleArchive(raw []byte, dst string) error {
-	if len(raw) >= 4 && bytes.Equal(raw[:4], []byte("PK\x03\x04")) {
-		return extractZipArchive(raw, dst)
+func LoadRuleSetFromZip(zipPath string) (*RuleSet, []string, error) {
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return nil, nil, err
 	}
-	if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
-		return extractTarGzArchive(raw, dst)
+	defer reader.Close()
+	entry, err := resolveZipRuleSetEntry(&reader.Reader)
+	if err != nil {
+		return nil, nil, err
 	}
-	return fmt.Errorf("unsupported bundle archive format")
+	rs, err := LoadRuleSetFromFS(&reader.Reader, entry)
+	if err != nil {
+		return nil, nil, err
+	}
+	files, err := ListRuleSetFilesFromFS(&reader.Reader, entry)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rs, files, nil
 }
 
-func extractZipArchive(raw []byte, dst string) error {
-	reader, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
-	if err != nil {
-		return err
-	}
-	for _, file := range reader.File {
-		target, err := safeJoin(dst, file.Name)
-		if err != nil {
-			return err
+func resolveZipRuleSetEntry(reader *zip.Reader) (string, error) {
+	root := detectZipRoot(reader.File)
+	entry := defaultRemoteEntry
+	if manifest, ok, err := readZipManifest(reader, root); err != nil {
+		return "", err
+	} else if ok {
+		if strings.TrimSpace(manifest.Entry) == "" {
+			return "", fmt.Errorf("bundle manifest entry is required")
 		}
-		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
-			}
+		entry = manifest.Entry
+	}
+	clean, err := cleanBundleEntry(entry)
+	if err != nil {
+		return "", err
+	}
+	if root == "" {
+		return clean, nil
+	}
+	return path.Join(root, clean), nil
+}
+
+func detectZipRoot(files []*zip.File) string {
+	root := ""
+	for _, file := range files {
+		name := strings.TrimSpace(file.Name)
+		if name == "" {
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return err
+		clean := path.Clean(strings.TrimPrefix(name, "/"))
+		if clean == "." || clean == "" {
+			continue
 		}
-		rc, err := file.Open()
-		if err != nil {
-			return err
+		parts := strings.Split(clean, "/")
+		if len(parts) == 0 || parts[0] == "" {
+			continue
 		}
-		if err := writeFile(target, rc, file.Mode()); err != nil {
-			_ = rc.Close()
-			return err
+		if root == "" {
+			root = parts[0]
+			continue
 		}
-		_ = rc.Close()
+		if root != parts[0] {
+			return ""
+		}
 	}
-	return nil
+	return root
 }
 
-func extractTarGzArchive(raw []byte, dst string) error {
-	gzr, err := gzip.NewReader(bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	defer gzr.Close()
-	tr := tar.NewReader(gzr)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			return nil
+func readZipManifest(reader *zip.Reader, root string) (*BundleManifest, bool, error) {
+	candidates := []string{"manifest.yaml", "manifest.yml"}
+	for _, name := range candidates {
+		target := name
+		if root != "" {
+			target = path.Join(root, name)
 		}
+		raw, err := fs.ReadFile(reader, target)
 		if err != nil {
-			return err
-		}
-		target, err := safeJoin(dst, header.Name)
-		if err != nil {
-			return err
-		}
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
-			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
-			}
-			if err := writeFile(target, tr, fs.FileMode(header.Mode)); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-func safeJoin(root string, name string) (string, error) {
-	clean := filepath.Clean(name)
-	target := filepath.Join(root, clean)
-	rel, err := filepath.Rel(root, target)
-	if err != nil {
-		return "", err
-	}
-	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("archive entry escapes root: %s", name)
-	}
-	return target, nil
-}
-
-func writeFile(path string, src io.Reader, mode fs.FileMode) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm())
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = io.Copy(file, src)
-	return err
-}
-
-func findManifestPath(root string) (string, error) {
-	var found string
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		name := strings.ToLower(d.Name())
-		if name == "manifest.yaml" || name == "manifest.yml" {
-			found = path
-			return io.EOF
-		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		return "", err
-	}
-	if strings.TrimSpace(found) == "" {
-		return "", fmt.Errorf("bundle manifest not found")
-	}
-	return found, nil
-}
-
-func readManifest(path string) (*BundleManifest, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	manifest := &BundleManifest{}
-	if err := yaml.Unmarshal(raw, manifest); err != nil {
-		return nil, err
-	}
-	return manifest, nil
-}
-
-func resolveBundleEntry(root string, fallbackVersion string) (string, string, error) {
-	manifestPath, err := findManifestPath(root)
-	if err == nil {
-		manifest, err := readManifest(manifestPath)
-		if err != nil {
-			return "", "", err
-		}
-		if strings.TrimSpace(manifest.Version) == "" {
-			return "", "", fmt.Errorf("bundle manifest version is required")
-		}
-		if strings.TrimSpace(manifest.Entry) == "" {
-			return "", "", fmt.Errorf("bundle manifest entry is required")
-		}
-		entryPath := filepath.Join(filepath.Dir(manifestPath), manifest.Entry)
-		if _, err := os.Stat(entryPath); err != nil {
-			return "", "", fmt.Errorf("bundle entry path not found: %w", err)
-		}
-		return entryPath, manifest.Version, nil
-	}
-	rulesetPath, rulesetErr := findRulesetDir(root)
-	if rulesetErr != nil {
-		return "", "", err
-	}
-	if strings.TrimSpace(fallbackVersion) == "" {
-		return "", "", fmt.Errorf("bundle version is required when manifest is absent")
-	}
-	return rulesetPath, fallbackVersion, nil
-}
-
-func findRulesetDir(root string) (string, error) {
-	var found string
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		if pathpkg := strings.ToLower(pathpkgBase(path)); pathpkg != "ruleset" {
-			return nil
-		}
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return err
-		}
-		hasYAML := false
-		for _, entry := range entries {
-			if entry.IsDir() {
+			if os.IsNotExist(err) {
 				continue
 			}
-			name := strings.ToLower(entry.Name())
-			if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
-				hasYAML = true
-				break
-			}
+			return nil, false, err
 		}
-		if hasYAML {
-			found = path
-			return io.EOF
+		manifest := &BundleManifest{}
+		if err := yaml.Unmarshal(raw, manifest); err != nil {
+			return nil, false, err
 		}
-		return nil
-	})
-	if err != nil && err != io.EOF {
-		return "", err
+		return manifest, true, nil
 	}
-	if strings.TrimSpace(found) == "" {
-		return "", fmt.Errorf("ruleset directory not found")
-	}
-	return found, nil
+	return nil, false, nil
 }
 
-func pathpkgBase(in string) string {
-	return path.Base(filepath.ToSlash(in))
+func cleanBundleEntry(raw string) (string, error) {
+	clean := path.Clean(strings.TrimSpace(raw))
+	clean = strings.TrimPrefix(clean, "/")
+	if clean == "" || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("invalid bundle manifest entry: %s", raw)
+	}
+	return clean, nil
 }
 
-func normalizeSourceID(sourceType string, value string) string {
-	switch sourceType {
-	case SourceTypeLocal:
-		if abs, err := filepath.Abs(strings.TrimSpace(value)); err == nil {
-			return abs
+func parseGitHubRepoURL(raw string) (*githubRepo, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, false
+	}
+	if !strings.EqualFold(u.Host, "github.com") {
+		return nil, false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 2 {
+		return nil, false
+	}
+	return &githubRepo{owner: parts[0], repo: strings.TrimSuffix(parts[1], ".git")}, true
+}
+
+func fileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func filesEqual(left string, right string) (bool, error) {
+	leftInfo, err := os.Stat(left)
+	if err != nil {
+		return false, err
+	}
+	rightInfo, err := os.Stat(right)
+	if err != nil {
+		return false, err
+	}
+	if leftInfo.Size() != rightInfo.Size() {
+		return false, nil
+	}
+	leftData, err := os.ReadFile(left)
+	if err != nil {
+		return false, err
+	}
+	rightData, err := os.ReadFile(right)
+	if err != nil {
+		return false, err
+	}
+	if len(leftData) != len(rightData) {
+		return false, nil
+	}
+	for i := range leftData {
+		if leftData[i] != rightData[i] {
+			return false, nil
 		}
-		return strings.TrimSpace(value)
-	default:
-		return strings.TrimSpace(value)
 	}
-}
-
-func sanitizeVersion(version string) string {
-	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_", " ", "_")
-	return replacer.Replace(strings.TrimSpace(version))
-}
-
-func isYAMLPath(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml")
+	return true, nil
 }
