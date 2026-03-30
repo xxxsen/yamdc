@@ -16,6 +16,25 @@ import (
 
 type yamlLoader struct{}
 
+var (
+	allowedBuiltinNormalizers = map[string]struct{}{
+		"basename":               {},
+		"strip_ext":              {},
+		"fullwidth_to_halfwidth": {},
+		"trim_space":             {},
+		"collapse_spaces":        {},
+		"to_upper":               {},
+		"replace_pairs":          {},
+	}
+	allowedBuiltinPostProcessors = map[string]struct{}{
+		"reorder_suffix":   {},
+		"normalize_hyphen": {},
+	}
+	allowedSuffixes = map[string]struct{}{
+		"C": {}, "4K": {}, "8K": {}, "VR": {}, "LEAK": {}, "U": {}, "UC": {},
+	}
+)
+
 func NewLoader() Loader {
 	return &yamlLoader{}
 }
@@ -238,52 +257,49 @@ func validateRuleSet(rs *RuleSet) error {
 	if strings.TrimSpace(rs.Version) == "" {
 		return &CleanError{Code: ErrInvalidRuleSet, Message: "rule set version is required"}
 	}
-	allowedBuiltinNormalizer := map[string]struct{}{
-		"basename":               {},
-		"strip_ext":              {},
-		"fullwidth_to_halfwidth": {},
-		"trim_space":             {},
-		"collapse_spaces":        {},
-		"to_upper":               {},
-		"replace_pairs":          {},
+	if err := validateNormalizers(rs.Normalizers); err != nil {
+		return err
 	}
-	allowedBuiltinPostProcessors := map[string]struct{}{
-		"reorder_suffix":   {},
-		"normalize_hyphen": {},
+	if err := validateRewriteRules(rs.RewriteRules); err != nil {
+		return err
 	}
-	allowedSuffixes := map[string]struct{}{
-		"C": {}, "4K": {}, "8K": {}, "VR": {}, "LEAK": {}, "U": {}, "UC": {},
+	if err := validateSuffixRules(rs.SuffixRules); err != nil {
+		return err
 	}
-	seen := make(map[string]struct{})
-	for _, item := range rs.Normalizers {
+	if err := validateNoiseRules(rs.NoiseRules); err != nil {
+		return err
+	}
+	if err := validateMatchers(rs.Matchers); err != nil {
+		return err
+	}
+	return validatePostProcessors(rs.PostProcessors)
+}
+
+func validateNormalizers(items []NormalizerRule) error {
+	if err := validateUniqueRuleNames(items, "normalizer"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "normalizer name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate normalizer name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if item.Type == "builtin" {
-			if _, ok := allowedBuiltinNormalizer[item.Builtin]; !ok {
+			if _, ok := allowedBuiltinNormalizers[item.Builtin]; !ok {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin), Rule: item.Name}
 			}
 		}
 	}
-	seen = make(map[string]struct{})
-	for _, item := range rs.RewriteRules {
+	return nil
+}
+
+func validateRewriteRules(items []RewriteRule) error {
+	if err := validateUniqueRuleNames(items, "rewrite rule"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "rewrite rule name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate rewrite rule name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if strings.TrimSpace(item.Pattern) == "" {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "rewrite rule pattern is required", Rule: item.Name}
 		}
@@ -291,18 +307,17 @@ func validateRuleSet(rs *RuleSet) error {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule regexp failed", Rule: item.Name, Cause: err}
 		}
 	}
-	seen = make(map[string]struct{})
-	for _, item := range rs.SuffixRules {
+	return nil
+}
+
+func validateSuffixRules(items []SuffixRule) error {
+	if err := validateUniqueRuleNames(items, "suffix rule"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "suffix rule name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate suffix rule name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile suffix rule regexp failed", Rule: item.Name, Cause: err}
@@ -317,36 +332,34 @@ func validateRuleSet(rs *RuleSet) error {
 			}
 		}
 	}
-	seen = make(map[string]struct{})
-	for _, item := range rs.NoiseRules {
+	return nil
+}
+
+func validateNoiseRules(items []NoiseRule) error {
+	if err := validateUniqueRuleNames(items, "noise rule"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "noise rule name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate noise rule name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile noise rule regexp failed", Rule: item.Name, Cause: err}
 			}
 		}
 	}
-	seen = make(map[string]struct{})
-	for _, item := range rs.Matchers {
+	return nil
+}
+
+func validateMatchers(items []MatcherRule) error {
+	if err := validateUniqueRuleNames(items, "matcher rule"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "matcher rule name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate matcher rule name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if strings.TrimSpace(item.NormalizeTemplate) == "" {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "matcher normalize_template is required", Rule: item.Name}
 		}
@@ -354,23 +367,45 @@ func validateRuleSet(rs *RuleSet) error {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile matcher rule regexp failed", Rule: item.Name, Cause: err}
 		}
 	}
-	seen = make(map[string]struct{})
-	for _, item := range rs.PostProcessors {
+	return nil
+}
+
+func validatePostProcessors(items []PostProcessRule) error {
+	if err := validateUniqueRuleNames(items, "post processor"); err != nil {
+		return err
+	}
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
-		if strings.TrimSpace(item.Name) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "post processor name is required"}
-		}
-		if _, ok := seen[item.Name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate post processor name: %s", item.Name), Rule: item.Name}
-		}
-		seen[item.Name] = struct{}{}
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinPostProcessors[item.Builtin]; !ok {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported post processor builtin: %s", item.Builtin), Rule: item.Name}
 			}
 		}
+	}
+	return nil
+}
+
+type namedRule interface {
+	GetName() string
+	IsDisabled() bool
+}
+
+func validateUniqueRuleNames[T namedRule](items []T, kind string) error {
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		if item.IsDisabled() {
+			continue
+		}
+		name := strings.TrimSpace(item.GetName())
+		if name == "" {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("%s name is required", kind)}
+		}
+		if _, ok := seen[name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate %s name: %s", kind, name), Rule: name}
+		}
+		seen[name] = struct{}{}
 	}
 	return nil
 }

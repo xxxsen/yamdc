@@ -128,11 +128,27 @@ type NormalizerRule struct {
 	Disabled bool              `yaml:"disabled"`
 }
 
+func (r NormalizerRule) GetName() string {
+	return r.Name
+}
+
+func (r NormalizerRule) IsDisabled() bool {
+	return r.Disabled
+}
+
 type RewriteRule struct {
 	Name     string `yaml:"name"`
 	Pattern  string `yaml:"pattern"`
 	Replace  string `yaml:"replace"`
 	Disabled bool   `yaml:"disabled"`
+}
+
+func (r RewriteRule) GetName() string {
+	return r.Name
+}
+
+func (r RewriteRule) IsDisabled() bool {
+	return r.Disabled
 }
 
 type SuffixRule struct {
@@ -146,12 +162,28 @@ type SuffixRule struct {
 	Disabled          bool     `yaml:"disabled"`
 }
 
+func (r SuffixRule) GetName() string {
+	return r.Name
+}
+
+func (r SuffixRule) IsDisabled() bool {
+	return r.Disabled
+}
+
 type NoiseRule struct {
 	Name     string   `yaml:"name"`
 	Type     string   `yaml:"type"`
 	Aliases  []string `yaml:"aliases"`
 	Pattern  string   `yaml:"pattern"`
 	Disabled bool     `yaml:"disabled"`
+}
+
+func (r NoiseRule) GetName() string {
+	return r.Name
+}
+
+func (r NoiseRule) IsDisabled() bool {
+	return r.Disabled
 }
 
 type MatcherRule struct {
@@ -166,11 +198,27 @@ type MatcherRule struct {
 	Disabled          bool     `yaml:"disabled"`
 }
 
+func (r MatcherRule) GetName() string {
+	return r.Name
+}
+
+func (r MatcherRule) IsDisabled() bool {
+	return r.Disabled
+}
+
 type PostProcessRule struct {
 	Name     string `yaml:"name"`
 	Type     string `yaml:"type"`
 	Builtin  string `yaml:"builtin"`
 	Disabled bool   `yaml:"disabled"`
+}
+
+func (r PostProcessRule) GetName() string {
+	return r.Name
+}
+
+func (r PostProcessRule) IsDisabled() bool {
+	return r.Disabled
 }
 
 type Cleaner interface {
