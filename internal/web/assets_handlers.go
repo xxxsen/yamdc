@@ -12,6 +12,10 @@ import (
 )
 
 func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
 	if r.Method == http.MethodPost {
 		file, header, err := r.FormFile("file")
 		if err != nil {
@@ -39,10 +43,6 @@ func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
 			"name": filepath.Base(header.Filename),
 			"key":  key,
 		})
-		return
-	}
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
 		return
 	}
 	key := strings.TrimPrefix(r.URL.Path, "/api/assets/")

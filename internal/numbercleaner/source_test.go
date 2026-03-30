@@ -69,6 +69,60 @@ matchers:
 	require.Contains(t, err.Error(), "duplicate rule name across fragments")
 }
 
+func TestLoadRuleSetFromDirDuplicateNormalizerName(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "001-base.yaml"), []byte(`
+version: v1
+options:
+  case_mode: upper
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-normalizers.yaml"), []byte(`
+version: v1
+normalizers:
+  - name: dup
+    type: builtin
+    builtin: basename
+  - name: dup
+    type: builtin
+    builtin: strip_ext
+`), 0644))
+
+	_, err := LoadRuleSetFromPath(dir)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate normalizer name: dup")
+}
+
+func TestLoadRuleSetFromDirAllowsCrossTypeDuplicateName(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "001-base.yaml"), []byte(`
+version: v1
+options:
+  case_mode: upper
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-suffix.yaml"), []byte(`
+version: v1
+suffix_rules:
+  - name: shared_name
+    type: token
+    aliases: ["中字"]
+    canonical: C
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "003-matcher.yaml"), []byte(`
+version: v1
+matchers:
+  - name: shared_name
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80
+`), 0644))
+
+	rs, err := LoadRuleSetFromPath(dir)
+	require.NoError(t, err)
+	require.NotNil(t, rs)
+	require.Len(t, rs.SuffixRules, 1)
+	require.Len(t, rs.Matchers, 1)
+}
+
 func TestLoadRuleSetFromZipUsesManifestEntry(t *testing.T) {
 	zipPath := filepath.Join(t.TempDir(), "rules.zip")
 	require.NoError(t, os.WriteFile(zipPath, buildTestBundleZip(t, map[string]string{

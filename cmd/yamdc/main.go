@@ -373,24 +373,24 @@ func buildHTTPClient(ctx context.Context, c *config.Config) (client.IHTTPClient,
 	if err != nil {
 		return nil, err
 	}
-	if c.FlareSolverrConfig.Enable {
-		bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
-		if err != nil {
-			return nil, fmt.Errorf("create flaresolverr client failed, err:%w", err)
-		}
-		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
-		for domain, ok := range c.FlareSolverrConfig.Domains {
-			if !ok {
-				continue
-			}
-			domainList = append(domainList, domain)
-			logutil.GetLogger(ctx).Debug("add domain to flaresolverr", zap.String("domain", domain))
-		}
-		flarerr.MustAddToSolverList(bpc, domainList...)
-		clientImpl = bpc
-		logutil.GetLogger(ctx).Info("enable flaresolverr client")
+	if !c.FlareSolverrConfig.Enable {
+		return clientImpl, nil
 	}
-	return clientImpl, nil
+	bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
+	if err != nil {
+		return nil, fmt.Errorf("create flaresolverr client failed, err:%w", err)
+	}
+	domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
+	for domain, ok := range c.FlareSolverrConfig.Domains {
+		if !ok {
+			continue
+		}
+		domainList = append(domainList, domain)
+		logutil.GetLogger(ctx).Debug("add domain to flaresolverr", zap.String("domain", domain))
+	}
+	flarerr.MustAddToSolverList(bpc, domainList...)
+	logutil.GetLogger(ctx).Info("enable flaresolverr client")
+	return bpc, nil
 }
 
 func buildAIEngine(ctx context.Context, cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine, error) {

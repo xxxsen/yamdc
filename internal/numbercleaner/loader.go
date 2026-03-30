@@ -262,6 +262,10 @@ func validateRuleSet(rs *RuleSet) error {
 		if strings.TrimSpace(item.Name) == "" {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "normalizer name is required"}
 		}
+		if _, ok := seen[item.Name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate normalizer name: %s", item.Name), Rule: item.Name}
+		}
+		seen[item.Name] = struct{}{}
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinNormalizer[item.Builtin]; !ok {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin), Rule: item.Name}
@@ -295,6 +299,10 @@ func validateRuleSet(rs *RuleSet) error {
 		if strings.TrimSpace(item.Name) == "" {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "suffix rule name is required"}
 		}
+		if _, ok := seen[item.Name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate suffix rule name: %s", item.Name), Rule: item.Name}
+		}
+		seen[item.Name] = struct{}{}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile suffix rule regexp failed", Rule: item.Name, Cause: err}
@@ -309,6 +317,7 @@ func validateRuleSet(rs *RuleSet) error {
 			}
 		}
 	}
+	seen = make(map[string]struct{})
 	for _, item := range rs.NoiseRules {
 		if item.Disabled {
 			continue
@@ -316,12 +325,17 @@ func validateRuleSet(rs *RuleSet) error {
 		if strings.TrimSpace(item.Name) == "" {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "noise rule name is required"}
 		}
+		if _, ok := seen[item.Name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate noise rule name: %s", item.Name), Rule: item.Name}
+		}
+		seen[item.Name] = struct{}{}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile noise rule regexp failed", Rule: item.Name, Cause: err}
 			}
 		}
 	}
+	seen = make(map[string]struct{})
 	for _, item := range rs.Matchers {
 		if item.Disabled {
 			continue
@@ -340,10 +354,18 @@ func validateRuleSet(rs *RuleSet) error {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile matcher rule regexp failed", Rule: item.Name, Cause: err}
 		}
 	}
+	seen = make(map[string]struct{})
 	for _, item := range rs.PostProcessors {
 		if item.Disabled {
 			continue
 		}
+		if strings.TrimSpace(item.Name) == "" {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: "post processor name is required"}
+		}
+		if _, ok := seen[item.Name]; ok {
+			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate post processor name: %s", item.Name), Rule: item.Name}
+		}
+		seen[item.Name] = struct{}{}
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinPostProcessors[item.Builtin]; !ok {
 				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported post processor builtin: %s", item.Builtin), Rule: item.Name}

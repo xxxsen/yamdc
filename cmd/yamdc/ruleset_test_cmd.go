@@ -1,22 +1,19 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 )
 
 func newRulesetTestCmd() *cobra.Command {
 	var (
-		configPath string
-		ruleset    string
-		output     string
+		ruleset string
+		output  string
 	)
 
 	cmd := &cobra.Command{
@@ -32,7 +29,7 @@ func newRulesetTestCmd() *cobra.Command {
 				return fmt.Errorf("unsupported output format: %s", output)
 			}
 
-			cleaner, err := buildRulesetTestCleaner(configPath, ruleset)
+			cleaner, err := buildRulesetTestCleaner(ruleset)
 			if err != nil {
 				return fmt.Errorf("build number cleaner failed: %w", err)
 			}
@@ -43,49 +40,25 @@ func newRulesetTestCmd() *cobra.Command {
 			return renderRulesetExplain(os.Stdout, explain, output)
 		},
 	}
-	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
 	cmd.Flags().StringVar(&ruleset, "ruleset", "", "path to ruleset file or directory")
 	cmd.Flags().StringVar(&output, "output", "text", "output format: text or json")
+	_ = cmd.MarkFlagRequired("ruleset")
 	return cmd
 }
 
-func buildRulesetTestCleaner(configPath string, ruleset string) (numbercleaner.Cleaner, error) {
-	if strings.TrimSpace(ruleset) != "" {
-		resolved, err := resolveRuleSourcePath(".", strings.TrimSpace(ruleset))
-		if err != nil {
-			return nil, err
-		}
-		rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
-		if err != nil {
-			return nil, err
-		}
-		return numbercleaner.NewCleaner(rs)
+func buildRulesetTestCleaner(ruleset string) (numbercleaner.Cleaner, error) {
+	if strings.TrimSpace(ruleset) == "" {
+		return nil, fmt.Errorf("ruleset is required")
 	}
-	c, err := config.Parse(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("parse config failed: %w", err)
-	}
-	sourceType := strings.ToLower(strings.TrimSpace(c.NumberCleanerConfig.SourceType))
-	if sourceType == "" || sourceType == numbercleaner.SourceTypeLocal {
-		resolved, err := resolveRuleSourcePath(c.DataDir, c.NumberCleanerConfig.Location)
-		if err != nil {
-			return nil, err
-		}
-		rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
-		if err != nil {
-			return nil, err
-		}
-		return numbercleaner.NewCleaner(rs)
-	}
-	cli, err := buildHTTPClient(context.Background(), c)
-	if err != nil {
-		return nil, fmt.Errorf("build http client failed: %w", err)
-	}
-	cleaner, _, err := buildNumberCleaner(context.Background(), cli, c)
+	resolved, err := resolveRuleSourcePath(".", strings.TrimSpace(ruleset))
 	if err != nil {
 		return nil, err
 	}
-	return cleaner, nil
+	rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
+	if err != nil {
+		return nil, err
+	}
+	return numbercleaner.NewCleaner(rs)
 }
 
 func renderRulesetExplain(out *os.File, explain *numbercleaner.ExplainResult, format string) error {

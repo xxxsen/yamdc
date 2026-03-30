@@ -1282,7 +1282,7 @@ func preserveAssetValue(current string, relPath string, relDir string) string {
 }
 
 func pickArtworkTargetName(detail *libraryDetail, variant libraryVariant, kind string, ext string) string {
-	currentPath := ""
+	var currentPath string
 	if kind == "poster" {
 		currentPath = firstNonEmpty(variant.PosterPath, variant.Meta.PosterPath)
 	} else {
