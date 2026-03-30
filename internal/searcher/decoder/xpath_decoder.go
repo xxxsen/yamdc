@@ -3,9 +3,9 @@ package decoder
 import (
 	"bytes"
 	"strings"
-	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/antchfx/htmlquery"
+	"github.com/xxxsen/yamdc/internal/model"
 	"golang.org/x/net/html"
 )
 

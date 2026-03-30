@@ -9,3 +9,5 @@ config.json
 /td
 /sample
 .codex
+/.cache
+/bin

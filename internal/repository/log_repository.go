@@ -50,7 +50,9 @@ func (r *LogRepository) ListByJobID(ctx context.Context, jobID int64, limit int)
 	if err != nil {
 		return nil, fmt.Errorf("list logs failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	items := make([]LogItem, 0, limit)
 	for rows.Next() {
 		var item LogItem

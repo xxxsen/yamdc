@@ -73,9 +73,13 @@ func CutImageViaRectangle(img image.Image, rect image.Rectangle) (image.Image, e
 	if img.Bounds().Max.X < rect.Max.X || img.Bounds().Max.Y < rect.Max.Y {
 		return nil, fmt.Errorf("invalid rectangle")
 	}
-	croppedImg := img.(interface {
+	subImager, ok := img.(interface {
 		SubImage(r image.Rectangle) image.Image
-	}).SubImage(rect)
+	})
+	if !ok {
+		return nil, fmt.Errorf("image does not support sub image")
+	}
+	croppedImg := subImager.SubImage(rect)
 	return croppedImg, nil
 }
 

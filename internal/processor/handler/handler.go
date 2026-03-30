@@ -3,9 +3,10 @@ package handler
 import (
 	"context"
 	"fmt"
+	"sort"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
-	"sort"
 )
 
 type IHandler interface {

@@ -1,19 +1,11 @@
 package numbercleaner
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-func loadDefaultRule(t *testing.T) []byte {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "rules", "ruleset", "001-base.yaml"))
-	require.NoError(t, err)
-	return data
-}
 
 func loadDefaultRuleSet(t *testing.T) *RuleSet {
 	t.Helper()

@@ -32,11 +32,15 @@ func BuildReaderFromHTTPResponse(rsp *http.Response) (io.ReadCloser, error) {
 }
 
 func ReadHTTPData(rsp *http.Response) ([]byte, error) {
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	reader, err := BuildReaderFromHTTPResponse(rsp)
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	return io.ReadAll(reader)
 }

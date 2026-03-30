@@ -2,9 +2,10 @@ package handler
 
 import (
 	"context"
+	"os"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
-	"os"
 
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/common/utils"

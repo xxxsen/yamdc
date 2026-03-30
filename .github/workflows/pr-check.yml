@@ -6,6 +6,24 @@ on:
       - master
 
 jobs:
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install golangci-lint
+        run: make install-golangci-lint
+
+      - name: Run golangci-lint
+        run: make lint-go
+
   backend-build:
     runs-on: ubuntu-latest
     steps:

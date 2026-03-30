@@ -202,7 +202,9 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 			writeFail(w, errCodeLibraryFileOpenFailed, "open library file failed")
 			return
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
@@ -267,7 +269,9 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 		writeFail(w, errCodeInvalidUploadFile, "invalid upload file")
 		return
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		writeFail(w, errCodeReadUploadFileFailed, "read upload file failed")
@@ -729,9 +733,7 @@ func (a *API) cropLibraryPosterFromCover(relPath string, absPath string, variant
 	}
 	coverRelPath := coverPath
 	prefix := detail.Item.RelPath + "/"
-	if strings.HasPrefix(coverRelPath, prefix) {
-		coverRelPath = strings.TrimPrefix(coverRelPath, prefix)
-	}
+	coverRelPath = strings.TrimPrefix(coverRelPath, prefix)
 	coverRelPath = filepath.ToSlash(coverRelPath)
 	coverAbsPath := filepath.Join(absPath, filepath.FromSlash(coverRelPath))
 	raw, err := os.ReadFile(coverAbsPath)

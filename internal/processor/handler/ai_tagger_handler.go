@@ -3,11 +3,12 @@ package handler
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode/utf8"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

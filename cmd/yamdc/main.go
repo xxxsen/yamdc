@@ -3,6 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
@@ -22,12 +29,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
 	"github.com/xxxsen/yamdc/internal/translator/google"
-	"log"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xxxsen/common/logger"

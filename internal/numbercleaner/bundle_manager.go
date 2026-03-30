@@ -203,7 +203,9 @@ func (m *remoteBundleManager) downloadBundle(ctx context.Context, downloadURL st
 		return nil, err
 	}
 	if rsp.StatusCode != http.StatusOK {
-		defer rsp.Body.Close()
+		defer func() {
+			_ = rsp.Body.Close()
+		}()
 		return nil, fmt.Errorf("download number cleaner bundle failed, status:%d", rsp.StatusCode)
 	}
 	return client.ReadHTTPData(rsp)
@@ -219,7 +221,9 @@ func (m *remoteBundleManager) fetchLatestGitHubTag(ctx context.Context) (string,
 	if err != nil {
 		return "", err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("query latest github tag failed, status:%d", rsp.StatusCode)
 	}
@@ -244,7 +248,9 @@ func LoadRuleSetFromZip(zipPath string) (*RuleSet, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	entry, err := resolveZipRuleSetEntry(&reader.Reader)
 	if err != nil {
 		return nil, nil, err

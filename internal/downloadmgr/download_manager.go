@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
 	"github.com/xxxsen/yamdc/internal/client"
 )
 
@@ -118,7 +119,9 @@ func (m *DownloadManager) Download(ctx context.Context, src string, dst string, 
 	if err != nil {
 		return false, fmt.Errorf("do request failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode == http.StatusNotModified {
 		return false, nil
 	}
@@ -129,7 +132,9 @@ func (m *DownloadManager) Download(ctx context.Context, src string, dst string, 
 	if err != nil {
 		return false, fmt.Errorf("build reader failed, err:%w", err)
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 	if err := m.writeToFile(rc, dst); err != nil {
 		return false, err
 	}

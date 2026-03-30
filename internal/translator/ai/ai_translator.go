@@ -3,9 +3,10 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/translator"
-	"strings"
 )
 
 const (

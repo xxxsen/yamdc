@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"testing"
+
 	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/stretchr/testify/assert"

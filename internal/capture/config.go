@@ -2,6 +2,7 @@ package capture
 
 import (
 	"fmt"
+
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"

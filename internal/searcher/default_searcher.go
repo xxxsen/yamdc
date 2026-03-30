@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/hasher"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
-	"net/http"
-	"strings"
-	"time"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -96,7 +97,9 @@ func (p *DefaultSearcher) checkOneRequest(ctx context.Context, host string) erro
 	if err != nil {
 		return fmt.Errorf("do check request network failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("do check request status failed, status code:%d, status:%s", rsp.StatusCode, rsp.Status)
 	}
@@ -158,7 +161,9 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 		if rsp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
 		}
-		defer rsp.Body.Close()
+		defer func() {
+			_ = rsp.Body.Close()
+		}()
 		data, err := client.ReadHTTPData(rsp)
 		if err != nil {
 			return nil, fmt.Errorf("read body failed, err:%w", err)
@@ -343,7 +348,9 @@ func (p *DefaultSearcher) fetchImageData(ctx context.Context, url string) ([]byt
 		return nil, fmt.Errorf("get url data failed, err:%w", err)
 	}
 
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get url data http code not ok, code:%d", rsp.StatusCode)
 	}

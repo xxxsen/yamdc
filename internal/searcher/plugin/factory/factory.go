@@ -3,6 +3,7 @@ package factory
 import (
 	"fmt"
 	"sort"
+
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 

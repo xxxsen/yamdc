@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
@@ -92,7 +93,9 @@ func (p *avsox) trySearchByNumber(ctx context.Context, oriReq *http.Request, inv
 	if err != nil {
 		return "", false, err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	tree, err := utils.ReadDataAsHTMLTree(rsp)
 	if err != nil {
 		return "", false, err

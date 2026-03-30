@@ -463,87 +463,6 @@ func applyNormalizer(in string, rule compiledNormalizerRule, opts Options) strin
 	}
 }
 
-func extractSuffixes(in string, rules []compiledSuffixRule) ([]string, string, []string) {
-	work := in
-	suffixSet := make(map[string]int)
-	hits := make([]string, 0, 8)
-	for _, rule := range rules {
-		switch rule.typ {
-		case "regex":
-			matches := rule.re.FindAllStringSubmatchIndex(work, -1)
-			if len(matches) == 0 {
-				continue
-			}
-			for _, match := range matches {
-				val := resolveCanonical(work, rule.canonical, rule.canonicalTemplate, rule.re, match)
-				if val == "" {
-					continue
-				}
-				val = strings.ToUpper(strings.TrimSpace(val))
-				if _, ok := suffixSet[val]; !ok {
-					suffixSet[val] = rule.priority
-				}
-				hits = append(hits, rule.name)
-			}
-			work = rule.re.ReplaceAllString(work, " ")
-		case "token":
-			matched := false
-			for _, aliasRe := range rule.aliasRegex {
-				if !aliasRe.MatchString(work) {
-					continue
-				}
-				matched = true
-				work = aliasRe.ReplaceAllString(work, " ")
-			}
-			if matched {
-				val := strings.ToUpper(strings.TrimSpace(rule.canonical))
-				if val != "" {
-					if _, ok := suffixSet[val]; !ok {
-						suffixSet[val] = rule.priority
-					}
-				}
-				hits = append(hits, rule.name)
-			}
-		}
-	}
-	type item struct {
-		val      string
-		priority int
-	}
-	items := make([]item, 0, len(suffixSet))
-	for k, v := range suffixSet {
-		items = append(items, item{val: k, priority: v})
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].priority == items[j].priority {
-			return suffixRank(items[i].val) < suffixRank(items[j].val)
-		}
-		return items[i].priority > items[j].priority
-	})
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		out = append(out, item.val)
-	}
-	return out, normalizeSpaces(work), hits
-}
-
-func applyRewriteRules(in string, rules []compiledRewriteRule) (string, []string) {
-	work := in
-	hits := make([]string, 0, len(rules))
-	for _, rule := range rules {
-		if !rule.re.MatchString(work) {
-			continue
-		}
-		next := rule.re.ReplaceAllString(work, rule.replace)
-		if next == work {
-			continue
-		}
-		work = next
-		hits = append(hits, rule.name)
-	}
-	return normalizeSpaces(work), hits
-}
-
 func applyRewriteRulesWithExplain(in string, rules []compiledRewriteRule, collector *explainCollector) (string, []string) {
 	work := in
 	hits := make([]string, 0, len(rules))
@@ -569,32 +488,6 @@ func applyRewriteRulesWithExplain(in string, rules []compiledRewriteRule, collec
 		}
 		work = next
 		hits = append(hits, rule.name)
-	}
-	return normalizeSpaces(work), hits
-}
-
-func removeNoise(in string, rules []compiledNoiseRule) (string, []string) {
-	work := in
-	hits := make([]string, 0, 8)
-	for _, rule := range rules {
-		switch rule.typ {
-		case "regex":
-			if rule.re.MatchString(work) {
-				hits = append(hits, rule.name)
-				work = rule.re.ReplaceAllString(work, " ")
-			}
-		case "token":
-			matched := false
-			for _, aliasRe := range rule.aliasRegex {
-				if aliasRe.MatchString(work) {
-					matched = true
-					work = aliasRe.ReplaceAllString(work, " ")
-				}
-			}
-			if matched {
-				hits = append(hits, rule.name)
-			}
-		}
 	}
 	return normalizeSpaces(work), hits
 }
@@ -642,50 +535,6 @@ func removeNoiseWithExplain(in string, rules []compiledNoiseRule, collector *exp
 		}
 	}
 	return normalizeSpaces(work), hits
-}
-
-func collectCandidates(in string, rules []compiledMatcherRule) []Candidate {
-	candidates := make([]Candidate, 0, 8)
-	for _, rule := range rules {
-		matches := rule.re.FindAllStringSubmatchIndex(in, -1)
-		for _, match := range matches {
-			normalized := string(rule.re.ExpandString(nil, rule.normalizeTemplate, in, match))
-			normalized = normalizeSpaces(normalized)
-			if normalized == "" {
-				continue
-			}
-			score := rule.score
-			start, end := match[0], match[1]
-			if start == 0 {
-				score += 5
-			}
-			candidates = append(candidates, Candidate{
-				NumberID:        normalized,
-				Score:           score,
-				RuleHits:        []string{rule.name},
-				Matcher:         rule.name,
-				Start:           start,
-				End:             end,
-				Category:        strings.TrimSpace(rule.category),
-				CategoryMatched: strings.TrimSpace(rule.category) != "",
-				Uncensor:        rule.uncensorValue,
-				UncensorMatched: rule.uncensorSet,
-			})
-		}
-	}
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].Score != candidates[j].Score {
-			return candidates[i].Score > candidates[j].Score
-		}
-		if candidates[i].Start != candidates[j].Start {
-			return candidates[i].Start < candidates[j].Start
-		}
-		if len(candidates[i].NumberID) != len(candidates[j].NumberID) {
-			return len(candidates[i].NumberID) > len(candidates[j].NumberID)
-		}
-		return candidates[i].Matcher < candidates[j].Matcher
-	})
-	return dedupeCandidates(candidates)
 }
 
 func collectCandidatesWithExplain(in string, rules []compiledMatcherRule, collector *explainCollector) []Candidate {
@@ -756,32 +605,6 @@ func dedupeCandidates(items []Candidate) []Candidate {
 		out = append(out, item)
 	}
 	return out
-}
-
-func rebuild(numberID string, suffixes []string, post []compiledPostProcessRule) string {
-	normalized := numberID
-	for _, suffix := range suffixes {
-		if suffix == "" {
-			continue
-		}
-		if normalized != "" {
-			normalized += "-" + suffix
-		} else {
-			normalized = suffix
-		}
-	}
-	for _, item := range post {
-		switch item.builtin {
-		case "normalize_hyphen":
-			normalized = strings.ReplaceAll(normalized, " ", "-")
-			normalized = strings.ReplaceAll(normalized, "_", "_")
-			normalized = regexp.MustCompile(`-+`).ReplaceAllString(normalized, "-")
-			normalized = strings.Trim(normalized, "- ")
-		case "reorder_suffix":
-			// suffixes are already ordered during extraction
-		}
-	}
-	return normalized
 }
 
 func rebuildWithExplain(numberID string, suffixes []string, post []compiledPostProcessRule, collector *explainCollector) string {

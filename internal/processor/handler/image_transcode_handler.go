@@ -3,12 +3,13 @@ package handler
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/store"
-	"strings"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

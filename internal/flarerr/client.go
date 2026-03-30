@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"github.com/xxxsen/yamdc/internal/client"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/yamdc/internal/client"
 	"go.uber.org/zap"
 )
 
@@ -78,7 +78,9 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var frResp flareResponse
 	if err := json.NewDecoder(resp.Body).Decode(&frResp); err != nil {
@@ -110,7 +112,9 @@ func (b *solverClient) testHost(impl client.IHTTPClient, endpoint string) error 
 	if err != nil {
 		return err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	return nil
 }
 

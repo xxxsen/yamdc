@@ -175,7 +175,9 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 	if err != nil {
 		return nil, fmt.Errorf("list jobs failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	jobs := make([]jobdef.Job, 0, max(pageSize, 16))
 	for rows.Next() {

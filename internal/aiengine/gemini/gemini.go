@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/xxxsen/yamdc/internal/aiengine"
-	"github.com/xxxsen/yamdc/internal/client"
 	"net/http"
 	"strings"
 
 	"github.com/xxxsen/common/utils"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/client"
 )
 
 const (
@@ -41,7 +41,9 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	if err != nil {
 		return "", err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("gemini response err, code:%d", rsp.StatusCode)
 	}

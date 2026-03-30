@@ -3,14 +3,15 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/store"
-	"io"
-	"net/http"
-	"strings"
 )
 
 const (
@@ -38,7 +39,9 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 	if err != nil {
 		return fmt.Errorf("request hd cover failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("hd cover response not ok, code:%d", rsp.StatusCode)
 	}

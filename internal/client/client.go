@@ -9,8 +9,6 @@ import (
 	"github.com/imroc/req/v3"
 )
 
-var defaultInst IHTTPClient
-
 type IHTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }

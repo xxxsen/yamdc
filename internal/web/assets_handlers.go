@@ -22,7 +22,9 @@ func (a *API) handleAsset(w http.ResponseWriter, r *http.Request) {
 			writeFail(w, errCodeInvalidUploadFile, "invalid upload file")
 			return
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		data, err := io.ReadAll(file)
 		if err != nil {
 			writeFail(w, errCodeReadUploadFileFailed, "read upload file failed")

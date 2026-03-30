@@ -15,7 +15,9 @@ func TestSmallWatermark(t *testing.T) {
 	watermark := MakeColorImage(image.Rect(0, 0, 768, 374), color.RGBA{255, 0, 0, 0})
 	f, err := os.OpenFile(filepath.Join(os.TempDir(), "watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	assert.NoError(t, err)
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	err = jpeg.Encode(f, watermark, nil)
 	assert.NoError(t, err)
 }
@@ -31,7 +33,9 @@ func TestWatermark(t *testing.T) {
 	assert.NoError(t, err)
 	f, err := os.OpenFile(filepath.Join(os.TempDir(), "fill_watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	assert.NoError(t, err)
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	err = jpeg.Encode(f, img, nil)
 	assert.NoError(t, err)
 }

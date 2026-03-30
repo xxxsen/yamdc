@@ -3,6 +3,7 @@ package dependency
 import (
 	"context"
 	"fmt"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/downloadmgr"
 

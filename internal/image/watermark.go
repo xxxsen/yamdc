@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
+
 	"github.com/xxxsen/yamdc/internal/resource"
 )
 

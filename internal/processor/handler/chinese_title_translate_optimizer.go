@@ -6,15 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/client"
-	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/resource"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/resource"
 
 	"github.com/antchfx/htmlquery"
 	"github.com/xxxsen/common/logutil"
@@ -91,7 +92,9 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(ctx context.Context
 	if err != nil {
 		return "", false, err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	raw, err := client.ReadHTTPData(rsp)
 	if err != nil {
 		return "", false, err

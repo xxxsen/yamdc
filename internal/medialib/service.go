@@ -64,7 +64,9 @@ func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]It
 	if err != nil {
 		return nil, fmt.Errorf("list media library items failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	items := make([]Item, 0, 32)
 	keyword := strings.ToLower(strings.TrimSpace(options.Keyword))
 	year := strings.TrimSpace(options.Year)
@@ -474,7 +476,9 @@ func copyDirectory(src string, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer in.Close()
+		defer func() {
+			_ = in.Close()
+		}()
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 		if err != nil {
 			return err
@@ -521,7 +525,9 @@ func (s *Service) deleteMissing(ctx context.Context, keep map[string]struct{}) e
 	if err != nil {
 		return fmt.Errorf("list existing media library rel paths failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	paths := make([]string, 0, 32)
 	for rows.Next() {
 		var relPath string

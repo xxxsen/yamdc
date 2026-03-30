@@ -26,12 +26,16 @@ func copyFile(srcFile, dstFile string) error {
 	if err != nil {
 		return fmt.Errorf("open src:%s failed, err:%w", srcFile, err)
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 	dst, err := os.OpenFile(dstFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("create dst:%s failed, err:%w", dstFile, err)
 	}
-	defer dst.Close()
+	defer func() {
+		_ = dst.Close()
+	}()
 	if _, err := io.Copy(dst, src); err != nil {
 		return fmt.Errorf("copy stream failed, err:%w", err)
 	}
@@ -44,13 +48,15 @@ func copyFile(srcFile, dstFile string) error {
 
 func moveCrossDevice(srcFile, dstFile string) error {
 	dstFileTemp := dstFile + ".tempfile." + uuid.NewString()
-	defer os.Remove(dstFileTemp)
+	defer func() {
+		_ = os.Remove(dstFileTemp)
+	}()
 	if err := copyFile(srcFile, dstFileTemp); err != nil {
 		return fmt.Errorf("copy file failed, err:%w", err)
 	}
 	if err := os.Rename(dstFileTemp, dstFile); err != nil {
 		return fmt.Errorf("rename dst temp to dst failed, err:%w", err)
 	}
-	os.Remove(srcFile)
+	_ = os.Remove(srcFile)
 	return nil
 }

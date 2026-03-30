@@ -306,7 +306,9 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
 		return
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")

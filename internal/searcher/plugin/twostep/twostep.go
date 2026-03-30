@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/utils"
@@ -39,7 +40,9 @@ func HandleXPathTwoStepSearch(ctx context.Context, invoker api.HTTPInvoker, req 
 	if err != nil {
 		return nil, fmt.Errorf("step search failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if !isCodeInValidStatusCodeList(xctx.ValidStatusCode, rsp.StatusCode) {
 		return nil, fmt.Errorf("status code:%d not in valid list", rsp.StatusCode)
 	}

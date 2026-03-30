@@ -3,6 +3,7 @@ package searcher
 import (
 	"context"
 	"fmt"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 

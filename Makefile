@@ -1,21 +1,32 @@
-.PHONY: build test backend-build backend-test backend-check web-install web-lint web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
+.PHONY: build test install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
 
 BIN ?= yamdc
 BACKEND_IMAGE ?= xxxsen/yamdc:latest
 WEB_IMAGE ?= xxxsen/yamdc-web:latest
 GO_TEST_PKGS ?= ./cmd/... ./internal/...
+GOBIN ?= $(CURDIR)/bin
+GOCACHE ?= $(CURDIR)/.cache/go-build
+GOLANGCI_LINT_CACHE ?= $(CURDIR)/.cache/golangci-lint
+GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
 
 build:
-	go build -o $(BIN) ./cmd/yamdc
+	GOCACHE=$(GOCACHE) go build -o $(BIN) ./cmd/yamdc
 
 test:
-	go test $(GO_TEST_PKGS)
+	GOCACHE=$(GOCACHE) go test $(GO_TEST_PKGS)
+
+install-golangci-lint:
+	GOBIN=$(GOBIN) GOCACHE=$(GOCACHE) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+lint-go:
+	GOCACHE=$(GOCACHE) GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOLANGCI_LINT) run --config .golangci.yml ./cmd/... ./internal/...
 
 backend-build: build
 
 backend-test: test
 
-backend-check: backend-build backend-test
+backend-check: backend-build backend-test lint-go
 
 web-install:
 	cd web && npm ci

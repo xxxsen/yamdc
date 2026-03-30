@@ -3,13 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/number"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
