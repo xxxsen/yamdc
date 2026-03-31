@@ -53,7 +53,12 @@ func (s *Service) IsConfigured() bool {
 }
 
 func (s *Service) Start(ctx context.Context) {
-	_ = ctx
+	if s.db == nil {
+		return
+	}
+	if err := s.recoverTaskStates(ctx); err != nil {
+		logutil.GetLogger(ctx).Error("recover media library task states failed", zap.Error(err))
+	}
 }
 
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
@@ -229,6 +234,35 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 	return nil
 }
 
+func (s *Service) recoverTaskStates(ctx context.Context) error {
+	for _, taskKey := range []string{TaskSync, TaskMove} {
+		if err := s.recoverTaskState(ctx, taskKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) recoverTaskState(ctx context.Context, taskKey string) error {
+	state, err := s.getTaskState(ctx, taskKey)
+	if err != nil {
+		return err
+	}
+	if state.Status != "running" {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	state.Status = "failed"
+	state.Message = "server restarted while task running"
+	state.FinishedAt = now
+	state.UpdatedAt = now
+	if err := s.saveTaskState(ctx, state); err != nil {
+		return err
+	}
+	logutil.GetLogger(ctx).Warn("recover media library task state from running to failed", zap.String("task", taskKey))
+	return nil
+}
+
 func (s *Service) TriggerMove(ctx context.Context) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskMove))
 	if !s.IsConfigured() {
@@ -289,71 +323,30 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 
 	itemDirs, err := s.listRootItemDirs(s.libraryDir)
 	if err != nil {
-		logger.Error("list media library directories failed", zap.Error(err))
-		_ = s.saveTaskState(ctx, TaskState{
-			TaskKey:    TaskSync,
-			Status:     "failed",
-			Message:    err.Error(),
-			UpdatedAt:  time.Now().UnixMilli(),
-			FinishedAt: time.Now().UnixMilli(),
-		})
+		s.failTask(ctx, logger, TaskSync, "list media library directories failed", err)
 		return err
 	}
 	logger.Info("media library sync started", zap.Int("total", len(itemDirs)))
-	startedAt := time.Now().UnixMilli()
-	state := TaskState{
-		TaskKey:    TaskSync,
-		Status:     "running",
-		Total:      len(itemDirs),
-		Processed:  0,
-		Current:    "",
-		Message:    "同步媒体库中",
-		StartedAt:  startedAt,
-		FinishedAt: 0,
-		UpdatedAt:  startedAt,
-	}
+	state := newRunningTaskState(TaskSync, len(itemDirs), "同步媒体库中")
 	_ = s.saveTaskState(ctx, state)
 	keep := make(map[string]struct{}, len(itemDirs))
-	successCount := 0
-	errorCount := 0
 	for index, absPath := range itemDirs {
-		relPath, err := filepath.Rel(s.libraryDir, absPath)
-		if err != nil {
-			logger.Warn("resolve media library relative path failed", zap.String("abs_path", absPath), zap.Error(err))
-			errorCount++
-			continue
-		}
-		relPath = filepath.ToSlash(relPath)
-		detail, err := s.readRootDetail(s.libraryDir, relPath, absPath)
-		if err != nil {
-			logger.Warn("read media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
-			errorCount++
-		} else if err := s.upsertDetail(ctx, detail); err != nil {
-			logger.Warn("upsert media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
-			errorCount++
-		} else {
-			keep[relPath] = struct{}{}
-			successCount++
-		}
+		result := s.syncOneItem(ctx, logger, keep, absPath)
 		state.Processed = index + 1
-		state.SuccessCount = successCount
-		state.ErrorCount = errorCount
-		state.Current = relPath
-		state.UpdatedAt = time.Now().UnixMilli()
-		_ = s.saveTaskState(ctx, state)
+		state.Current = result.RelPath
+		if result.Success {
+			state.SuccessCount++
+		}
+		if result.Failed {
+			state.ErrorCount++
+		}
+		s.persistTaskProgress(ctx, &state)
 	}
 	if err := s.deleteMissing(ctx, keep); err != nil {
 		logger.Warn("delete stale media library items failed", zap.Error(err))
-		errorCount++
+		state.ErrorCount++
 	}
-	state.Status = "completed"
-	state.Message = fmt.Sprintf("媒体库同步完成 (%s)", reason)
-	state.ErrorCount = errorCount
-	state.SuccessCount = successCount
-	state.Current = ""
-	state.UpdatedAt = time.Now().UnixMilli()
-	state.FinishedAt = state.UpdatedAt
-	_ = s.saveTaskState(ctx, state)
+	s.finishTask(ctx, &state, fmt.Sprintf("媒体库同步完成 (%s)", reason))
 	logger.Info("media library sync completed",
 		zap.Int("total", state.Total),
 		zap.Int("success_count", state.SuccessCount),
@@ -368,73 +361,29 @@ func (s *Service) runMove(ctx context.Context) error {
 
 	itemDirs, err := s.listRootItemDirs(s.saveDir)
 	if err != nil {
-		logger.Error("list save directories before move failed", zap.Error(err))
-		_ = s.saveTaskState(ctx, TaskState{
-			TaskKey:    TaskMove,
-			Status:     "failed",
-			Message:    err.Error(),
-			UpdatedAt:  time.Now().UnixMilli(),
-			FinishedAt: time.Now().UnixMilli(),
-		})
+		s.failTask(ctx, logger, TaskMove, "list save directories before move failed", err)
 		return err
 	}
 	logger.Info("move to media library started", zap.Int("total", len(itemDirs)))
-	startedAt := time.Now().UnixMilli()
-	state := TaskState{
-		TaskKey:   TaskMove,
-		Status:    "running",
-		Total:     len(itemDirs),
-		Message:   "移动到媒体库中",
-		StartedAt: startedAt,
-		UpdatedAt: startedAt,
-	}
+	state := newRunningTaskState(TaskMove, len(itemDirs), "移动到媒体库中")
 	_ = s.saveTaskState(ctx, state)
-	successCount := 0
-	conflictCount := 0
-	errorCount := 0
 	for index, absPath := range itemDirs {
-		relPath, err := filepath.Rel(s.saveDir, absPath)
-		if err != nil {
-			logger.Warn("resolve save relative path failed", zap.String("abs_path", absPath), zap.Error(err))
-			errorCount++
-			continue
-		}
-		relPath = filepath.ToSlash(relPath)
-		targetAbs := filepath.Join(s.libraryDir, filepath.FromSlash(relPath))
-		if _, err := os.Stat(targetAbs); err == nil {
-			conflictCount++
-		} else if !os.IsNotExist(err) {
-			logger.Warn("check target media library path failed", zap.String("rel_path", relPath), zap.Error(err))
-			errorCount++
-		} else {
-			if err := os.MkdirAll(filepath.Dir(targetAbs), 0755); err != nil {
-				logger.Warn("create media library parent directory failed", zap.String("rel_path", relPath), zap.Error(err))
-				errorCount++
-			} else if err := moveDirectory(absPath, targetAbs); err != nil {
-				logger.Warn("move directory to media library failed", zap.String("rel_path", relPath), zap.Error(err))
-				errorCount++
-			} else {
-				successCount++
-			}
-		}
+		result := s.moveOneItem(logger, absPath)
 		state.Processed = index + 1
-		state.SuccessCount = successCount
-		state.ConflictCount = conflictCount
-		state.ErrorCount = errorCount
-		state.Current = relPath
-		state.UpdatedAt = time.Now().UnixMilli()
-		_ = s.saveTaskState(ctx, state)
+		state.Current = result.RelPath
+		if result.Success {
+			state.SuccessCount++
+		}
+		if result.Conflict {
+			state.ConflictCount++
+		}
+		if result.Failed {
+			state.ErrorCount++
+		}
+		s.persistTaskProgress(ctx, &state)
 	}
 	_ = s.runFullSync(ctx, "move")
-	state.Status = "completed"
-	state.Message = "移动到媒体库完成"
-	state.Current = ""
-	state.UpdatedAt = time.Now().UnixMilli()
-	state.FinishedAt = state.UpdatedAt
-	state.SuccessCount = successCount
-	state.ConflictCount = conflictCount
-	state.ErrorCount = errorCount
-	_ = s.saveTaskState(ctx, state)
+	s.finishTask(ctx, &state, "移动到媒体库完成")
 	logger.Info("move to media library completed",
 		zap.Int("total", state.Total),
 		zap.Int("success_count", state.SuccessCount),
@@ -445,15 +394,108 @@ func (s *Service) runMove(ctx context.Context) error {
 }
 
 func moveDirectory(src string, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
+	err := os.Rename(src, dst)
+	if err == nil {
 		return nil
-	} else if linkErr, ok := err.(*os.LinkError); !ok || linkErr.Err != syscall.EXDEV {
+	}
+	linkErr, ok := err.(*os.LinkError)
+	if !ok || linkErr.Err != syscall.EXDEV {
 		return err
 	}
 	if err := copyDirectory(src, dst); err != nil {
 		return err
 	}
 	return os.RemoveAll(src)
+}
+
+type itemTaskResult struct {
+	RelPath  string
+	Success  bool
+	Conflict bool
+	Failed   bool
+}
+
+func newRunningTaskState(taskKey string, total int, message string) TaskState {
+	now := time.Now().UnixMilli()
+	return TaskState{
+		TaskKey:   taskKey,
+		Status:    "running",
+		Total:     total,
+		Message:   message,
+		StartedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func (s *Service) failTask(ctx context.Context, logger *zap.Logger, taskKey string, message string, err error) {
+	logger.Error(message, zap.Error(err))
+	now := time.Now().UnixMilli()
+	_ = s.saveTaskState(ctx, TaskState{
+		TaskKey:    taskKey,
+		Status:     "failed",
+		Message:    err.Error(),
+		UpdatedAt:  now,
+		FinishedAt: now,
+	})
+}
+
+func (s *Service) persistTaskProgress(ctx context.Context, state *TaskState) {
+	state.UpdatedAt = time.Now().UnixMilli()
+	_ = s.saveTaskState(ctx, *state)
+}
+
+func (s *Service) finishTask(ctx context.Context, state *TaskState, message string) {
+	state.Status = "completed"
+	state.Message = message
+	state.Current = ""
+	state.UpdatedAt = time.Now().UnixMilli()
+	state.FinishedAt = state.UpdatedAt
+	_ = s.saveTaskState(ctx, *state)
+}
+
+func (s *Service) syncOneItem(ctx context.Context, logger *zap.Logger, keep map[string]struct{}, absPath string) itemTaskResult {
+	relPath, err := filepath.Rel(s.libraryDir, absPath)
+	if err != nil {
+		logger.Warn("resolve media library relative path failed", zap.String("abs_path", absPath), zap.Error(err))
+		return itemTaskResult{Failed: true}
+	}
+	relPath = filepath.ToSlash(relPath)
+	detail, err := s.readRootDetail(s.libraryDir, relPath, absPath)
+	if err != nil {
+		logger.Warn("read media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Failed: true}
+	}
+	if err := s.upsertDetail(ctx, detail); err != nil {
+		logger.Warn("upsert media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Failed: true}
+	}
+	keep[relPath] = struct{}{}
+	return itemTaskResult{RelPath: relPath, Success: true}
+}
+
+func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult {
+	relPath, err := filepath.Rel(s.saveDir, absPath)
+	if err != nil {
+		logger.Warn("resolve save relative path failed", zap.String("abs_path", absPath), zap.Error(err))
+		return itemTaskResult{Failed: true}
+	}
+	relPath = filepath.ToSlash(relPath)
+	targetAbs := filepath.Join(s.libraryDir, filepath.FromSlash(relPath))
+	if _, err := os.Stat(targetAbs); err == nil {
+		return itemTaskResult{RelPath: relPath, Conflict: true}
+	} else if !os.IsNotExist(err) {
+		logger.Warn("check target media library path failed", zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Failed: true}
+	}
+	if err := os.MkdirAll(filepath.Dir(targetAbs), 0755); err != nil {
+		logger.Warn("create media library parent directory failed", zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Failed: true}
+	}
+	if err := moveDirectory(absPath, targetAbs); err != nil {
+		logger.Warn("move directory to media library failed", zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Failed: true}
+	}
+	return itemTaskResult{RelPath: relPath, Success: true}
 }
 
 func copyDirectory(src string, dst string) error {

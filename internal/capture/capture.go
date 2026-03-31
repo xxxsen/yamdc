@@ -70,16 +70,18 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
 	fileNoExt := strings.TrimSpace(preferredNumber)
-	useCleaner := len(fileNoExt) == 0
+	useCleanerNormalizedValue := len(fileNoExt) == 0
 	var cleaned *numbercleaner.Result
-	if useCleaner {
+	if len(fileNoExt) == 0 {
 		fileNoExt = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+	}
+	if c.c.NumberCleaner != nil {
 		var err error
 		cleaned, err = c.c.NumberCleaner.Clean(fileNoExt)
 		if err != nil {
 			return fmt.Errorf("clean number before rewrite failed, err:%w", err)
 		}
-		if cleaned != nil && len(cleaned.Normalized) != 0 {
+		if useCleanerNormalizedValue && cleaned != nil && len(cleaned.Normalized) != 0 {
 			fileNoExt = cleaned.Normalized
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -170,17 +171,18 @@ func buildCacheStoreAction(_ context.Context, ysctx *YamdcStartContext) error {
 		return err
 	}
 	ysctx.CacheStore = cacheStore
+	if closer, ok := cacheStore.(io.Closer); ok {
+		ysctx.AddCleanup(func(context.Context) error {
+			return closer.Close()
+		})
+	}
 	return nil
 }
 
 func buildTranslatorAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	tr, err := buildTranslator(ctx, ysctx.Config, ysctx.AIEngine)
 	if err != nil {
-		if ysctx.Logger != nil {
-			ysctx.Logger.Error("setup translator failed", zap.Error(err))
-		} else {
-			logutil.GetLogger(ctx).Error("setup translator failed", zap.Error(err))
-		}
+		logOptionalSetupFailure(ctx, ysctx, "setup translator failed", err)
 		return nil
 	}
 	ysctx.Translator = tr
@@ -190,15 +192,19 @@ func buildTranslatorAction(ctx context.Context, ysctx *YamdcStartContext) error 
 func buildFaceRecognizerAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	faceRec, err := buildFaceRecognizer(ctx, ysctx.Config, filepath.Join(ysctx.Config.DataDir, "models"))
 	if err != nil {
-		if ysctx.Logger != nil {
-			ysctx.Logger.Error("init face recognizer failed", zap.Error(err))
-		} else {
-			logutil.GetLogger(ctx).Error("init face recognizer failed", zap.Error(err))
-		}
+		logOptionalSetupFailure(ctx, ysctx, "init face recognizer failed", err)
 		return nil
 	}
 	ysctx.FaceRec = faceRec
 	return nil
+}
+
+func logOptionalSetupFailure(ctx context.Context, ysctx *YamdcStartContext, message string, err error) {
+	if ysctx.Logger != nil {
+		ysctx.Logger.Error(message, zap.Error(err))
+		return
+	}
+	logutil.GetLogger(ctx).Error(message, zap.Error(err))
 }
 
 func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {

@@ -235,6 +235,7 @@ func TestJobRepositoryUpsertScannedJobPreservesManualNumber(t *testing.T) {
 	require.Equal(t, "manual", got.NumberSource)
 	require.Equal(t, "AAA-002", got.CleanedNumber)
 	require.Equal(t, "AAA002-raw", got.RawNumber)
+	require.Equal(t, "MANUAL-999.mp4", got.ConflictKey)
 }
 
 func TestJobRepositoryUpsertScannedJobReactivatesDoneJob(t *testing.T) {
@@ -266,4 +267,96 @@ func TestJobRepositoryUpsertScannedJobReactivatesDoneJob(t *testing.T) {
 	require.NotNil(t, got)
 	require.Equal(t, jobdef.StatusInit, got.Status)
 	require.Equal(t, "", got.ErrorMsg)
+}
+
+func TestJobRepositoryStoresAndUpdatesConflictKey(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	require.NoError(t, repo.UpsertScannedJob(ctx, UpsertJobInput{
+		FileName: "ABC-123.mp4",
+		FileExt:  ".mp4",
+		RelPath:  "ABC-123.mp4",
+		AbsPath:  "/scan/ABC-123.mp4",
+		Number:   "ABC-123",
+		FileSize: 1,
+	}))
+
+	result, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	jobID := result.Items[0].ID
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "ABC-123.mp4", got.ConflictKey)
+
+	require.NoError(t, repo.UpdateNumber(ctx, jobID, "XYZ-999", "manual", "success", "high", ""))
+	got, err = repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "XYZ-999.mp4", got.ConflictKey)
+}
+
+func TestJobRepositoryUpdateSourcePathRefreshesConflictKey(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	require.NoError(t, repo.UpsertScannedJob(ctx, UpsertJobInput{
+		FileName: "ABC-123.mp4",
+		FileExt:  ".mp4",
+		RelPath:  "ABC-123.mp4",
+		AbsPath:  "/scan/ABC-123.mp4",
+		Number:   "ABC-123",
+		FileSize: 1,
+	}))
+
+	result, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	jobID := result.Items[0].ID
+
+	require.NoError(t, repo.UpdateSourcePath(ctx, jobID, "ABC-123.mkv", ".mkv", "ABC-123.mkv", "/scan/ABC-123.mkv"))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, ".mkv", got.FileExt)
+	require.Equal(t, "ABC-123.mkv", got.ConflictKey)
+}
+
+func TestJobRepositoryListActiveJobsByConflictKeysFiltersDoneAndDeleted(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	for _, relPath := range []string{"a/ABC-123.mp4", "b/ABC-123.mp4", "c/ABC-123.mp4", "d/ABC-123.mp4"} {
+		require.NoError(t, repo.UpsertScannedJob(ctx, UpsertJobInput{
+			FileName: filepath.Base(relPath),
+			FileExt:  ".mp4",
+			RelPath:  relPath,
+			AbsPath:  "/scan/" + relPath,
+			Number:   "ABC-123",
+			FileSize: 1,
+		}))
+	}
+
+	result, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 4)
+
+	require.NoError(t, repo.MarkDone(ctx, result.Items[1].ID))
+	require.NoError(t, repo.SoftDelete(ctx, result.Items[2].ID))
+
+	items, err := repo.ListActiveJobsByConflictKeys(ctx, []string{"ABC-123.mp4"})
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	for _, item := range items {
+		require.Equal(t, "ABC-123.mp4", item.ConflictKey)
+		require.NotEqual(t, result.Items[1].ID, item.ID)
+		require.NotEqual(t, result.Items[2].ID, item.ID)
+	}
 }

@@ -52,3 +52,21 @@ options:
 	require.NotNil(t, cleaner)
 	require.NotNil(t, manager)
 }
+
+func TestBuildTranslatorSelectsConfiguredOrderAndDedupes(t *testing.T) {
+	c := &config.Config{
+		TranslateConfig: config.TranslateConfig{
+			Enable:   true,
+			Engine:   "ai",
+			Fallback: []string{"google", "ai"},
+			EngineConfig: config.TranslateEngineConfig{
+				Google: config.GoogleTranslateEngineConfig{Enable: true},
+				AI:     config.AITranslateEngineConfig{Enable: true},
+			},
+		},
+	}
+	tr, err := buildTranslator(context.Background(), c, nil)
+	require.NoError(t, err)
+	require.NotNil(t, tr)
+	require.Equal(t, "G:[ai,google]", tr.Name())
+}

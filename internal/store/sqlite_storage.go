@@ -17,24 +17,54 @@ import (
 )
 
 const (
-	defaultExpireTime = 90 * 24 * time.Hour //默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
+	defaultExpireTime      = 90 * 24 * time.Hour //默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
+	defaultCleanupInterval = 24 * time.Hour
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 type sqliteStore struct {
-	db *sql.DB
+	db              *sql.DB
+	cleanupInterval time.Duration
+	cleanupCancel   context.CancelFunc
 }
 
 func (s *sqliteStore) init(ctx context.Context) error {
 	if err := applyMigrations(ctx, s.db); err != nil {
 		return err
 	}
+	if err := s.cleanupExpired(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *sqliteStore) cleanupExpired(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM cache_tab WHERE expire_at <= ?", time.Now().Unix()); err != nil {
 		return fmt.Errorf("cleanup expired cache failed: %w", err)
 	}
 	return nil
+}
+
+func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
+	if s.cleanupInterval <= 0 {
+		return
+	}
+	loopCtx, cancel := context.WithCancel(ctx)
+	s.cleanupCancel = cancel
+	go func() {
+		ticker := time.NewTicker(s.cleanupInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-loopCtx.Done():
+				return
+			case <-ticker.C:
+				_ = s.cleanupExpired(context.Background())
+			}
+		}
+	}()
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -109,7 +139,7 @@ func (s *sqliteStore) IsDataExist(ctx context.Context, key string) (bool, error)
 	return true, nil
 }
 
-func NewSqliteStorage(path string) (IStorage, error) {
+func newSqliteStorage(path string, cleanupInterval time.Duration) (*sqliteStore, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
@@ -118,11 +148,20 @@ func NewSqliteStorage(path string) (IStorage, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &sqliteStore{db: db}
+	s := &sqliteStore{
+		db:              db,
+		cleanupInterval: cleanupInterval,
+	}
 	if err := s.init(context.Background()); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
+	s.startCleanupLoop(context.Background())
 	return s, nil
+}
+
+func NewSqliteStorage(path string) (IStorage, error) {
+	return newSqliteStorage(path, defaultCleanupInterval)
 }
 
 func MustNewSqliteStorage(path string) IStorage {
@@ -131,4 +170,18 @@ func MustNewSqliteStorage(path string) IStorage {
 		panic(err)
 	}
 	return s
+}
+
+func (s *sqliteStore) Close() error {
+	if s == nil {
+		return nil
+	}
+	if s.cleanupCancel != nil {
+		s.cleanupCancel()
+		s.cleanupCancel = nil
+	}
+	if s.db == nil {
+		return nil
+	}
+	return s.db.Close()
 }

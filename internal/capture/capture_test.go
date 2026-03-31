@@ -87,6 +87,22 @@ func TestResolveFileContextSkipsCleanerForPreferredNumber(t *testing.T) {
 	require.Equal(t, "XYZ-999", fc.Number.GenerateFileName())
 }
 
+func TestResolveFileContextUsesCleanerDerivedFieldsForPreferredNumber(t *testing.T) {
+	cap := newTestCapture(t, &staticCleaner{
+		normalized:      "ABC-123",
+		category:        "HEYZO",
+		categoryMatched: true,
+		uncensor:        true,
+		uncensorMatched: true,
+	})
+
+	fc, err := cap.ResolveFileContext(filepath.Join(t.TempDir(), "ignored.mp4"), "HEYZO-0040")
+	require.NoError(t, err)
+	require.Equal(t, "HEYZO-0040", fc.Number.GenerateFileName())
+	require.Equal(t, "HEYZO", fc.Number.GetExternalFieldCategory())
+	require.True(t, fc.Number.GetExternalFieldUncensor())
+}
+
 func TestResolveFileContextUsesCleanerDerivedFields(t *testing.T) {
 	cap := newTestCapture(t, &staticCleaner{
 		normalized:      "FC2-PPV-12345",

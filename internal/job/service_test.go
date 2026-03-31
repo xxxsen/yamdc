@@ -12,7 +12,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
-func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
+func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository, *repository.SQLite) {
 	t.Helper()
 	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
@@ -23,7 +23,13 @@ func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
 	jobRepo := repository.NewJobRepository(sqlite.DB())
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
-	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo
+	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo, sqlite
+}
+
+func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
+	t.Helper()
+	svc, repo, _ := newTestServiceWithSQLite(t)
+	return svc, repo
 }
 
 func insertJob(t *testing.T, repo *repository.JobRepository, absPath string, status jobdef.Status) int64 {
@@ -356,4 +362,152 @@ func TestServiceGetJobConflictIgnoresExistingSavedirTarget(t *testing.T) {
 	conflict, err := svc.GetJobConflict(context.Background(), jobItem)
 	require.NoError(t, err)
 	require.Nil(t, conflict)
+}
+
+func TestServiceApplyJobConflictsBatchesCurrentPageKeys(t *testing.T) {
+	svc, repo := newTestService(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "page-a-1@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "page-a-1@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "page-a-1@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "page-a-1@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	_ = insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "page-a-2@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "page-a-2@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "page-a-2@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "page-a-2@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID3 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "page-b-1@XYZ-999.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "page-b-1@XYZ-999.mp4",
+		AbsPath:               filepath.Join(dir, "page-b-1@XYZ-999.mp4"),
+		Number:                "XYZ-999",
+		RawNumber:             "page-b-1@XYZ-999",
+		CleanedNumber:         "XYZ-999",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	_ = insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "page-b-2@XYZ-999.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "page-b-2@XYZ-999.mp4",
+		AbsPath:               filepath.Join(dir, "page-b-2@XYZ-999.mp4"),
+		Number:                "XYZ-999",
+		RawNumber:             "page-b-2@XYZ-999",
+		CleanedNumber:         "XYZ-999",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	job1, err := repo.GetByID(ctx, jobID1)
+	require.NoError(t, err)
+	require.NotNil(t, job1)
+	job3, err := repo.GetByID(ctx, jobID3)
+	require.NoError(t, err)
+	require.NotNil(t, job3)
+
+	page := []jobdef.Job{*job1, *job3}
+	require.NoError(t, svc.ApplyJobConflicts(ctx, page))
+	require.Contains(t, page[0].ConflictTarget, "page-a-1@ABC-123.mp4")
+	require.Contains(t, page[0].ConflictTarget, "page-a-2@ABC-123.mp4")
+	require.NotContains(t, page[0].ConflictTarget, "page-b-1@XYZ-999.mp4")
+	require.Contains(t, page[1].ConflictTarget, "page-b-1@XYZ-999.mp4")
+	require.Contains(t, page[1].ConflictTarget, "page-b-2@XYZ-999.mp4")
+	require.NotContains(t, page[1].ConflictTarget, "page-a-1@ABC-123.mp4")
+}
+
+func TestServiceApplyJobConflictsIgnoresDoneAndDeletedJobs(t *testing.T) {
+	svc, repo := newTestService(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "active@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "active@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "active@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "active@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "done@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "done@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "done@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "done@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusDone)
+	jobID3 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              "deleted@ABC-123.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "deleted@ABC-123.mp4",
+		AbsPath:               filepath.Join(dir, "deleted@ABC-123.mp4"),
+		Number:                "ABC-123",
+		RawNumber:             "deleted@ABC-123",
+		CleanedNumber:         "ABC-123",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		NumberCleanWarnings:   "",
+		FileSize:              1,
+	}, jobdef.StatusFailed)
+	require.NoError(t, repo.SoftDelete(ctx, jobID3))
+
+	job1, err := repo.GetByID(ctx, jobID1)
+	require.NoError(t, err)
+	require.NotNil(t, job1)
+
+	doneJob := jobdef.Job{
+		ID:          jobID2,
+		RelPath:     "done@ABC-123.mp4",
+		Number:      "ABC-123",
+		FileName:    "done@ABC-123.mp4",
+		FileExt:     ".mp4",
+		Status:      jobdef.StatusDone,
+		ConflictKey: "ABC-123.mp4",
+	}
+
+	page := []jobdef.Job{*job1, doneJob}
+	require.NoError(t, svc.ApplyJobConflicts(ctx, page))
+	require.Equal(t, "", page[0].ConflictReason)
+	require.Equal(t, "", page[0].ConflictTarget)
+	require.Equal(t, "", page[1].ConflictReason)
+	require.Equal(t, "", page[1].ConflictTarget)
 }

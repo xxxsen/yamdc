@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,14 +44,33 @@ func NewJobRepository(db *sql.DB) *JobRepository {
 
 func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput) error {
 	now := time.Now().UnixMilli()
-	_, err := r.db.ExecContext(ctx, `
+	conflictNumber := in.Number
+	var existingNumber string
+	var existingSource string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT number, number_source
+		FROM yamdc_job_tab
+		WHERE rel_path = ?
+	`, in.RelPath).Scan(&existingNumber, &existingSource)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("load existing job before upsert failed: %w", err)
+	}
+	if err == nil && existingSource == "manual" {
+		conflictNumber = existingNumber
+	}
+	conflictKey := jobdef.BuildConflictKey(conflictNumber, in.FileExt, in.FileName)
+	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO yamdc_job_tab (
-			job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number, number_source,
+			job_uid, file_name, file_ext, conflict_key, rel_path, abs_path, number, raw_number, cleaned_number, number_source,
 			number_clean_status, number_clean_confidence, number_clean_warnings, file_size, status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(rel_path) DO UPDATE SET
 			file_name = excluded.file_name,
 			file_ext = excluded.file_ext,
+			conflict_key = CASE
+				WHEN yamdc_job_tab.number_source = 'manual' THEN excluded.conflict_key
+				ELSE excluded.conflict_key
+			END,
 			abs_path = excluded.abs_path,
 			raw_number = excluded.raw_number,
 			cleaned_number = excluded.cleaned_number,
@@ -105,10 +126,11 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 			deleted_at = 0,
 			updated_at = CASE
 				WHEN yamdc_job_tab.file_name != excluded.file_name
-					OR yamdc_job_tab.file_ext != excluded.file_ext
-					OR yamdc_job_tab.abs_path != excluded.abs_path
-					OR yamdc_job_tab.raw_number != excluded.raw_number
-					OR yamdc_job_tab.cleaned_number != excluded.cleaned_number
+				OR yamdc_job_tab.file_ext != excluded.file_ext
+				OR yamdc_job_tab.conflict_key != excluded.conflict_key
+				OR yamdc_job_tab.abs_path != excluded.abs_path
+				OR yamdc_job_tab.raw_number != excluded.raw_number
+				OR yamdc_job_tab.cleaned_number != excluded.cleaned_number
 					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number != excluded.number)
 					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_source != excluded.number_source)
 					OR (yamdc_job_tab.number_source != 'manual' AND yamdc_job_tab.number_clean_status != excluded.number_clean_status)
@@ -120,7 +142,7 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 				THEN excluded.updated_at
 				ELSE yamdc_job_tab.updated_at
 			END
-	`, uuid.NewString(), in.FileName, in.FileExt, in.RelPath, in.AbsPath, in.Number, in.RawNumber, in.CleanedNumber, in.NumberSource, in.NumberCleanStatus, in.NumberCleanConfidence, in.NumberCleanWarnings, in.FileSize, jobdef.StatusInit, now, now)
+		`, uuid.NewString(), in.FileName, in.FileExt, conflictKey, in.RelPath, in.AbsPath, in.Number, in.RawNumber, in.CleanedNumber, in.NumberSource, in.NumberCleanStatus, in.NumberCleanConfidence, in.NumberCleanWarnings, in.FileSize, jobdef.StatusInit, now, now)
 	if err != nil {
 		return fmt.Errorf("upsert scanned job failed: %w", err)
 	}
@@ -159,7 +181,7 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 		return nil, fmt.Errorf("count jobs failed: %w", err)
 	}
 	query := `
-		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number,
+		SELECT id, job_uid, file_name, file_ext, conflict_key, rel_path, abs_path, number, raw_number, cleaned_number,
 		       number_source, number_clean_status, number_clean_confidence, number_clean_warnings,
 		       file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
@@ -187,6 +209,7 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 			&item.JobUID,
 			&item.FileName,
 			&item.FileExt,
+			&item.ConflictKey,
 			&item.RelPath,
 			&item.AbsPath,
 			&item.Number,
@@ -220,7 +243,7 @@ func (r *JobRepository) ListJobs(ctx context.Context, status []jobdef.Status, ke
 func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, error) {
 	var item jobdef.Job
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, job_uid, file_name, file_ext, rel_path, abs_path, number, raw_number, cleaned_number,
+		SELECT id, job_uid, file_name, file_ext, conflict_key, rel_path, abs_path, number, raw_number, cleaned_number,
 		       number_source, number_clean_status, number_clean_confidence, number_clean_warnings,
 		       file_size, status, error_msg, created_at, updated_at
 		FROM yamdc_job_tab
@@ -230,6 +253,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, err
 		&item.JobUID,
 		&item.FileName,
 		&item.FileExt,
+		&item.ConflictKey,
 		&item.RelPath,
 		&item.AbsPath,
 		&item.Number,
@@ -255,11 +279,18 @@ func (r *JobRepository) GetByID(ctx context.Context, id int64) (*jobdef.Job, err
 }
 
 func (r *JobRepository) UpdateNumber(ctx context.Context, id int64, number string, source string, cleanStatus string, cleanConfidence string, cleanWarnings string) error {
-	_, err := r.db.ExecContext(ctx, `
+	var fileExt string
+	var fileName string
+	err := r.db.QueryRowContext(ctx, `SELECT file_ext, file_name FROM yamdc_job_tab WHERE id = ? AND deleted_at = 0`, id).Scan(&fileExt, &fileName)
+	if err != nil {
+		return fmt.Errorf("load job before number update failed: %w", err)
+	}
+	conflictKey := jobdef.BuildConflictKey(number, fileExt, fileName)
+	_, err = r.db.ExecContext(ctx, `
 		UPDATE yamdc_job_tab
-		SET number = ?, number_source = ?, number_clean_status = ?, number_clean_confidence = ?, number_clean_warnings = ?, updated_at = ?
+		SET number = ?, number_source = ?, number_clean_status = ?, number_clean_confidence = ?, number_clean_warnings = ?, conflict_key = ?, updated_at = ?
 		WHERE id = ? AND deleted_at = 0
-	`, number, source, cleanStatus, cleanConfidence, cleanWarnings, time.Now().UnixMilli(), id)
+	`, number, source, cleanStatus, cleanConfidence, cleanWarnings, conflictKey, time.Now().UnixMilli(), id)
 	if err != nil {
 		return fmt.Errorf("update job number failed: %w", err)
 	}
@@ -267,11 +298,17 @@ func (r *JobRepository) UpdateNumber(ctx context.Context, id int64, number strin
 }
 
 func (r *JobRepository) UpdateSourcePath(ctx context.Context, id int64, fileName string, fileExt string, relPath string, absPath string) error {
-	_, err := r.db.ExecContext(ctx, `
+	var numberText string
+	err := r.db.QueryRowContext(ctx, `SELECT number FROM yamdc_job_tab WHERE id = ? AND deleted_at = 0`, id).Scan(&numberText)
+	if err != nil {
+		return fmt.Errorf("load job before source path update failed: %w", err)
+	}
+	conflictKey := jobdef.BuildConflictKey(numberText, fileExt, fileName)
+	_, err = r.db.ExecContext(ctx, `
 		UPDATE yamdc_job_tab
-		SET file_name = ?, file_ext = ?, rel_path = ?, abs_path = ?, updated_at = ?
+		SET file_name = ?, file_ext = ?, conflict_key = ?, rel_path = ?, abs_path = ?, updated_at = ?
 		WHERE id = ? AND deleted_at = 0
-	`, fileName, fileExt, relPath, absPath, time.Now().UnixMilli(), id)
+	`, fileName, fileExt, conflictKey, relPath, absPath, time.Now().UnixMilli(), id)
 	if err != nil {
 		return fmt.Errorf("update job source path failed: %w", err)
 	}
@@ -338,4 +375,53 @@ func (r *JobRepository) RecoverProcessingJobs(ctx context.Context) error {
 		return fmt.Errorf("recover processing jobs failed: %w", err)
 	}
 	return nil
+}
+
+func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys []string) ([]jobdef.Job, error) {
+	filtered := make([]string, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		filtered = append(filtered, key)
+	}
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+	sort.Strings(filtered)
+	placeholders := make([]string, 0, len(filtered))
+	args := make([]interface{}, 0, len(filtered))
+	for _, key := range filtered {
+		placeholders = append(placeholders, "?")
+		args = append(args, key)
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, rel_path, conflict_key
+		FROM yamdc_job_tab
+		WHERE deleted_at = 0 AND status != ? AND conflict_key IN (`+strings.Join(placeholders, ",")+`)
+	`, append([]interface{}{jobdef.StatusDone}, args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("list active jobs by conflict keys failed: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	items := make([]jobdef.Job, 0, len(filtered))
+	for rows.Next() {
+		var item jobdef.Job
+		if err := rows.Scan(&item.ID, &item.RelPath, &item.ConflictKey); err != nil {
+			return nil, fmt.Errorf("scan active job by conflict key failed: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active jobs by conflict key failed: %w", err)
+	}
+	return items, nil
 }
