@@ -260,10 +260,12 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 			return err
 		}
 	}
-	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
+	conflict, err := s.GetJobConflict(ctx, j)
+	if err != nil {
 		logger.Error("check job conflict before import failed", zap.Error(err))
 		return err
-	} else if conflict != nil {
+	}
+	if conflict != nil {
 		logger.Warn("import blocked by conflict", zap.String("reason", conflict.Reason), zap.String("target", conflict.Target))
 		return fmt.Errorf("%s: %s", conflict.Reason, conflict.Target)
 	}
@@ -363,9 +365,11 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 	if requiresManualNumberReview(j) {
 		return fmt.Errorf("job number requires manual edit before scraping")
 	}
-	if conflict, err := s.GetJobConflict(ctx, j); err != nil {
+	conflict, err := s.GetJobConflict(ctx, j)
+	if err != nil {
 		return err
-	} else if conflict != nil {
+	}
+	if conflict != nil {
 		return fmt.Errorf("%s: %s", conflict.Reason, conflict.Target)
 	}
 

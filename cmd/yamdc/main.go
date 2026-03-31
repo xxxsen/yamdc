@@ -37,8 +37,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
 	"go.uber.org/zap"
-
-	"github.com/samber/lo"
 )
 
 func main() {
@@ -416,11 +414,11 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 	if !c.TranslateConfig.Enable {
 		return nil, nil
 	}
-	allEngines := make(map[string]translator.ITranslator, 4)
+	allEngines := make(map[string]translator.ITranslator, 2)
 	enginec := c.TranslateConfig.EngineConfig
 	if enginec.Google.Enable {
 		opts := []google.Option{}
-		if enginec.Google.UseProxy && len(c.NetworkConfig.Proxy) > 0 {
+		if enginec.Google.UseProxy && c.NetworkConfig.Proxy != "" {
 			opts = append(opts, google.WithProxyUrl(c.NetworkConfig.Proxy))
 		}
 		allEngines[translator.TrNameGoogle] = google.New(opts...)
@@ -428,14 +426,20 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 	if enginec.AI.Enable {
 		allEngines[translator.TrNameAI] = ai.New(engine, ai.WithPrompt(enginec.AI.Prompt))
 	}
-	useEngines := make([]translator.ITranslator, 0, len(allEngines))
-	engineNames := []string{
-		c.TranslateConfig.Engine,
-	}
+	engineNames := []string{c.TranslateConfig.Engine}
 	engineNames = append(engineNames, c.TranslateConfig.Fallback...)
-	engineNames = lo.Uniq(engineNames)
+	useEngines := make([]translator.ITranslator, 0, len(engineNames))
+	seen := make(map[string]struct{}, len(engineNames))
 	for _, name := range engineNames {
-		e, ok := allEngines[strings.ToLower(name)]
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		e, ok := allEngines[name]
 		if !ok {
 			logutil.GetLogger(ctx).Error("spec engine not found, skip", zap.String("name", name))
 			continue
