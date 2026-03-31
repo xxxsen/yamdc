@@ -1,6 +1,6 @@
 module github.com/xxxsen/yamdc
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/Conight/go-googletrans v0.2.4
@@ -17,9 +17,9 @@ require (
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
 	github.com/xxxsen/common v0.1.28
 	go.uber.org/zap v1.23.0
-	golang.org/x/image v0.18.0
+	golang.org/x/image v0.38.0
 	golang.org/x/net v0.48.0
-	golang.org/x/text v0.32.0
+	golang.org/x/text v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
