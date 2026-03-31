@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS yamdc_job_tab (
     job_uid TEXT NOT NULL UNIQUE,
     file_name TEXT NOT NULL,
     file_ext TEXT NOT NULL,
+    conflict_key TEXT NOT NULL DEFAULT '',
     rel_path TEXT NOT NULL UNIQUE,
     abs_path TEXT NOT NULL,
     number TEXT NOT NULL,

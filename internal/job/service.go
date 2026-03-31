@@ -17,7 +17,6 @@ import (
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
 	"go.uber.org/zap"
@@ -592,90 +591,94 @@ func (s *Service) GetJobConflict(ctx context.Context, job *jobdef.Job) (*JobConf
 	if job == nil {
 		return nil, nil
 	}
-	index, err := s.buildConflictIndex(ctx)
+	if job.Status == jobdef.StatusDone {
+		return nil, nil
+	}
+	grouped, err := s.loadConflictGroups(ctx, []jobdef.Job{*job})
 	if err != nil {
 		return nil, err
 	}
-	conflict, ok := index[job.ID]
-	if !ok {
+	key := conflictKeyForJob(job)
+	items := grouped[key]
+	if len(items) <= 1 {
 		return nil, nil
 	}
-	return &conflict, nil
+	return buildJobConflict(items), nil
 }
 
 func (s *Service) ApplyJobConflicts(ctx context.Context, jobs []jobdef.Job) error {
-	index, err := s.buildConflictIndex(ctx)
+	grouped, err := s.loadConflictGroups(ctx, jobs)
 	if err != nil {
 		return err
 	}
 	for idx := range jobs {
-		if conflict, ok := index[jobs[idx].ID]; ok {
-			jobs[idx].ConflictReason = conflict.Reason
-			jobs[idx].ConflictTarget = conflict.Target
-		} else {
+		if jobs[idx].Status == jobdef.StatusDone {
 			jobs[idx].ConflictReason = ""
 			jobs[idx].ConflictTarget = ""
+			continue
 		}
+		items := grouped[conflictKeyForJob(&jobs[idx])]
+		if len(items) <= 1 {
+			jobs[idx].ConflictReason = ""
+			jobs[idx].ConflictTarget = ""
+			continue
+		}
+		conflict := buildJobConflict(items)
+		jobs[idx].ConflictReason = conflict.Reason
+		jobs[idx].ConflictTarget = conflict.Target
 	}
 	return nil
 }
 
-func (s *Service) buildConflictIndex(ctx context.Context) (map[int64]JobConflict, error) {
-	result, err := s.jobRepo.ListJobs(ctx, nil, "", 1, 0)
-	if err != nil {
-		return nil, err
-	}
-	jobs := result.Items
-	index := make(map[int64]JobConflict, len(jobs))
+func (s *Service) loadConflictGroups(ctx context.Context, jobs []jobdef.Job) (map[string][]jobdef.Job, error) {
 	grouped := make(map[string][]jobdef.Job)
+	keys := make([]string, 0, len(jobs))
 	for _, job := range jobs {
 		if job.Status == jobdef.StatusDone {
 			continue
 		}
-		key := buildJobConflictKey(&job)
+		key := conflictKeyForJob(&job)
 		if key == "" {
 			continue
 		}
-		grouped[key] = append(grouped[key], job)
+		keys = append(keys, key)
 	}
-	for _, items := range grouped {
-		if len(items) <= 1 {
-			continue
-		}
-		targets := make([]string, 0, len(items))
-		for _, item := range items {
-			targets = append(targets, item.RelPath)
-		}
-		sort.Strings(targets)
-		targetText := strings.Join(targets, " | ")
-		for _, item := range items {
-			index[item.ID] = JobConflict{
-				Reason: "存在同目标文件名冲突",
-				Target: targetText,
-			}
-		}
+	if len(keys) == 0 {
+		return grouped, nil
 	}
-	return index, nil
+	items, err := s.jobRepo.ListActiveJobsByConflictKeys(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		grouped[item.ConflictKey] = append(grouped[item.ConflictKey], item)
+	}
+	return grouped, nil
 }
 
-func buildJobConflictKey(job *jobdef.Job) string {
+func conflictKeyForJob(job *jobdef.Job) string {
 	if job == nil {
 		return ""
 	}
-	numberText := strings.TrimSpace(job.Number)
-	if numberText == "" {
-		return ""
+	if strings.TrimSpace(job.ConflictKey) != "" {
+		return strings.TrimSpace(job.ConflictKey)
 	}
-	parsed, err := number.Parse(numberText)
-	base := strings.ToUpper(numberText)
-	if err == nil && parsed != nil {
-		base = strings.ToUpper(parsed.GenerateFileName())
+	return jobdef.BuildConflictKey(job.Number, job.FileExt, job.FileName)
+}
+
+func buildJobConflict(items []jobdef.Job) *JobConflict {
+	if len(items) <= 1 {
+		return nil
 	}
-	ext := strings.ToLower(strings.TrimSpace(firstNonEmptyString(job.FileExt, filepath.Ext(job.FileName))))
-	if ext == "" {
-		return base
+	targets := make([]string, 0, len(items))
+	for _, item := range items {
+		targets = append(targets, item.RelPath)
 	}
-	return base + ext
+	sort.Strings(targets)
+	return &JobConflict{
+		Reason: "存在同目标文件名冲突",
+		Target: strings.Join(targets, " | "),
+	}
 }
 
 func (s *Service) failJob(ctx context.Context, jobID int64, message string) {
