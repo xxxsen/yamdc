@@ -53,7 +53,12 @@ func (s *Service) IsConfigured() bool {
 }
 
 func (s *Service) Start(ctx context.Context) {
-	_ = ctx
+	if s.db == nil {
+		return
+	}
+	if err := s.recoverTaskStates(ctx); err != nil {
+		logutil.GetLogger(ctx).Error("recover media library task states failed", zap.Error(err))
+	}
 }
 
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
@@ -226,6 +231,35 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 	go func() {
 		_ = s.runFullSync(context.WithoutCancel(ctx), "manual")
 	}()
+	return nil
+}
+
+func (s *Service) recoverTaskStates(ctx context.Context) error {
+	for _, taskKey := range []string{TaskSync, TaskMove} {
+		if err := s.recoverTaskState(ctx, taskKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) recoverTaskState(ctx context.Context, taskKey string) error {
+	state, err := s.getTaskState(ctx, taskKey)
+	if err != nil {
+		return err
+	}
+	if state.Status != "running" {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	state.Status = "failed"
+	state.Message = "server restarted while task running"
+	state.FinishedAt = now
+	state.UpdatedAt = now
+	if err := s.saveTaskState(ctx, state); err != nil {
+		return err
+	}
+	logutil.GetLogger(ctx).Warn("recover media library task state from running to failed", zap.String("task", taskKey))
 	return nil
 }
 
