@@ -177,7 +177,7 @@ func runCapture(c *config.Config) error {
 }
 
 func loggerInit(c *config.Config) *zap.Logger {
-	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), true)
+	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 }
 
 func buildCapture(c *config.Config, storage store.IStorage, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
