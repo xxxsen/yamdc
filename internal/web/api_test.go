@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
@@ -276,6 +277,16 @@ func TestEngineJobRunRoute(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	require.Equal(t, 0, payload.Code)
 	require.Equal(t, "job started", payload.Message)
+
+	// Run 路由会异步启动任务，等待后台 goroutine 收尾，避免 TempDir 清理时目录仍被占用导致 CI 偶发失败。
+	require.Eventually(t, func() bool {
+		current, getErr := jobRepo.GetByID(context.Background(), item.ID)
+		require.NoError(t, getErr)
+		if current == nil {
+			return false
+		}
+		return current.Status != jobdef.StatusProcessing
+	}, 3*time.Second, 50*time.Millisecond)
 }
 
 func TestEngineReviewSaveRoute(t *testing.T) {
