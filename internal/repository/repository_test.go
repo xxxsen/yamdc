@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -18,52 +17,6 @@ func newTestSQLite(t *testing.T) *SQLite {
 		require.NoError(t, db.Close())
 	})
 	return db
-}
-
-func TestNewSQLiteEnsuresLegacyConflictSchema(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-	rawDB, err := sql.Open("sqlite", path)
-	require.NoError(t, err)
-	_, err = rawDB.Exec(`
-		CREATE TABLE IF NOT EXISTS yamdc_job_tab (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			job_uid TEXT NOT NULL UNIQUE,
-			file_name TEXT NOT NULL,
-			file_ext TEXT NOT NULL,
-			rel_path TEXT NOT NULL UNIQUE,
-			abs_path TEXT NOT NULL,
-			number TEXT NOT NULL,
-			raw_number TEXT NOT NULL DEFAULT '',
-			cleaned_number TEXT NOT NULL DEFAULT '',
-			number_source TEXT NOT NULL DEFAULT 'raw',
-			number_clean_status TEXT NOT NULL DEFAULT '',
-			number_clean_confidence TEXT NOT NULL DEFAULT '',
-			number_clean_warnings TEXT NOT NULL DEFAULT '',
-			file_size INTEGER NOT NULL DEFAULT 0,
-			status TEXT NOT NULL,
-			error_msg TEXT NOT NULL DEFAULT '',
-			retry_count INTEGER NOT NULL DEFAULT 0,
-			scrape_started_at INTEGER NOT NULL DEFAULT 0,
-			scrape_finished_at INTEGER NOT NULL DEFAULT 0,
-			reviewed_at INTEGER NOT NULL DEFAULT 0,
-			imported_at INTEGER NOT NULL DEFAULT 0,
-			deleted_at INTEGER NOT NULL DEFAULT 0,
-			created_at INTEGER NOT NULL,
-			updated_at INTEGER NOT NULL
-		)
-	`)
-	require.NoError(t, err)
-	require.NoError(t, rawDB.Close())
-
-	sqlite, err := NewSQLite(path)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, sqlite.Close())
-	})
-
-	hasColumn, err := hasColumnNamed(context.Background(), sqlite.DB(), "yamdc_job_tab", "conflict_key")
-	require.NoError(t, err)
-	require.True(t, hasColumn)
 }
 
 func TestJobRepositoryLifecycle(t *testing.T) {

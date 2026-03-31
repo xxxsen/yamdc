@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS yamdc_job_tab (
 
 CREATE INDEX IF NOT EXISTS idx_yamdc_job_status ON yamdc_job_tab(status);
 CREATE INDEX IF NOT EXISTS idx_yamdc_job_updated_at ON yamdc_job_tab(updated_at);
+CREATE INDEX IF NOT EXISTS idx_yamdc_job_conflict_key_active ON yamdc_job_tab(conflict_key) WHERE deleted_at = 0 AND status != 'done' AND conflict_key != '';
 
 CREATE TABLE IF NOT EXISTS yamdc_log_tab (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
