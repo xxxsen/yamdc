@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -170,6 +171,11 @@ func buildCacheStoreAction(_ context.Context, ysctx *YamdcStartContext) error {
 		return err
 	}
 	ysctx.CacheStore = cacheStore
+	if closer, ok := cacheStore.(io.Closer); ok {
+		ysctx.AddCleanup(func(context.Context) error {
+			return closer.Close()
+		})
+	}
 	return nil
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -134,6 +135,11 @@ func runCapture(c *config.Config) error {
 	cacheStore, err := store.NewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db"))
 	if err != nil {
 		return err
+	}
+	if closer, ok := cacheStore.(io.Closer); ok {
+		defer func() {
+			_ = closer.Close()
+		}()
 	}
 	tr, err := buildTranslator(ctx, c, engine)
 	if err != nil {

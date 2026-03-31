@@ -7,11 +7,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
 	storage := MustNewSqliteStorage(file)
+	if closer, ok := storage.(interface{ Close() error }); ok {
+		t.Cleanup(func() {
+			require.NoError(t, closer.Close())
+		})
+	}
 	ctx := context.Background()
 	//获取数据, 此时返回错误
 	_, err := GetDataFrom(ctx, storage, "abc")
@@ -50,4 +56,23 @@ func TestStore(t *testing.T) {
 	val, err = GetDataFrom(ctx, storage, "zzz")
 	assert.NoError(t, err)
 	assert.Equal(t, "aaa", string(val))
+}
+
+func TestStoreCleanupLoopDeletesExpiredRows(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "cache.db")
+	storage, err := newSqliteStorage(file, 20*time.Millisecond)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, storage.Close())
+	})
+
+	ctx := context.Background()
+	require.NoError(t, storage.PutData(ctx, "abc", []byte("helloworld"), 20*time.Millisecond))
+
+	assert.Eventually(t, func() bool {
+		var cnt int
+		err := storage.db.QueryRowContext(ctx, "SELECT count(*) FROM cache_tab WHERE key = ?", "abc").Scan(&cnt)
+		require.NoError(t, err)
+		return cnt == 0
+	}, 2*time.Second, 20*time.Millisecond)
 }
