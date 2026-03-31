@@ -2,6 +2,7 @@ package medialib
 
 import (
 	"fmt"
+	stdimage "image"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/nfo"
 )
 
@@ -366,6 +368,84 @@ func (s *Service) replaceRootArtwork(root string, detail *Detail, absPath string
 		return nil, err
 	}
 	return s.readRootDetail(root, relPath, absPath)
+}
+
+func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath string, variantKey string, x int, y int, width int, height int) (*Detail, error) {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("library item is not a directory")
+	}
+	if detail == nil {
+		return nil, fmt.Errorf("library detail is required")
+	}
+	variant, ok := pickVariant(detail, variantKey)
+	if !ok {
+		return nil, fmt.Errorf("library variant not found")
+	}
+	coverPath := firstNonEmpty(
+		variant.CoverPath,
+		variant.Meta.CoverPath,
+		variant.Meta.FanartPath,
+		variant.Meta.ThumbPath,
+		detail.Meta.CoverPath,
+		detail.Meta.FanartPath,
+		detail.Meta.ThumbPath,
+	)
+	if coverPath == "" {
+		return nil, fmt.Errorf("cover not found")
+	}
+	coverRelPath := strings.TrimPrefix(filepath.ToSlash(coverPath), detail.Item.RelPath+"/")
+	coverAbsPath := filepath.Join(absPath, filepath.FromSlash(coverRelPath))
+	raw, err := os.ReadFile(coverAbsPath)
+	if err != nil {
+		return nil, fmt.Errorf("read cover failed: %w", err)
+	}
+	img, err := imgutil.LoadImage(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode cover failed: %w", err)
+	}
+	rect := stdimage.Rect(x, y, x+width, y+height)
+	bounds := img.Bounds()
+	if rect.Min.X < bounds.Min.X || rect.Min.Y < bounds.Min.Y || rect.Max.X > bounds.Max.X || rect.Max.Y > bounds.Max.Y {
+		return nil, fmt.Errorf("crop rectangle out of bounds")
+	}
+	cropped, err := imgutil.CutImageViaRectangle(img, rect)
+	if err != nil {
+		return nil, fmt.Errorf("crop poster failed: %w", err)
+	}
+	croppedRaw, err := imgutil.WriteImageToBytes(cropped)
+	if err != nil {
+		return nil, fmt.Errorf("encode poster failed: %w", err)
+	}
+	ext := strings.ToLower(filepath.Ext(coverRelPath))
+	if _, ok := imageExts[ext]; !ok {
+		ext = ".jpg"
+	}
+	targetName := pickArtworkTargetName(detail, variant, "poster", ext)
+	if strings.EqualFold(filepath.ToSlash(targetName), coverRelPath) {
+		targetName = fmt.Sprintf("%s-poster%s", firstNonEmpty(variant.BaseName, detail.Item.Number, detail.Item.Name), ext)
+	}
+	targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
+	if err := os.WriteFile(targetPath, croppedRaw, 0644); err != nil {
+		return nil, fmt.Errorf("write poster failed: %w", err)
+	}
+	mov := &nfo.Movie{}
+	nfoPath := selectVariantNFOPath(absPath, variant, detail.PrimaryVariantKey)
+	if variant.NFOAbsPath != "" {
+		nfoPath = variant.NFOAbsPath
+	}
+	if existing, parseErr := nfo.ParseMovie(nfoPath); parseErr == nil {
+		mov = existing
+	}
+	mov.Poster = targetName
+	mov.Art.Poster = targetName
+	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
+		return nil, err
+	}
+	return s.readRootDetail(root, detail.Item.RelPath, absPath)
 }
 
 func (s *Service) deleteRootFile(root string, itemRelPath string, fileRelPath string) (*Detail, error) {
