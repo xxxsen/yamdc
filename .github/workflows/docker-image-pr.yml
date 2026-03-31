@@ -1,0 +1,58 @@
+name: build_pr_image
+
+on:
+  workflow_run:
+    workflows:
+      - pr_check
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR merge ref
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.workflow_run.pull_requests[0].number }}/merge
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build backend image
+        uses: docker/build-push-action@v2
+        with:
+          platforms: linux/amd64
+          push: false
+          tags: xxxsen/yamdc:pr-${{ github.event.workflow_run.pull_requests[0].number }}
+
+  build-yamdc-web:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR merge ref
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.workflow_run.pull_requests[0].number }}/merge
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build yamdc-web image
+        uses: docker/build-push-action@v2
+        with:
+          context: ./web
+          platforms: linux/amd64
+          push: false
+          file: web/Dockerfile
+          tags: xxxsen/yamdc-web:pr-${{ github.event.workflow_run.pull_requests[0].number }}
