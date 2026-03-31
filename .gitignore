@@ -6,3 +6,8 @@ models/
 .idea
 config.json
 .qoder
+/td
+/sample
+.codex
+/.cache
+/bin

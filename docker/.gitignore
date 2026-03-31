@@ -1,0 +1,14 @@
+/data/*
+!/data/.gitkeep
+!/data/scan/
+!/data/save/
+!/data/library/
+!/data/app/
+/data/scan/*
+!/data/scan/.gitkeep
+/data/save/*
+!/data/save/.gitkeep
+/data/library/*
+!/data/library/.gitkeep
+/data/app/*
+!/data/app/.gitkeep

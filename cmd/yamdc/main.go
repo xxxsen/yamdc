@@ -8,21 +8,20 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/capture"
-	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/dependency"
-	"github.com/xxxsen/yamdc/internal/dynscript"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
-	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/flarerr"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -31,125 +30,157 @@ import (
 	"github.com/xxxsen/yamdc/internal/translator/ai"
 	"github.com/xxxsen/yamdc/internal/translator/google"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
+	"go.uber.org/zap"
 
 	"github.com/samber/lo"
 )
 
 func main() {
-	configPath, err := parseConfigPath()
-	if err != nil {
-		log.Fatalf("parse flags failed, err:%v", err)
+	if err := newRootCmd().Execute(); err != nil {
+		log.Fatalf("execute command failed, err:%v", err)
 	}
-	c, err := config.Parse(configPath)
-	if err != nil {
-		log.Fatalf("parse config failed, err:%v", err)
+}
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "yamdc",
+		Short:         "YAMDC server",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
+	cmd.AddCommand(newRunCmd(), newServerCmd(), newRulesetTestCmd())
+	return cmd
+}
+
+func newRunCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run one full scraping pass from scan dir to save dir",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := config.Parse(configPath)
+			if err != nil {
+				return fmt.Errorf("parse config failed, err:%w", err)
+			}
+			return runCapture(c)
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
+	return cmd
+}
+
+func newServerCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "server",
+		Short: "Start YAMDC HTTP server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := config.Parse(configPath)
+			if err != nil {
+				return fmt.Errorf("parse config failed, err:%w", err)
+			}
+			return runServer(c)
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "./config.json", "config file")
+	return cmd
+}
+
+func runServer(c *config.Config) error {
 	rewriteEnvFlagToConfig(&c.SwitchConfig)
-	logkit := logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
-	if err := precheckDir(c); err != nil {
-		logkit.Fatal("precheck dir failed", zap.Error(err))
-	}
-	if err := setupHTTPClient(c); err != nil {
-		logkit.Fatal("setup http client failed", zap.Error(err))
-	}
-	logkit.Info("check dependencies...")
-	if err := initDependencies(c.DataDir, c.Dependencies); err != nil {
-		logkit.Fatal("ensure dependencies failed", zap.Error(err))
-	}
-	logkit.Info("check dependencies finish...")
-	logkit.Info("use switch config", zap.Any("switch", c.SwitchConfig))
-	if err := setupAIEngine(c); err != nil {
-		logkit.Fatal("setup ai engine failed", zap.Error(err))
-	}
-
-	store.SetStorage(store.MustNewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db")))
-	if err := setupTranslator(c); err != nil {
-		logkit.Error("setup translator failed", zap.Error(err)) //非关键路径
-	}
-	logkit.Info("use translator engine", zap.String("engine", c.TranslateConfig.Engine))
-	if err := setupFace(c, filepath.Join(c.DataDir, "models")); err != nil {
-		logkit.Error("init face recognizer failed", zap.Error(err))
-	}
-	logkit.Info("support plugins", zap.Strings("plugins", factory.Plugins()))
-	logkit.Info("support handlers", zap.Strings("handlers", handler.Handlers()))
-	logkit.Info("use plugins", zap.Strings("plugins", c.Plugins))
-	for _, ct := range c.CategoryPlugins {
-		logkit.Info("-- cat plugins", zap.String("cat", ct.Name), zap.Strings("plugins", ct.Plugins))
-	}
-	logkit.Info("use handlers", zap.Strings("handlers", c.Handlers))
-	logkit.Info("use naming rule", zap.String("rule", c.Naming))
-	logkit.Info("scrape from dir", zap.String("dir", c.ScanDir))
-	logkit.Info("save to dir", zap.String("dir", c.SaveDir))
-	logkit.Info("use data dir", zap.String("dir", c.DataDir))
-	logkit.Info("check feature list")
-	logkit.Info("-- ffmpeg", zap.Bool("enable", ffmpeg.IsFFMpegEnabled()))
-	logkit.Info("-- ffprobe", zap.Bool("enable", ffmpeg.IsFFProbeEnabled()))
-	logkit.Info("-- translator", zap.Bool("enable", translator.IsTranslatorEnabled()))
-	logkit.Info("-- face recognize", zap.Bool("enable", face.IsFaceRecognizeEnabled()))
-	logkit.Info("-- ai engine", zap.Bool("enable", aiengine.IsAIEngineEnabled()))
-
-	ss, err := buildSearcher(c, c.Plugins, c.PluginConfig)
-	if err != nil {
-		logkit.Fatal("build searcher failed", zap.Error(err))
-	}
-	catSs, err := buildCatSearcher(c, c.CategoryPlugins, c.PluginConfig)
-	if err != nil {
-		logkit.Fatal("build cat searcher failed", zap.Error(err))
-	}
-	tryTestSearcher(c, ss, catSs)
-	ps, err := buildProcessor(c.Handlers, c.HandlerConfig)
-	if err != nil {
-		logkit.Fatal("build processor failed", zap.Error(err))
-	}
-	cap, err := buildCapture(c, ss, catSs, ps)
-	if err != nil {
-		logkit.Fatal("build capture runner failed", zap.Error(err))
-	}
-	logkit.Info("capture kit init succ, start scraping")
-	if err := cap.Run(context.Background()); err != nil {
-		logkit.Error("run capture kit failed", zap.Error(err))
-		return
-	}
-	logkit.Info("run capture kit finish, all file scrape succ")
-}
-
-func parseConfigPath() (string, error) {
-	fs := pflag.NewFlagSet("yamdc", pflag.ContinueOnError)
-	configPath := fs.String("config", "./config.json", "config file")
-	if len(os.Args) > 1 && os.Args[1] == "run" {
-		if err := fs.Parse(os.Args[2:]); err != nil {
-			return "", err
+	ysctx := NewYamdcStartContext(c)
+	defer func() {
+		if err := ysctx.Cleanup(context.Background()); err != nil && ysctx.Logger != nil {
+			ysctx.Logger.Error("cleanup yamdc start context failed", zap.Error(err))
 		}
-		return *configPath, nil
+	}()
+	if err := executeYamdcInitActions(context.Background(), ysctx, newYamdcInitActions()); err != nil {
+		return err
 	}
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return "", err
-	}
-	return *configPath, nil
+	return nil
 }
 
-func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor) (*capture.Capture, error) {
-	numberUncensorRule, err := buildNumberUncensorRule(c)
-	if err != nil {
-		return nil, err
+func runCapture(c *config.Config) error {
+	rewriteEnvFlagToConfig(&c.SwitchConfig)
+	ctx := context.Background()
+	logkit := loggerInit(c)
+	if logkit != nil {
+		defer func() { _ = logkit.Sync() }()
 	}
-	numberCategoryRule, err := buildNumberCategoryRule(c)
-	if err != nil {
-		return nil, err
+	if err := normalizeDirPaths(c); err != nil {
+		return err
 	}
-	numberRewriteRule, err := buildNumberRewriteRule(c)
-	if err != nil {
-		return nil, err
+	if err := precheckCaptureDir(c); err != nil {
+		return err
 	}
+	logutil.GetLogger(ctx).Info("start capture run", zap.String("scan_dir", c.ScanDir), zap.String("save_dir", c.SaveDir), zap.String("data_dir", c.DataDir))
 
+	cli, err := buildHTTPClient(ctx, c)
+	if err != nil {
+		return err
+	}
+	if err := initDependencies(ctx, cli, c.DataDir, c.Dependencies); err != nil {
+		return err
+	}
+	engine, err := buildAIEngine(ctx, cli, c)
+	if err != nil {
+		return err
+	}
+	cacheStore, err := store.NewSqliteStorage(filepath.Join(c.DataDir, "cache", "cache.db"))
+	if err != nil {
+		return err
+	}
+	tr, err := buildTranslator(ctx, c, engine)
+	if err != nil {
+		logutil.GetLogger(ctx).Error("setup translator failed", zap.Error(err))
+	}
+	faceRec, err := buildFaceRecognizer(ctx, c, filepath.Join(c.DataDir, "models"))
+	if err != nil {
+		logutil.GetLogger(ctx).Error("init face recognizer failed", zap.Error(err))
+	}
+	searchers, err := buildSearcher(ctx, cli, cacheStore, c, c.Plugins, c.PluginConfig)
+	if err != nil {
+		return err
+	}
+	catSearchers, err := buildCatSearcher(ctx, cli, cacheStore, c, c.CategoryPlugins, c.PluginConfig)
+	if err != nil {
+		return err
+	}
+	processors, err := buildProcessor(ctx, appdeps.Runtime{
+		HTTPClient: cli,
+		Storage:    cacheStore,
+		Translator: tr,
+		AIEngine:   engine,
+		FaceRec:    faceRec,
+	}, c.Handlers, c.HandlerConfig)
+	if err != nil {
+		return err
+	}
+	cleaner, _, err := buildNumberCleaner(ctx, cli, c)
+	if err != nil {
+		return err
+	}
+	cap, err := buildCapture(c, cacheStore, searchers, catSearchers, processors, cleaner)
+	if err != nil {
+		return err
+	}
+	if err := cap.Run(ctx); err != nil {
+		return err
+	}
+	logutil.GetLogger(ctx).Info("capture run finished")
+	return nil
+}
+
+func loggerInit(c *config.Config) *zap.Logger {
+	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
+}
+
+func buildCapture(c *config.Config, storage store.IStorage, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
@@ -157,10 +188,9 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 		capture.WithSaveDir(c.SaveDir),
 		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
 		capture.WithProcessor(processor.NewGroup(ps)),
+		capture.WithStorage(storage),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
-		capture.WithUncensorTester(numberUncensorRule),
-		capture.WithNumberCategorier(numberCategoryRule),
-		capture.WithNumberRewriter(numberRewriteRule),
+		capture.WithNumberCleaner(numCleaner),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
 		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
 		capture.WithLinkMode(c.SwitchConfig.EnableLinkMode),
@@ -168,10 +198,10 @@ func buildCapture(c *config.Config, ss []searcher.ISearcher, catSs map[string][]
 	return capture.New(opts...)
 }
 
-func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
+func buildCatSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
-		ss, err := buildSearcher(c, plg.Plugins, m)
+		ss, err := buildSearcher(ctx, cli, storage, c, plg.Plugins, m)
 		if err != nil {
 			return nil, err
 		}
@@ -180,51 +210,7 @@ func buildCatSearcher(c *config.Config, cplgs []config.CategoryPlugin, m map[str
 	return rs, nil
 }
 
-func tryTestSearcher(c *config.Config, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher) {
-	if !c.SwitchConfig.EnableSearcherCheck {
-		return
-	}
-	testMap := make(map[string]searcher.ISearcher)
-	for _, s := range ss {
-		testMap[s.Name()] = s
-	}
-	for _, catS := range catSs {
-		for _, item := range catS {
-			if _, ok := testMap[item.Name()]; ok {
-				continue
-			}
-			testMap[item.Name()] = item
-		}
-	}
-	wg, ctx := errgroup.WithContext(context.Background())
-	m := make(map[string]error, len(ss))
-	var lck sync.Mutex
-	logutil.GetLogger(ctx).Info("try test searhers...")
-	for _, s := range testMap {
-		s := s
-		wg.Go(func() error {
-			err := s.Check(ctx)
-			lck.Lock()
-			defer lck.Unlock()
-			m[s.Name()] = err
-			return nil
-		})
-	}
-	if err := wg.Wait(); err != nil {
-		logutil.GetLogger(ctx).Error("test searcher internal err", zap.Error(err))
-		return
-	}
-	for name, err := range m {
-		if err != nil {
-			logutil.GetLogger(ctx).Error("-- test searher failed", zap.String("searcher", name), zap.Error(err))
-			continue
-		}
-		logutil.GetLogger(ctx).Info("-- test searcher succ", zap.String("searcher", name))
-	}
-
-}
-
-func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
+func buildSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
@@ -235,7 +221,7 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 			plugc = defc
 		}
 		if plugc.Disable {
-			logutil.GetLogger(context.Background()).Info("plugin is disabled, skip create", zap.String("plugin", name))
+			logutil.GetLogger(ctx).Info("plugin is disabled, skip create", zap.String("plugin", name))
 			continue
 		}
 		plg, err := factory.CreatePlugin(name, struct{}{})
@@ -243,19 +229,20 @@ func buildSearcher(c *config.Config, plgs []string, m map[string]config.PluginCo
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
 		sr, err := searcher.NewDefaultSearcher(name, plg,
-			searcher.WithHTTPClient(client.DefaultClient()),
+			searcher.WithHTTPClient(cli),
+			searcher.WithStorage(storage),
 			searcher.WithSearchCache(c.SwitchConfig.EnableSearchMetaCache),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("create searcher failed, plugin:%s, err:%w", name, err)
 		}
-		logutil.GetLogger(context.Background()).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(context.Background())))
+		logutil.GetLogger(ctx).Info("create search succ", zap.String("plugin", name), zap.Strings("domains", plg.OnGetHosts(ctx)))
 		rs = append(rs, sr)
 	}
 	return rs, nil
 }
 
-func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
+func buildProcessor(ctx context.Context, deps appdeps.Runtime, hs []string, m map[string]config.HandlerConfig) ([]processor.IProcessor, error) {
 	rs := make([]processor.IProcessor, 0, len(hs))
 	defc := config.HandlerConfig{
 		Disable: false,
@@ -266,21 +253,29 @@ func buildProcessor(hs []string, m map[string]config.HandlerConfig) ([]processor
 			handlec = defc
 		}
 		if handlec.Disable {
-			logutil.GetLogger(context.Background()).Info("handler is disabled, skip create", zap.String("handler", name))
+			logutil.GetLogger(ctx).Info("handler is disabled, skip create", zap.String("handler", name))
 			continue
 		}
-		h, err := handler.CreateHandler(name, handlec.Args)
+		h, err := handler.CreateHandler(name, handlec.Args, deps)
 		if err != nil {
 			return nil, fmt.Errorf("create handler failed, name:%s, err:%w", name, err)
 		}
 		p := processor.NewProcessor(name, h)
-		logutil.GetLogger(context.Background()).Info("create processor succ", zap.String("handler", name))
+		logutil.GetLogger(ctx).Info("create processor succ", zap.String("handler", name))
 		rs = append(rs, p)
 	}
 	return rs, nil
 }
 
-func precheckDir(c *config.Config) error {
+func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, c *config.Config) *searcher.Debugger {
+	categoryPlugins := make(map[string][]string, len(c.CategoryPlugins))
+	for _, item := range c.CategoryPlugins {
+		categoryPlugins[item.Name] = append([]string(nil), item.Plugins...)
+	}
+	return searcher.NewDebugger(cli, storage, cleaner, c.Plugins, categoryPlugins)
+}
+
+func precheckCaptureDir(c *config.Config) error {
 	if len(c.DataDir) == 0 {
 		return fmt.Errorf("no data dir")
 	}
@@ -293,7 +288,46 @@ func precheckDir(c *config.Config) error {
 	return nil
 }
 
-func initDependencies(datadir string, cdeps []config.Dependency) error {
+func precheckServerDir(c *config.Config) error {
+	if err := precheckCaptureDir(c); err != nil {
+		return err
+	}
+	if len(c.LibraryDir) == 0 {
+		return fmt.Errorf("no library dir")
+	}
+	return nil
+}
+
+func normalizeDirPaths(c *config.Config) error {
+	var err error
+	if c.DataDir != "" {
+		c.DataDir, err = filepath.Abs(c.DataDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.ScanDir != "" {
+		c.ScanDir, err = filepath.Abs(c.ScanDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.SaveDir != "" {
+		c.SaveDir, err = filepath.Abs(c.SaveDir)
+		if err != nil {
+			return err
+		}
+	}
+	if c.LibraryDir != "" {
+		c.LibraryDir, err = filepath.Abs(c.LibraryDir)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func initDependencies(ctx context.Context, cli client.IHTTPClient, datadir string, cdeps []config.Dependency) error {
 	deps := make([]*dependency.Dependency, 0, len(cdeps))
 	for _, item := range cdeps {
 		deps = append(deps, &dependency.Dependency{
@@ -302,10 +336,10 @@ func initDependencies(datadir string, cdeps []config.Dependency) error {
 			Refresh: item.Refresh,
 		})
 	}
-	return dependency.Resolve(client.DefaultClient(), deps)
+	return dependency.Resolve(ctx, cli, deps)
 }
 
-func setupFace(c *config.Config, models string) error {
+func buildFaceRecognizer(ctx context.Context, c *config.Config, models string) (face.IFaceRec, error) {
 	impls := make([]face.IFaceRec, 0, 2)
 	var faceRecCreator = make([]func() (face.IFaceRec, error), 0, 2)
 	if c.SwitchConfig.EnablePigoFaceRecognizer {
@@ -316,20 +350,19 @@ func setupFace(c *config.Config, models string) error {
 	for index, creator := range faceRecCreator {
 		impl, err := creator()
 		if err != nil {
-			logutil.GetLogger(context.Background()).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
+			logutil.GetLogger(ctx).Error("create face rec impl failed", zap.Int("index", index), zap.Error(err))
 			continue
 		}
-		logutil.GetLogger(context.Background()).Info("use face recognizer", zap.String("name", impl.Name()))
+		logutil.GetLogger(ctx).Info("use face recognizer", zap.String("name", impl.Name()))
 		impls = append(impls, impl)
 	}
 	if len(impls) == 0 {
-		return fmt.Errorf("no face rec impl inited")
+		return nil, fmt.Errorf("no face rec impl inited")
 	}
-	face.SetFaceRec(face.NewGroup(impls))
-	return nil
+	return face.NewGroup(impls), nil
 }
 
-func setupHTTPClient(c *config.Config) error {
+func buildHTTPClient(ctx context.Context, c *config.Config) (client.IHTTPClient, error) {
 	opts := make([]client.Option, 0, 4)
 	if c.NetworkConfig.Timeout > 0 {
 		opts = append(opts, client.WithTimeout(time.Duration(c.NetworkConfig.Timeout)*time.Second))
@@ -339,45 +372,43 @@ func setupHTTPClient(c *config.Config) error {
 	}
 	clientImpl, err := client.NewClient(opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if c.FlareSolverrConfig.Enable {
-		bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
-		if err != nil {
-			return fmt.Errorf("create flaresolverr client failed, err:%w", err)
-		}
-		domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
-		for domain, ok := range c.FlareSolverrConfig.Domains {
-			if !ok {
-				continue
-			}
-			domainList = append(domainList, domain)
-			logutil.GetLogger(context.Background()).Debug("add domain to flaresolverr", zap.String("domain", domain))
-		}
-		flarerr.MustAddToSolverList(bpc, domainList...)
-		clientImpl = bpc
-		logutil.GetLogger(context.Background()).Info("enable flaresolverr client")
+	if !c.FlareSolverrConfig.Enable {
+		return clientImpl, nil
 	}
-	client.SetDefault(clientImpl)
-	return nil
-}
-
-func setupAIEngine(c *config.Config) error {
-	if len(c.AIEngine.Name) == 0 {
-		logutil.GetLogger(context.Background()).Info("ai engine is disabled, skip init")
-		return nil
-	}
-	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args)
+	bpc, err := flarerr.New(clientImpl, c.FlareSolverrConfig.Host)
 	if err != nil {
-		return fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
+		return nil, fmt.Errorf("create flaresolverr client failed, err:%w", err)
 	}
-	aiengine.SetAIEngine(engine)
-	return nil
+	domainList := make([]string, 0, len(c.FlareSolverrConfig.Domains))
+	for domain, ok := range c.FlareSolverrConfig.Domains {
+		if !ok {
+			continue
+		}
+		domainList = append(domainList, domain)
+		logutil.GetLogger(ctx).Debug("add domain to flaresolverr", zap.String("domain", domain))
+	}
+	flarerr.MustAddToSolverList(bpc, domainList...)
+	logutil.GetLogger(ctx).Info("enable flaresolverr client")
+	return bpc, nil
 }
 
-func setupTranslator(c *config.Config) error {
+func buildAIEngine(ctx context.Context, cli client.IHTTPClient, c *config.Config) (aiengine.IAIEngine, error) {
+	if len(c.AIEngine.Name) == 0 {
+		logutil.GetLogger(ctx).Info("ai engine is disabled, skip init")
+		return nil, nil
+	}
+	engine, err := aiengine.Create(c.AIEngine.Name, c.AIEngine.Args, aiengine.WithHTTPClient(cli))
+	if err != nil {
+		return nil, fmt.Errorf("create ai engine failed, name:%s, err:%w", c.AIEngine.Name, err)
+	}
+	return engine, nil
+}
+
+func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIEngine) (translator.ITranslator, error) {
 	if !c.TranslateConfig.Enable {
-		return nil
+		return nil, nil
 	}
 	allEngines := make(map[string]translator.ITranslator, 4)
 	enginec := c.TranslateConfig.EngineConfig
@@ -389,7 +420,7 @@ func setupTranslator(c *config.Config) error {
 		allEngines[translator.TrNameGoogle] = google.New(opts...)
 	}
 	if enginec.AI.Enable {
-		allEngines[translator.TrNameAI] = ai.New(ai.WithPrompt(enginec.AI.Prompt))
+		allEngines[translator.TrNameAI] = ai.New(engine, ai.WithPrompt(enginec.AI.Prompt))
 	}
 	useEngines := make([]translator.ITranslator, 0, len(allEngines))
 	engineNames := []string{
@@ -400,71 +431,63 @@ func setupTranslator(c *config.Config) error {
 	for _, name := range engineNames {
 		e, ok := allEngines[strings.ToLower(name)]
 		if !ok {
-			logutil.GetLogger(context.Background()).Error("spec engine not found, skip", zap.String("name", name))
+			logutil.GetLogger(ctx).Error("spec engine not found, skip", zap.String("name", name))
 			continue
 		}
 		useEngines = append(useEngines, e)
 	}
 	if len(useEngines) == 0 {
-		return fmt.Errorf("no engine used, need to check engine config")
+		return nil, fmt.Errorf("no engine used, need to check engine config")
 	}
-	tr := translator.NewGroup(useEngines...)
-	translator.SetTranslator(tr)
-	return nil
+	return translator.NewGroup(useEngines...), nil
 }
 
-func readScriptStream(datadir string, relpath string) ([]byte, error) {
-	paths := []string{relpath, path.Join(datadir, relpath)} //尝试从所有的路径种查找脚本, relpath可以被用户传入, 所以优先查找
+func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, numbercleaner.BundleManager, error) {
+	cc := c.NumberCleanerConfig
+	sourceType := strings.ToLower(strings.TrimSpace(cc.SourceType))
+	if sourceType == "" {
+		sourceType = numbercleaner.SourceTypeLocal
+	}
+	location := strings.TrimSpace(cc.Location)
+	if sourceType == numbercleaner.SourceTypeLocal {
+		resolved, err := resolveRuleSourcePath(c.DataDir, location)
+		if err != nil {
+			return nil, nil, err
+		}
+		location = resolved
+	}
+	manager, err := numbercleaner.NewBundleManager(c.DataDir, cli, sourceType, location)
+	if err != nil {
+		return nil, nil, err
+	}
+	rs, files, err := manager.Load(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	logutil.GetLogger(ctx).Debug("load number cleaner rules", zap.Strings("files", files))
+	inner, err := numbercleaner.NewCleaner(rs)
+	if err != nil {
+		return nil, nil, err
+	}
+	runtimeCleaner := numbercleaner.NewRuntimeCleaner(inner)
+	return runtimeCleaner, manager, nil
+}
+
+func resolveRuleSourcePath(datadir string, raw string) (string, error) {
+	paths := []string{raw, path.Join(datadir, raw)}
 	for _, p := range paths {
-		data, err := os.ReadFile(p)
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		info, err := os.Stat(p)
 		if err != nil {
 			continue
 		}
-		return data, nil
+		if info.IsDir() || strings.HasSuffix(strings.ToLower(p), ".yaml") || strings.HasSuffix(strings.ToLower(p), ".yml") {
+			return filepath.Abs(p)
+		}
 	}
-	return nil, fmt.Errorf("no scripts found in paths, relpath:%s", relpath)
-}
-
-func buildNumberUncensorRule(c *config.Config) (ruleapi.ITester, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberUncensorTesterConfig)
-	if err != nil {
-		return nil, err
-	}
-	ck, err := dynscript.NewNumberUncensorChecker(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsTester(func(res string) (bool, error) {
-		return ck.IsMatch(context.Background(), res)
-	}), nil
-}
-
-func buildNumberCategoryRule(c *config.Config) (ruleapi.IMatcher, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberCategorierConfig)
-	if err != nil {
-		return nil, err
-	}
-	cater, err := dynscript.NewNumberCategorier(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsMatcher(func(res string) (string, bool, error) {
-		return cater.Category(context.Background(), res)
-	}), nil
-}
-
-func buildNumberRewriteRule(c *config.Config) (ruleapi.IRewriter, error) {
-	rule, err := readScriptStream(c.DataDir, c.RuleConfig.NumberRewriterConfig)
-	if err != nil {
-		return nil, err
-	}
-	rewriter, err := dynscript.NewNumberRewriter(string(rule))
-	if err != nil {
-		return nil, err
-	}
-	return ruleapi.WrapFuncAsRewriter(func(res string) (string, error) {
-		return rewriter.Rewrite(context.Background(), res)
-	}), nil
+	return "", fmt.Errorf("no rule source found in paths, raw:%s", raw)
 }
 
 func rewriteEnvFlagToConfig(c *config.SwitchConfig) {

@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -18,6 +20,8 @@ const (
 )
 
 type highQualityCoverHandler struct {
+	httpClient client.IHTTPClient
+	storage    store.IStorage
 }
 
 func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileContext) error {
@@ -31,11 +35,13 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 	if err != nil {
 		return fmt.Errorf("build hd cover link failed, err:%w", err)
 	}
-	rsp, err := client.DefaultClient().Do(req)
+	rsp, err := h.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request hd cover failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("hd cover response not ok, code:%d", rsp.StatusCode)
 	}
@@ -49,7 +55,7 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 	if _, err := image.LoadImage(raw); err != nil {
 		return fmt.Errorf("hd cover server return non-image data, err:%w", err)
 	}
-	key, err := store.AnonymousPutData(ctx, raw)
+	key, err := store.AnonymousPutDataTo(ctx, h.storage, raw)
 	if err != nil {
 		return fmt.Errorf("write hd cover data failed, err:%w", err)
 	}
@@ -58,5 +64,10 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 }
 
 func init() {
-	Register(HHDCoverHandler, HandlerToCreator(&highQualityCoverHandler{}))
+	Register(HHDCoverHandler, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &highQualityCoverHandler{
+			httpClient: deps.HTTPClient,
+			storage:    deps.Storage,
+		}, nil
+	})
 }

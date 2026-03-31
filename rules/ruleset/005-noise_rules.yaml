@@ -1,0 +1,15 @@
+version: v1
+
+noise_rules:
+  - name: domain_tags
+    type: regex
+    pattern: '(?i)\b(?:[A-Z0-9-]+\.)+[A-Z0-9-]+\b'
+  - name: source_tags
+    type: token
+    aliases: ["JAV", "JAVDB", "JAVBUS", "MISSAV", "THZ.LA", "HHD800"]
+  - name: codec_tags
+    type: token
+    aliases: ["1080P", "720P", "2160P", "H264", "H265", "X264", "X265", "HEVC"]
+  - name: wrappers
+    type: regex
+    pattern: '(?i)\[(?:JAV|JAVDB|MISSAV|THZ\.LA|HHD800)\]'

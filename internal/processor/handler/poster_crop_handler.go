@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -15,6 +17,8 @@ import (
 type imageCutter func(data []byte) ([]byte, error)
 
 type posterCropHandler struct {
+	faceRec face.IFaceRec
+	storage store.IStorage
 }
 
 func (c *posterCropHandler) Name() string {
@@ -23,7 +27,7 @@ func (c *posterCropHandler) Name() string {
 
 func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
 	//如果没有开启人脸识别, 那么直接使用原始的骑兵裁剪方案
-	if !face.IsFaceRecognizeEnabled() {
+	if c.faceRec == nil {
 		return image.CutCensoredImageFromBytes
 	}
 	return func(data []byte) ([]byte, error) {
@@ -32,18 +36,18 @@ func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
 			return nil, err
 		}
 		//出错或者已经存在人脸, 直接返回
-		rects, err := face.SearchFaces(ctx, raw)
+		rects, err := c.faceRec.SearchFaces(ctx, raw)
 		if err != nil || len(rects) > 0 {
 			return raw, nil
 		}
 		//在原始图中, 存在人脸, 那么尝试从原始图中进行人脸识别并裁剪
 		//主要优化 SIRO 之类的番号无法截取正常带人脸poster的问题
-		rects, err = face.SearchFaces(ctx, data)
+		rects, err = c.faceRec.SearchFaces(ctx, data)
 		if err != nil || len(rects) != 1 { //仅有一个人脸的场景下才执行人脸识别, 避免截到奇奇怪怪的地方
 			return raw, nil
 		}
 		logutil.GetLogger(ctx).Info("enhance poster crop with face rec for censored number")
-		rec, err := image.CutImageWithFaceRecFromBytes(ctx, data)
+		rec, err := image.CutImageWithFaceRecFromBytesWithFaceRec(ctx, c.faceRec, data)
 		if err != nil {
 			return raw, nil
 		}
@@ -52,11 +56,11 @@ func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
 }
 
 func (c *posterCropHandler) uncensorCutter(ctx context.Context) imageCutter {
-	if !face.IsFaceRecognizeEnabled() {
+	if c.faceRec == nil {
 		return image.CutCensoredImageFromBytes
 	}
 	return func(data []byte) ([]byte, error) {
-		rec, err := image.CutImageWithFaceRecFromBytes(ctx, data)
+		rec, err := image.CutImageWithFaceRecFromBytesWithFaceRec(ctx, c.faceRec, data)
 		if err == nil {
 			return rec, nil
 		}
@@ -79,9 +83,15 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 	if fc.Number.GetExternalFieldUncensor() {    //如果为步兵, 则使用人脸识别(当然, 只有该特性能用的情况下才启用)
 		cutter = c.uncensorCutter(ctx)
 	}
-	key, err := store.AnonymousDataRewrite(ctx, fc.Meta.Cover.Key, func(ctx context.Context, data []byte) ([]byte, error) {
-		return cutter(data)
-	})
+	raw, err := c.storage.GetData(ctx, fc.Meta.Cover.Key)
+	if err != nil {
+		return fmt.Errorf("read cover data failed, err:%w", err)
+	}
+	nextRaw, err := cutter(raw)
+	if err != nil {
+		return fmt.Errorf("save cutted poster data failed, err:%w", err)
+	}
+	key, err := store.AnonymousPutDataTo(ctx, c.storage, nextRaw)
 	if err != nil {
 		return fmt.Errorf("save cutted poster data failed, err:%w", err)
 	}
@@ -93,5 +103,10 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HPosterCropper, HandlerToCreator(&posterCropHandler{}))
+	Register(HPosterCropper, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &posterCropHandler{
+			faceRec: deps.FaceRec,
+			storage: deps.Storage,
+		}, nil
+	})
 }

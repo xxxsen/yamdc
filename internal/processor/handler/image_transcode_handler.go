@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -14,6 +16,7 @@ import (
 )
 
 type imageTranscodeHandler struct {
+	storage store.IStorage
 }
 
 func (p *imageTranscodeHandler) Name() string {
@@ -41,7 +44,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 	}
 	logger = logger.With(zap.String("key", f.Key))
 
-	key, err := store.AnonymousDataRewrite(ctx, f.Key, func(ctx context.Context, data []byte) ([]byte, error) {
+	key, err := store.AnonymousDataRewriteWithStorage(ctx, p.storage, f.Key, func(ctx context.Context, data []byte) ([]byte, error) {
 		raw, err := image.TranscodeToJpeg(data)
 		if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && ffmpeg.IsFFMpegEnabled() {
 			data, err = ffmpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
@@ -63,5 +66,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 }
 
 func init() {
-	Register(HImageTranscoder, HandlerToCreator(&imageTranscodeHandler{}))
+	Register(HImageTranscoder, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &imageTranscodeHandler{storage: deps.Storage}, nil
+	})
 }

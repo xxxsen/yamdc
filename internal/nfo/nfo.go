@@ -40,6 +40,8 @@ func WriteMovieToFile(f string, m *Movie) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	return WriteMovie(file, m)
 }

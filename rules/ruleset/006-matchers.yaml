@@ -1,0 +1,97 @@
+version: v1
+
+matchers:
+  - name: fc2
+    category: FC2
+    uncensor: true
+    pattern: '(?i)FC2[-_\s]?(?:PPV)?[-_\s]?([0-9]{3,})'
+    normalize_template: 'FC2-PPV-$1'
+    score: 100
+  - name: heyzo
+    uncensor: true
+    pattern: '(?i)HEYZO[-_\s]?([0-9]{3,6})'
+    normalize_template: 'HEYZO-$1'
+    score: 95
+  - name: manyvids
+    category: MANYVIDS
+    uncensor: true
+    pattern: '(?i)MANYVIDS[-_\s]?([0-9]{3,})'
+    normalize_template: 'MANYVIDS-$1'
+    score: 92
+  - name: caribpr
+    uncensor: true
+    pattern: '(?i)CARIB(?:BEANCOMPR)?[-_\s]?([0-9]{6})[-_]([0-9]{2,3})'
+    normalize_template: '$1-$2'
+    score: 90
+  - name: onepondo
+    uncensor: true
+    pattern: '(?i)(?:1PONDO|1PON)[-_\s]?([0-9]{6})[_-]([0-9]{2,3})'
+    normalize_template: '${1}_${2}'
+    score: 90
+  - name: carib_prefix
+    uncensor: true
+    pattern: '(?i)\b(CARIB[A-Z0-9_-]{3,})\b'
+    normalize_template: '$1'
+    score: 89
+  - name: onepon_prefix
+    uncensor: true
+    pattern: '(?i)\b(1PON(?:DO)?[-_A-Z0-9]{3,})\b'
+    normalize_template: '$1'
+    score: 89
+  - name: uncensored_date_underscore
+    uncensor: true
+    pattern: '(?i)\b([0-9]{4,6})_([0-9]{2,3})\b'
+    normalize_template: '${1}_${2}'
+    score: 88
+  - name: uncensored_date_hyphen
+    uncensor: true
+    pattern: '(?i)\b([0-9]{4,6})-([0-9]{2,3})\b'
+    normalize_template: '$1-$2'
+    score: 88
+  - name: jvr
+    category: JVR
+    uncensor: true
+    pattern: '(?i)\bJVR[-_\s]?([0-9]{2,6})\b'
+    normalize_template: 'JVR-$1'
+    score: 85
+  - name: madou
+    category: MD
+    uncensor: true
+    pattern: '(?i)\bMADOU[-_\s]?([A-Z0-9-]{2,})\b'
+    normalize_template: 'MADOU-$1'
+    score: 84
+  - name: cospuri
+    category: COSPURI
+    uncensor: true
+    pattern: '(?i)\bCOSPURI[-_\s]?([A-Z0-9-]{4,})\b'
+    normalize_template: 'COSPURI-$1'
+    score: 84
+  - name: uncensor_misc_prefix
+    uncensor: true
+    pattern: '(?i)\b((?:SM3D2DBD|SMDV|SKY|HEY|MKD|MKBD|H4610|H0930|MXX|DSAM)[-_A-Z0-9]{2,})\b'
+    normalize_template: '$1'
+    score: 83
+  - name: uncensor_sep_prefix
+    uncensor: true
+    pattern: '(?i)\b((?:SMD|SSDV|CCDV|LLDV|DRC)[-_][A-Z0-9-]{2,})\b'
+    normalize_template: '$1'
+    score: 83
+  - name: uncensor_n_code
+    uncensor: true
+    pattern: '(?i)\b(N[0-9]{2,6})\b'
+    normalize_template: '$1'
+    score: 82
+  - name: uncensor_k_code
+    uncensor: true
+    pattern: '(?i)\b(KB?[0-9]{2,6})\b'
+    normalize_template: '$1'
+    score: 82
+  - name: uncensor_c_ki_code
+    uncensor: true
+    pattern: '(?i)\b(C[0-9]{1,6}[-_]KI[0-9]{1,6})\b'
+    normalize_template: '$1'
+    score: 82
+  - name: generic_censored
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80

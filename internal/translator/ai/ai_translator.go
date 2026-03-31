@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/translator"
 )
@@ -24,7 +25,8 @@ var keywordsReplace = map[string]string{
 }
 
 type aiTranslator struct {
-	c *config
+	c      *config
+	engine aiengine.IAIEngine
 }
 
 func (g *aiTranslator) replaceKeyword(in string) string {
@@ -36,13 +38,13 @@ func (g *aiTranslator) replaceKeyword(in string) string {
 
 func (g *aiTranslator) Translate(ctx context.Context, wording string, _ string, _ string) (string, error) {
 	wording = g.replaceKeyword(wording)
-	if !aiengine.IsAIEngineEnabled() {
+	if g.engine == nil {
 		return "", fmt.Errorf("ai engine not init yet")
 	}
 	args := map[string]interface{}{
 		"WORDING": wording,
 	}
-	res, err := aiengine.Complete(ctx, g.c.prompt, args)
+	res, err := g.engine.Complete(ctx, g.c.prompt, args)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +55,7 @@ func (g *aiTranslator) Name() string {
 	return "ai"
 }
 
-func New(opts ...Option) translator.ITranslator {
+func New(engine aiengine.IAIEngine, opts ...Option) translator.ITranslator {
 	c := &config{}
 	for _, opt := range opts {
 		opt(c)
@@ -62,6 +64,7 @@ func New(opts ...Option) translator.ITranslator {
 		c.prompt = defaultTranslatePrompt
 	}
 	return &aiTranslator{
-		c: c,
+		c:      c,
+		engine: engine,
 	}
 }

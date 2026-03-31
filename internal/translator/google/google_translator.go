@@ -2,9 +2,9 @@ package google
 
 import (
 	"context"
-	"github.com/xxxsen/yamdc/internal/translator"
 
 	gt "github.com/Conight/go-googletrans"
+	"github.com/xxxsen/yamdc/internal/translator"
 )
 
 type googleTranslator struct {

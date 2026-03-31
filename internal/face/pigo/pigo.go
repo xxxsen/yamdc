@@ -6,9 +6,9 @@ import (
 	"image"
 	"os"
 	"path/filepath"
-	"github.com/xxxsen/yamdc/internal/face"
 
 	pigo "github.com/esimov/pigo/core"
+	"github.com/xxxsen/yamdc/internal/face"
 )
 
 const (

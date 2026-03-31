@@ -1,0 +1,43 @@
+version: v1
+
+suffix_rules:
+  - name: chinese_subtitle_word
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])(?:中字|中文字幕|SUBTITLE|SUB)(?:$|[\s\[\]\(\)_-])'
+    canonical: "C"
+    priority: 100
+  - name: chinese_subtitle_suffix
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])C(?:$|[\s\[\]\(\)_-])'
+    canonical: "C"
+    priority: 95
+  - name: cd_index
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])CD([0-9]+)(?:$|[\s\[\]\(\)_-])'
+    canonical_template: 'CD$1'
+    priority: 10
+  - name: suffix_4k
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])(?:4K|2160P)(?:$|[\s\[\]\(\)_-])'
+    canonical: "4K"
+    priority: 80
+  - name: suffix_8k
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])8K(?:$|[\s\[\]\(\)_-])'
+    canonical: "8K"
+    priority: 70
+  - name: suffix_vr
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])VR(?:$|[\s\[\]\(\)_-])'
+    canonical: "VR"
+    priority: 60
+  - name: suffix_leak
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])LEAK(?:$|[\s\[\]\(\)_-])'
+    canonical: "LEAK"
+    priority: 50
+  - name: suffix_hack
+    type: regex
+    pattern: '(?i)(?:^|[\s\[\]\(\)_-])(?:UC|U)(?:$|[\s\[\]\(\)_-])'
+    canonical: "UC"
+    priority: 40

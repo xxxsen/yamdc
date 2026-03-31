@@ -1,9 +1,13 @@
 package searcher
 
-import "github.com/xxxsen/yamdc/internal/client"
+import (
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/store"
+)
 
 type config struct {
 	cli         client.IHTTPClient
+	storage     store.IStorage
 	searchCache bool
 }
 
@@ -21,10 +25,14 @@ func WithSearchCache(v bool) Option {
 	}
 }
 
-func applyOpts(opts ...Option) *config {
-	c := &config{
-		cli: client.DefaultClient(),
+func WithStorage(s store.IStorage) Option {
+	return func(c *config) {
+		c.storage = s
 	}
+}
+
+func applyOpts(opts ...Option) *config {
+	c := &config{}
 	for _, opt := range opts {
 		opt(c)
 	}

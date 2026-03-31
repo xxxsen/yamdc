@@ -20,8 +20,7 @@ go install github.com/xxxsen/yamdc/cmd/yamdc@latest
 安装后可直接运行：
 
 ```bash
-yamdc --config=./config.json
-yamdc run --config=./config.json
+yamdc server --config=./config.json
 ```
 
 或使用源码构建：
@@ -33,8 +32,7 @@ make build
 构建后可使用以下任意方式运行：
 
 ```bash
-./yamdc --config=./config.json
-./yamdc run --config=./config.json
+./yamdc server --config=./config.json
 ```
 
 运行单元测试：
@@ -79,7 +77,42 @@ services:
 
 需要挂载扫描目录(/scandir), 存储目录(/savedir), 数据目录(/datadir)和配置目录(/config), 这几个目录在自己的配置文件中指定。
 
-配置完成后, 使用`docker compose up` 进行刮削, 刮削完成的电影会被存储到`/data/scrape/savedir`下。
+配置完成后, 使用`docker compose up`启动服务, 然后通过 WebUI 手动触发扫描、刮削、review 与入库流程。刮削完成并确认入库后的电影会被存储到`/data/scrape/savedir`下。
+
+## WebUI
+
+当前仓库已经仅保留服务端模式，分为 Go Server 和 Next.js 前端两部分：
+
+- Go Server: `yamdc server --config=...`
+- WebUI: `web/`
+
+本地启动方式：
+
+```bash
+go build -o ./yamdc ./cmd/yamdc
+YAMDC_SERVER_ADDR=:8080 ./yamdc server --config=./config.json
+```
+
+```bash
+cd web
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080 npm run dev
+```
+
+启动后访问：
+
+- `http://127.0.0.1:3000/processing`
+- `http://127.0.0.1:3000/review`
+
+WebUI 模式下的主流程是：
+
+1. 扫描 `scandir`
+2. 生成待处理任务
+3. 手动触发单任务刮削
+4. 在 review 页面修正元数据
+5. 点击入库，写入 `savedir`
+
+详细联调说明见 [td/runbook.md](/home/sen/work/yamdc/td/runbook.md)。
 
 ## 基础配置
 

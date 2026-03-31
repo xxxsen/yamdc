@@ -1,0 +1,31 @@
+version: v1
+
+normalizers:
+  - name: basename
+    type: builtin
+    builtin: basename
+  - name: strip_ext
+    type: builtin
+    builtin: strip_ext
+  - name: fullwidth_to_halfwidth
+    type: builtin
+    builtin: fullwidth_to_halfwidth
+  - name: replace_brackets
+    type: replace
+    pairs:
+      "【": "["
+      "】": "]"
+      "（": "("
+      "）": ")"
+      "@": " "
+      "#": " "
+      "|": " "
+  - name: trim_space
+    type: builtin
+    builtin: trim_space
+  - name: collapse_spaces
+    type: builtin
+    builtin: collapse_spaces
+  - name: to_upper
+    type: builtin
+    builtin: to_upper

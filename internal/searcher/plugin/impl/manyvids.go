@@ -3,11 +3,11 @@ package impl
 import (
 	"context"
 	"fmt"
-	"github.com/xxxsen/common/logutil"
-	"go.uber.org/zap"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
@@ -16,6 +16,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/constant"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
+	"go.uber.org/zap"
 )
 
 var defaultManyVidsHosts = []string{

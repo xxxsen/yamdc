@@ -9,20 +9,6 @@ import (
 	"github.com/imroc/req/v3"
 )
 
-var defaultInst IHTTPClient
-
-func init() {
-	SetDefault(MustNewClient()) //初始化default, 避免无初始化使用直接炸了
-}
-
-func SetDefault(c IHTTPClient) {
-	defaultInst = c
-}
-
-func DefaultClient() IHTTPClient {
-	return defaultInst
-}
-
 type IHTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }

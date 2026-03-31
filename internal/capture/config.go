@@ -2,9 +2,11 @@ package capture
 
 import (
 	"fmt"
-	"github.com/xxxsen/yamdc/internal/capture/ruleapi"
+
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 const (
@@ -25,12 +27,11 @@ type config struct {
 	ScanDir                string
 	Searcher               searcher.ISearcher
 	Processor              processor.IProcessor
+	Storage                store.IStorage
 	SaveDir                string
 	Naming                 string
 	ExtraMediaExtList      []string
-	UncensorTester         ruleapi.ITester
-	NumberRewriter         ruleapi.IRewriter
-	NumberCategorier       ruleapi.IMatcher
+	NumberCleaner          numbercleaner.Cleaner
 	DiscardTranslatedTitle bool
 	DiscardTranslatedPlot  bool
 	LinkMode               bool
@@ -62,6 +63,12 @@ func WithProcessor(p processor.IProcessor) Option {
 	}
 }
 
+func WithStorage(s store.IStorage) Option {
+	return func(c *config) {
+		c.Storage = s
+	}
+}
+
 func WithNamingRule(r string) Option {
 	return func(c *config) {
 		c.Naming = r
@@ -74,21 +81,9 @@ func WithExtraMediaExtList(lst []string) Option {
 	}
 }
 
-func WithUncensorTester(t ruleapi.ITester) Option {
+func WithNumberCleaner(cl numbercleaner.Cleaner) Option {
 	return func(c *config) {
-		c.UncensorTester = t
-	}
-}
-
-func WithNumberRewriter(t ruleapi.IRewriter) Option {
-	return func(c *config) {
-		c.NumberRewriter = t
-	}
-}
-
-func WithNumberCategorier(t ruleapi.IMatcher) Option {
-	return func(c *config) {
-		c.NumberCategorier = t
+		c.NumberCleaner = cl
 	}
 }
 
@@ -108,4 +103,11 @@ func WithLinkMode(v bool) Option {
 	return func(c *config) {
 		c.LinkMode = v
 	}
+}
+
+func (c *Capture) ScanDir() string {
+	if c == nil || c.c == nil {
+		return ""
+	}
+	return c.c.ScanDir
 }

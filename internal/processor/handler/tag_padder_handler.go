@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 	"unicode"
-	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/samber/lo"
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type tagPadderHandler struct{}

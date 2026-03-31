@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/hasher"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
-	"github.com/xxxsen/yamdc/internal/store"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
@@ -49,7 +49,27 @@ func NewDefaultSearcher(name string, plg api.IPlugin, opts ...Option) (ISearcher
 		cc:   cc,
 		plg:  plg,
 	}
+	if ss.cc.cli == nil {
+		return nil, fmt.Errorf("http client is nil")
+	}
+	if ss.cc.storage == nil {
+		return nil, fmt.Errorf("storage is nil")
+	}
 	return ss, nil
+}
+
+func (p *DefaultSearcher) loadCacheData(ctx context.Context, key string, expire time.Duration, loader func() ([]byte, error)) ([]byte, error) {
+	if raw, err := p.cc.storage.GetData(ctx, key); err == nil {
+		return raw, nil
+	}
+	raw, err := loader()
+	if err != nil {
+		return nil, err
+	}
+	if err := p.cc.storage.PutData(ctx, key, raw, expire); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 func (p *DefaultSearcher) Check(ctx context.Context) error {
@@ -77,7 +97,9 @@ func (p *DefaultSearcher) checkOneRequest(ctx context.Context, host string) erro
 	if err != nil {
 		return fmt.Errorf("do check request network failed, err:%w", err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("do check request status failed, status code:%d, status:%s", rsp.StatusCode, rsp.Status)
 	}
@@ -139,7 +161,9 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 		if rsp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
 		}
-		defer rsp.Body.Close()
+		defer func() {
+			_ = rsp.Body.Close()
+		}()
 		data, err := client.ReadHTTPData(rsp)
 		if err != nil {
 			return nil, fmt.Errorf("read body failed, err:%w", err)
@@ -149,7 +173,7 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 	if !p.cc.searchCache {
 		return dataLoader()
 	}
-	res, err := store.LoadData(ctx, key, defaultPageSearchCacheExpire, func() ([]byte, error) {
+	res, err := p.loadCacheData(ctx, key, defaultPageSearchCacheExpire, func() ([]byte, error) {
 		res, err := dataLoader()
 		if err != nil {
 			return nil, err
@@ -291,9 +315,9 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx context.Context, urls []string) 
 		if len(url) == 0 {
 			continue
 		}
-		logger := logutil.GetLogger(context.Background()).With(zap.String("url", url))
+		logger := logutil.GetLogger(ctx).With(zap.String("url", url))
 		key := hasher.ToSha1(url)
-		if ok, _ := store.IsDataExist(ctx, key); ok {
+		if ok, _ := p.cc.storage.IsDataExist(ctx, key); ok {
 			rs[url] = key
 			continue
 		}
@@ -302,7 +326,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx context.Context, urls []string) 
 			logger.Error("fetch image data failed", zap.Error(err))
 			continue
 		}
-		err = store.PutData(ctx, key, data)
+		err = p.cc.storage.PutData(ctx, key, data, 0)
 		if err != nil {
 			logger.Error("put image data to store failed", zap.Error(err))
 		}
@@ -324,7 +348,9 @@ func (p *DefaultSearcher) fetchImageData(ctx context.Context, url string) ([]byt
 		return nil, fmt.Errorf("get url data failed, err:%w", err)
 	}
 
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("get url data http code not ok, code:%d", rsp.StatusCode)
 	}

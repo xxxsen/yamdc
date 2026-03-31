@@ -9,11 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/nfo"
 	"github.com/xxxsen/yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
-	"github.com/xxxsen/yamdc/internal/store"
 
 	"github.com/samber/lo"
 	"github.com/xxxsen/common/logutil"
@@ -50,6 +51,12 @@ func New(opts ...Option) (*Capture, error) {
 	if c.Processor == nil {
 		c.Processor = processor.DefaultProcessor
 	}
+	if c.Storage == nil {
+		return nil, fmt.Errorf("no storage found")
+	}
+	if c.NumberCleaner == nil {
+		c.NumberCleaner = numbercleaner.NewPassthroughCleaner()
+	}
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
 	}
@@ -59,27 +66,36 @@ func New(opts ...Option) (*Capture, error) {
 	return &Capture{c: c, extMap: extMap}, nil
 }
 
-func (c *Capture) resolveFileInfo(fc *model.FileContext, file string) error {
+func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredNumber string) error {
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
-	fileNoExt := fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
-	//番号改写
-	fileNoExt, err := c.c.NumberRewriter.Rewrite(fileNoExt)
-	if err != nil {
-		return fmt.Errorf("rewrite number before parse failed, err:%w", err)
+	fileNoExt := strings.TrimSpace(preferredNumber)
+	useCleaner := len(fileNoExt) == 0
+	var cleaned *numbercleaner.Result
+	if useCleaner {
+		fileNoExt = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
+		var err error
+		cleaned, err = c.c.NumberCleaner.Clean(fileNoExt)
+		if err != nil {
+			return fmt.Errorf("clean number before rewrite failed, err:%w", err)
+		}
+		if cleaned != nil && len(cleaned.Normalized) != 0 {
+			fileNoExt = cleaned.Normalized
+		}
 	}
 	//番号解析
 	info, err := number.Parse(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
-	//规则测试
-	//是否无码
-	ok, _ := c.c.UncensorTester.Test(info.GetNumberID())
-	info.SetExternalFieldUncensor(ok)
-	//尝试分类
-	cat, _, _ := c.c.NumberCategorier.Match(info.GetNumberID())
-	info.SetExternalFieldCategory(cat)
+	if cleaned != nil {
+		if cleaned.UncensorMatched {
+			info.SetExternalFieldUncensor(cleaned.Uncensor)
+		}
+		if cleaned.CategoryMatched {
+			info.SetExternalFieldCategory(cleaned.Category)
+		}
+	}
 
 	fc.Number = info
 	fc.SaveFileBase = fc.Number.GenerateFileName()
@@ -107,7 +123,7 @@ func (c *Capture) readFileList() ([]*model.FileContext, error) {
 			return nil
 		}
 		fc := &model.FileContext{FullFilePath: path}
-		if err := c.resolveFileInfo(fc, path); err != nil {
+		if err := c.resolveFileInfo(fc, path, ""); err != nil {
 			return err
 		}
 		fcs = append(fcs, fc)
@@ -127,6 +143,64 @@ func (c *Capture) Run(ctx context.Context) error {
 	c.displayNumberInfo(ctx, fcs)
 	if err := c.processFileList(ctx, fcs); err != nil {
 		return fmt.Errorf("proc file list failed, err:%w", err)
+	}
+	return nil
+}
+
+func (c *Capture) ResolveFileContext(file string, preferredNumber ...string) (*model.FileContext, error) {
+	fc := &model.FileContext{FullFilePath: file}
+	numberInput := ""
+	if len(preferredNumber) > 0 {
+		numberInput = preferredNumber[0]
+	}
+	if err := c.resolveFileInfo(fc, file, numberInput); err != nil {
+		return nil, err
+	}
+	return fc, nil
+}
+
+func (c *Capture) ScrapeMeta(ctx context.Context, fc *model.FileContext) error {
+	steps := []struct {
+		name string
+		fn   fcProcessFunc
+	}{
+		{"search", c.doSearch},
+		{"process", c.doProcess},
+		{"metaverify", c.doMetaVerify},
+		{"datadiscard", c.doDataDiscard},
+	}
+	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
+	for idx, step := range steps {
+		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
+		log.Debug("step start")
+		if err := step.fn(ctx, fc); err != nil {
+			log.Error("proc step failed", zap.Error(err))
+			return err
+		}
+		log.Debug("step end")
+	}
+	return nil
+}
+
+func (c *Capture) ImportMeta(ctx context.Context, fc *model.FileContext) error {
+	steps := []struct {
+		name string
+		fn   fcProcessFunc
+	}{
+		{"metaverify", c.doMetaVerify},
+		{"naming", c.doNaming},
+		{"savedata", c.doSaveData},
+		{"nfo", c.doExport},
+	}
+	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
+	for idx, step := range steps {
+		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
+		log.Debug("step start")
+		if err := step.fn(ctx, fc); err != nil {
+			log.Error("proc step failed", zap.Error(err))
+			return err
+		}
+		log.Debug("step end")
 	}
 	return nil
 }
@@ -338,9 +412,9 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 	images = append(images, fc.Meta.SampleImages...)
 	for _, image := range images {
 		target := filepath.Join(fc.SaveDir, image.Name)
-		logger := logutil.GetLogger(context.Background()).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
+		logger := logutil.GetLogger(ctx).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
 
-		data, err := store.GetData(ctx, image.Key)
+		data, err := c.c.Storage.GetData(ctx, image.Key)
 		if err != nil {
 			logger.Error("read image data failed", zap.Error(err))
 			return err

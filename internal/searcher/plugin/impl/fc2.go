@@ -7,14 +7,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/searcher/plugin/numberkit"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/constant"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/numberkit"
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"

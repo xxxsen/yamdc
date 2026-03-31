@@ -1,0 +1,50 @@
+services:
+  yamdc-backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: xxxsen/yamdc:dev
+    container_name: yamdc-backend
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./yamdc:/config
+      - ./data:/data
+    expose:
+      - "8080"
+    command: ["server", "--config", "/config/config.json"]
+    networks:
+      - yamdc
+    restart: unless-stopped
+
+  yamdc-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: yamdc-web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://yamdc-backend:8080
+    expose:
+      - "3000"
+    depends_on:
+      - yamdc-backend
+    networks:
+      - yamdc
+    restart: unless-stopped
+
+  yamdc-gateway:
+    image: nginx:alpine
+    container_name: yamdc-gateway
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - yamdc-web
+      - yamdc-backend
+    networks:
+      - yamdc
+    restart: unless-stopped
+
+networks:
+  yamdc:
+    name: yamdc_network

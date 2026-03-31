@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"os"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
 
 	"github.com/xxxsen/common/logutil"
@@ -51,7 +53,7 @@ func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 // createTagMappingHandler 创建标签映射处理器
-func createTagMappingHandler(args interface{}) (IHandler, error) {
+func createTagMappingHandler(args interface{}, deps appdeps.Runtime) (IHandler, error) {
 	c := &tagMappingConfig{}
 
 	handler := &tagMappingHandler{}

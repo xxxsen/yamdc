@@ -18,5 +18,9 @@ func GetNumberId(ctx context.Context) string {
 	if nid == nil {
 		return ""
 	}
-	return nid.(string)
+	value, ok := nid.(string)
+	if !ok {
+		return ""
+	}
+	return value
 }

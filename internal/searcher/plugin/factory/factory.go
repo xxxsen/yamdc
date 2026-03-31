@@ -3,6 +3,7 @@ package factory
 import (
 	"fmt"
 	"sort"
+
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
@@ -33,5 +34,6 @@ func Plugins() []string {
 	for k := range mp {
 		rs = append(rs, k)
 	}
-	return sort.StringSlice(rs)
+	sort.Strings(rs)
+	return rs
 }

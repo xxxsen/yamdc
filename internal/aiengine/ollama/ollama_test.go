@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"github.com/xxxsen/yamdc/internal/client"
 )
 
 type httpClientMock struct {
@@ -15,15 +14,6 @@ type httpClientMock struct {
 
 func (m *httpClientMock) Do(req *http.Request) (*http.Response, error) {
 	return m.client.Do(req)
-}
-
-func withMockClient(t *testing.T, cli client.IHTTPClient) func() {
-	t.Helper()
-	old := client.DefaultClient()
-	client.SetDefault(cli)
-	return func() {
-		client.SetDefault(old)
-	}
 }
 
 func TestOllamaCompleteSuccess(t *testing.T) {
@@ -44,10 +34,7 @@ func TestOllamaCompleteSuccess(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	restore := withMockClient(t, &httpClientMock{client: srv.Client()})
-	defer restore()
-
-	eng, err := New(WithHost(srv.URL), WithModel("llama3"))
+	eng, err := New(WithHost(srv.URL), WithModel("llama3"), WithHTTPClient(&httpClientMock{client: srv.Client()}))
 	if err != nil {
 		t.Fatalf("new engine failed: %v", err)
 	}
@@ -74,10 +61,7 @@ func TestOllamaCompleteHTTPError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	restore := withMockClient(t, &httpClientMock{client: srv.Client()})
-	defer restore()
-
-	eng, err := New(WithHost(srv.URL), WithModel("llama3"))
+	eng, err := New(WithHost(srv.URL), WithModel("llama3"), WithHTTPClient(&httpClientMock{client: srv.Client()}))
 	if err != nil {
 		t.Fatalf("new engine failed: %v", err)
 	}
@@ -93,10 +77,7 @@ func TestOllamaCompleteResponseError(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	restore := withMockClient(t, &httpClientMock{client: srv.Client()})
-	defer restore()
-
-	eng, err := New(WithHost(srv.URL), WithModel("llama3"))
+	eng, err := New(WithHost(srv.URL), WithModel("llama3"), WithHTTPClient(&httpClientMock{client: srv.Client()}))
 	if err != nil {
 		t.Fatalf("new engine failed: %v", err)
 	}
@@ -113,10 +94,7 @@ func TestOllamaCompleteEmptyResponse(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	restore := withMockClient(t, &httpClientMock{client: srv.Client()})
-	defer restore()
-
-	eng, err := New(WithHost(srv.URL), WithModel("llama3"))
+	eng, err := New(WithHost(srv.URL), WithModel("llama3"), WithHTTPClient(&httpClientMock{client: srv.Client()}))
 	if err != nil {
 		t.Fatalf("new engine failed: %v", err)
 	}

@@ -2,26 +2,12 @@ package face
 
 import (
 	"context"
-	"fmt"
 	"image"
 )
-
-var defaultInst IFaceRec
-
-func SetFaceRec(impl IFaceRec) {
-	defaultInst = impl
-}
 
 type IFaceRec interface {
 	Name() string
 	SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error)
-}
-
-func SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error) {
-	if defaultInst == nil {
-		return nil, fmt.Errorf("not impl")
-	}
-	return defaultInst.SearchFaces(ctx, data)
 }
 
 func FindMaxFace(fs []image.Rectangle) image.Rectangle {
@@ -35,8 +21,4 @@ func FindMaxFace(fs []image.Rectangle) image.Rectangle {
 		}
 	}
 	return m
-}
-
-func IsFaceRecognizeEnabled() bool {
-	return defaultInst != nil
 }

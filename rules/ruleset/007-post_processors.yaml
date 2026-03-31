@@ -1,0 +1,9 @@
+version: v1
+
+post_processors:
+  - name: reorder_suffix
+    type: builtin
+    builtin: reorder_suffix
+  - name: normalize_hyphen
+    type: builtin
+    builtin: normalize_hyphen

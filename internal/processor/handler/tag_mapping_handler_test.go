@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 
@@ -70,7 +72,7 @@ func TestTagMappingHandler_Disabled(t *testing.T) {
 	// 创建禁用状态的处理器
 	handler, err := createTagMappingHandler(map[string]interface{}{
 		"enable": false,
-	})
+	}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")
@@ -94,7 +96,7 @@ func TestTagMappingHandler_EmptyTags(t *testing.T) {
 	handler, err := createTagMappingHandler(map[string]interface{}{
 		"enable":    true,
 		"file_path": filePath,
-	})
+	}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")
@@ -116,7 +118,7 @@ func TestTagMappingHandler_AliasMapping(t *testing.T) {
 	filePath := createTestTagMappingConfig(t)
 	handler, err := createTagMappingHandler(map[string]interface{}{
 		"file_path": filePath,
-	})
+	}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -184,7 +186,7 @@ func TestTagMappingHandler_FileNotFound(t *testing.T) {
 	handler, err := createTagMappingHandler(map[string]interface{}{
 		"enable":    true,
 		"file_path": "/nonexistent/file.json",
-	})
+	}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")
@@ -205,7 +207,7 @@ func TestTagMappingHandler_FileNotFound(t *testing.T) {
 
 func TestTagMappingHandler_NoConfig(t *testing.T) {
 	// 测试没有配置参数时的行为
-	handler, err := createTagMappingHandler(map[string]interface{}{})
+	handler, err := createTagMappingHandler(map[string]interface{}{}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")

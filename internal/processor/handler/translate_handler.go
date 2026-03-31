@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/hasher"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -19,6 +21,8 @@ const (
 )
 
 type translaterHandler struct {
+	storage    store.IStorage
+	translator translator.ITranslator
 }
 
 func (p *translaterHandler) Name() string {
@@ -36,16 +40,23 @@ func (p *translaterHandler) translateSingle(ctx context.Context, name string, in
 	if !p.isNeedTranslate(lang) {
 		return nil
 	}
-	res, err := store.LoadData(ctx, p.buildKey(in), defaultTranslateDataSaveTime, func() ([]byte, error) {
-		res, err := translator.Translate(ctx, in, "auto", "zh")
+	if raw, err := p.storage.GetData(ctx, p.buildKey(in)); err == nil {
+		*out = string(raw)
+		return nil
+	}
+	res, err := func() ([]byte, error) {
+		res, err := p.translator.Translate(ctx, in, "auto", "zh")
 		if err != nil {
 			return nil, err
 		}
 		return []byte(res), nil
-	})
+	}()
 
 	if err != nil {
 		return fmt.Errorf("translate failed, name:%s, data:%s, err:%w", name, in, err)
+	}
+	if err := p.storage.PutData(ctx, p.buildKey(in), res, defaultTranslateDataSaveTime); err != nil {
+		return fmt.Errorf("cache translate result failed, err:%w", err)
 	}
 	*out = string(res)
 	return nil
@@ -77,7 +88,7 @@ func (p *translaterHandler) translateArray(ctx context.Context, name string, in 
 }
 
 func (p *translaterHandler) Handle(ctx context.Context, fc *model.FileContext) error {
-	if !translator.IsTranslatorEnabled() {
+	if p.translator == nil || p.storage == nil {
 		return nil
 	}
 	var errs []error
@@ -95,5 +106,10 @@ func (p *translaterHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HTranslater, HandlerToCreator(&translaterHandler{}))
+	Register(HTranslater, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+		return &translaterHandler{
+			storage:    deps.Storage,
+			translator: deps.Translator,
+		}, nil
+	})
 }

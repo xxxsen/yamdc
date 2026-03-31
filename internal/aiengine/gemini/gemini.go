@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"github.com/xxxsen/yamdc/internal/aiengine"
-	"github.com/xxxsen/yamdc/internal/client"
 
 	"github.com/xxxsen/common/utils"
+	"github.com/xxxsen/yamdc/internal/aiengine"
+	"github.com/xxxsen/yamdc/internal/client"
 )
 
 const (
@@ -37,11 +37,13 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	rsp, err := client.DefaultClient().Do(req)
+	rsp, err := g.c.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		_ = rsp.Body.Close()
+	}()
 	if rsp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("gemini response err, code:%d", rsp.StatusCode)
 	}
@@ -74,13 +76,20 @@ func newGeminiEngine(c *config) (*geminiEngine, error) {
 	if c.Model == "" {
 		return nil, fmt.Errorf("model is empty")
 	}
+	if c.HTTPClient == nil {
+		c.HTTPClient = client.MustNewClient()
+	}
 	return &geminiEngine{c: c}, nil
 }
 
-func createGeminiEngine(args interface{}) (aiengine.IAIEngine, error) {
+func createGeminiEngine(args interface{}, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
 	c := &config{}
 	if err := utils.ConvStructJson(args, c); err != nil {
 		return nil, err
+	}
+	createCfg := aiengine.ResolveCreateConfig(opts...)
+	if createCfg.HTTPClient != nil {
+		c.HTTPClient = createCfg.HTTPClient
 	}
 	return newGeminiEngine(c)
 }

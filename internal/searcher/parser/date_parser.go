@@ -3,9 +3,9 @@ package parser
 import (
 	"context"
 	"time"
-	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	"go.uber.org/zap"
 )
 
