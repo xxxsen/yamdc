@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/jobdef"
@@ -23,6 +24,9 @@ type Service struct {
 	repo    *repository.JobRepository
 	extMap  map[string]struct{}
 	cleaner numbercleaner.Cleaner
+
+	mu      sync.Mutex
+	scaning bool
 }
 
 func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository, cleaner numbercleaner.Cleaner) *Service {
@@ -61,6 +65,11 @@ func (s *Service) Start(ctx context.Context, interval time.Duration) {
 }
 
 func (s *Service) Scan(ctx context.Context) error {
+	if !s.claimScan() {
+		return fmt.Errorf("scan is already running")
+	}
+	defer s.finishScan()
+
 	entries := make([]repository.UpsertJobInput, 0, 32)
 	err := filepath.Walk(s.scanDir, func(path string, info fs.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -131,6 +140,22 @@ func (s *Service) Scan(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (s *Service) claimScan() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.scaning {
+		return false
+	}
+	s.scaning = true
+	return true
+}
+
+func (s *Service) finishScan() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scaning = false
 }
 
 func (s *Service) isMediaFile(path string) bool {

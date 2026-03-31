@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,24 @@ import (
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
+
+type blockingCleaner struct {
+	startOnce sync.Once
+	started   chan struct{}
+	release   chan struct{}
+}
+
+func (c *blockingCleaner) Clean(input string) (*numbercleaner.Result, error) {
+	c.startOnce.Do(func() {
+		close(c.started)
+	})
+	<-c.release
+	return numbercleaner.NewPassthroughCleaner().Clean(input)
+}
+
+func (c *blockingCleaner) Explain(input string) (*numbercleaner.ExplainResult, error) {
+	return numbercleaner.NewPassthroughCleaner().Explain(input)
+}
 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {
 	ctx := context.Background()
@@ -80,4 +99,38 @@ func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T
 	require.NotNil(t, reviewJob)
 	require.Equal(t, jobdef.StatusFailed, reviewJob.Status)
 	require.Contains(t, reviewJob.ErrorMsg, "source file missing")
+}
+
+func TestScanRejectsReentryWhileRunning(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	filePath := filepath.Join(scanDir, "HEYZO-0040.mp4")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o644))
+
+	cleaner := &blockingCleaner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, cleaner)
+
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- svc.Scan(ctx)
+	}()
+
+	<-cleaner.started
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already running")
+
+	close(cleaner.release)
+	require.NoError(t, <-firstDone)
 }
