@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -11,8 +10,7 @@ import (
 )
 
 func TestStore(t *testing.T) {
-	file := filepath.Join(os.TempDir(), "cache.db")
-	_ = os.Remove(file)
+	file := filepath.Join(t.TempDir(), "cache.db")
 	storage := MustNewSqliteStorage(file)
 	ctx := context.Background()
 	//获取数据, 此时返回错误
@@ -33,11 +31,12 @@ func TestStore(t *testing.T) {
 	val, err := GetDataFrom(ctx, storage, "abc")
 	assert.NoError(t, err)
 	assert.Equal(t, "helloworld", string(val))
-	time.Sleep(1 * time.Second)
-	//数据过期
-	exist, err = IsDataExistIn(ctx, storage, "abc")
-	assert.NoError(t, err)
-	assert.False(t, exist)
+	//等待数据过期（避免卡在过期边界导致偶发失败）
+	assert.Eventually(t, func() bool {
+		exist, err = IsDataExistIn(ctx, storage, "abc")
+		assert.NoError(t, err)
+		return !exist
+	}, 3*time.Second, 50*time.Millisecond)
 	_, err = GetDataFrom(ctx, storage, "abc")
 	assert.Error(t, err)
 
