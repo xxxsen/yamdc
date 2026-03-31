@@ -59,7 +59,7 @@ services:
       - /data/scrape/savedir:/savedir
       - /data/scrape/datadir:/datadir
       - /data/config:/config
-    command: --config=/config/config.json
+    command: run --config=/config/config.json
 ```
 
 程序的配置文件如下
