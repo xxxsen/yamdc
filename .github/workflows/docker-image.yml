@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    if: ${{ !endsWith(github.ref_name, '-preview') }}
+    if: ${{ !contains(github.ref_name, '-preview') }}
     runs-on: ubuntu-latest
     steps:
       - name: Get git tag
@@ -36,7 +36,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USER }}/${{ secrets.DOCKER_IMAGE_NAME }}:latest,${{ secrets.DOCKER_USER }}/${{ secrets.DOCKER_IMAGE_NAME }}:${{steps.tag.outputs.tag}}
 
   build-yamdc-web:
-    if: ${{ !endsWith(github.ref_name, '-preview') }}
+    if: ${{ !contains(github.ref_name, '-preview') }}
     runs-on: ubuntu-latest
     steps:
       - name: Get git tag
