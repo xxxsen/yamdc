@@ -3,7 +3,7 @@ name: build_preview_tag
 on:
   push:
     tags:
-      - 'v*-preview'
+      - 'v*-preview*'
 
 jobs:
   build:
