@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"maps"
 )
 
@@ -29,26 +28,6 @@ func InitContainer(ctx context.Context) context.Context {
 		m: make(map[string]string),
 	}
 	return context.WithValue(ctx, defaultContainerTypeKey, c)
-}
-
-func SetKeyValue(ctx context.Context, key string, value string) {
-	c := mustGetContainer(ctx)
-	c.m[key] = value
-}
-
-func GetKeyValue(ctx context.Context, key string) (string, bool) {
-	c := mustGetContainer(ctx)
-	v, ok := c.m[key]
-	return v, ok
-}
-
-func MustGetKeyValue(ctx context.Context, key string) string {
-	c := mustGetContainer(ctx)
-	v, ok := c.m[key]
-	if !ok {
-		panic(fmt.Errorf("key:%s not found", key))
-	}
-	return v
 }
 
 func ExportContainerData(ctx context.Context) map[string]string {

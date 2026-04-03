@@ -33,10 +33,6 @@ var (
 	defaultCosPuriCoverMatchRegexp     = regexp.MustCompile(`(?i)url\((.*)\s*\)`)
 )
 
-const (
-	defaultCospuriRealNumberIdKey = "key_cospuri_real_number_id"
-)
-
 type cospuri struct {
 	api.DefaultPlugin
 }
@@ -176,7 +172,7 @@ func (c *cospuri) OnHandleHTTPRequest(ctx context.Context, invoker api.HTTPInvok
 	if err != nil {
 		return nil, err
 	}
-	api.SetKeyValue(ctx, defaultCospuriRealNumberIdKey, realid)
+	_ = realid
 	return rsp, nil
 }
 
@@ -216,12 +212,6 @@ func (c *cospuri) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.Mov
 	if err != nil {
 		return nil, false, err
 	}
-	realid, ok := api.GetKeyValue(ctx, defaultCospuriRealNumberIdKey)
-	if !ok {
-		return nil, false, fmt.Errorf("cospuri real id not found")
-	}
-	mm.Number = strings.ToUpper("cospuri-" + realid)
-	mm.SwithConfig.DisableNumberReplace = true
 	mm.SwithConfig.DisableReleaseDateCheck = true
 	mm.TitleLang = enum.MetaLangEn
 	mm.PlotLang = enum.MetaLangEn
