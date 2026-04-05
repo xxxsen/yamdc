@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
@@ -23,6 +25,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
+	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/web"
@@ -44,7 +47,9 @@ type YamdcStartContext struct {
 	Processors        []processor.IProcessor
 	NumberCleaner     numbercleaner.Cleaner
 	SearcherDebugger  *searcher.Debugger
+	RuntimeSearcher   *searcher.RuntimeCategorySearcher
 	HandlerDebugger   *handler.Debugger
+	PluginBundleMgr   *pluginbundle.Manager
 
 	Capture *capture.Capture
 
@@ -208,6 +213,16 @@ func logOptionalSetupFailure(ctx context.Context, ysctx *YamdcStartContext, mess
 }
 
 func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	runtimeSearcher := searcher.NewCategorySearcher(nil, nil)
+	ysctx.RuntimeSearcher = runtimeSearcher
+	if len(ysctx.Config.SearcherPluginBundleConfig.Sources) != 0 {
+		manager, err := prepareSearcherPluginsForServer(ctx, ysctx, runtimeSearcher)
+		if err != nil {
+			return err
+		}
+		ysctx.PluginBundleMgr = manager
+		return nil
+	}
 	ss, err := buildSearcher(ctx, ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.Plugins, ysctx.Config.PluginConfig)
 	if err != nil {
 		return err
@@ -218,7 +233,51 @@ func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	}
 	ysctx.Searchers = ss
 	ysctx.CategorySearchers = catSs
+	runtimeSearcher.Swap(ss, catSs)
 	return nil
+}
+
+func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartContext, runtimeSearcher *searcher.RuntimeCategorySearcher) (*pluginbundle.Manager, error) {
+	c := ysctx.Config
+	sources := make([]config.SearcherPluginBundleSource, 0, len(c.SearcherPluginBundleConfig.Sources))
+	for _, source := range c.SearcherPluginBundleConfig.Sources {
+		item := source
+		if strings.TrimSpace(item.SourceType) == "" || strings.EqualFold(item.SourceType, basebundle.SourceTypeLocal) {
+			resolved, err := resolveBundleSourcePath(c.DataDir, item.Location)
+			if err != nil {
+				return nil, err
+			}
+			item.Location = resolved
+			item.SourceType = basebundle.SourceTypeLocal
+		}
+		sources = append(sources, item)
+	}
+	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, ysctx.HTTPClient, sources, func(cbCtx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
+		applyResolvedSearcherPluginBundle(cbCtx, c, resolved)
+		ss, err := buildSearcher(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, c.Plugins, c.PluginConfig)
+		if err != nil {
+			return err
+		}
+		catSs, err := buildCatSearcher(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, c.CategoryPlugins, c.PluginConfig)
+		if err != nil {
+			return err
+		}
+		ysctx.Searchers = ss
+		ysctx.CategorySearchers = catSs
+		runtimeSearcher.Swap(ss, catSs)
+		if ysctx.SearcherDebugger != nil {
+			ysctx.SearcherDebugger.SwapPlugins(c.Plugins, categoryPluginMap(c.CategoryPlugins))
+		}
+		logutil.GetLogger(cbCtx).Info("reload searcher plugin runtime", zap.Int("default_plugins", len(c.Plugins)), zap.Int("category_chains", len(c.CategoryPlugins)))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.Start(ctx); err != nil {
+		return nil, err
+	}
+	return manager, nil
 }
 
 func buildProcessorsAction(ctx context.Context, ysctx *YamdcStartContext) error {
@@ -237,26 +296,11 @@ func buildProcessorsAction(ctx context.Context, ysctx *YamdcStartContext) error 
 }
 
 func buildNumberCleanerAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	cleaner, manager, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
+	cleaner, _, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
 	if err != nil {
 		return err
 	}
 	ysctx.NumberCleaner = cleaner
-	swapableCleaner, ok := cleaner.(numbercleaner.ISwapableCleaner)
-	if !ok {
-		return nil
-	}
-	logutil.GetLogger(ctx).Debug("start ruleset watch")
-	go manager.StartWatch(ctx, func(next *numbercleaner.RuleSet, files []string) {
-		nextCleaner, err := numbercleaner.NewCleaner(next)
-		if err != nil {
-			logutil.GetLogger(ctx).Error("reload number cleaner after remote sync failed", zap.Error(err))
-			return
-		}
-		swapableCleaner.Swap(nextCleaner)
-		logutil.GetLogger(ctx).Debug("reload number cleaner rules", zap.Strings("files", files))
-		logutil.GetLogger(ctx).Info("reload number cleaner after remote sync")
-	})
 	return nil
 }
 
@@ -277,7 +321,11 @@ func buildHandlerDebuggerAction(_ context.Context, ysctx *YamdcStartContext) err
 }
 
 func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
-	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, ysctx.Searchers, ysctx.CategorySearchers, ysctx.Processors, ysctx.NumberCleaner)
+	useSearcher := searcher.ISearcher(ysctx.RuntimeSearcher)
+	if useSearcher == nil {
+		useSearcher = searcher.NewCategorySearcher(ysctx.Searchers, ysctx.CategorySearchers)
+	}
+	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.NumberCleaner)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/client"
@@ -66,31 +67,42 @@ type Debugger struct {
 	cli             client.IHTTPClient
 	storage         store.IStorage
 	cleaner         numbercleaner.Cleaner
+	mu              sync.RWMutex
 	defaultPlugins  []string
 	categoryPlugins map[string][]string
 }
 
 func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, defaultPlugins []string, categoryPlugins map[string][]string) *Debugger {
+	d := &Debugger{
+		cli:     cli,
+		storage: storage,
+		cleaner: cleaner,
+	}
+	d.SwapPlugins(defaultPlugins, categoryPlugins)
+	return d
+}
+
+func (d *Debugger) SwapPlugins(defaultPlugins []string, categoryPlugins map[string][]string) {
 	cp := make(map[string][]string, len(categoryPlugins))
 	for key, items := range categoryPlugins {
 		cp[strings.ToUpper(strings.TrimSpace(key))] = append([]string(nil), items...)
 	}
-	return &Debugger{
-		cli:             cli,
-		storage:         storage,
-		cleaner:         cleaner,
-		defaultPlugins:  append([]string(nil), defaultPlugins...),
-		categoryPlugins: cp,
-	}
+	d.mu.Lock()
+	d.defaultPlugins = append([]string(nil), defaultPlugins...)
+	d.categoryPlugins = cp
+	d.mu.Unlock()
 }
 
 func (d *Debugger) Plugins() SearcherDebugPluginCollection {
+	d.mu.RLock()
 	defaultPlugins := append([]string(nil), d.defaultPlugins...)
+	categoryPlugins := cloneStringMap(d.categoryPlugins)
+	d.mu.RUnlock()
 	sort.Strings(defaultPlugins)
 	return SearcherDebugPluginCollection{
 		Available: factory.Plugins(),
 		Default:   defaultPlugins,
-		Category:  cloneStringMap(d.categoryPlugins),
+		Category:  categoryPlugins,
 	}
 }
 
@@ -163,16 +175,20 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 }
 
 func (d *Debugger) resolvePlugins(num *number.Number) []string {
+	d.mu.RLock()
+	defaultPlugins := append([]string(nil), d.defaultPlugins...)
+	categoryPlugins := cloneStringMap(d.categoryPlugins)
+	d.mu.RUnlock()
 	if num == nil {
-		return append([]string(nil), d.defaultPlugins...)
+		return defaultPlugins
 	}
 	cat := strings.ToUpper(strings.TrimSpace(num.GetExternalFieldCategory()))
 	if cat != "" {
-		if chain, ok := d.categoryPlugins[cat]; ok && len(chain) != 0 {
+		if chain, ok := categoryPlugins[cat]; ok && len(chain) != 0 {
 			return append([]string(nil), chain...)
 		}
 	}
-	return append([]string(nil), d.defaultPlugins...)
+	return defaultPlugins
 }
 
 func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number) (*PluginDebugResult, error) {

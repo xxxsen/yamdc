@@ -2,6 +2,7 @@ package yamlplugin
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
@@ -51,17 +52,36 @@ func RegisterBuiltins() {
 	mustRegisterFromFile(constant.SSCospuri, "cospuri.yaml")
 }
 
+func RegisterBundle(plugins map[string][]byte) {
+	names := make([]string, 0, len(plugins))
+	for name := range plugins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		registerBytes(name, plugins[name], false)
+	}
+}
+
 func LegacyPluginName(name string) string {
 	return legacyPrefix + name
 }
 
 func mustRegisterFromFile(name, file string) {
-	if legacy, ok := factory.Lookup(name); ok {
-		factory.Register(LegacyPluginName(name), legacy)
-	}
 	data, err := yamlassets.ReadFile(file)
 	if err != nil {
 		panic(fmt.Errorf("read yaml plugin %s failed, err:%w", file, err))
+	}
+	registerBytes(name, data, true)
+}
+
+func registerBytes(name string, data []byte, preserveLegacy bool) {
+	if preserveLegacy {
+		if legacy, ok := factory.Lookup(name); ok {
+			if _, exists := factory.Lookup(LegacyPluginName(name)); !exists {
+				factory.Register(LegacyPluginName(name), legacy)
+			}
+		}
 	}
 	cc := &cachedCreator{data: data}
 	factory.Register(name, cc.create)

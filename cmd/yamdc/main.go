@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
@@ -26,6 +28,8 @@ import (
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
+	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/yamlplugin"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
@@ -147,6 +151,9 @@ func runCapture(c *config.Config) error {
 	if err != nil {
 		logutil.GetLogger(ctx).Error("init face recognizer failed", zap.Error(err))
 	}
+	if _, err := prepareSearcherPlugins(ctx, cli, c); err != nil {
+		return err
+	}
 	searchers, err := buildSearcher(ctx, cli, cacheStore, c, c.Plugins, c.PluginConfig)
 	if err != nil {
 		return err
@@ -169,7 +176,7 @@ func runCapture(c *config.Config) error {
 	if err != nil {
 		return err
 	}
-	cap, err := buildCapture(c, cacheStore, searchers, catSearchers, processors, cleaner)
+	cap, err := buildCapture(c, cacheStore, searcher.NewCategorySearcher(searchers, catSearchers), processors, cleaner)
 	if err != nil {
 		return err
 	}
@@ -184,13 +191,13 @@ func loggerInit(c *config.Config) *zap.Logger {
 	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 }
 
-func buildCapture(c *config.Config, storage store.IStorage, ss []searcher.ISearcher, catSs map[string][]searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
+func buildCapture(c *config.Config, storage store.IStorage, sr searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
 		capture.WithScanDir(c.ScanDir),
 		capture.WithSaveDir(c.SaveDir),
-		capture.WithSeacher(searcher.NewCategorySearcher(ss, catSs)),
+		capture.WithSeacher(sr),
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithStorage(storage),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
@@ -277,6 +284,65 @@ func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, clean
 		categoryPlugins[item.Name] = append([]string(nil), item.Plugins...)
 	}
 	return searcher.NewDebugger(cli, storage, cleaner, c.Plugins, categoryPlugins)
+}
+
+func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *config.Config) (*pluginbundle.Manager, error) {
+	if len(c.SearcherPluginBundleConfig.Sources) == 0 {
+		return nil, nil
+	}
+	sources := make([]config.SearcherPluginBundleSource, 0, len(c.SearcherPluginBundleConfig.Sources))
+	for _, source := range c.SearcherPluginBundleConfig.Sources {
+		item := source
+		if strings.ToLower(strings.TrimSpace(item.SourceType)) == "" || strings.EqualFold(item.SourceType, basebundle.SourceTypeLocal) {
+			resolved, err := resolveBundleSourcePath(c.DataDir, item.Location)
+			if err != nil {
+				return nil, err
+			}
+			item.Location = resolved
+			item.SourceType = basebundle.SourceTypeLocal
+		}
+		sources = append(sources, item)
+	}
+	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, cli, sources, func(ctx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
+		applyResolvedSearcherPluginBundle(ctx, c, resolved)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.Start(ctx); err != nil {
+		return nil, err
+	}
+	return manager, nil
+}
+
+func applyResolvedSearcherPluginBundle(ctx context.Context, c *config.Config, resolved *pluginbundle.ResolvedBundle) {
+	yamlplugin.RegisterBundle(resolved.Plugins)
+	for _, warning := range resolved.Warnings {
+		logutil.GetLogger(ctx).Warn("plugin bundle conflict", zap.String("detail", warning))
+	}
+	c.Plugins = append([]string(nil), resolved.DefaultPlugins...)
+	c.CategoryPlugins = make([]config.CategoryPlugin, 0, len(resolved.CategoryChains))
+	categoryNames := make([]string, 0, len(resolved.CategoryChains))
+	for category := range resolved.CategoryChains {
+		categoryNames = append(categoryNames, category)
+	}
+	sort.Strings(categoryNames)
+	for _, category := range categoryNames {
+		c.CategoryPlugins = append(c.CategoryPlugins, config.CategoryPlugin{
+			Name:    category,
+			Plugins: append([]string(nil), resolved.CategoryChains[category]...),
+		})
+	}
+	logutil.GetLogger(ctx).Info("load searcher plugin bundles", zap.Strings("default_plugins", c.Plugins), zap.Int("category_count", len(c.CategoryPlugins)))
+}
+
+func categoryPluginMap(items []config.CategoryPlugin) map[string][]string {
+	out := make(map[string][]string, len(items))
+	for _, item := range items {
+		out[item.Name] = append([]string(nil), item.Plugins...)
+	}
+	return out
 }
 
 func precheckCaptureDir(c *config.Config) error {
@@ -452,34 +518,36 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 	return translator.NewGroup(useEngines...), nil
 }
 
-func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, numbercleaner.BundleManager, error) {
+func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, *numbercleaner.Manager, error) {
 	cc := c.NumberCleanerConfig
 	sourceType := strings.ToLower(strings.TrimSpace(cc.SourceType))
 	if sourceType == "" {
-		sourceType = numbercleaner.SourceTypeLocal
+		sourceType = basebundle.SourceTypeLocal
 	}
 	location := strings.TrimSpace(cc.Location)
-	if sourceType == numbercleaner.SourceTypeLocal {
+	if sourceType == basebundle.SourceTypeLocal {
 		resolved, err := resolveRuleSourcePath(c.DataDir, location)
 		if err != nil {
 			return nil, nil, err
 		}
 		location = resolved
 	}
-	manager, err := numbercleaner.NewBundleManager(c.DataDir, cli, sourceType, location)
+	runtimeCleaner := numbercleaner.NewRuntimeCleaner(nil)
+	manager, err := numbercleaner.NewManager(c.DataDir, cli, sourceType, location, func(ctx context.Context, rs *numbercleaner.RuleSet, files []string) error {
+		logutil.GetLogger(ctx).Debug("load number cleaner rules", zap.Strings("files", files))
+		inner, err := numbercleaner.NewCleaner(rs)
+		if err != nil {
+			return err
+		}
+		runtimeCleaner.Swap(inner)
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	rs, files, err := manager.Load(ctx)
-	if err != nil {
+	if err := manager.Start(ctx); err != nil {
 		return nil, nil, err
 	}
-	logutil.GetLogger(ctx).Debug("load number cleaner rules", zap.Strings("files", files))
-	inner, err := numbercleaner.NewCleaner(rs)
-	if err != nil {
-		return nil, nil, err
-	}
-	runtimeCleaner := numbercleaner.NewRuntimeCleaner(inner)
 	return runtimeCleaner, manager, nil
 }
 
@@ -498,6 +566,23 @@ func resolveRuleSourcePath(datadir string, raw string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no rule source found in paths, raw:%s", raw)
+}
+
+func resolveBundleSourcePath(datadir string, raw string) (string, error) {
+	paths := []string{raw, path.Join(datadir, raw)}
+	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			return filepath.Abs(p)
+		}
+	}
+	return "", fmt.Errorf("no bundle source found in paths, raw:%s", raw)
 }
 
 func rewriteEnvFlagToConfig(c *config.SwitchConfig) {

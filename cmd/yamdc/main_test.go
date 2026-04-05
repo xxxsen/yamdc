@@ -33,8 +33,11 @@ func TestPrecheckServerDirRequiresLibraryDir(t *testing.T) {
 func TestBuildNumberCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
 	dataDir := t.TempDir()
 	ruleDir := filepath.Join(t.TempDir(), "rules")
-	require.NoError(t, os.MkdirAll(ruleDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "001-base.yaml"), []byte(`
+	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "manifest.yaml"), []byte(`
+entry: ruleset
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
