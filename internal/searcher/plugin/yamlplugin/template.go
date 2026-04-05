@@ -59,7 +59,7 @@ func validateTemplateExpr(expr string) error {
 	if name, args, ok, err := parseCall(expr); err != nil {
 		return err
 	} else if ok {
-		if !slices.Contains([]string{"build_url", "to_upper", "to_lower", "trim", "trim_prefix", "trim_suffix", "replace", "clean_number", "first_non_empty", "concat"}, name) {
+		if !slices.Contains([]string{"build_url", "to_upper", "to_lower", "trim", "trim_prefix", "trim_suffix", "replace", "clean_number", "first_non_empty", "concat", "last_segment"}, name) {
 			return fmt.Errorf("unknown template function:%s", name)
 		}
 		for _, arg := range args {
@@ -271,6 +271,18 @@ func evalTemplateFunc(name string, args []string) (string, error) {
 		return "", nil
 	case "concat":
 		return strings.Join(args, ""), nil
+	case "last_segment":
+		if len(args) != 2 {
+			return "", fmt.Errorf("last_segment expects 2 arguments")
+		}
+		if args[1] == "" {
+			return args[0], nil
+		}
+		parts := strings.Split(args[0], args[1])
+		if len(parts) == 0 {
+			return "", nil
+		}
+		return parts[len(parts)-1], nil
 	default:
 		return "", fmt.Errorf("unknown template function:%s", name)
 	}
@@ -394,7 +406,7 @@ func unquoteArg(in string) (string, bool, error) {
 
 func strconvUnquote(in string) (string, error) {
 	// avoid importing strconv in condition parser separately.
-	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(in[1:len(in)-1]), nil
+	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(in[1 : len(in)-1]), nil
 }
 
 func isIdentifier(in string) bool {

@@ -1,0 +1,87 @@
+version: 1
+name: fc2
+type: one-step
+hosts:
+  - https://adult.contents.fc2.com
+precheck:
+  number_patterns:
+    - ^(?i)fc2[-_]?.+$
+request:
+  method: GET
+  path: /article/${last_segment(${number}, "-")}/
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: /html/head/title/text()
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: xpath
+        expr: //*[@id="top"]/div[1]/section[1]/div/section/div[2]/ul/li[3]/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //*[@id="top"]/div[1]/section[1]/div/section/div[2]/div[2]/p/text()
+      transforms:
+        - kind: split_index
+          sep: ":"
+          index: 1
+        - kind: trim
+      parser:
+        kind: date_layout_soft
+        layout: "2006/01/02"
+    duration:
+      selector:
+        kind: xpath
+        expr: //p[@class='items_article_info']/text()
+      parser: duration_mmss
+    studio:
+      selector:
+        kind: xpath
+        expr: //*[@id="top"]/div[1]/section[1]/div/section/div[2]/ul/li[3]/a/text()
+      parser: string
+    genres:
+      selector:
+        kind: xpath
+        expr: //a[@class='tag tagTag']/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //div[@class='items_article_MainitemThumb']/span/img/@src
+      parser: string
+      required: true
+    poster:
+      selector:
+        kind: xpath
+        expr: //div[@class='items_article_MainitemThumb']/span/img/@src
+      parser: string
+    sample_images:
+      selector:
+        kind: xpath
+        expr: //ul[@class="items_article_SampleImagesArea"]/li/a/@href
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+postprocess:
+  assign:
+    number: ${number}
+  defaults:
+    title_lang: ja

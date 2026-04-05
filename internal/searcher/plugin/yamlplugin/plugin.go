@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,16 +34,16 @@ const (
 )
 
 type compiledPlugin struct {
-	version     int
-	name        string
-	pluginType  string
-	hosts       []string
-	precheck    *compiledPrecheck
-	request     *compiledRequest
+	version      int
+	name         string
+	pluginType   string
+	hosts        []string
+	precheck     *compiledPrecheck
+	request      *compiledRequest
 	multiRequest *compiledMultiRequest
-	workflow    *compiledSearchSelectWorkflow
-	scrape      *compiledScrape
-	postprocess *compiledPostprocess
+	workflow     *compiledSearchSelectWorkflow
+	scrape       *compiledScrape
+	postprocess  *compiledPostprocess
 }
 
 type compiledPrecheck struct {
@@ -904,6 +905,21 @@ func assignStringField(ctx context.Context, mv *model.MovieMeta, field, value st
 		mv.Duration = parser.DefaultMMDurationParser(ctx)(value)
 	case "duration_human":
 		mv.Duration = parser.HumanDurationToSecond(value)
+	case "duration_mmss":
+		value = strings.TrimSpace(value)
+		parts := strings.Split(value, ":")
+		if len(parts) != 2 {
+			return nil
+		}
+		min, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+		if err != nil {
+			return nil
+		}
+		sec, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+		if err != nil {
+			return nil
+		}
+		mv.Duration = min*60 + sec
 	case "time_format":
 		t, err := timeParse(parserSpec.Layout, value)
 		if err != nil {
