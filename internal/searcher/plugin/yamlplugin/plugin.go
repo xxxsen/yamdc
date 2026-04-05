@@ -1025,6 +1025,18 @@ func applyStringTransforms(value string, transforms []*TransformSpec) string {
 			out = strings.Trim(out, item.Cutset)
 		case "replace":
 			out = strings.ReplaceAll(out, item.Old, item.New)
+		case "regex_extract":
+			re, err := regexp.Compile(item.Value)
+			if err != nil {
+				out = ""
+				continue
+			}
+			matches := re.FindStringSubmatch(out)
+			if item.Index >= 0 && item.Index < len(matches) {
+				out = matches[item.Index]
+			} else {
+				out = ""
+			}
 		case "split_index":
 			parts := strings.Split(out, item.Sep)
 			if item.Index >= 0 && item.Index < len(parts) {
