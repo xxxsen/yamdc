@@ -1,0 +1,73 @@
+version: 1
+name: tktube
+type: two-step
+hosts:
+  - https://tktube.com
+request:
+  method: GET
+  path: /zh/search/${replace(${number}, "-", "--")}/
+  accept_status_codes: [200]
+workflow:
+  search_select:
+    selectors:
+      - name: read_link
+        kind: xpath
+        expr: //div[@id="list_videos_videos_list_search_result_items"]/div/a/@href
+      - name: read_name
+        kind: xpath
+        expr: //div[@id="list_videos_videos_list_search_result_items"]/div/a/strong[@class="title"]/text()
+    match:
+      mode: and
+      conditions:
+        - contains("${to_upper(${item.read_name})}", "${to_upper(${number})}")
+    return: ${item.read_link}
+    next_request:
+      method: GET
+      url: ${build_url(${host}, ${value})}
+      accept_status_codes: [200]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //div[@class="headline"]/h1/text()
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[contains(text(), "女優:")]/a[contains(@href, "models")]/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //div[@class="item"]/span[contains(text(), "加入日期:")]/em/text()
+      parser: date_only
+    duration:
+      selector:
+        kind: xpath
+        expr: //div[@class="item"]/span[contains(text(), "時長:")]/em/text()
+      parser: duration_hhmmss
+    genres:
+      selector:
+        kind: xpath
+        expr: //div[contains(text(), "標籤:")]/a[contains(@href, "tags")]/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //meta[@property="og:image"]/@content
+      parser: string
+      required: true
+postprocess:
+  assign:
+    number: ${number}

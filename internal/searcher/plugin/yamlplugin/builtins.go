@@ -32,6 +32,13 @@ func (c *cachedCreator) create(args interface{}) (api.IPlugin, error) {
 func RegisterBuiltins() {
 	mustRegisterFromFile(constant.SSJav321, "jav321.yaml")
 	mustRegisterFromFile(constant.SSJavDB, "javdb.yaml")
+	mustRegisterFromFile(constant.SSJavBus, "javbus.yaml")
+	mustRegisterFromFile(constant.SSMissav, "missav.yaml")
+	mustRegisterFromFile(constant.SSTKTube, "tktube.yaml")
+	mustRegisterFromFile(constant.SSJvrPorn, "jvrporn.yaml")
+	mustRegisterFromFile(constant.SSJavhoo, "javhoo.yaml")
+	mustRegisterFromFile(constant.SSJavLibrary, "javlibrary.yaml")
+	mustRegisterFromFile(constant.SSFreeJavBt, "freejavbt.yaml")
 }
 
 func LegacyPluginName(name string) string {

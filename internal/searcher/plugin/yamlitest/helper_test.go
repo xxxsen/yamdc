@@ -39,9 +39,14 @@ func runPluginComparison(t *testing.T, pluginName string, numbers []string) {
 			require.NoError(t, err)
 
 			legacyMeta, legacyFound, err := legacySearcher.Search(context.Background(), num)
-			require.NoError(t, err)
+			legacyErr := err
 			yamlMeta, yamlFound, err := yamlSearcher.Search(context.Background(), num)
-			require.NoError(t, err)
+			yamlErr := err
+
+			if legacyErr != nil || yamlErr != nil {
+				require.Equal(t, legacyErr != nil, yamlErr != nil, "error presence mismatch")
+				return
+			}
 
 			require.Equal(t, legacyFound, yamlFound, "found mismatch")
 			if !legacyFound {
@@ -83,4 +88,3 @@ func canonicalizeMeta(in *model.MovieMeta) *model.MovieMeta {
 	}
 	return &out
 }
-

@@ -1,0 +1,85 @@
+version: 1
+name: missav
+type: two-step
+hosts:
+  - https://missav.ws
+request:
+  method: GET
+  path: /cn/search/${number}
+  headers:
+    Sec-GPC: "1"
+  accept_status_codes: [200]
+workflow:
+  search_select:
+    selectors:
+      - name: read_link
+        kind: xpath
+        expr: //div[@class="my-2 text-sm text-nord4 truncate"]/a[@class="text-secondary group-hover:text-primary"]/@href
+      - name: read_title
+        kind: xpath
+        expr: //div[@class="my-2 text-sm text-nord4 truncate"]/a[@class="text-secondary group-hover:text-primary"]/text()
+    match:
+      mode: and
+      conditions:
+        - contains("${item.read_title}", "${number}")
+    return: ${item.read_link}
+    next_request:
+      method: GET
+      url: ${build_url(${host}, ${value})}
+      headers:
+        Sec-GPC: "1"
+      accept_status_codes: [200]
+scrape:
+  format: html
+  fields:
+    number:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "番号")]]/span[@class="font-medium"]/text()
+      parser: string
+      required: true
+    title:
+      selector:
+        kind: xpath
+        expr: //div[@class="mt-4"]/h1[@class="text-base lg:text-lg text-nord6"]/text()
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "女优")]]/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "发行日期")]]/time/text()
+      parser: date_only
+    studio:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "发行商")]]/a/text()
+      parser: string
+    director:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "导演")]]/a/text()
+      parser: string
+    genres:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "类型")]]/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //link[@rel="preload" and @as="image"]/@href
+      parser: string
+      required: true

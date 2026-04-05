@@ -1,0 +1,76 @@
+version: 1
+name: jvrporn
+type: one-step
+hosts:
+  - https://jvrporn.com
+precheck:
+  number_patterns:
+    - ^JVR-.+
+request:
+  method: GET
+  path: /video/${trim_prefix(${number}, "JVR-")}/
+  cookies:
+    adult: "true"
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //h1
+      parser: string
+      required: true
+    plot:
+      selector:
+        kind: xpath
+        expr: //pre
+      parser: string
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[@class="basic-info"]//td/a[@class="actress"]/span/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    duration:
+      selector:
+        kind: xpath
+        expr: //tr[td[span[contains(text(), "Duration")]]]/td[span[@class="bold"]]/span/text()
+      parser: duration_hhmmss
+    genres:
+      selector:
+        kind: xpath
+        expr: //tr[td[span[contains(text(), "Tags")]]]/td/a/span[@class="bold"]/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //div[@class="video-play-container"]/deo-video/@cover-image
+      parser: string
+    sample_images:
+      selector:
+        kind: xpath
+        expr: //div[@class="gallery-wrap"]/div[@id="snapshot-gallery"]/a/@href
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+postprocess:
+  assign:
+    number: ${number}
+  defaults:
+    title_lang: en
+    plot_lang: en
+    genres_lang: en
+    actors_lang: en
+  switch_config:
+    disable_release_date_check: true

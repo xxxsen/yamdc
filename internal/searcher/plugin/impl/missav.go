@@ -26,6 +26,17 @@ type missav struct {
 	api.DefaultPlugin
 }
 
+func (p *missav) OnDecorateRequest(ctx context.Context, req *http.Request) error {
+	req.Header.Set("Sec-GPC", "1")
+	return nil
+}
+
+func (p *missav) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
+	req.Header.Set("Sec-GPC", "1")
+	req.Header.Set("Referer", "https://missav.ws/")
+	return nil
+}
+
 func (p *missav) OnGetHosts(ctx context.Context) []string {
 	return defaultMissavDomains
 }

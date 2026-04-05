@@ -1,0 +1,77 @@
+version: 1
+name: freejavbt
+type: one-step
+hosts:
+  - https://freejavbt.com
+request:
+  method: GET
+  path: /zh/${number}
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //h1[@class="text-white"]/strong/text()
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "女优")]]/div/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "日期")]]/span[2]
+      parser: date_only
+    duration:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "时长")]]/span[2]
+      parser: duration_default
+    studio:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "制作")]]/a
+      parser: string
+    director:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "导演")]]/a
+      parser: string
+    genres:
+      selector:
+        kind: xpath
+        expr: //div[span[contains(text(), "类别")]]/div/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //img[@class="video-cover rounded lazyload"]/@data-src
+      parser: string
+      required: true
+    sample_images:
+      selector:
+        kind: xpath
+        expr: //div[@class="preview"]/a/img/@data-src
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+postprocess:
+  assign:
+    number: ${number}
+  defaults:
+    title_lang: ja
