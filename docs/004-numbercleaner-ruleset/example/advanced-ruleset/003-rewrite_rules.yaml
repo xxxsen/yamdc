@@ -1,0 +1,10 @@
+rewrite_rules:
+  # 把连续写法改成统一格式，方便 matcher 直接识别
+  - name: compact_fc2
+    pattern: '(?i)FC2PPV([0-9]{3,})'
+    replace: 'FC2-PPV-$1'
+
+  # 统一某些常见前缀后的分隔符
+  - name: compact_generic
+    pattern: '(?i)\b([A-Z]{2,6})\s+([0-9]{2,6})\b'
+    replace: '$1-$2'

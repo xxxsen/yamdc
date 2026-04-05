@@ -1,15 +1,15 @@
 normalizers:
-  # 取文件基础名
+  # 从完整路径中取文件名
   - name: basename
     type: builtin
     builtin: basename
 
-  # 去扩展名
+  # 去掉扩展名
   - name: strip_ext
     type: builtin
     builtin: strip_ext
 
-  # 统一大写
+  # 统一大写，便于后续 matcher 输出稳定
   - name: to_upper
     type: builtin
     builtin: to_upper

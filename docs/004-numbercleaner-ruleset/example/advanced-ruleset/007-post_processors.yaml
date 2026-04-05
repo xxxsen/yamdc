@@ -1,0 +1,10 @@
+post_processors:
+  # 将提取到的字幕/CD/清晰度后缀按系统顺序重排
+  - name: reorder_suffix
+    type: builtin
+    builtin: reorder_suffix
+
+  # 将最终输出中的连接符统一为系统约定
+  - name: normalize_hyphen
+    type: builtin
+    builtin: normalize_hyphen
