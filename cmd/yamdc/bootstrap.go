@@ -331,8 +331,10 @@ func buildHandlerDebuggerAction(_ context.Context, ysctx *YamdcStartContext) err
 }
 
 func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
-	useSearcher := searcher.ISearcher(ysctx.RuntimeSearcher)
-	if useSearcher == nil {
+	var useSearcher searcher.ISearcher
+	if ysctx.RuntimeSearcher != nil {
+		useSearcher = ysctx.RuntimeSearcher
+	} else {
 		useSearcher = searcher.NewCategorySearcher(ysctx.Searchers, ysctx.CategorySearchers)
 	}
 	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.NumberCleaner)

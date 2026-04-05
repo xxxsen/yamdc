@@ -10,9 +10,9 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
+	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/yamlplugin"
 	"github.com/xxxsen/yamdc/internal/store"
-	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
 )
 
 func runPluginComparison(t *testing.T, pluginName string, numbers []string) {
