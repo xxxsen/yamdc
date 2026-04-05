@@ -41,3 +41,14 @@ func ImportContainerData(ctx context.Context, m map[string]string) {
 	c := mustGetContainer(ctx)
 	maps.Copy(c.m, m)
 }
+
+func SetContainerValue(ctx context.Context, key, value string) {
+	c := mustGetContainer(ctx)
+	c.m[key] = value
+}
+
+func GetContainerValue(ctx context.Context, key string) (string, bool) {
+	c := mustGetContainer(ctx)
+	v, ok := c.m[key]
+	return v, ok
+}

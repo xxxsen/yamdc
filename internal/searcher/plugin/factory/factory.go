@@ -23,6 +23,11 @@ func CreatePlugin(name string, args interface{}) (api.IPlugin, error) {
 	return cr(args)
 }
 
+func Lookup(name string) (CreatorFunc, bool) {
+	cr, ok := mp[name]
+	return cr, ok
+}
+
 func PluginToCreator(plg api.IPlugin) CreatorFunc {
 	return func(args interface{}) (api.IPlugin, error) {
 		return plg, nil
