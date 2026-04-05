@@ -1,0 +1,24 @@
+version: 1
+name: example-plugin-bundle
+desc: example searcher plugin bundle
+bundle_version: 2026.04.06
+entry: plugins
+configuration:
+  # 默认链
+  - name: alpha
+    priority: 100
+    category: all
+
+  # 分类链中的同名插件允许单独配置
+  - name: alpha
+    priority: 200
+    category: fc2
+
+  - name: beta
+    priority: 150
+    category: all
+
+  # 空 category 在运行时会归一成 all
+  - name: gamma
+    priority: 300
+
