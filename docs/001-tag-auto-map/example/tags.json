@@ -1,0 +1,22 @@
+[
+  {
+    "name": "cosplay",
+    "alias": ["cos", "角色扮演"],
+    "children": [
+      {
+        "name": "原神",
+        "alias": ["Genshin", "⚪神"],
+        "children": [
+          {
+            "name": "芭芭拉·佩奇",
+            "alias": ["芭芭拉", "Barbara Pegg", "Barbara"]
+          },
+          {
+            "name": "莫娜",
+            "alias": ["Mona"]
+          }
+        ]
+      }
+    ]
+  }
+]

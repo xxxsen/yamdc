@@ -1,0 +1,47 @@
+# 两步抓取示例：
+# 第一步搜索，第二步根据搜索结果进入详情页。
+version: 1
+name: example_two_step
+type: two-step
+hosts:
+  - https://example.com
+request:
+  method: GET
+  path: /search
+  query:
+    q: ${number}
+  accept_status_codes: [200]
+workflow:
+  search_select:
+    # selectors 从搜索页并行提取列表，列表长度默认要求一致。
+    selectors:
+      - name: read_link
+        kind: xpath
+        expr: //div[@class="item"]/a/@href
+    match:
+      # expect_count=1 表示最终必须只匹配到 1 条结果。
+      mode: and
+      conditions:
+        - contains("${item.read_link}", "/detail/")
+      expect_count: 1
+    return: ${item.read_link}
+    next_request:
+      method: GET
+      # build_url 用于把相对链接重建为绝对链接。
+      url: ${build_url(${host}, ${value})}
+      accept_status_codes: [200]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //h1/text()
+      parser: string
+      required: true
+    cover:
+      selector:
+        kind: xpath
+        expr: //img[@class="cover"]/@src
+      parser: string
+      required: true

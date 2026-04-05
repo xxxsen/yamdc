@@ -1,0 +1,95 @@
+# 复杂 transform 示例：
+# 展示字符串清洗、列表拆分、正则提取和系统映射能力。
+version: 1
+name: example_advanced_transform
+type: one-step
+hosts:
+  - https://example.com
+request:
+  method: GET
+  path: /sample
+  query:
+    # 这里把 PREFIX- 前缀去掉并转小写，用于构造 query 参数。
+    id: ${to_lower(${trim_prefix(${number}, "PREFIX-")})}
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //div[@class="details"]/div[@class="description"]/text()
+      transforms:
+        - kind: trim
+      parser: string
+      required: true
+    plot:
+      selector:
+        kind: xpath
+        expr: //div[@class="details"]/div[@class="description"]/text()
+      transforms:
+        - kind: trim
+      parser: string
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[@class="details"]//div[@class="actor-list"]/text()
+        multi: true
+      transforms:
+        # 先去掉前缀，再按逗号拆开，最后逐项 trim / 去空 / 去重。
+        - kind: replace
+          old: "Actors:"
+          new: ""
+        - kind: map_trim
+        - kind: split
+          sep: ","
+        - kind: map_trim
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    duration:
+      selector:
+        kind: xpath
+        expr: //div[@class="details"]//div[@class="length"]/strong/text()
+      parser: duration_mm
+    genres:
+      selector:
+        kind: xpath
+        expr: //div[@class="details"]//a[@class="tag"]/text()
+        multi: true
+      transforms:
+        - kind: map_trim
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //div[@class="player"]/@style
+      transforms:
+        # 从 style 里的 url(...) 中提取封面地址。
+        - kind: regex_extract
+          value: (?i)url\((.*)\s*\)
+          index: 1
+      parser: string
+      required: true
+    sample_images:
+      selector:
+        kind: xpath
+        expr: //div[@class="thumbs"]/a/@href
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+postprocess:
+  assign:
+    number: ${number}
+  defaults:
+    title_lang: en
+    plot_lang: en
+    genres_lang: en
+  switch_config:
+    # 某些站点不存在发布日期时，可关闭 release_date 的最终校验。
+    disable_release_date_check: true

@@ -1,0 +1,37 @@
+# 多候选请求示例：
+# 当同一个编号可能存在多种搜索写法时，可依次尝试多个 candidate。
+version: 1
+name: example_multi_request
+type: one-step
+hosts:
+  - https://example.com
+multi_request:
+  # unique=true 会对候选值去重，避免重复请求。
+  unique: true
+  candidates:
+    - ${number}
+    - ${replace(${number}, "-", "_")}
+  request:
+    method: GET
+    path: /search/${candidate}
+    accept_status_codes: [200]
+  success_when:
+    # success_when 用于判定某次候选请求是否命中。
+    mode: and
+    conditions:
+      - selector_exists(xpath("//div[@class='result']/a"))
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //h1/text()
+      parser: string
+      required: true
+    cover:
+      selector:
+        kind: xpath
+        expr: //meta[@property='og:image']/@content
+      parser: string
+      required: true

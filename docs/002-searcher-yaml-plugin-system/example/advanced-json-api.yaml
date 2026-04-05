@@ -1,0 +1,90 @@
+# 复杂 JSON API 示例：
+# 组合使用 API 请求头、jsonpath、日期切分、时长解析和 postprocess。
+version: 1
+name: example_advanced_json_api
+type: one-step
+hosts:
+  - https://api.example.com
+request:
+  method: GET
+  # last_segment 常用于从标准化番号中提取尾部数字或标识。
+  url: https://api.example.com/store/video/${last_segment(${number}, "-")}
+  headers:
+    Accept: application/json
+    Origin: https://www.example.com
+    Referer: https://www.example.com/
+    Sec-GPC: "1"
+  accept_status_codes: [200]
+scrape:
+  format: json
+  fields:
+    title:
+      selector:
+        kind: jsonpath
+        expr: $.data.title
+      transforms:
+        - kind: trim
+      parser: string
+      required: true
+    plot:
+      selector:
+        kind: jsonpath
+        expr: $.data.description
+      transforms:
+        - kind: trim
+      parser: string
+    actors:
+      selector:
+        kind: jsonpath
+        expr: $.data.model.displayName
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: jsonpath
+        expr: $.data.launchDate
+      transforms:
+        # 先从 ISO 时间串里截出日期部分，再按 layout 解析。
+        - kind: split_index
+          sep: T
+          index: 0
+      parser:
+        kind: date_layout_soft
+        layout: "2006-01-02"
+    duration:
+      selector:
+        kind: jsonpath
+        expr: $.data.videoDuration
+      # mm:ss -> 秒。
+      parser: duration_mmss
+    genres:
+      selector:
+        kind: jsonpath
+        expr: $.data.tagList[*].label
+        multi: true
+      transforms:
+        - kind: map_trim
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: jsonpath
+        expr: $.data.screenshot
+      parser: string
+      required: true
+    poster:
+      selector:
+        kind: jsonpath
+        expr: $.data.screenshot
+      parser: string
+postprocess:
+  assign:
+    # 当 API 本身不返回规范番号时，可在后处理阶段回填。
+    number: ${number}
+  defaults:
+    title_lang: en
+    plot_lang: en
