@@ -2,21 +2,19 @@ package impl
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/searcher/decoder"
-	"github.com/xxxsen/yamdc/internal/searcher/parser"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/constant"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
-	"go.uber.org/zap"
 )
 
 var defaultManyVidsHosts = []string{
@@ -27,96 +25,122 @@ type manyvids struct {
 	api.DefaultPlugin
 }
 
+type manyVidsVideoResponse struct {
+	StatusCode    int                `json:"statusCode"`
+	StatusMessage string             `json:"statusMessage"`
+	Data          *manyVidsVideoData `json:"data"`
+}
+
+type manyVidsVideoData struct {
+	ID            string         `json:"id"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	LaunchDate    string         `json:"launchDate"`
+	VideoDuration string         `json:"videoDuration"`
+	Screenshot    string         `json:"screenshot"`
+	TagList       []manyVidsTag  `json:"tagList"`
+	Model         *manyVidsModel `json:"model"`
+}
+
+type manyVidsTag struct {
+	Label string `json:"label"`
+}
+
+type manyVidsModel struct {
+	DisplayName string `json:"displayName"`
+}
+
 func (p *manyvids) OnGetHosts(ctx context.Context) []string {
 	return defaultManyVidsHosts
 }
 
 func (p *manyvids) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
-	//番号格式
-	//example: MANYVIDS-123456
 	if !strings.HasPrefix(number, "MANYVIDS") {
 		return false, nil
 	}
 	return true, nil
 }
+
 func (p *manyvids) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	num := strings.TrimPrefix(number, "MANYVIDS-") //移除默认的前缀
-	uri := fmt.Sprintf("%s/Video/%s", api.MustSelectDomain(defaultManyVidsHosts), num)
+	id := strings.TrimPrefix(number, "MANYVIDS-")
+	uri := fmt.Sprintf("https://api.manyvids.com/store/video/%s", id)
 	return http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 }
 
-func (p *manyvids) decodeTitle(ctx context.Context) decoder.StringParseFunc {
-	return func(v string) string {
-		// MollyRedWolf - 标题 - ManyVids
-		// 去除最后的 ManyVids
-		v = strings.TrimSuffix(v, "- ManyVids")
-
-		v = strings.TrimSpace(v)
-
-		return v
-	}
+func (p *manyvids) OnDecorateRequest(ctx context.Context, req *http.Request) error {
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Origin", "https://www.manyvids.com")
+	req.Header.Set("Referer", "https://www.manyvids.com/")
+	req.Header.Set("Sec-GPC", "1")
+	return nil
 }
 
-func (p *manyvids) decodeGenre(ctx context.Context) decoder.StringListParseFunc {
-	return func(gs []string) []string {
-
-		for i, g := range gs {
-			gs[i] = strings.TrimPrefix(g, "#")
-			gs[i] = strings.TrimSpace(gs[i])
-		}
-		return gs
-	}
-}
-
-func (p *manyvids) decodeDuration(ctx context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		// 21m30s
-		// 01h16m56s
-		return parser.HumanDurationToSecond(v)
-	}
-}
-func (p *manyvids) decodeReleaseDate(ctx context.Context) decoder.NumberParseFunc {
-	return func(v string) int64 {
-		logger := logutil.GetLogger(ctx).With(zap.String("releasedate", v))
-		t, err := time.Parse("Jan 2, 2006", strings.TrimSpace(v))
-		if err != nil {
-			logger.Error("parse date time failed", zap.Error(err))
-			return 0
-		}
-		return t.UnixMilli()
-	}
+func (p *manyvids) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
+	req.Header.Set("Referer", "https://www.manyvids.com/")
+	req.Header.Set("Origin", "https://www.manyvids.com")
+	req.Header.Set("Sec-GPC", "1")
+	return nil
 }
 
 func (p *manyvids) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
-	dec := decoder.XPathHtmlDecoder{
-		NumberExpr: ``,
-		//TitleExpr:           `/html/head/title/text()`,
-		TitleExpr:           `//h1[starts-with(@class, 'VideoMetaInfo_title')]/text()`,
-		PlotExpr:            `//div[contains(@class, 'VideoDetail_description')]//p/text()`,
-		ActorListExpr:       `//div[starts-with(@class, 'VideoProfileCard_videoProfileCard')]//div[contains(@class, 'VideoProfileCard_creatorDetails')]//a[contains(@class, 'VideoProfileCard_link')]`,
-		ReleaseDateExpr:     `//span[starts-with(@class, 'VideoDetail_date')]/text()`,
-		DurationExpr:        `//div[contains(@class, 'VideoDetail_details')]//span[5]/text()`,
-		StudioExpr:          ``,
-		LabelExpr:           ``,
-		DirectorExpr:        ``,
-		SeriesExpr:          ``,
-		GenreListExpr:       `//div[starts-with(@class, 'TagList_tagList')]//a[starts-with(@class, 'Tag_mavTag')]`,
-		CoverExpr:           `//meta[@property='og:image']/@content`,
-		PosterExpr:          `//meta[@property='og:image']/@content`,
-		SampleImageListExpr: ``,
+	raw := &manyVidsVideoResponse{}
+	if err := json.Unmarshal(data, raw); err != nil {
+		return nil, false, fmt.Errorf("decode json data failed, err:%w", err)
 	}
-	metadata, err := dec.DecodeHTML(data,
-		decoder.WithTitleParser(p.decodeTitle(ctx)),
-		decoder.WithGenreListParser(p.decodeGenre(ctx)),
-		decoder.WithDurationParser(p.decodeDuration(ctx)),
-		decoder.WithReleaseDateParser(p.decodeReleaseDate(ctx)))
-	if err != nil {
-		return nil, false, err
+	if raw.StatusCode != http.StatusOK || raw.Data == nil {
+		return nil, false, nil
 	}
 
-	metadata.Number = meta.GetNumberId(ctx)
-	metadata.TitleLang = enum.MetaLangEn
-	return metadata, true, nil
+	mv := &model.MovieMeta{
+		Number:    meta.GetNumberId(ctx),
+		Title:     strings.TrimSpace(raw.Data.Title),
+		Plot:      strings.TrimSpace(raw.Data.Description),
+		Cover:     &model.File{Name: strings.TrimSpace(raw.Data.Screenshot)},
+		Poster:    &model.File{Name: strings.TrimSpace(raw.Data.Screenshot)},
+		TitleLang: enum.MetaLangEn,
+		PlotLang:  enum.MetaLangEn,
+	}
+
+	if raw.Data.Model != nil && strings.TrimSpace(raw.Data.Model.DisplayName) != "" {
+		mv.Actors = []string{strings.TrimSpace(raw.Data.Model.DisplayName)}
+	}
+	if datePart, _, ok := strings.Cut(strings.TrimSpace(raw.Data.LaunchDate), "T"); ok && datePart != "" {
+		mv.ReleaseDate = parseManyVidsDate(datePart)
+	}
+	mv.Duration = parseManyVidsDuration(raw.Data.VideoDuration)
+	for _, tag := range raw.Data.TagList {
+		label := strings.TrimSpace(tag.Label)
+		if label == "" {
+			continue
+		}
+		mv.Genres = append(mv.Genres, label)
+	}
+	return mv, true, nil
+}
+
+func parseManyVidsDate(value string) int64 {
+	t, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return 0
+	}
+	return t.UnixMilli()
+}
+
+func parseManyVidsDuration(value string) int64 {
+	value = strings.TrimSpace(value)
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return 0
+	}
+	min, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil {
+		return 0
+	}
+	sec, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return min*60 + sec
 }
 
 func init() {

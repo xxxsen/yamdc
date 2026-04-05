@@ -8,31 +8,31 @@ precheck:
     - ^MANYVIDS.*
 request:
   method: GET
-  path: /Video/${trim_prefix(${number}, "MANYVIDS-")}
+  url: https://api.manyvids.com/store/video/${trim_prefix(${number}, "MANYVIDS-")}
+  headers:
+    Accept: application/json
+    Origin: https://www.manyvids.com
+    Referer: https://www.manyvids.com/
+    Sec-GPC: "1"
   accept_status_codes: [200]
-  not_found_status_codes: [404]
 scrape:
-  format: html
+  format: json
   fields:
     title:
       selector:
-        kind: xpath
-        expr: //h1[starts-with(@class, 'VideoMetaInfo_title')]/text()
-      transforms:
-        - kind: trim_suffix
-          value: "- ManyVids"
-        - kind: trim
+        kind: jsonpath
+        expr: $.data.title
       parser: string
       required: true
     plot:
       selector:
-        kind: xpath
-        expr: //div[contains(@class, 'VideoDetail_description')]//p/text()
+        kind: jsonpath
+        expr: $.data.description
       parser: string
     actors:
       selector:
-        kind: xpath
-        expr: //div[starts-with(@class, 'VideoProfileCard_videoProfileCard')]//div[contains(@class, 'VideoProfileCard_creatorDetails')]//a[contains(@class, 'VideoProfileCard_link')]
+        kind: jsonpath
+        expr: $.data.model.displayName
         multi: true
       transforms:
         - kind: remove_empty
@@ -40,42 +40,43 @@ scrape:
       parser: string_list
     release_date:
       selector:
-        kind: xpath
-        expr: //span[starts-with(@class, 'VideoDetail_date')]/text()
+        kind: jsonpath
+        expr: $.data.launchDate
+      transforms:
+        - kind: split_index
+          sep: T
+          index: 0
       parser:
         kind: date_layout_soft
-        layout: "Jan 2, 2006"
+        layout: "2006-01-02"
     duration:
       selector:
-        kind: xpath
-        expr: //div[contains(@class, 'VideoDetail_details')]//span[5]/text()
-      parser: duration_human
+        kind: jsonpath
+        expr: $.data.videoDuration
+      parser: duration_mmss
     genres:
       selector:
-        kind: xpath
-        expr: //div[starts-with(@class, 'TagList_tagList')]//a[starts-with(@class, 'Tag_mavTag')]
+        kind: jsonpath
+        expr: $.data.tagList[*].label
         multi: true
       transforms:
-        - kind: replace
-          old: "#"
-          new: ""
-        - kind: map_trim
         - kind: remove_empty
         - kind: dedupe
       parser: string_list
     cover:
       selector:
-        kind: xpath
-        expr: //meta[@property='og:image']/@content
+        kind: jsonpath
+        expr: $.data.screenshot
       parser: string
       required: true
     poster:
       selector:
-        kind: xpath
-        expr: //meta[@property='og:image']/@content
+        kind: jsonpath
+        expr: $.data.screenshot
       parser: string
 postprocess:
   assign:
     number: ${number}
   defaults:
     title_lang: en
+    plot_lang: en

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	paesslerjsonpath "github.com/PaesslerAG/jsonpath"
 )
@@ -11,11 +12,22 @@ import (
 func evalJSONPathStrings(doc any, expr string) ([]string, error) {
 	value, err := paesslerjsonpath.Get(expr, doc)
 	if err != nil {
+		if isJSONPathMissingError(err) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("eval jsonpath failed, err:%w", err)
 	}
 	out := make([]string, 0)
 	flattenJSONPathValue(value, &out)
 	return out, nil
+}
+
+func isJSONPathMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "unknown key") || strings.Contains(msg, "index out of range")
 }
 
 func flattenJSONPathValue(value any, out *[]string) {
