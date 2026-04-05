@@ -18,8 +18,9 @@ const (
 )
 
 type compiledConditionGroup struct {
-	mode       conditionMode
-	conditions []*compiledCondition
+	mode        conditionMode
+	conditions  []*compiledCondition
+	expectCount int
 }
 
 type compiledCondition struct {
@@ -45,7 +46,11 @@ func compileConditionGroup(spec *ConditionGroupSpec) (*compiledConditionGroup, e
 	if len(spec.Conditions) == 0 {
 		return nil, fmt.Errorf("conditions is empty")
 	}
-	out := &compiledConditionGroup{mode: mode, conditions: make([]*compiledCondition, 0, len(spec.Conditions))}
+	out := &compiledConditionGroup{
+		mode:        mode,
+		conditions:  make([]*compiledCondition, 0, len(spec.Conditions)),
+		expectCount: spec.ExpectCount,
+	}
 	for _, raw := range spec.Conditions {
 		c, err := compileCondition(raw)
 		if err != nil {
@@ -241,4 +246,3 @@ func (c *compiledCondition) Eval(ctx *evalContext, node *html.Node) (bool, error
 		return false, fmt.Errorf("unknown condition:%s", c.name)
 	}
 }
-

@@ -317,8 +317,8 @@ func compileWorkflow(raw *WorkflowSpec) (*compiledSearchSelectWorkflow, error) {
 }
 
 func compileSearchSelect(raw *SearchSelectWorkflowSpec) (*compiledSearchSelectWorkflow, error) {
-	if len(raw.Selectors) < 2 {
-		return nil, fmt.Errorf("search_select requires at least 2 selectors")
+	if len(raw.Selectors) < 1 {
+		return nil, fmt.Errorf("search_select requires at least 1 selector")
 	}
 	if raw.NextRequest == nil {
 		return nil, fmt.Errorf("search_select next_request is required")
@@ -642,6 +642,7 @@ func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *
 			return nil, fmt.Errorf("selector result count mismatch")
 		}
 	}
+	matched := make([]*evalContext, 0, expectedLen)
 	for i := 0; i < expectedLen; i++ {
 		itemCtx := &evalContext{
 			number:        evalCtx.number,
@@ -668,28 +669,35 @@ func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *
 		if !ok {
 			continue
 		}
-		value, err := w.ret.Render(itemCtx)
-		if err != nil {
-			return nil, err
-		}
-		itemCtx.value = value
-		nextReq, err := plg.buildRequest(ctx, w.nextRequest, itemCtx)
-		if err != nil {
-			return nil, err
-		}
-		pluginapi.SetContainerValue(ctx, ctxKeyRequestPath, nextReq.URL.String())
-		nextRsp, err := invoker(ctx, nextReq)
-		if err != nil {
-			return nil, err
-		}
-		if err := checkAcceptedStatus(w.nextRequest, nextRsp.StatusCode); err != nil {
-			_ = nextRsp.Body.Close()
-			return nil, err
-		}
-		pluginapi.SetContainerValue(ctx, ctxKeyFinalPage, nextReq.URL.String())
-		return nextRsp, nil
+		matched = append(matched, itemCtx)
 	}
-	return nil, fmt.Errorf("no search_select result matched")
+	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
+		return nil, fmt.Errorf("search_select matched count mismatch, got:%d expect:%d", len(matched), w.match.expectCount)
+	}
+	if len(matched) == 0 {
+		return nil, fmt.Errorf("no search_select result matched")
+	}
+	itemCtx := matched[0]
+	value, err := w.ret.Render(itemCtx)
+	if err != nil {
+		return nil, err
+	}
+	itemCtx.value = value
+	nextReq, err := plg.buildRequest(ctx, w.nextRequest, itemCtx)
+	if err != nil {
+		return nil, err
+	}
+	pluginapi.SetContainerValue(ctx, ctxKeyRequestPath, nextReq.URL.String())
+	nextRsp, err := invoker(ctx, nextReq)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkAcceptedStatus(w.nextRequest, nextRsp.StatusCode); err != nil {
+		_ = nextRsp.Body.Close()
+		return nil, err
+	}
+	pluginapi.SetContainerValue(ctx, ctxKeyFinalPage, nextReq.URL.String())
+	return nextRsp, nil
 }
 
 func (w *compiledMultiRequest) handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, evalCtx *evalContext) (*http.Response, error) {

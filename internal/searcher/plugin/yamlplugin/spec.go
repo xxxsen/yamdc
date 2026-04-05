@@ -80,6 +80,9 @@ type MultiRequestSpec struct {
 type ConditionGroupSpec struct {
 	Mode       string   `yaml:"mode"`
 	Conditions []string `yaml:"conditions"`
+	// ExpectCount limits the number of matched items after conditions are evaluated.
+	// A zero value means the count constraint is disabled.
+	ExpectCount int `yaml:"expect_count"`
 }
 
 type ScrapeSpec struct {
