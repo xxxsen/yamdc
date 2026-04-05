@@ -15,19 +15,20 @@ const (
 	bodyKindRaw  = "raw"
 
 	formatHTML = "html"
+	formatJSON = "json"
 )
 
 type PluginSpec struct {
-	Version     int              `yaml:"version"`
-	Name        string           `yaml:"name"`
-	Type        string           `yaml:"type"`
-	Hosts       []string         `yaml:"hosts"`
-	Precheck    *PrecheckSpec    `yaml:"precheck"`
-	Request     *RequestSpec     `yaml:"request"`
+	Version      int               `yaml:"version"`
+	Name         string            `yaml:"name"`
+	Type         string            `yaml:"type"`
+	Hosts        []string          `yaml:"hosts"`
+	Precheck     *PrecheckSpec     `yaml:"precheck"`
+	Request      *RequestSpec      `yaml:"request"`
 	MultiRequest *MultiRequestSpec `yaml:"multi_request"`
-	Workflow    *WorkflowSpec    `yaml:"workflow"`
-	Scrape      *ScrapeSpec      `yaml:"scrape"`
-	Postprocess *PostprocessSpec `yaml:"postprocess"`
+	Workflow     *WorkflowSpec     `yaml:"workflow"`
+	Scrape       *ScrapeSpec       `yaml:"scrape"`
+	Postprocess  *PostprocessSpec  `yaml:"postprocess"`
 }
 
 type PrecheckSpec struct {

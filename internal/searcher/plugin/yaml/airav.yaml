@@ -1,0 +1,74 @@
+version: 1
+name: airav
+type: one-step
+hosts:
+  - https://www.airav.wiki
+request:
+  method: GET
+  path: /api/video/barcode/${number}
+  query:
+    lng: zh-TW
+  accept_status_codes: [200]
+scrape:
+  format: json
+  fields:
+    number:
+      selector:
+        kind: jsonpath
+        expr: $.result.barcode
+      parser: string
+      required: true
+    title:
+      selector:
+        kind: jsonpath
+        expr: $.result.name
+      parser: string
+      required: true
+    plot:
+      selector:
+        kind: jsonpath
+        expr: $.result.description
+      parser: string
+    actors:
+      selector:
+        kind: jsonpath
+        expr: $.result.actors[*].name
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: jsonpath
+        expr: $.result.publish_date
+      parser: date_only
+    studio:
+      selector:
+        kind: jsonpath
+        expr: $.result.factories[0].name
+      parser: string
+    genres:
+      selector:
+        kind: jsonpath
+        expr: $.result.tags[*].name
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: jsonpath
+        expr: $.result.img_url
+      parser: string
+      required: true
+    sample_images:
+      selector:
+        kind: jsonpath
+        expr: $.result.images[*]
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list

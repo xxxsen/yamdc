@@ -398,7 +398,7 @@ func compileScrape(raw *ScrapeSpec) (*compiledScrape, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("scrape is required")
 	}
-	if raw.Format != formatHTML {
+	if raw.Format != formatHTML && raw.Format != formatJSON {
 		return nil, fmt.Errorf("unsupported scrape format:%s", raw.Format)
 	}
 	if len(raw.Fields) == 0 {
@@ -414,7 +414,10 @@ func compileScrape(raw *ScrapeSpec) (*compiledScrape, error) {
 		if spec.Selector == nil {
 			return nil, fmt.Errorf("field %s selector is required", name)
 		}
-		if spec.Selector.Kind != "xpath" {
+		if raw.Format == formatHTML && spec.Selector.Kind != "xpath" {
+			return nil, fmt.Errorf("field %s selector kind unsupported:%s", name, spec.Selector.Kind)
+		}
+		if raw.Format == formatJSON && spec.Selector.Kind != "jsonpath" {
 			return nil, fmt.Errorf("field %s selector kind unsupported:%s", name, spec.Selector.Kind)
 		}
 		out.fields = append(out.fields, &compiledField{
@@ -558,13 +561,24 @@ func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*
 	if err != nil {
 		return nil, false, err
 	}
-	node, err := htmlquery.Parse(bytes.NewReader(decoded))
-	if err != nil {
-		return nil, false, err
-	}
-	mv, err := p.decodeHTML(ctx, node)
-	if err != nil {
-		return nil, false, err
+	var mv *model.MovieMeta
+	switch p.spec.scrape.format {
+	case formatHTML:
+		node, err := htmlquery.Parse(bytes.NewReader(decoded))
+		if err != nil {
+			return nil, false, err
+		}
+		mv, err = p.decodeHTML(ctx, node)
+		if err != nil {
+			return nil, false, err
+		}
+	case formatJSON:
+		mv, err = p.decodeJSON(ctx, decoded)
+		if err != nil {
+			return nil, false, err
+		}
+	default:
+		return nil, false, fmt.Errorf("unsupported scrape format:%s", p.spec.scrape.format)
 	}
 	if mv == nil {
 		return nil, false, nil
@@ -860,6 +874,46 @@ func (p *YAMLSearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*mo
 			}
 		default:
 			value := decoder.DecodeSingle(node, field.selector.expr)
+			value = applyStringTransforms(value, field.transforms)
+			if field.required && strings.TrimSpace(value) == "" {
+				return nil, nil
+			}
+			if err := assignStringField(ctx, mv, field.name, value, field.parser); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return mv, nil
+}
+
+func (p *YAMLSearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.MovieMeta, error) {
+	var doc any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("decode json data failed, err:%w", err)
+	}
+	mv := &model.MovieMeta{
+		Cover:  &model.File{},
+		Poster: &model.File{},
+	}
+	for _, field := range p.spec.scrape.fields {
+		values, err := evalJSONPathStrings(doc, field.selector.expr)
+		if err != nil {
+			return nil, err
+		}
+		switch field.name {
+		case "actors", "genres", "sample_images":
+			values = applyListTransforms(values, field.transforms)
+			if field.required && len(values) == 0 {
+				return nil, nil
+			}
+			if err := assignListField(ctx, mv, field.name, values, field.parser); err != nil {
+				return nil, err
+			}
+		default:
+			value := ""
+			if len(values) > 0 {
+				value = values[0]
+			}
 			value = applyStringTransforms(value, field.transforms)
 			if field.required && strings.TrimSpace(value) == "" {
 				return nil, nil

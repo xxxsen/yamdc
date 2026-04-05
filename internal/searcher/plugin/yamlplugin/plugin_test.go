@@ -144,6 +144,50 @@ func TestYAMLPlugin_JavDB_TwoStep(t *testing.T) {
 	require.EqualValues(t, 150*60, meta.Duration)
 }
 
+func TestYAMLPlugin_Airav_JSON(t *testing.T) {
+	var baseURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/img/") {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+			return
+		}
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "/api/video/barcode/ABC-123", r.URL.Path)
+		require.Equal(t, "zh-TW", r.URL.Query().Get("lng"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.ReplaceAll(`{
+  "count": 1,
+  "status": "ok",
+  "result": {
+    "barcode": "ABC-123",
+    "name": "Airav Title",
+    "description": "Airav Plot",
+    "img_url": "{{HOST}}/img/cover.jpg",
+    "publish_date": "2024-05-06",
+    "actors": [{"name": "Alice"}, {"name": "Bob"}],
+    "images": ["{{HOST}}/img/1.jpg", "{{HOST}}/img/2.jpg"],
+    "tags": [{"name": "Drama"}, {"name": "Action"}],
+    "factories": [{"name": "Studio A"}]
+  }
+}`, "{{HOST}}", baseURL)))
+	}))
+	defer srv.Close()
+	baseURL = srv.URL
+
+	plg := mustPluginFromBuiltinYAML(t, "airav", map[string]string{"https://www.airav.wiki": srv.URL})
+	meta := mustSearch(t, "airav", plg, srv.Client(), "ABC-123")
+	require.Equal(t, "ABC-123", meta.Number)
+	require.Equal(t, "Airav Title", meta.Title)
+	require.Equal(t, "Airav Plot", meta.Plot)
+	require.Equal(t, []string{"Alice", "Bob"}, meta.Actors)
+	require.Equal(t, "Studio A", meta.Studio)
+	require.Equal(t, []string{"Drama", "Action"}, meta.Genres)
+	require.Equal(t, srv.URL+"/img/cover.jpg", meta.Cover.Name)
+	require.Len(t, meta.SampleImages, 2)
+	require.NotZero(t, meta.ReleaseDate)
+}
+
 func mustPluginFromYAML(t *testing.T, data string) *YAMLSearchPlugin {
 	t.Helper()
 	plg, err := NewFromBytes([]byte(data))
