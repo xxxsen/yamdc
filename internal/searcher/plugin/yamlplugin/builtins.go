@@ -45,6 +45,7 @@ func RegisterBuiltins() {
 	mustRegisterFromFile(constant.SSCaribpr, "caribpr.yaml")
 	mustRegisterFromFile(constant.SSMadouqu, "madouqu.yaml")
 	mustRegisterFromFile(constant.SSAvsox, "avsox.yaml")
+	mustRegisterFromFile(constant.SSManyVids, "manyvids.yaml")
 }
 
 func LegacyPluginName(name string) string {
