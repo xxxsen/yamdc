@@ -39,6 +39,10 @@ func RegisterBuiltins() {
 	mustRegisterFromFile(constant.SSJavhoo, "javhoo.yaml")
 	mustRegisterFromFile(constant.SSJavLibrary, "javlibrary.yaml")
 	mustRegisterFromFile(constant.SSFreeJavBt, "freejavbt.yaml")
+	mustRegisterFromFile(constant.SS18AV, "18av.yaml")
+	mustRegisterFromFile(constant.SSNJav, "njav.yaml")
+	mustRegisterFromFile(constant.SSFc2PPVDB, "fc2ppvdb.yaml")
+	mustRegisterFromFile(constant.SSCaribpr, "caribpr.yaml")
 }
 
 func LegacyPluginName(name string) string {

@@ -1,0 +1,82 @@
+version: 1
+name: caribpr
+type: one-step
+hosts:
+  - https://www.caribbeancompr.com
+request:
+  method: GET
+  path: /moviepages/${number}/index.html
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+  response:
+    decode_charset: euc-jp
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //div[@class='movie-info']/div[@class='section is-wide']/div[@class='heading']/h1/text()
+      parser: string
+      required: true
+    plot:
+      selector:
+        kind: xpath
+        expr: //meta[@name="description"]/@content
+      parser: string
+    actors:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "出演")]]/span[@class="spec-content"]/a[@class="spec-item"]/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "販売日")]]/span[@class="spec-content"]/text()
+      parser:
+        kind: date_layout_soft
+        layout: "2006-01-02"
+    duration:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "再生時間")]]/span[@class="spec-content"]/text()
+      parser: duration_hhmmss
+    studio:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "スタジオ")]]/span[@class="spec-content"]/a/text()
+      parser: string
+    series:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "シリーズ")]]/span[@class="spec-content"]/a/text()
+      parser: string
+    genres:
+      selector:
+        kind: xpath
+        expr: //li[span[contains(text(), "タグ")]]/span[@class="spec-content"]/a/text()
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    sample_images:
+      selector:
+        kind: xpath
+        expr: //div[@class='movie-gallery']/div[@class='section is-wide']/div[2]/div[@class='grid-item']/div/a/@href
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+postprocess:
+  assign:
+    number: ${number}
+    cover: ${concat(${host}, "/moviepages/", ${number}, "/images/l_l.jpg")}
+  defaults:
+    title_lang: ja
+    plot_lang: ja

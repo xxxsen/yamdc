@@ -876,6 +876,10 @@ func assignStringField(ctx context.Context, mv *model.MovieMeta, field, value st
 		if field == "release_date" {
 			mv.ReleaseDate = t
 		}
+	case "date_layout_soft":
+		if field == "release_date" {
+			mv.ReleaseDate = softTimeParse(parserSpec.Layout, value)
+		}
 	default:
 		return fmt.Errorf("unsupported parser:%s", parserSpec.Kind)
 	}
@@ -1138,4 +1142,12 @@ func timeParse(layout, value string) (int64, error) {
 		return 0, err
 	}
 	return t.UnixMilli(), nil
+}
+
+func softTimeParse(layout, value string) int64 {
+	t, err := time.Parse(layout, strings.TrimSpace(value))
+	if err != nil {
+		return 0
+	}
+	return t.UnixMilli()
 }
