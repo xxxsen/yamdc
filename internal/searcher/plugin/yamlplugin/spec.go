@@ -24,6 +24,7 @@ type PluginSpec struct {
 	Hosts       []string         `yaml:"hosts"`
 	Precheck    *PrecheckSpec    `yaml:"precheck"`
 	Request     *RequestSpec     `yaml:"request"`
+	MultiRequest *MultiRequestSpec `yaml:"multi_request"`
 	Workflow    *WorkflowSpec    `yaml:"workflow"`
 	Scrape      *ScrapeSpec      `yaml:"scrape"`
 	Postprocess *PostprocessSpec `yaml:"postprocess"`
@@ -59,7 +60,6 @@ type ResponseSpec struct {
 
 type WorkflowSpec struct {
 	SearchSelect *SearchSelectWorkflowSpec `yaml:"search_select"`
-	MultiTry     *MultiTryWorkflowSpec     `yaml:"multi_try"`
 }
 
 type SearchSelectWorkflowSpec struct {
@@ -70,7 +70,7 @@ type SearchSelectWorkflowSpec struct {
 	NextRequest   *RequestSpec        `yaml:"next_request"`
 }
 
-type MultiTryWorkflowSpec struct {
+type MultiRequestSpec struct {
 	Candidates  []string            `yaml:"candidates"`
 	Unique      bool                `yaml:"unique"`
 	Request     *RequestSpec        `yaml:"request"`
@@ -160,4 +160,3 @@ type SwitchConfigSpec struct {
 	DisableReleaseDateCheck bool `yaml:"disable_release_date_check"`
 	DisableNumberReplace    bool `yaml:"disable_number_replace"`
 }
-

@@ -39,7 +39,8 @@ type compiledPlugin struct {
 	hosts       []string
 	precheck    *compiledPrecheck
 	request     *compiledRequest
-	workflow    compiledWorkflow
+	multiRequest *compiledMultiRequest
+	workflow    *compiledSearchSelectWorkflow
 	scrape      *compiledScrape
 	postprocess *compiledPostprocess
 }
@@ -68,11 +69,6 @@ type compiledRequestBody struct {
 	content *template
 }
 
-type compiledWorkflow interface {
-	handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, req *http.Request, evalCtx *evalContext) (*http.Response, error)
-	finalRequest() *compiledRequest
-}
-
 type compiledSearchSelectWorkflow struct {
 	selectors     []*compiledSelectorList
 	itemVariables map[string]*template
@@ -81,7 +77,7 @@ type compiledSearchSelectWorkflow struct {
 	nextRequest   *compiledRequest
 }
 
-type compiledMultiTryWorkflow struct {
+type compiledMultiRequest struct {
 	candidates  []*template
 	unique      bool
 	request     *compiledRequest
@@ -121,6 +117,16 @@ type YAMLSearchPlugin struct {
 	spec *compiledPlugin
 }
 
+func (p *compiledPlugin) finalRequest() *compiledRequest {
+	if p.workflow != nil {
+		return p.workflow.nextRequest
+	}
+	if p.multiRequest != nil {
+		return p.multiRequest.request
+	}
+	return p.request
+}
+
 func NewFromBytes(data []byte) (pluginapi.IPlugin, error) {
 	raw := &PluginSpec{}
 	if err := yaml.Unmarshal(data, raw); err != nil {
@@ -146,14 +152,14 @@ func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
 	if len(raw.Hosts) == 0 {
 		return nil, fmt.Errorf("hosts is required")
 	}
-	if raw.Workflow != nil && raw.Workflow.SearchSelect != nil && raw.Workflow.MultiTry != nil {
-		return nil, fmt.Errorf("search_select and multi_try are mutually exclusive")
+	if raw.Request != nil && raw.MultiRequest != nil {
+		return nil, fmt.Errorf("request and multi_request are mutually exclusive")
 	}
 	if raw.Type == typeTwoStep && (raw.Workflow == nil || raw.Workflow.SearchSelect == nil) {
 		return nil, fmt.Errorf("two-step requires workflow.search_select")
 	}
-	if raw.Request == nil && (raw.Workflow == nil || raw.Workflow.MultiTry == nil) {
-		return nil, fmt.Errorf("request is required")
+	if raw.Request == nil && raw.MultiRequest == nil {
+		return nil, fmt.Errorf("request or multi_request is required")
 	}
 	out := &compiledPlugin{
 		version:    raw.Version,
@@ -167,6 +173,11 @@ func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
 	}
 	if raw.Request != nil {
 		if out.request, err = compileRequest(raw.Request); err != nil {
+			return nil, err
+		}
+	}
+	if raw.MultiRequest != nil {
+		if out.multiRequest, err = compileMultiRequest(raw.MultiRequest); err != nil {
 			return nil, err
 		}
 	}
@@ -295,15 +306,12 @@ func compileRequestBody(raw *RequestBodySpec) (*compiledRequestBody, error) {
 	return out, nil
 }
 
-func compileWorkflow(raw *WorkflowSpec) (compiledWorkflow, error) {
+func compileWorkflow(raw *WorkflowSpec) (*compiledSearchSelectWorkflow, error) {
 	if raw == nil {
 		return nil, nil
 	}
 	if raw.SearchSelect != nil {
 		return compileSearchSelect(raw.SearchSelect)
-	}
-	if raw.MultiTry != nil {
-		return compileMultiTry(raw.MultiTry)
 	}
 	return nil, nil
 }
@@ -355,12 +363,12 @@ func compileSearchSelect(raw *SearchSelectWorkflowSpec) (*compiledSearchSelectWo
 	return out, nil
 }
 
-func compileMultiTry(raw *MultiTryWorkflowSpec) (*compiledMultiTryWorkflow, error) {
+func compileMultiRequest(raw *MultiRequestSpec) (*compiledMultiRequest, error) {
 	if len(raw.Candidates) == 0 {
-		return nil, fmt.Errorf("multi_try candidates is required")
+		return nil, fmt.Errorf("multi_request candidates is required")
 	}
 	if raw.Request == nil {
-		return nil, fmt.Errorf("multi_try request is required")
+		return nil, fmt.Errorf("multi_request request is required")
 	}
 	req, err := compileRequest(raw.Request)
 	if err != nil {
@@ -370,7 +378,7 @@ func compileMultiTry(raw *MultiTryWorkflowSpec) (*compiledMultiTryWorkflow, erro
 	if err != nil {
 		return nil, err
 	}
-	out := &compiledMultiTryWorkflow{
+	out := &compiledMultiRequest{
 		unique:      raw.Unique,
 		request:     req,
 		successWhen: successWhen,
@@ -478,11 +486,14 @@ func (p *YAMLSearchPlugin) OnPrecheckRequest(ctx context.Context, number string)
 }
 
 func (p *YAMLSearchPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	if p.spec.request == nil {
-		return nil, fmt.Errorf("request is nil")
-	}
 	host := pluginapi.MustSelectDomain(p.spec.hosts)
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
+	if p.spec.request == nil {
+		if p.spec.multiRequest == nil {
+			return nil, fmt.Errorf("request is nil")
+		}
+		return http.NewRequestWithContext(ctx, http.MethodGet, host, nil)
+	}
 	return p.buildRequest(ctx, p.spec.request, &evalContext{
 		number: number,
 		host:   host,
@@ -495,21 +506,29 @@ func (p *YAMLSearchPlugin) OnDecorateRequest(ctx context.Context, req *http.Requ
 }
 
 func (p *YAMLSearchPlugin) OnHandleHTTPRequest(ctx context.Context, invoker pluginapi.HTTPInvoker, req *http.Request) (*http.Response, error) {
-	if p.spec.workflow == nil {
-		return invoker(ctx, req)
-	}
-	return p.spec.workflow.handle(ctx, p, invoker, req, &evalContext{
+	evalCtx := &evalContext{
 		number: ctxNumber(ctx),
 		host:   currentHost(ctx, p.spec.hosts),
 		vars:   readVarsFromContext(ctx),
-	})
+	}
+	if p.spec.multiRequest != nil {
+		rsp, err := p.spec.multiRequest.handle(ctx, p, invoker, evalCtx)
+		if err != nil {
+			return nil, err
+		}
+		if p.spec.workflow != nil {
+			return p.spec.workflow.handleResponse(ctx, p, invoker, rsp, evalCtx, p.spec.multiRequest.request.decodeCharset)
+		}
+		return rsp, nil
+	}
+	if p.spec.workflow == nil {
+		return invoker(ctx, req)
+	}
+	return p.spec.workflow.handleRequest(ctx, p, invoker, req, evalCtx)
 }
 
 func (p *YAMLSearchPlugin) OnPrecheckResponse(ctx context.Context, req *http.Request, rsp *http.Response) (bool, error) {
-	finalReq := p.spec.request
-	if p.spec.workflow != nil && p.spec.workflow.finalRequest() != nil {
-		finalReq = p.spec.workflow.finalRequest()
-	}
+	finalReq := p.spec.finalRequest()
 	if finalReq == nil {
 		if rsp.StatusCode == http.StatusNotFound {
 			return false, nil
@@ -533,10 +552,7 @@ func (p *YAMLSearchPlugin) OnPrecheckResponse(ctx context.Context, req *http.Req
 }
 
 func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
-	finalReq := p.spec.request
-	if p.spec.workflow != nil && p.spec.workflow.finalRequest() != nil {
-		finalReq = p.spec.workflow.finalRequest()
-	}
+	finalReq := p.spec.finalRequest()
 	decoded, err := decodeBytes(data, finalReq.decodeCharset)
 	if err != nil {
 		return nil, false, err
@@ -557,7 +573,11 @@ func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*
 }
 
 func (p *YAMLSearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
-	for key, value := range p.spec.request.headers {
+	baseReq := p.spec.finalRequest()
+	if baseReq == nil {
+		return nil
+	}
+	for key, value := range baseReq.headers {
 		rendered, err := value.Render(&evalContext{
 			number: ctxNumber(ctx),
 			host:   currentHost(ctx, p.spec.hosts),
@@ -568,7 +588,7 @@ func (p *YAMLSearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http
 		}
 		req.Header.Set(key, rendered)
 	}
-	for key, value := range p.spec.request.cookies {
+	for key, value := range baseReq.cookies {
 		rendered, err := value.Render(&evalContext{
 			number: ctxNumber(ctx),
 			host:   currentHost(ctx, p.spec.hosts),
@@ -585,16 +605,28 @@ func (p *YAMLSearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http
 	return nil
 }
 
-func (w *compiledSearchSelectWorkflow) handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, req *http.Request, evalCtx *evalContext) (*http.Response, error) {
+func (w *compiledSearchSelectWorkflow) handleRequest(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, req *http.Request, evalCtx *evalContext) (*http.Response, error) {
 	rsp, err := invoker(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	body, node, err := readResponseBody(rsp, plg.spec.request.decodeCharset)
+	return w.handleResponse(ctx, plg, invoker, rsp, evalCtx, plg.spec.request.decodeCharset)
+}
+
+func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, rsp *http.Response, evalCtx *evalContext, decodeCharset string) (*http.Response, error) {
+	body, node, err := readResponseBody(rsp, decodeCharset)
 	if err != nil {
 		return nil, err
 	}
-	if err := checkAcceptedStatus(plg.spec.request, rsp.StatusCode); err != nil {
+	if pReq := plg.spec.request; pReq != nil {
+		if err := checkAcceptedStatus(pReq, rsp.StatusCode); err != nil {
+			return nil, err
+		}
+	} else if pReq := plg.spec.multiRequest; pReq != nil {
+		if err := checkAcceptedStatus(pReq.request, rsp.StatusCode); err != nil {
+			return nil, err
+		}
+	} else {
 		return nil, err
 	}
 	results := make(map[string][]string, len(w.selectors))
@@ -660,9 +692,7 @@ func (w *compiledSearchSelectWorkflow) handle(ctx context.Context, plg *YAMLSear
 	return nil, fmt.Errorf("no search_select result matched")
 }
 
-func (w *compiledSearchSelectWorkflow) finalRequest() *compiledRequest { return w.nextRequest }
-
-func (w *compiledMultiTryWorkflow) handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, req *http.Request, evalCtx *evalContext) (*http.Response, error) {
+func (w *compiledMultiRequest) handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, evalCtx *evalContext) (*http.Response, error) {
 	seen := map[string]struct{}{}
 	for _, candidateTmpl := range w.candidates {
 		candidate, err := candidateTmpl.Render(evalCtx)
@@ -704,10 +734,8 @@ func (w *compiledMultiTryWorkflow) handle(ctx context.Context, plg *YAMLSearchPl
 		rsp.Body = io.NopCloser(bytes.NewReader([]byte(body)))
 		return rsp, nil
 	}
-	return nil, fmt.Errorf("no multi_try request matched")
+	return nil, fmt.Errorf("no multi_request matched")
 }
-
-func (w *compiledMultiTryWorkflow) finalRequest() *compiledRequest { return w.request }
 
 func (p *YAMLSearchPlugin) buildRequest(ctx context.Context, spec *compiledRequest, evalCtx *evalContext) (*http.Request, error) {
 	if evalCtx.host == "" {
@@ -919,6 +947,13 @@ func applyStringTransforms(value string, transforms []*TransformSpec) string {
 			out = strings.Trim(out, item.Cutset)
 		case "replace":
 			out = strings.ReplaceAll(out, item.Old, item.New)
+		case "split_index":
+			parts := strings.Split(out, item.Sep)
+			if item.Index >= 0 && item.Index < len(parts) {
+				out = parts[item.Index]
+			} else {
+				out = ""
+			}
 		case "to_upper":
 			out = strings.ToUpper(out)
 		case "to_lower":
@@ -960,6 +995,13 @@ func applyListTransforms(values []string, transforms []*TransformSpec) []string 
 			for i, value := range out {
 				out[i] = strings.ReplaceAll(value, item.Old, item.New)
 			}
+		case "split":
+			split := make([]string, 0, len(out))
+			for _, value := range out {
+				parts := strings.Split(value, item.Sep)
+				split = append(split, parts...)
+			}
+			out = split
 		case "to_upper":
 			for i, value := range out {
 				out[i] = strings.ToUpper(value)

@@ -43,6 +43,7 @@ func RegisterBuiltins() {
 	mustRegisterFromFile(constant.SSNJav, "njav.yaml")
 	mustRegisterFromFile(constant.SSFc2PPVDB, "fc2ppvdb.yaml")
 	mustRegisterFromFile(constant.SSCaribpr, "caribpr.yaml")
+	mustRegisterFromFile(constant.SSMadouqu, "madouqu.yaml")
 }
 
 func LegacyPluginName(name string) string {
