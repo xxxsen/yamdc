@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/config"
 )
 
 func TestLoadBundleFromDir(t *testing.T) {
@@ -108,7 +107,7 @@ configuration:
 		default:
 			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 		}
-	}}, []config.SearcherPluginBundleSource{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
+	}}, []Source{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
 		latest = resolved
 		return nil
 	})
@@ -124,7 +123,7 @@ configuration:
 	latest = nil
 	manager, err = NewManager("searcher_plugin", dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("network down")
-	}}, []config.SearcherPluginBundleSource{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
+	}}, []Source{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
 		latest = resolved
 		return nil
 	})

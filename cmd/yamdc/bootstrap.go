@@ -239,9 +239,12 @@ func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 
 func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartContext, runtimeSearcher *searcher.RuntimeCategorySearcher) (*pluginbundle.Manager, error) {
 	c := ysctx.Config
-	sources := make([]config.SearcherPluginBundleSource, 0, len(c.SearcherPluginBundleConfig.Sources))
+	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginBundleConfig.Sources))
 	for _, source := range c.SearcherPluginBundleConfig.Sources {
-		item := source
+		item := pluginbundle.Source{
+			SourceType: source.SourceType,
+			Location:   source.Location,
+		}
 		if strings.TrimSpace(item.SourceType) == "" || strings.EqualFold(item.SourceType, basebundle.SourceTypeLocal) {
 			resolved, err := resolveBundleSourcePath(c.DataDir, item.Location)
 			if err != nil {
@@ -310,13 +313,20 @@ func buildSearcherDebuggerAction(_ context.Context, ysctx *YamdcStartContext) er
 }
 
 func buildHandlerDebuggerAction(_ context.Context, ysctx *YamdcStartContext) error {
+	handlerOptions := make(map[string]handler.DebugHandlerOption, len(ysctx.Config.HandlerConfig))
+	for name, cfg := range ysctx.Config.HandlerConfig {
+		handlerOptions[name] = handler.DebugHandlerOption{
+			Disable: cfg.Disable,
+			Args:    cfg.Args,
+		}
+	}
 	ysctx.HandlerDebugger = handler.NewDebugger(appdeps.Runtime{
 		HTTPClient: ysctx.HTTPClient,
 		Storage:    ysctx.CacheStore,
 		Translator: ysctx.Translator,
 		AIEngine:   ysctx.AIEngine,
 		FaceRec:    ysctx.FaceRec,
-	}, ysctx.NumberCleaner, ysctx.Config.Handlers, ysctx.Config.HandlerConfig)
+	}, ysctx.NumberCleaner, ysctx.Config.Handlers, handlerOptions)
 	return nil
 }
 

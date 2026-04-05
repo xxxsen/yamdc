@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -128,7 +127,7 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 	}`))
 	rec := httptest.NewRecorder()
 
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]config.HandlerConfig{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
 	api.handleHandlerDebugRun(rec, req)
 
 	resp := rec.Result()
@@ -164,7 +163,7 @@ func TestHandleHandlerDebugRunChain(t *testing.T) {
 	}`))
 	rec := httptest.NewRecorder()
 
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]config.HandlerConfig{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
 	api.handleHandlerDebugRun(rec, req)
 
 	resp := rec.Result()

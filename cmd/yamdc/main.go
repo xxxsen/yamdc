@@ -290,9 +290,12 @@ func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *conf
 	if len(c.SearcherPluginBundleConfig.Sources) == 0 {
 		return nil, nil
 	}
-	sources := make([]config.SearcherPluginBundleSource, 0, len(c.SearcherPluginBundleConfig.Sources))
+	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginBundleConfig.Sources))
 	for _, source := range c.SearcherPluginBundleConfig.Sources {
-		item := source
+		item := pluginbundle.Source{
+			SourceType: source.SourceType,
+			Location:   source.Location,
+		}
 		if strings.ToLower(strings.TrimSpace(item.SourceType)) == "" || strings.EqualFold(item.SourceType, basebundle.SourceTypeLocal) {
 			resolved, err := resolveBundleSourcePath(c.DataDir, item.Location)
 			if err != nil {

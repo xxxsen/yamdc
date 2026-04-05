@@ -9,10 +9,14 @@ import (
 
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
-	"github.com/xxxsen/yamdc/internal/config"
 )
 
 type OnDataReadyFunc func(context.Context, *ResolvedBundle, []string) error
+
+type Source struct {
+	SourceType string
+	Location   string
+}
 
 type Manager struct {
 	name        string
@@ -23,7 +27,7 @@ type Manager struct {
 	mu          sync.Mutex
 }
 
-func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []config.SearcherPluginBundleSource, cb OnDataReadyFunc) (*Manager, error) {
+func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []Source, cb OnDataReadyFunc) (*Manager, error) {
 	if cb == nil {
 		return nil, fmt.Errorf("plugin bundle callback is required")
 	}
