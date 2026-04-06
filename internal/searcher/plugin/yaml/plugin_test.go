@@ -26,6 +26,13 @@ func TestSyncBundleRemovesObsoletePlugins(t *testing.T) {
 		oldName = "__bundle_test_old__"
 		newName = "__bundle_test_new__"
 	)
+	orig := factory.NewRegisterContext()
+	for _, name := range factory.Plugins() {
+		cr, ok := factory.Lookup(name)
+		require.True(t, ok)
+		orig.Register(name, cr)
+	}
+	defer factory.Swap(orig)
 	SyncBundle(map[string][]byte{
 		oldName: []byte(`
 version: 1
@@ -77,7 +84,8 @@ scrape:
 	require.True(t, ok)
 
 	SyncBundle(nil)
-	factory.Unregister(newName)
+	_, ok = factory.Lookup(newName)
+	require.False(t, ok)
 }
 
 func TestYAML_Jav321_OneStep(t *testing.T) {

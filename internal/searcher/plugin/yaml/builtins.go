@@ -8,10 +8,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 )
 
-var (
-	bundleMu            sync.Mutex
-	currentBundlePlugin = make(map[string]struct{})
-)
+var bundleMu sync.Mutex
 
 type cachedCreator struct {
 	data   []byte
@@ -36,25 +33,16 @@ func SyncBundle(plugins map[string][]byte) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	next := make(map[string]struct{}, len(names))
 	bundleMu.Lock()
+	ctx := factory.NewRegisterContext()
 	for _, name := range names {
-		next[name] = struct{}{}
+		registerBytes(ctx, name, plugins[name])
 	}
-	for name := range currentBundlePlugin {
-		if _, ok := next[name]; ok {
-			continue
-		}
-		factory.Unregister(name)
-	}
-	for _, name := range names {
-		registerBytes(name, plugins[name])
-	}
-	currentBundlePlugin = next
+	factory.Swap(ctx)
 	bundleMu.Unlock()
 }
 
-func registerBytes(name string, data []byte) {
+func registerBytes(ctx *factory.RegisterContext, name string, data []byte) {
 	cc := &cachedCreator{data: data}
-	factory.Register(name, cc.create)
+	ctx.Register(name, cc.create)
 }
