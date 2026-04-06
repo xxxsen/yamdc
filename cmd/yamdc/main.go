@@ -55,7 +55,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newRunCmd(), newServerCmd(), newRulesetTestCmd())
+	cmd.AddCommand(newRunCmd(), newServerCmd(), newRulesetTestCmd(), newPluginTestCmd())
 	return cmd
 }
 

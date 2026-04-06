@@ -171,7 +171,7 @@ func defaultConfig() *Config {
 			Sources: []SearcherPluginSource{
 				{
 					SourceType: "remote",
-					Location:   "https://github.com/xxxsen/yamdc-plugins",
+					Location:   "https://github.com/xxxsen/yamdc-plugin",
 				},
 			},
 		},

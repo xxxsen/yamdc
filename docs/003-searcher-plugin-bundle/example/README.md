@@ -15,4 +15,8 @@
    - 演示 GitHub remote source 与本地 source 的组合方式
    - 演示本地相对路径会基于 `data_dir` 解析
 
+3. `plugin-test/`
+   - 预留给 `plugin-test --plugin=... --output=json` 这类 CI 校验命令
+   - 当前命令直接校验 bundle 目录，不再依赖单独的 case 文件
+
 这些示例只展示 bundle 与配置层语义，不包含具体站点插件逻辑。

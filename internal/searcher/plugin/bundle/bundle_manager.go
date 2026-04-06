@@ -103,6 +103,18 @@ func LoadResolvedBundleFromData(data *basebundle.BundleData) (*ResolvedBundle, [
 	return resolved, append([]string(nil), resolved.Files...), nil
 }
 
+func LoadResolvedBundleFromDir(dir string) (*ResolvedBundle, []string, error) {
+	bundle, files, err := LoadBundleFromDir(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolved, err := resolveBundles([]*Bundle{bundle})
+	if err != nil {
+		return nil, nil, err
+	}
+	return resolved, files, nil
+}
+
 func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 	out := &ResolvedBundle{
 		Plugins:        make(map[string][]byte),
