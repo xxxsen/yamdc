@@ -29,6 +29,12 @@ func (r *RegisterContext) Register(name string, fn CreatorFunc) {
 	r.mp[name] = fn
 }
 
+func (r *RegisterContext) Snapshot() map[string]CreatorFunc {
+	out := make(map[string]CreatorFunc, len(r.mp))
+	maps.Copy(out, r.mp)
+	return out
+}
+
 func Swap(ctx *RegisterContext) {
 	next := make(map[string]CreatorFunc, len(ctx.mp))
 	maps.Copy(next, ctx.mp)
@@ -62,6 +68,13 @@ func Plugins() []string {
 	}
 	sort.Strings(rs)
 	return rs
+}
+
+func Snapshot() map[string]CreatorFunc {
+	current := currentRegistry()
+	out := make(map[string]CreatorFunc, len(current))
+	maps.Copy(out, current)
+	return out
 }
 
 func currentRegistry() map[string]CreatorFunc {

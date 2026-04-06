@@ -70,6 +70,7 @@ type Debugger struct {
 	mu              sync.RWMutex
 	defaultPlugins  []string
 	categoryPlugins map[string][]string
+	creators        map[string]factory.CreatorFunc
 }
 
 func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, defaultPlugins []string, categoryPlugins map[string][]string) *Debugger {
@@ -83,13 +84,22 @@ func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numberc
 }
 
 func (d *Debugger) SwapPlugins(defaultPlugins []string, categoryPlugins map[string][]string) {
+	d.SwapState(defaultPlugins, categoryPlugins, factory.Snapshot())
+}
+
+func (d *Debugger) SwapState(defaultPlugins []string, categoryPlugins map[string][]string, creators map[string]factory.CreatorFunc) {
 	cp := make(map[string][]string, len(categoryPlugins))
 	for key, items := range categoryPlugins {
 		cp[strings.ToUpper(strings.TrimSpace(key))] = append([]string(nil), items...)
 	}
+	nextCreators := make(map[string]factory.CreatorFunc, len(creators))
+	for name, creator := range creators {
+		nextCreators[name] = creator
+	}
 	d.mu.Lock()
 	d.defaultPlugins = append([]string(nil), defaultPlugins...)
 	d.categoryPlugins = cp
+	d.creators = nextCreators
 	d.mu.Unlock()
 }
 
@@ -97,8 +107,9 @@ func (d *Debugger) Plugins() SearcherDebugPluginCollection {
 	d.mu.RLock()
 	defaultPlugins := append([]string(nil), d.defaultPlugins...)
 	categoryPlugins := cloneStringMap(d.categoryPlugins)
+	creators := cloneCreators(d.creators)
 	d.mu.RUnlock()
-	available := collectVisiblePlugins(defaultPlugins, categoryPlugins)
+	available := collectVisiblePlugins(defaultPlugins, categoryPlugins, creators)
 	sort.Strings(defaultPlugins)
 	return SearcherDebugPluginCollection{
 		Available: available,
@@ -175,7 +186,7 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 	return result, nil
 }
 
-func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][]string) []string {
+func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][]string, creators map[string]factory.CreatorFunc) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(defaultPlugins))
 	for _, name := range defaultPlugins {
@@ -186,7 +197,7 @@ func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][
 		if _, ok := seen[name]; ok {
 			continue
 		}
-		if _, ok := factory.Lookup(name); !ok {
+		if _, ok := creators[name]; !ok {
 			continue
 		}
 		seen[name] = struct{}{}
@@ -201,7 +212,7 @@ func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][
 			if _, ok := seen[name]; ok {
 				continue
 			}
-			if _, ok := factory.Lookup(name); !ok {
+			if _, ok := creators[name]; !ok {
 				continue
 			}
 			seen[name] = struct{}{}
@@ -230,7 +241,13 @@ func (d *Debugger) resolvePlugins(num *number.Number) []string {
 }
 
 func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number) (*PluginDebugResult, error) {
-	plg, err := factory.CreatePlugin(name, struct{}{})
+	d.mu.RLock()
+	creator, ok := d.creators[name]
+	d.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("plugin:%s not found", name)
+	}
+	plg, err := creator(struct{}{})
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +260,14 @@ func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.
 		return nil, fmt.Errorf("searcher %s is not default searcher", name)
 	}
 	return def.debugSearch(ctx, num), nil
+}
+
+func cloneCreators(in map[string]factory.CreatorFunc) map[string]factory.CreatorFunc {
+	out := make(map[string]factory.CreatorFunc, len(in))
+	for name, creator := range in {
+		out[name] = creator
+	}
+	return out
 }
 
 func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number) *PluginDebugResult {

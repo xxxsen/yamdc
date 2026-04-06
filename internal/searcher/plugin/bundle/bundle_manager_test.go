@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -147,6 +150,56 @@ chains:
 	require.NotNil(t, latest)
 	require.Equal(t, []string{"alpha"}, latest.DefaultPlugins)
 	require.Equal(t, []string{"yamdc-plugins-v1/plugins/alpha.yaml"}, latest.Files)
+}
+
+func TestManagerEmitSerializesCallbacks(t *testing.T) {
+	var (
+		inFlight    atomic.Int64
+		maxInFlight atomic.Int64
+	)
+	manager := &Manager{
+		cb: func(_ context.Context, _ *ResolvedBundle, _ []string) error {
+			active := inFlight.Add(1)
+			defer inFlight.Add(-1)
+			for {
+				current := maxInFlight.Load()
+				if active <= current || maxInFlight.CompareAndSwap(current, active) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			return nil
+		},
+		bundles: map[int]*Bundle{
+			0: {
+				Manifest: &BundleManifest{
+					Version: 1,
+					Name:    "bundle-a",
+					Entry:   "plugins",
+					Chains: map[string][]*PluginChainItem{
+						"all": {
+							{Name: "alpha", Priority: 100},
+						},
+					},
+				},
+				Plugins: map[string]*PluginFile{
+					"alpha": {Name: "alpha", Data: []byte(samplePluginYAML("alpha"))},
+				},
+			},
+		},
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		require.NoError(t, manager.emit(context.Background()))
+	}()
+	go func() {
+		defer wg.Done()
+		require.NoError(t, manager.emit(context.Background()))
+	}()
+	wg.Wait()
+	require.EqualValues(t, 1, maxInFlight.Load())
 }
 
 func samplePluginYAML(name string) string {

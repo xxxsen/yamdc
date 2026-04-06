@@ -209,9 +209,13 @@ func buildCapture(c *config.Config, storage store.IStorage, sr searcher.ISearche
 }
 
 func buildCatSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig) (map[string][]searcher.ISearcher, error) {
+	return buildCatSearcherWithCreators(ctx, cli, storage, c, cplgs, m, factory.Snapshot())
+}
+
+func buildCatSearcherWithCreators(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig, creators map[string]factory.CreatorFunc) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
-		ss, err := buildSearcher(ctx, cli, storage, c, plg.Plugins, m)
+		ss, err := buildSearcherWithCreators(ctx, cli, storage, c, plg.Plugins, m, creators)
 		if err != nil {
 			return nil, err
 		}
@@ -221,6 +225,10 @@ func buildCatSearcher(ctx context.Context, cli client.IHTTPClient, storage store
 }
 
 func buildSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig) ([]searcher.ISearcher, error) {
+	return buildSearcherWithCreators(ctx, cli, storage, c, plgs, m, factory.Snapshot())
+}
+
+func buildSearcherWithCreators(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, plgs []string, m map[string]config.PluginConfig, creators map[string]factory.CreatorFunc) ([]searcher.ISearcher, error) {
 	rs := make([]searcher.ISearcher, 0, len(plgs))
 	defc := config.PluginConfig{
 		Disable: false,
@@ -234,7 +242,11 @@ func buildSearcher(ctx context.Context, cli client.IHTTPClient, storage store.IS
 			logutil.GetLogger(ctx).Info("plugin is disabled, skip create", zap.String("plugin", name))
 			continue
 		}
-		plg, err := factory.CreatePlugin(name, struct{}{})
+		cr, ok := creators[name]
+		if !ok {
+			return nil, fmt.Errorf("create plugin failed, name:%s, err:plugin not found", name)
+		}
+		plg, err := cr(struct{}{})
 		if err != nil {
 			return nil, fmt.Errorf("create plugin failed, name:%s, err:%w", name, err)
 		}
@@ -306,6 +318,7 @@ func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *conf
 		sources = append(sources, item)
 	}
 	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, cli, sources, func(ctx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
+		pluginyaml.SyncBundle(resolved.Plugins)
 		applyResolvedSearcherPluginBundle(ctx, c, resolved)
 		return nil
 	})
@@ -319,23 +332,12 @@ func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *conf
 }
 
 func applyResolvedSearcherPluginBundle(ctx context.Context, c *config.Config, resolved *pluginbundle.ResolvedBundle) {
-	pluginyaml.SyncBundle(resolved.Plugins)
+	defaultPlugins, categoryPlugins := resolvedPluginConfig(resolved)
 	for _, warning := range resolved.Warnings {
 		logutil.GetLogger(ctx).Warn("plugin bundle conflict", zap.String("detail", warning))
 	}
-	c.Plugins = append([]string(nil), resolved.DefaultPlugins...)
-	c.CategoryPlugins = make([]config.CategoryPlugin, 0, len(resolved.CategoryChains))
-	categoryNames := make([]string, 0, len(resolved.CategoryChains))
-	for category := range resolved.CategoryChains {
-		categoryNames = append(categoryNames, category)
-	}
-	sort.Strings(categoryNames)
-	for _, category := range categoryNames {
-		c.CategoryPlugins = append(c.CategoryPlugins, config.CategoryPlugin{
-			Name:    category,
-			Plugins: append([]string(nil), resolved.CategoryChains[category]...),
-		})
-	}
+	c.Plugins = defaultPlugins
+	c.CategoryPlugins = categoryPlugins
 	logutil.GetLogger(ctx).Info("load searcher plugin bundles", zap.Strings("default_plugins", c.Plugins), zap.Int("category_count", len(c.CategoryPlugins)))
 }
 
@@ -345,6 +347,26 @@ func categoryPluginMap(items []config.CategoryPlugin) map[string][]string {
 		out[item.Name] = append([]string(nil), item.Plugins...)
 	}
 	return out
+}
+
+func resolvedPluginConfig(resolved *pluginbundle.ResolvedBundle) ([]string, []config.CategoryPlugin) {
+	if resolved == nil {
+		return nil, nil
+	}
+	defaultPlugins := append([]string(nil), resolved.DefaultPlugins...)
+	categoryPlugins := make([]config.CategoryPlugin, 0, len(resolved.CategoryChains))
+	categoryNames := make([]string, 0, len(resolved.CategoryChains))
+	for category := range resolved.CategoryChains {
+		categoryNames = append(categoryNames, category)
+	}
+	sort.Strings(categoryNames)
+	for _, category := range categoryNames {
+		categoryPlugins = append(categoryPlugins, config.CategoryPlugin{
+			Name:    category,
+			Plugins: append([]string(nil), resolved.CategoryChains[category]...),
+		})
+	}
+	return defaultPlugins, categoryPlugins
 }
 
 func precheckCaptureDir(c *config.Config) error {

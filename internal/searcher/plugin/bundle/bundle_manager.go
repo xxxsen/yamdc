@@ -25,6 +25,7 @@ type Manager struct {
 	bundles     map[int]*Bundle
 	initialized bool
 	mu          sync.Mutex
+	emitMu      sync.Mutex
 }
 
 func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []Source, cb OnDataReadyFunc) (*Manager, error) {
@@ -75,6 +76,8 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 func (m *Manager) emit(ctx context.Context) error {
+	m.emitMu.Lock()
+	defer m.emitMu.Unlock()
 	m.mu.Lock()
 	bundles := make([]*Bundle, 0, len(m.bundles))
 	for _, bundle := range m.bundles {

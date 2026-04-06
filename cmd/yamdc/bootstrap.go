@@ -26,6 +26,8 @@ import (
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
+	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/web"
@@ -256,20 +258,24 @@ func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartConte
 		sources = append(sources, item)
 	}
 	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, ysctx.HTTPClient, sources, func(cbCtx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
+		nextDefaultPlugins, nextCategoryPlugins := resolvedPluginConfig(resolved)
+		registerCtx := pluginyaml.BuildRegisterContext(resolved.Plugins)
+		creatorSnapshot := registerCtx.Snapshot()
+		ss, err := buildSearcherWithCreators(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextDefaultPlugins, c.PluginConfig, creatorSnapshot)
+		if err != nil {
+			return err
+		}
+		catSs, err := buildCatSearcherWithCreators(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextCategoryPlugins, c.PluginConfig, creatorSnapshot)
+		if err != nil {
+			return err
+		}
+		factory.Swap(registerCtx)
 		applyResolvedSearcherPluginBundle(cbCtx, c, resolved)
-		ss, err := buildSearcher(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, c.Plugins, c.PluginConfig)
-		if err != nil {
-			return err
-		}
-		catSs, err := buildCatSearcher(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, c.CategoryPlugins, c.PluginConfig)
-		if err != nil {
-			return err
-		}
 		ysctx.Searchers = ss
 		ysctx.CategorySearchers = catSs
 		runtimeSearcher.Swap(ss, catSs)
 		if ysctx.SearcherDebugger != nil {
-			ysctx.SearcherDebugger.SwapPlugins(c.Plugins, categoryPluginMap(c.CategoryPlugins))
+			ysctx.SearcherDebugger.SwapState(nextDefaultPlugins, categoryPluginMap(nextCategoryPlugins), creatorSnapshot)
 		}
 		logutil.GetLogger(cbCtx).Info("reload searcher plugin runtime", zap.Int("default_plugins", len(c.Plugins)), zap.Int("category_chains", len(c.CategoryPlugins)))
 		return nil

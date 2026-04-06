@@ -28,18 +28,23 @@ func (c *cachedCreator) create(args interface{}) (api.IPlugin, error) {
 }
 
 func SyncBundle(plugins map[string][]byte) {
+	ctx := BuildRegisterContext(plugins)
+	bundleMu.Lock()
+	factory.Swap(ctx)
+	bundleMu.Unlock()
+}
+
+func BuildRegisterContext(plugins map[string][]byte) *factory.RegisterContext {
 	names := make([]string, 0, len(plugins))
 	for name := range plugins {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	bundleMu.Lock()
 	ctx := factory.NewRegisterContext()
 	for _, name := range names {
 		registerBytes(ctx, name, plugins[name])
 	}
-	factory.Swap(ctx)
-	bundleMu.Unlock()
+	return ctx
 }
 
 func registerBytes(ctx *factory.RegisterContext, name string, data []byte) {
