@@ -1,0 +1,7 @@
+version: v1
+options:
+  case_mode: upper
+  collapse_spaces: true
+  enable_embedded_match: true
+  fail_when_no_match: false
+

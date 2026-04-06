@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
@@ -47,16 +46,21 @@ type DebugResult struct {
 	Steps       []DebugStep      `json:"steps"`
 }
 
+type DebugHandlerOption struct {
+	Disable bool
+	Args    interface{}
+}
+
 type Debugger struct {
 	deps      appdeps.Runtime
 	cleaner   numbercleaner.Cleaner
 	instances []DebugHandlerInstance
-	configs   map[string]config.HandlerConfig
+	configs   map[string]DebugHandlerOption
 }
 
-func NewDebugger(deps appdeps.Runtime, cleaner numbercleaner.Cleaner, handlers []string, configs map[string]config.HandlerConfig) *Debugger {
+func NewDebugger(deps appdeps.Runtime, cleaner numbercleaner.Cleaner, handlers []string, configs map[string]DebugHandlerOption) *Debugger {
 	items := make([]DebugHandlerInstance, 0, len(handlers))
-	cfgMap := make(map[string]config.HandlerConfig, len(handlers))
+	cfgMap := make(map[string]DebugHandlerOption, len(handlers))
 	for _, name := range handlers {
 		if name == HDurationFixer {
 			continue
@@ -179,7 +183,7 @@ func (d *Debugger) resolveChain(handlerIDs []string) []DebugHandlerInstance {
 	return chain
 }
 
-func (d *Debugger) runOne(ctx context.Context, fc *model.FileContext, instance DebugHandlerInstance, handlerCfg config.HandlerConfig) (*DebugStep, error) {
+func (d *Debugger) runOne(ctx context.Context, fc *model.FileContext, instance DebugHandlerInstance, handlerCfg DebugHandlerOption) (*DebugStep, error) {
 	beforeMeta, err := cloneMovieMeta(fc.Meta)
 	if err != nil {
 		return nil, err
@@ -204,13 +208,13 @@ func (d *Debugger) runOne(ctx context.Context, fc *model.FileContext, instance D
 	return step, nil
 }
 
-func (d *Debugger) lookupHandler(handlerID string) (*DebugHandlerInstance, config.HandlerConfig, error) {
+func (d *Debugger) lookupHandler(handlerID string) (*DebugHandlerInstance, DebugHandlerOption, error) {
 	for _, item := range d.instances {
 		if item.ID == handlerID {
 			return &item, d.configs[handlerID], nil
 		}
 	}
-	return nil, config.HandlerConfig{}, fmt.Errorf("handler instance not found: %s", handlerID)
+	return nil, DebugHandlerOption{}, fmt.Errorf("handler instance not found: %s", handlerID)
 }
 
 func (d *Debugger) parseNumber(rawInput string) (*number.Number, error) {

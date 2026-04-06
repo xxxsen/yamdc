@@ -193,7 +193,9 @@ matchers:
 `,
 	})
 	fail := false
-	manager, err := NewBundleManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
+	var latest *RuleSet
+	var latestFiles []string
+	manager, err := NewManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
 		if fail {
 			return nil, fmt.Errorf("network down")
 		}
@@ -205,42 +207,68 @@ matchers:
 		default:
 			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 		}
-	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script")
+	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script", func(_ context.Context, rs *RuleSet, files []string) error {
+		latest = rs
+		latestFiles = append([]string(nil), files...)
+		return nil
+	})
 	require.NoError(t, err)
 
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "remote-rules"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"), []byte("stale"), 0644))
 
-	rs, files, err := manager.Load(context.Background())
+	err = manager.Start(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "v1", rs.Version)
-	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, files)
+	require.NotNil(t, latest)
+	require.Equal(t, "v1", latest.Version)
+	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, latestFiles)
 	require.FileExists(t, filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip"))
 	require.NoFileExists(t, filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"))
 
 	fail = true
-	rs, files, err = manager.Load(context.Background())
+	latest = nil
+	latestFiles = nil
+	manager, err = NewManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("network down")
+	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script", func(_ context.Context, rs *RuleSet, files []string) error {
+		latest = rs
+		latestFiles = append([]string(nil), files...)
+		return nil
+	})
 	require.NoError(t, err)
-	require.Equal(t, "v1", rs.Version)
-	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, files)
+	err = manager.Start(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	require.Equal(t, "v1", latest.Version)
+	require.Equal(t, []string{"yamdc-script-v1/ruleset/001-base.yaml", "yamdc-script-v1/ruleset/002-matchers.yaml"}, latestFiles)
 }
 
 func TestLocalBundleManagerLoad(t *testing.T) {
 	ruleDir := filepath.Join(t.TempDir(), "rules")
-	require.NoError(t, os.MkdirAll(ruleDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "001-base.yaml"), []byte(`
+	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "manifest.yaml"), []byte(`
+entry: ruleset
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
 `), 0644))
 
-	manager, err := NewBundleManager(t.TempDir(), stubHTTPClient{}, SourceTypeLocal, ruleDir)
+	var latest *RuleSet
+	var latestFiles []string
+	manager, err := NewManager(t.TempDir(), stubHTTPClient{}, SourceTypeLocal, ruleDir, func(_ context.Context, rs *RuleSet, files []string) error {
+		latest = rs
+		latestFiles = append([]string(nil), files...)
+		return nil
+	})
 	require.NoError(t, err)
 
-	rs, files, err := manager.Load(context.Background())
+	err = manager.Start(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "v1", rs.Version)
-	require.Equal(t, []string{"001-base.yaml"}, files)
+	require.NotNil(t, latest)
+	require.Equal(t, "v1", latest.Version)
+	require.Equal(t, []string{"ruleset/001-base.yaml"}, latestFiles)
 }
 
 type stubHTTPClient struct {

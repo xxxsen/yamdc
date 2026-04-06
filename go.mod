@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/Conight/go-googletrans v0.2.4
+	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/antchfx/htmlquery v1.3.1
 	github.com/esimov/pigo v1.4.6
 	github.com/gin-gonic/gin v1.10.0
@@ -24,6 +25,7 @@ require (
 )
 
 require (
+	github.com/PaesslerAG/gval v1.0.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect

@@ -614,7 +614,8 @@ export async function getSearcherDebugPlugins() {
   return data.data;
 }
 
-export async function debugSearcher(input: string, plugins: string[], useCleaner: boolean) {
+export async function debugSearcher(input: string, plugin: string, useCleaner: boolean) {
+  const plugins = plugin ? [plugin] : [];
   const resp = await fetch(`${getBaseURL()}/api/debug/searcher/search`, {
     method: "POST",
     headers: {

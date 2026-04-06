@@ -1,0 +1,17 @@
+version: 1
+name: example-plugin-bundle
+desc: example searcher plugin bundle
+bundle_version: 2026.04.06
+entry: plugins
+chains:
+  all:
+    - name: alpha
+      priority: 100
+    - name: beta
+      priority: 150
+    - name: gamma
+      priority: 300
+
+  fc2:
+    - name: alpha
+      priority: 200

@@ -1,0 +1,109 @@
+# 复杂 HTML 工作流示例：
+# 组合使用 multi_request、search_select、item_variables 和 postprocess。
+version: 1
+name: example_advanced_html_workflow
+type: two-step
+hosts:
+  - https://example.com
+multi_request:
+  unique: true
+  candidates:
+    # 依次尝试原始格式、下划线格式、紧凑格式。
+    - ${to_upper(${number})}
+    - ${replace(${to_upper(${number})}, "-", "_")}
+    - ${replace(${replace(${to_upper(${number})}, "-", "_")}, "_", "")}
+  request:
+    method: GET
+    path: /search/${candidate}
+    accept_status_codes: [200]
+  success_when:
+    mode: and
+    conditions:
+      - selector_exists(xpath("//div[@class='result-list']/a"))
+workflow:
+  search_select:
+    selectors:
+      - name: read_title
+        kind: xpath
+        expr: //div[@class="result-list"]/a/@title
+      - name: read_link
+        kind: xpath
+        expr: //div[@class="result-list"]/a/@href
+    item_variables:
+      # item_variables 用于把“当前候选项上的值”先做一轮预处理，再参与 match。
+      clean_title: ${clean_number(${item.read_title})}
+      clean_number: ${clean_number(${number})}
+    match:
+      mode: and
+      conditions:
+        - equals("${item_variables.clean_title}", "${item_variables.clean_number}")
+        - contains("${item.read_link}", "/detail/")
+      expect_count: 1
+    return: ${item.read_link}
+    next_request:
+      method: GET
+      url: ${build_url(${host}, ${value})}
+      headers:
+        # 示例：下一跳请求也可以单独附加请求头。
+        X-Debug-Source: search_select
+      accept_status_codes: [200]
+scrape:
+  format: html
+  fields:
+    number:
+      selector:
+        kind: xpath
+        expr: //span[@class="number"]/text()
+      transforms:
+        - kind: trim
+        - kind: to_upper
+      parser: string
+      required: true
+    title:
+      selector:
+        kind: xpath
+        expr: //h1/text()
+      transforms:
+        - kind: trim
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: xpath
+        expr: //div[@class="actors"]/a/text()
+        multi: true
+      transforms:
+        - kind: map_trim
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: xpath
+        expr: //span[@class="publish-date"]/text()
+      parser: date_only
+    duration:
+      selector:
+        kind: xpath
+        expr: //span[@class="duration"]/text()
+      parser: duration_default
+    genres:
+      selector:
+        kind: xpath
+        expr: //div[@class="tags"]/a/text()
+        multi: true
+      transforms:
+        - kind: map_trim
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    cover:
+      selector:
+        kind: xpath
+        expr: //meta[@property='og:image']/@content
+      parser: string
+      required: true
+postprocess:
+  defaults:
+    # defaults 用于补 MovieMeta 的默认语言等系统映射字段。
+    title_lang: ja

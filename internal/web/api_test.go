@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -128,7 +127,7 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 	}`))
 	rec := httptest.NewRecorder()
 
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]config.HandlerConfig{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
 	api.handleHandlerDebugRun(rec, req)
 
 	resp := rec.Result()
@@ -164,7 +163,7 @@ func TestHandleHandlerDebugRunChain(t *testing.T) {
 	}`))
 	rec := httptest.NewRecorder()
 
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]config.HandlerConfig{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
 	api.handleHandlerDebugRun(rec, req)
 
 	resp := rec.Result()
@@ -247,7 +246,7 @@ func TestEngineJobRunRoute(t *testing.T) {
 		FileName:      "abc",
 		FileExt:       ".mp4",
 		RelPath:       "abc.mp4",
-		AbsPath:       "/tmp/abc.mp4",
+		AbsPath:       filepath.Join(t.TempDir(), "abc.mp4"),
 		Number:        "ABC-123",
 		RawNumber:     "ABC-123",
 		CleanedNumber: "ABC-123",
@@ -304,7 +303,7 @@ func TestEngineReviewSaveRoute(t *testing.T) {
 		FileName:      "review",
 		FileExt:       ".mp4",
 		RelPath:       "review.mp4",
-		AbsPath:       "/tmp/review.mp4",
+		AbsPath:       filepath.Join(t.TempDir(), "review.mp4"),
 		Number:        "ABC-456",
 		RawNumber:     "ABC-456",
 		CleanedNumber: "ABC-456",

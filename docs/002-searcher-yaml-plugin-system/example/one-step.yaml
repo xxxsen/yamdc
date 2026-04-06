@@ -1,0 +1,33 @@
+# 最基础的单步抓取示例：
+# 直接由番号构造详情页请求，然后从 HTML 中抽字段。
+version: 1
+name: example_one_step
+type: one-step
+hosts:
+  - https://example.com
+request:
+  # path 与 url 二选一。这里使用 path，运行时会基于 host 拼接完整地址。
+  method: GET
+  path: /items/${number}
+  accept_status_codes: [200]
+  not_found_status_codes: [404]
+scrape:
+  format: html
+  fields:
+    title:
+      # HTML 抓取使用 xpath。
+      selector:
+        kind: xpath
+        expr: //h1/text()
+      parser: string
+      required: true
+    cover:
+      selector:
+        kind: xpath
+        expr: //meta[@property='og:image']/@content
+      parser: string
+      required: true
+postprocess:
+  assign:
+    # 未从页面中单独抓 number 时，可在后处理阶段回填原始番号。
+    number: ${number}

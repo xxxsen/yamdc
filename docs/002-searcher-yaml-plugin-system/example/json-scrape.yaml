@@ -1,0 +1,47 @@
+# 最基础的 JSON 抓取示例：
+# 通过 API 返回 JSON，再用 jsonpath 提取字段。
+version: 1
+name: example_json
+type: one-step
+hosts:
+  - https://api.example.com
+request:
+  method: GET
+  path: /items/${number}
+  headers:
+    # JSON API 通常需要显式 Accept。
+    Accept: application/json
+  accept_status_codes: [200]
+scrape:
+  format: json
+  fields:
+    title:
+      selector:
+        # JSON 抓取使用 jsonpath。
+        kind: jsonpath
+        expr: $.data.title
+      parser: string
+      required: true
+    actors:
+      selector:
+        kind: jsonpath
+        expr: $.data.actors[*].name
+        multi: true
+      transforms:
+        - kind: remove_empty
+        - kind: dedupe
+      parser: string_list
+    release_date:
+      selector:
+        kind: jsonpath
+        expr: $.data.launch_date
+      # date_layout_soft 解析失败时返回 0，不直接报错。
+      parser:
+        kind: date_layout_soft
+        layout: "2006-01-02"
+    cover:
+      selector:
+        kind: jsonpath
+        expr: $.data.cover
+      parser: string
+      required: true
