@@ -98,9 +98,10 @@ func (d *Debugger) Plugins() SearcherDebugPluginCollection {
 	defaultPlugins := append([]string(nil), d.defaultPlugins...)
 	categoryPlugins := cloneStringMap(d.categoryPlugins)
 	d.mu.RUnlock()
+	available := collectVisiblePlugins(defaultPlugins, categoryPlugins)
 	sort.Strings(defaultPlugins)
 	return SearcherDebugPluginCollection{
-		Available: factory.Plugins(),
+		Available: available,
 		Default:   defaultPlugins,
 		Category:  categoryPlugins,
 	}
@@ -172,6 +173,43 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 		}
 	}
 	return result, nil
+}
+
+func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][]string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(defaultPlugins))
+	for _, name := range defaultPlugins {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		if _, ok := factory.Lookup(name); !ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	for _, items := range categoryPlugins {
+		for _, name := range items {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			if _, ok := factory.Lookup(name); !ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (d *Debugger) resolvePlugins(num *number.Number) []string {

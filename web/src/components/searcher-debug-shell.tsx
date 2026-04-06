@@ -13,7 +13,7 @@ import {
 
 const DEFAULT_INPUT = "FC2-PPV-12345";
 const SEARCHER_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.searcher.input";
-const SEARCHER_DEBUG_PLUGINS_STORAGE_KEY = "yamdc.debug.searcher.plugins";
+const SEARCHER_DEBUG_PLUGIN_STORAGE_KEY = "yamdc.debug.searcher.plugin";
 const SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY = "yamdc.debug.searcher.use_cleaner";
 
 export function SearcherDebugShell() {
@@ -25,11 +25,11 @@ export function SearcherDebugShell() {
     const stored = window.localStorage.getItem(SEARCHER_DEBUG_INPUT_STORAGE_KEY);
     return stored && stored.trim() ? stored : DEFAULT_INPUT;
   });
-  const [customPlugins, setCustomPlugins] = useState(() => {
+  const [selectedPlugin, setSelectedPlugin] = useState(() => {
     if (typeof window === "undefined") {
       return "";
     }
-    return window.localStorage.getItem(SEARCHER_DEBUG_PLUGINS_STORAGE_KEY) ?? "";
+    return window.localStorage.getItem(SEARCHER_DEBUG_PLUGIN_STORAGE_KEY) ?? "";
   });
   const [useCleaner, setUseCleaner] = useState(() => {
     if (typeof window === "undefined") {
@@ -66,8 +66,8 @@ export function SearcherDebugShell() {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(SEARCHER_DEBUG_PLUGINS_STORAGE_KEY, customPlugins);
-  }, [customPlugins]);
+    window.localStorage.setItem(SEARCHER_DEBUG_PLUGIN_STORAGE_KEY, selectedPlugin);
+  }, [selectedPlugin]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -76,29 +76,16 @@ export function SearcherDebugShell() {
     window.localStorage.setItem(SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY, String(useCleaner));
   }, [useCleaner]);
 
-  const selectedPlugins = useMemo(
-    () =>
-      customPlugins
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    [customPlugins],
-  );
-
   const resultMetaJSON = useMemo(() => (result?.meta ? JSON.stringify(result.meta, null, 2) : ""), [result]);
 
-  const appendPlugin = (name: string) => {
-    setCustomPlugins((current) => {
-      const parts = current
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-      if (parts.includes(name)) {
-        return current;
-      }
-      return [...parts, name].join(", ");
-    });
-  };
+  useEffect(() => {
+    if (!pluginCatalog?.available?.length) {
+      return;
+    }
+    if (selectedPlugin && !pluginCatalog.available.includes(selectedPlugin)) {
+      setSelectedPlugin("");
+    }
+  }, [pluginCatalog, selectedPlugin]);
 
   const handleRun = () => {
     const nextInput = input.trim();
@@ -110,7 +97,7 @@ export function SearcherDebugShell() {
     setIsRunning(true);
     void (async () => {
       try {
-        const next = await debugSearcher(nextInput, selectedPlugins, useCleaner);
+        const next = await debugSearcher(nextInput, selectedPlugin, useCleaner);
         setResult(next);
         setError("");
       } catch (nextError) {
@@ -174,34 +161,27 @@ export function SearcherDebugShell() {
             </button>
           </div>
 
-          <label className="ruleset-debug-label" htmlFor="searcher-debug-plugins">
-            指定插件链
+          <label className="ruleset-debug-label" htmlFor="searcher-debug-plugin">
+            指定插件
           </label>
-          <input
-            id="searcher-debug-plugins"
+          <select
+            id="searcher-debug-plugin"
             className="input ruleset-debug-input"
-            value={customPlugins}
-            onChange={(event) => setCustomPlugins(event.target.value)}
-            placeholder="留空则使用当前配置链；也可输入 javdb,javbus,avsox"
-          />
+            value={selectedPlugin}
+            onChange={(event) => setSelectedPlugin(event.target.value)}
+          >
+            <option value="">使用当前配置链</option>
+            {pluginCatalog?.available?.map((plugin) => (
+              <option key={plugin} value={plugin}>
+                {plugin}
+              </option>
+            ))}
+          </select>
 
           <label className="searcher-debug-switch">
             <input type="checkbox" checked={useCleaner} onChange={(event) => setUseCleaner(event.target.checked)} />
             <span>启用番号清洗</span>
           </label>
-
-          {pluginCatalog?.available?.length ? (
-            <div className="searcher-debug-plugin-bank">
-              <span className="searcher-debug-plugin-bank-label">快速加入插件</span>
-              <div className="searcher-debug-plugin-chips">
-                {pluginCatalog.available.map((plugin) => (
-                  <button key={plugin} type="button" className="file-list-chip" onClick={() => appendPlugin(plugin)}>
-                    {plugin}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           {error ? <div className="ruleset-debug-error">{error}</div> : null}
         </div>
