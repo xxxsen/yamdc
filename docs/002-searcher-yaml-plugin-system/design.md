@@ -46,15 +46,12 @@ yaml bytes
 
 ```text
 internal/searcher/plugin/yaml/
-internal/searcher/plugin/yamlplugin/
-internal/searcher/plugin/yamlitest/
 ```
 
 其中：
 
-1. `yaml/` 存放内置 YAML 配置
-2. `yamlplugin/` 存放 loader/compiler/runtime
-3. `yamlitest/` 存放 legacy vs yaml parity 集成测试
+1. `yaml/` 存放 loader/compiler/runtime
+2. 实际插件 YAML 由外部 plugin bundle 提供，不再作为主程序 runtime 的内置资源
 
 ## 4. 设计原则
 
@@ -468,12 +465,12 @@ JSONPath 执行层当前基于：
 
 当前核心实现位于：
 
-1. `internal/searcher/plugin/yamlplugin/spec.go`
-2. `internal/searcher/plugin/yamlplugin/plugin.go`
-3. `internal/searcher/plugin/yamlplugin/template.go`
-4. `internal/searcher/plugin/yamlplugin/condition.go`
-5. `internal/searcher/plugin/yamlplugin/jsonpath.go`
-6. `internal/searcher/plugin/yamlplugin/builtins.go`
+1. `internal/searcher/plugin/yaml/spec.go`
+2. `internal/searcher/plugin/yaml/plugin.go`
+3. `internal/searcher/plugin/yaml/template.go`
+4. `internal/searcher/plugin/yaml/condition.go`
+5. `internal/searcher/plugin/yaml/jsonpath.go`
+6. `internal/searcher/plugin/yaml/builtins.go`
 
 ### 11.2 运行时职责
 
@@ -510,8 +507,8 @@ JSONPath 执行层当前基于：
 
 `builtins.go`
 
-1. 注册 YAML 内置插件
-2. 覆盖 legacy 插件前保留 `legacy:<name>`
+1. 同步当前激活 bundle 的 YAML 插件注册表
+2. 清理已从 bundle 中移除的旧注册项
 
 ### 11.3 当前关键编译约束
 
@@ -565,25 +562,17 @@ JSONPath 执行层当前基于：
 
 不建议前端把 YAML 当成通用脚本语言解释器。
 
-## 14. parity 集成测试设计
+## 14. 迁移验证说明
 
-每个已迁移插件都应有一个 parity 集成测试文件，位于：
+在插件 YAML 化迁移阶段，项目曾使用过一套 legacy vs YAML 的 parity 集成测试来验证行为一致性。
 
-```text
-internal/searcher/plugin/yamlitest/
-```
+这类测试属于迁移过程产物，不是当前 runtime 的正式组成部分。
 
-规则：
+当前仓库的正式运行时边界是：
 
-1. 每个测试维护自己的 `numbers` 列表
-2. 为空时 `skip`
-3. 逐个调用 legacy 插件与 YAML 插件
-4. 比较 `error presence / found / meta`
-
-关键实现点：
-
-1. YAML 插件覆盖注册前，legacy 会保存为 `legacy:<name>`
-2. 比较前会清理 `ExtInfo` 和媒体 `Key`
+1. 主程序只保留 YAML runtime
+2. 插件配置通过外部 plugin bundle 提供
+3. 不再依赖内置 legacy 插件与 parity 测试目录
 
 ## 15. 本次迁移过程中的关键设计收敛
 

@@ -29,7 +29,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
-	"github.com/xxxsen/yamdc/internal/searcher/plugin/yamlplugin"
+	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
@@ -39,7 +39,6 @@ import (
 	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
-	_ "github.com/xxxsen/yamdc/internal/searcher/plugin/register"
 	"go.uber.org/zap"
 )
 
@@ -287,11 +286,11 @@ func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, clean
 }
 
 func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *config.Config) (*pluginbundle.Manager, error) {
-	if len(c.SearcherPluginBundleConfig.Sources) == 0 {
+	if len(c.SearcherPluginConfig.Sources) == 0 {
 		return nil, nil
 	}
-	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginBundleConfig.Sources))
-	for _, source := range c.SearcherPluginBundleConfig.Sources {
+	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginConfig.Sources))
+	for _, source := range c.SearcherPluginConfig.Sources {
 		item := pluginbundle.Source{
 			SourceType: source.SourceType,
 			Location:   source.Location,
@@ -320,7 +319,7 @@ func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *conf
 }
 
 func applyResolvedSearcherPluginBundle(ctx context.Context, c *config.Config, resolved *pluginbundle.ResolvedBundle) {
-	yamlplugin.RegisterBundle(resolved.Plugins)
+	pluginyaml.SyncBundle(resolved.Plugins)
 	for _, warning := range resolved.Warnings {
 		logutil.GetLogger(ctx).Warn("plugin bundle conflict", zap.String("detail", warning))
 	}

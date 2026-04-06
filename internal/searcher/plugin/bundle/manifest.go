@@ -16,18 +16,17 @@ const (
 )
 
 type BundleManifest struct {
-	Version       int                  `yaml:"version"`
-	Name          string               `yaml:"name"`
-	Desc          string               `yaml:"desc"`
-	BundleVersion string               `yaml:"bundle_version"`
-	Entry         string               `yaml:"entry"`
-	Configuration []*PluginChainConfig `yaml:"configuration"`
+	Version       int                           `yaml:"version"`
+	Name          string                        `yaml:"name"`
+	Desc          string                        `yaml:"desc"`
+	BundleVersion string                        `yaml:"bundle_version"`
+	Entry         string                        `yaml:"entry"`
+	Chains        map[string][]*PluginChainItem `yaml:"chains"`
 }
 
-type PluginChainConfig struct {
+type PluginChainItem struct {
 	Name     string `yaml:"name"`
 	Priority int    `yaml:"priority"`
-	Category string `yaml:"category"`
 }
 
 type pluginHeader struct {
@@ -65,9 +64,17 @@ type ResolvedBundle struct {
 	Files          []string
 }
 
+func runtimePluginKey(category string, name string) string {
+	cat := normalizeCategory(category)
+	if cat == allCategory {
+		return name
+	}
+	return "__bundle__" + cat + "__" + name
+}
+
 func normalizeCategory(raw string) string {
 	cat := strings.TrimSpace(raw)
-	if cat == "" {
+	if cat == "" || strings.EqualFold(cat, allCategory) {
 		return allCategory
 	}
 	return strings.ToUpper(cat)
@@ -86,24 +93,26 @@ func validateManifest(manifest *BundleManifest) error {
 	if strings.TrimSpace(manifest.Entry) == "" {
 		return fmt.Errorf("bundle manifest entry is required")
 	}
-	seen := make(map[string]struct{}, len(manifest.Configuration))
-	for _, item := range manifest.Configuration {
-		if item == nil {
-			return fmt.Errorf("bundle manifest configuration item is required")
+	seen := make(map[string]struct{})
+	for rawChain, items := range manifest.Chains {
+		chain := normalizeCategory(rawChain)
+		for _, item := range items {
+			if item == nil {
+				return fmt.Errorf("bundle manifest chain item is required")
+			}
+			name := strings.TrimSpace(item.Name)
+			if name == "" {
+				return fmt.Errorf("bundle manifest chain plugin name is required")
+			}
+			if item.Priority < 1 || item.Priority > 1000 {
+				return fmt.Errorf("bundle manifest plugin priority out of range: %d", item.Priority)
+			}
+			key := chain + "\x00" + name
+			if _, ok := seen[key]; ok {
+				return fmt.Errorf("duplicate bundle manifest chain item: chain=%s, name=%s", chain, name)
+			}
+			seen[key] = struct{}{}
 		}
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			return fmt.Errorf("bundle manifest configuration plugin name is required")
-		}
-		if item.Priority < 1 || item.Priority > 1000 {
-			return fmt.Errorf("bundle manifest plugin priority out of range: %d", item.Priority)
-		}
-		cat := normalizeCategory(item.Category)
-		key := cat + "\x00" + name
-		if _, ok := seen[key]; ok {
-			return fmt.Errorf("duplicate bundle manifest configuration item: category=%s, name=%s", cat, name)
-		}
-		seen[key] = struct{}{}
 	}
 	return nil
 }

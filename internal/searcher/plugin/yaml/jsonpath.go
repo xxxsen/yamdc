@@ -1,4 +1,4 @@
-package yamlplugin
+package yaml
 
 import (
 	"encoding/json"

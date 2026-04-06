@@ -1,4 +1,4 @@
-package yamlplugin
+package yaml
 
 import (
 	"bytes"
@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	ctxKeyHost        = "yamlplugin.host"
-	ctxKeyFinalPage   = "yamlplugin.final_page"
-	ctxKeyRequestPath = "yamlplugin.request_path"
+	ctxKeyHost        = "yaml.host"
+	ctxKeyFinalPage   = "yaml.final_page"
+	ctxKeyRequestPath = "yaml.request_path"
 )
 
 type compiledPlugin struct {
@@ -1238,14 +1238,14 @@ func movieMetaStringMap(mv *model.MovieMeta) map[string]string {
 func readVarsFromContext(ctx context.Context) map[string]string {
 	out := map[string]string{}
 	for key, value := range pluginapi.ExportContainerData(ctx) {
-		if strings.HasPrefix(key, "yamlplugin.var.") {
-			out[strings.TrimPrefix(key, "yamlplugin.var.")] = value
+		if strings.HasPrefix(key, "yaml.var.") {
+			out[strings.TrimPrefix(key, "yaml.var.")] = value
 		}
 	}
 	return out
 }
 
-func ctxVarKey(name string) string { return "yamlplugin.var." + name }
+func ctxVarKey(name string) string { return "yaml.var." + name }
 
 func currentHost(ctx context.Context, hosts []string) string {
 	if host, ok := pluginapi.GetContainerValue(ctx, ctxKeyHost); ok && host != "" {

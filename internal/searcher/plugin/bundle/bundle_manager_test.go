@@ -21,12 +21,13 @@ func TestLoadBundleFromDir(t *testing.T) {
 version: 1
 name: bundle-a
 entry: plugins
-configuration:
-  - name: beta
-    priority: 200
-  - name: alpha
-    priority: 200
-    category: fc2
+chains:
+  all:
+    - name: beta
+      priority: 200
+  fc2:
+    - name: alpha
+      priority: 200
 `,
 		"plugins/alpha.yaml": samplePluginYAML("alpha"),
 		"plugins/beta.yaml":  samplePluginYAML("beta"),
@@ -44,14 +45,18 @@ func TestResolveBundles(t *testing.T) {
 			Version: 1,
 			Name:    "left",
 			Entry:   "plugins",
-			Configuration: []*PluginChainConfig{
-				{Name: "beta", Priority: 200},
-				{Name: "alpha", Priority: 200},
-				{Name: "cat-only", Priority: 150, Category: "FC2"},
+			Chains: map[string][]*PluginChainItem{
+				"all": {
+					{Name: "beta", Priority: 200},
+					{Name: "alpha", Priority: 200},
+				},
+				"FC2": {
+					{Name: "cat-only", Priority: 150},
+				},
 			},
 		},
 		Plugins: map[string]*PluginFile{
-			"alpha":    {Name: "alpha", Data: []byte(samplePluginYAML("alpha"))},
+			"alpha":    {Name: "alpha", Data: []byte(samplePluginYAML("alpha-left"))},
 			"beta":     {Name: "beta", Data: []byte(samplePluginYAML("beta"))},
 			"cat-only": {Name: "cat-only", Data: []byte(samplePluginYAML("cat-only"))},
 		},
@@ -62,13 +67,18 @@ func TestResolveBundles(t *testing.T) {
 			Version: 1,
 			Name:    "right",
 			Entry:   "plugins",
-			Configuration: []*PluginChainConfig{
-				{Name: "alpha", Priority: 200},
-				{Name: "beta", Priority: 100, Category: "FC2"},
+			Chains: map[string][]*PluginChainItem{
+				"all": {
+					{Name: "alpha", Priority: 200},
+				},
+				"FC2": {
+					{Name: "alpha", Priority: 100},
+					{Name: "beta", Priority: 100},
+				},
 			},
 		},
 		Plugins: map[string]*PluginFile{
-			"alpha": {Name: "alpha", Data: []byte(samplePluginYAML("alpha"))},
+			"alpha": {Name: "alpha", Data: []byte(samplePluginYAML("alpha-right"))},
 			"beta":  {Name: "beta", Data: []byte(samplePluginYAML("beta"))},
 		},
 		Order: 1,
@@ -76,7 +86,10 @@ func TestResolveBundles(t *testing.T) {
 	resolved, err := resolveBundles([]*Bundle{left, right})
 	require.NoError(t, err)
 	require.Equal(t, []string{"alpha", "beta"}, resolved.DefaultPlugins)
-	require.Equal(t, []string{"beta", "cat-only", "alpha"}, resolved.CategoryChains["FC2"])
+	require.Equal(t, []string{"__bundle__FC2__alpha", "__bundle__FC2__beta", "__bundle__FC2__cat-only"}, resolved.CategoryChains["FC2"])
+	require.Equal(t, samplePluginYAML("alpha-left"), string(resolved.Plugins["alpha"]))
+	require.Equal(t, samplePluginYAML("alpha-right"), string(resolved.Plugins["__bundle__FC2__alpha"]))
+	require.Equal(t, samplePluginYAML("beta"), string(resolved.Plugins["__bundle__FC2__beta"]))
 	require.NotEmpty(t, resolved.Warnings)
 }
 
@@ -87,9 +100,10 @@ func TestRemoteBundleManagerLoadFallsBackToCachedZip(t *testing.T) {
 version: 1
 name: remote
 entry: plugins
-configuration:
-  - name: alpha
-    priority: 100
+chains:
+  all:
+    - name: alpha
+      priority: 100
 `,
 		"yamdc-plugins-v1/plugins/alpha.yaml": samplePluginYAML("alpha"),
 	})

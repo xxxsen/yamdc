@@ -215,7 +215,7 @@ func logOptionalSetupFailure(ctx context.Context, ysctx *YamdcStartContext, mess
 func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	runtimeSearcher := searcher.NewCategorySearcher(nil, nil)
 	ysctx.RuntimeSearcher = runtimeSearcher
-	if len(ysctx.Config.SearcherPluginBundleConfig.Sources) != 0 {
+	if len(ysctx.Config.SearcherPluginConfig.Sources) != 0 {
 		manager, err := prepareSearcherPluginsForServer(ctx, ysctx, runtimeSearcher)
 		if err != nil {
 			return err
@@ -239,8 +239,8 @@ func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 
 func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartContext, runtimeSearcher *searcher.RuntimeCategorySearcher) (*pluginbundle.Manager, error) {
 	c := ysctx.Config
-	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginBundleConfig.Sources))
-	for _, source := range c.SearcherPluginBundleConfig.Sources {
+	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginConfig.Sources))
+	for _, source := range c.SearcherPluginConfig.Sources {
 		item := pluginbundle.Source{
 			SourceType: source.SourceType,
 			Location:   source.Location,

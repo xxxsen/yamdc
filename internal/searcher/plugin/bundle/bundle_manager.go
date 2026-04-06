@@ -110,6 +110,8 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 	}
 	type pluginCandidate struct {
 		name       string
+		category   string
+		runtimeKey string
 		priority   int
 		bundleName string
 		source     string
@@ -122,40 +124,39 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 		if bundle == nil || bundle.Manifest == nil {
 			continue
 		}
-		minPriorityByPlugin := make(map[string]int)
-		for _, item := range bundle.Manifest.Configuration {
-			name := strings.TrimSpace(item.Name)
-			if name == "" {
-				continue
+		for rawChain, items := range bundle.Manifest.Chains {
+			cat := normalizeCategory(rawChain)
+			for _, item := range items {
+				name := strings.TrimSpace(item.Name)
+				if name == "" {
+					continue
+				}
+				key := cat + "\x00" + name
+				chainGroups[key] = append(chainGroups[key], ChainItem{
+					Name:         name,
+					Category:     cat,
+					Priority:     item.Priority,
+					BundleName:   bundle.Manifest.Name,
+					BundleSource: bundle.Source,
+					Order:        bundle.Order,
+				})
+				plugin := bundle.Plugins[name]
+				runtimeKey := runtimePluginKey(cat, name)
+				pluginCandidates[key] = append(pluginCandidates[key], pluginCandidate{
+					name:       name,
+					category:   cat,
+					runtimeKey: runtimeKey,
+					priority:   item.Priority,
+					bundleName: bundle.Manifest.Name,
+					source:     bundle.Source,
+					order:      bundle.Order,
+					data:       plugin.Data,
+				})
 			}
-			if current, ok := minPriorityByPlugin[name]; !ok || item.Priority < current {
-				minPriorityByPlugin[name] = item.Priority
-			}
-			cat := normalizeCategory(item.Category)
-			key := cat + "\x00" + name
-			chainGroups[key] = append(chainGroups[key], ChainItem{
-				Name:         name,
-				Category:     cat,
-				Priority:     item.Priority,
-				BundleName:   bundle.Manifest.Name,
-				BundleSource: bundle.Source,
-				Order:        bundle.Order,
-			})
-		}
-		for name, priority := range minPriorityByPlugin {
-			plugin := bundle.Plugins[name]
-			pluginCandidates[name] = append(pluginCandidates[name], pluginCandidate{
-				name:       name,
-				priority:   priority,
-				bundleName: bundle.Manifest.Name,
-				source:     bundle.Source,
-				order:      bundle.Order,
-				data:       plugin.Data,
-			})
 		}
 		out.Files = append(out.Files, bundle.Files...)
 	}
-	for name, candidates := range pluginCandidates {
+	for _, candidates := range pluginCandidates {
 		sort.SliceStable(candidates, func(i, j int) bool {
 			if candidates[i].priority != candidates[j].priority {
 				return candidates[i].priority < candidates[j].priority
@@ -165,12 +166,13 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 			}
 			return candidates[i].order < candidates[j].order
 		})
-		out.Plugins[name] = candidates[0].data
+		winner := candidates[0]
+		out.Plugins[winner.runtimeKey] = winner.data
 		for i := 1; i < len(candidates); i++ {
-			if candidates[i].priority == candidates[0].priority {
+			if candidates[i].priority == winner.priority {
 				out.Warnings = append(out.Warnings, fmt.Sprintf(
-					"plugin %s from bundle %s ignored because bundle %s already wins at priority %d",
-					name, candidates[i].bundleName, candidates[0].bundleName, candidates[0].priority,
+					"plugin %s in category %s from bundle %s ignored because bundle %s already wins at priority %d",
+					winner.name, winner.category, candidates[i].bundleName, winner.bundleName, winner.priority,
 				))
 			}
 		}
@@ -203,23 +205,13 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 		}
 	}
 	sortChainItems(allItems)
-	out.DefaultPlugins = chainItemNames(allItems)
+	out.DefaultPlugins = chainItemRuntimeNames(allItems)
+	if len(out.DefaultPlugins) == 0 {
+		out.Warnings = append(out.Warnings, "no all chain found after resolving plugin bundles")
+	}
 	for category, items := range categoryItems {
 		sortChainItems(items)
-		names := chainItemNames(items)
-		if len(out.DefaultPlugins) != 0 {
-			seen := make(map[string]struct{}, len(names))
-			for _, name := range names {
-				seen[name] = struct{}{}
-			}
-			for _, name := range out.DefaultPlugins {
-				if _, ok := seen[name]; ok {
-					continue
-				}
-				names = append(names, name)
-			}
-		}
-		out.CategoryChains[category] = names
+		out.CategoryChains[category] = chainItemRuntimeNames(items)
 	}
 	sort.Strings(out.Files)
 	return out, nil
@@ -237,10 +229,10 @@ func sortChainItems(items []ChainItem) {
 	})
 }
 
-func chainItemNames(items []ChainItem) []string {
+func chainItemRuntimeNames(items []ChainItem) []string {
 	out := make([]string, 0, len(items))
 	for _, item := range items {
-		out = append(out, item.Name)
+		out = append(out, runtimePluginKey(item.Category, item.Name))
 	}
 	return out
 }

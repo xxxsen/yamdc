@@ -84,37 +84,37 @@ type NumberCleanerConfig struct {
 	Location   string `json:"location"`
 }
 
-type SearcherPluginBundleSource struct {
+type SearcherPluginSource struct {
 	SourceType string `json:"source_type"`
 	Location   string `json:"location"`
 }
 
-type SearcherPluginBundleConfig struct {
-	Sources []SearcherPluginBundleSource `json:"sources"`
+type SearcherPluginConfig struct {
+	Sources []SearcherPluginSource `json:"sources"`
 }
 
 type Config struct {
-	ScanDir                    string                     `json:"scan_dir"`
-	SaveDir                    string                     `json:"save_dir"`
-	LibraryDir                 string                     `json:"library_dir"`
-	DataDir                    string                     `json:"data_dir"`
-	Naming                     string                     `json:"naming"`
-	PluginConfig               map[string]PluginConfig    `json:"plugin_config"`
-	HandlerConfig              map[string]HandlerConfig   `json:"handler_config"`
-	AIEngine                   AIEngineConfig             `json:"ai_engine"`
-	Plugins                    []string                   `json:"plugins"`
-	CategoryPlugins            []CategoryPlugin           `json:"category_plugins"`
-	Handlers                   []string                   `json:"handlers"`
-	ExtraMediaExts             []string                   `json:"extra_media_exts"`
-	LogConfig                  logger.LogConfig           `json:"log_config"`
-	Dependencies               []Dependency               `json:"dependencies"`
-	NetworkConfig              NetworkConfig              `json:"network_config"`
-	TranslateConfig            TranslateConfig            `json:"translate_config"`
-	SwitchConfig               SwitchConfig               `json:"switch_config"`
-	FlareSolverrConfig         FlareSolverrConfig         `json:"flare_solverr_config"`
-	TagMappingConfig           TagMappingConfig           `json:"tag_mapping_config"`
-	NumberCleanerConfig        NumberCleanerConfig        `json:"number_cleaner"`
-	SearcherPluginBundleConfig SearcherPluginBundleConfig `json:"searcher_plugin_bundle"`
+	ScanDir              string                   `json:"scan_dir"`
+	SaveDir              string                   `json:"save_dir"`
+	LibraryDir           string                   `json:"library_dir"`
+	DataDir              string                   `json:"data_dir"`
+	Naming               string                   `json:"naming"`
+	PluginConfig         map[string]PluginConfig  `json:"plugin_config"`
+	HandlerConfig        map[string]HandlerConfig `json:"handler_config"`
+	AIEngine             AIEngineConfig           `json:"ai_engine"`
+	Plugins              []string                 `json:"plugins"`
+	CategoryPlugins      []CategoryPlugin         `json:"category_plugins"`
+	Handlers             []string                 `json:"handlers"`
+	ExtraMediaExts       []string                 `json:"extra_media_exts"`
+	LogConfig            logger.LogConfig         `json:"log_config"`
+	Dependencies         []Dependency             `json:"dependencies"`
+	NetworkConfig        NetworkConfig            `json:"network_config"`
+	TranslateConfig      TranslateConfig          `json:"translate_config"`
+	SwitchConfig         SwitchConfig             `json:"switch_config"`
+	FlareSolverrConfig   FlareSolverrConfig       `json:"flare_solverr_config"`
+	TagMappingConfig     TagMappingConfig         `json:"tag_mapping_config"`
+	NumberCleanerConfig  NumberCleanerConfig      `json:"number_cleaner_config"`
+	SearcherPluginConfig SearcherPluginConfig     `json:"searcher_plugin_config"`
 }
 
 type SwitchConfig struct {
@@ -166,6 +166,14 @@ func defaultConfig() *Config {
 		NumberCleanerConfig: NumberCleanerConfig{
 			SourceType: "remote",
 			Location:   "https://github.com/xxxsen/yamdc-script",
+		},
+		SearcherPluginConfig: SearcherPluginConfig{
+			Sources: []SearcherPluginSource{
+				{
+					SourceType: "remote",
+					Location:   "https://github.com/xxxsen/yamdc-plugins",
+				},
+			},
 		},
 	}
 }

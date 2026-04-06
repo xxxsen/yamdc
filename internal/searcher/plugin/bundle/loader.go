@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
-	"github.com/xxxsen/yamdc/internal/searcher/plugin/yamlplugin"
+	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"gopkg.in/yaml.v3"
 )
 
@@ -131,7 +131,7 @@ func loadPluginFilesFromFS(fsys fs.FS, entry string) (map[string]*PluginFile, []
 		if err != nil {
 			return err
 		}
-		if _, err := yamlplugin.NewFromBytes(raw); err != nil {
+		if _, err := pluginyaml.NewFromBytes(raw); err != nil {
 			return fmt.Errorf("validate plugin file %s failed, err:%w", name, err)
 		}
 		pluginName, err := decodePluginName(raw)
@@ -157,9 +157,11 @@ func loadPluginFilesFromFS(fsys fs.FS, entry string) (map[string]*PluginFile, []
 }
 
 func validateBundlePlugins(manifest *BundleManifest, plugins map[string]*PluginFile) error {
-	for _, item := range manifest.Configuration {
-		if _, ok := plugins[strings.TrimSpace(item.Name)]; !ok {
-			return fmt.Errorf("bundle manifest references unknown plugin: %s", item.Name)
+	for _, items := range manifest.Chains {
+		for _, item := range items {
+			if _, ok := plugins[strings.TrimSpace(item.Name)]; !ok {
+				return fmt.Errorf("bundle manifest references unknown plugin: %s", item.Name)
+			}
 		}
 	}
 	return nil

@@ -15,6 +15,10 @@ func Register(name string, fn CreatorFunc) {
 	mp[name] = fn
 }
 
+func Unregister(name string) {
+	delete(mp, name)
+}
+
 func CreatePlugin(name string, args interface{}) (api.IPlugin, error) {
 	cr, ok := mp[name]
 	if !ok {

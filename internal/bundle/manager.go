@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/client"
+	"go.uber.org/zap"
 )
 
 const (
@@ -154,7 +156,9 @@ func (m *Manager) watchRemote(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_, _ = m.syncAndActivate(ctx)
+			if _, err := m.syncAndActivate(ctx); err != nil {
+				logutil.GetLogger(ctx).Warn("bundle remote sync failed", zap.String("bundle", m.name), zap.String("location", m.location), zap.Error(err))
+			}
 		}
 	}
 }
