@@ -11,6 +11,13 @@ import (
 )
 
 type bundleVerifyResult struct {
+	Pass   bool                    `json:"pass"`
+	Errmsg string                  `json:"errmsg"`
+	Cases  []*bundleVerifyCaseItem `json:"cases,omitempty"`
+}
+
+type bundleVerifyCaseItem struct {
+	Name   string `json:"name"`
 	Pass   bool   `json:"pass"`
 	Errmsg string `json:"errmsg"`
 }
