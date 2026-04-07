@@ -1,0 +1,5 @@
+version: v1
+noise_rules:
+  - name: remove_domains
+    type: regex
+    pattern: '(?i)\b[a-z0-9.-]+\.(com|net)\b'
