@@ -64,7 +64,17 @@ func LoadRuleSetFromPath(path string) (*RuleSet, error) {
 		return nil, err
 	}
 	if info.IsDir() {
-		return LoadRuleSetFromDir(path)
+		fsys := os.DirFS(path)
+		if manifest, ok, err := readManifest(fsys, "."); err != nil {
+			return nil, err
+		} else if ok {
+			entry, err := cleanBundleEntry(manifest.Entry)
+			if err != nil {
+				return nil, err
+			}
+			return LoadRuleSetFromFS(fsys, entry)
+		}
+		return LoadRuleSetFromFS(fsys, ".")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

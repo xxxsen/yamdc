@@ -123,6 +123,33 @@ matchers:
 	require.Len(t, rs.Matchers, 1)
 }
 
+func TestLoadRuleSetFromPathUsesManifestEntryForDir(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "ruleset"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte(`
+entry: ruleset
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ruleset", "001-base.yaml"), []byte(`
+version: v1
+options:
+  case_mode: upper
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ruleset", "002-matchers.yaml"), []byte(`
+version: v1
+matchers:
+  - name: generic
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80
+`), 0644))
+
+	rs, err := LoadRuleSetFromPath(dir)
+	require.NoError(t, err)
+	require.NotNil(t, rs)
+	require.Equal(t, "v1", rs.Version)
+	require.Len(t, rs.Matchers, 1)
+}
+
 func TestLoadRuleSetFromZipUsesManifestEntry(t *testing.T) {
 	zipPath := filepath.Join(t.TempDir(), "rules.zip")
 	require.NoError(t, os.WriteFile(zipPath, buildTestBundleZip(t, map[string]string{
