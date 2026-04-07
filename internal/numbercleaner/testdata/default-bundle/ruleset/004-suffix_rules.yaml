@@ -1,13 +1,13 @@
 version: v1
 suffix_rules:
-  - name: chinese_subtitle
+  - name: subtitle_flag
     type: token
-    aliases: ["中文字幕", "中字"]
+    aliases: ["SUB"]
     canonical: C
     priority: 10
   - name: disc_number
     type: regex
-    pattern: '(?i)\bCD\s*([0-9]+)\b'
+    pattern: '(?i)\bDISC\s*([0-9]+)\b'
     canonical_template: 'CD$1'
     priority: 20
   - name: leak_flag
