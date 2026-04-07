@@ -1,5 +1,5 @@
 version: v1
 rewrite_rules:
-  - name: rewrite_fc2_ppv
-    pattern: '(?i)\bFC2[-_\s]?PPV[-_\s]?([0-9]{3,})\b'
-    replace: 'FC2-PPV-$1'
+  - name: rewrite_rawx_ppv
+    pattern: '(?i)\bRAWX[-_\s]?PPV[-_\s]?([0-9]{3,})\b'
+    replace: 'RAWX-PPV-$1'

@@ -29,19 +29,19 @@ func TestCleanerClean(t *testing.T) {
 		uncensorMatched bool
 		suffixes        []string
 	}{
-		"fc2": {
-			input:           "[JAV] fc2ppv12345 中文字幕.mp4",
-			normalized:      "FC2-PPV-12345-C",
-			numberID:        "FC2-PPV-12345",
+		"rawx": {
+			input:           "[VID] rawxppv12345 sub.mp4",
+			normalized:      "RAWX-PPV-12345-C",
+			numberID:        "RAWX-PPV-12345",
 			status:          StatusSuccess,
-			category:        "FC2",
+			category:        "RAWX",
 			categoryMatched: true,
 			uncensor:        true,
 			uncensorMatched: true,
 			suffixes:        []string{"C"},
 		},
 		"generic": {
-			input:           "abc123 cd2.avi",
+			input:           "abc123 disc2.avi",
 			normalized:      "ABC-123-CD2",
 			numberID:        "ABC-123",
 			status:          StatusSuccess,
@@ -51,10 +51,10 @@ func TestCleanerClean(t *testing.T) {
 			uncensorMatched: false,
 			suffixes:        []string{"CD2"},
 		},
-		"heyzo": {
-			input:           "www.baidu.com HEYZO-1234 leak.mp4",
-			normalized:      "HEYZO-1234-LEAK",
-			numberID:        "HEYZO-1234",
+		"open": {
+			input:           "www.example.com OPEN-1234 leak.mp4",
+			normalized:      "OPEN-1234-LEAK",
+			numberID:        "OPEN-1234",
 			status:          StatusSuccess,
 			category:        "",
 			categoryMatched: false,
@@ -95,11 +95,11 @@ func TestCleanerExplain(t *testing.T) {
 	cl, err := NewCleaner(loadTestRuleSet(t))
 	require.NoError(t, err)
 
-	explain, err := cl.Explain("[JAV] fc2ppv12345 中文字幕.mp4")
+	explain, err := cl.Explain("[VID] rawxppv12345 sub.mp4")
 	require.NoError(t, err)
 	require.NotNil(t, explain)
 	require.NotNil(t, explain.Final)
-	require.Equal(t, "FC2-PPV-12345-C", explain.Final.Normalized)
+	require.Equal(t, "RAWX-PPV-12345-C", explain.Final.Normalized)
 	require.NotEmpty(t, explain.Steps)
 
 	var hasSuffix bool
@@ -150,9 +150,9 @@ func TestMergeRuleSets(t *testing.T) {
 	overrideRaw := []byte(`
 version: v1
 rewrite_rules:
-  - name: rewrite_fc2_ppv
-    pattern: '(?i)^FC2[-_\s]?([0-9]{4,})$'
-    replace: 'FC2-PPV-$1'
+  - name: rewrite_rawx_ppv
+    pattern: '(?i)^RAWX[-_\s]?([0-9]{4,})$'
+    replace: 'RAWX-PPV-$1'
 matchers:
   - name: generic_censored
     pattern: '(?i)\b([A-Z]{3,10})[-_\s]?([0-9]{2,6})\b'
