@@ -23,6 +23,7 @@ type DebugSearchOptions struct {
 	Input      string   `json:"input"`
 	Plugins    []string `json:"plugins"`
 	UseCleaner bool     `json:"use_cleaner"`
+	SkipAssets bool     `json:"skip_assets"`
 }
 
 type DebugSearchResult struct {
@@ -171,7 +172,7 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 	result.UsedPlugins = append([]string(nil), plugins...)
 
 	for _, name := range plugins {
-		trace, err := d.debugOnePlugin(ctx, name, num)
+		trace, err := d.debugOnePlugin(ctx, name, num, opts.SkipAssets)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +241,7 @@ func (d *Debugger) resolvePlugins(num *number.Number) []string {
 	return defaultPlugins
 }
 
-func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number) (*PluginDebugResult, error) {
+func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number, skipAssets bool) (*PluginDebugResult, error) {
 	d.mu.RLock()
 	creator, ok := d.creators[name]
 	d.mu.RUnlock()
@@ -259,7 +260,7 @@ func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.
 	if !ok {
 		return nil, fmt.Errorf("searcher %s is not default searcher", name)
 	}
-	return def.debugSearch(ctx, num), nil
+	return def.debugSearch(ctx, num, skipAssets), nil
 }
 
 func cloneCreators(in map[string]factory.CreatorFunc) map[string]factory.CreatorFunc {
@@ -270,7 +271,7 @@ func cloneCreators(in map[string]factory.CreatorFunc) map[string]factory.Creator
 	return out
 }
 
-func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number) *PluginDebugResult {
+func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number, skipAssets bool) *PluginDebugResult {
 	trace := &PluginDebugResult{Plugin: p.name}
 	ctx = pluginapi.InitContainer(ctx)
 	ctx = meta.SetNumberId(ctx, num.GetNumberID())
@@ -382,12 +383,20 @@ func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number) *
 	p.fixMeta(ctx, req, metaInfo)
 	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "fix_meta", OK: true, Message: "meta normalized"})
 
-	p.storeImageData(ctx, metaInfo)
-	trace.Steps = append(trace.Steps, PluginDebugStep{
-		Stage:   "store_assets",
-		OK:      metaHasAssets(metaInfo),
-		Message: fmt.Sprintf("cover=%t poster=%t sample_images=%d", hasFileKey(metaInfo.Cover), hasFileKey(metaInfo.Poster), countSampleKeys(metaInfo.SampleImages)),
-	})
+	if skipAssets {
+		trace.Steps = append(trace.Steps, PluginDebugStep{
+			Stage:   "store_assets",
+			OK:      true,
+			Message: "asset fetch skipped",
+		})
+	} else {
+		p.storeImageData(ctx, metaInfo)
+		trace.Steps = append(trace.Steps, PluginDebugStep{
+			Stage:   "store_assets",
+			OK:      metaHasAssets(metaInfo),
+			Message: fmt.Sprintf("cover=%t poster=%t sample_images=%d", hasFileKey(metaInfo.Cover), hasFileKey(metaInfo.Poster), countSampleKeys(metaInfo.SampleImages)),
+		})
+	}
 
 	if err := p.verifyMeta(metaInfo); err != nil {
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "verify_meta", OK: false, Message: err.Error()})
