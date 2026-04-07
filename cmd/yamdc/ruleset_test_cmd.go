@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -101,6 +102,49 @@ func loadRulesetCaseFile(path string) (*rulesetCaseFile, error) {
 	if path == "" {
 		return nil, fmt.Errorf("casefile is required")
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return loadRulesetCaseDir(path)
+	}
+	return loadRulesetCaseJSONFile(path)
+}
+
+func loadRulesetCaseDir(dir string) (*rulesetCaseFile, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
+			continue
+		}
+		files = append(files, filepath.Join(dir, entry.Name()))
+	}
+	slices.Sort(files)
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no json case files found in dir: %s", dir)
+	}
+	out := &rulesetCaseFile{
+		Cases: make([]*rulesetCaseItem, 0, len(files)),
+	}
+	for _, file := range files {
+		item, err := loadRulesetCaseJSONFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("load case file failed: %s: %w", file, err)
+		}
+		out.Cases = append(out.Cases, item.Cases...)
+	}
+	return out, nil
+}
+
+func loadRulesetCaseJSONFile(path string) (*rulesetCaseFile, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
