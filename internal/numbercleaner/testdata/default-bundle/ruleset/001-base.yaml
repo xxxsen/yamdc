@@ -1,0 +1,4 @@
+version: v1
+options:
+  case_mode: upper
+  collapse_spaces: true
