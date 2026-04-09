@@ -1,20 +1,21 @@
 "use client";
 
 import {
-  ArrowLeft,
   Plus,
   Braces,
   Copy,
   FileCode2,
+  GripVertical,
   Import,
   LoaderCircle,
   Route,
   ScanSearch,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   compilePluginDraft,
@@ -277,6 +278,8 @@ export function PluginEditorShell() {
   const [busyAction, setBusyAction] = useState<RunAction | "import" | "">("");
   const [copyMessage, setCopyMessage] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStateRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -320,6 +323,30 @@ export function PluginEditorShell() {
     } catch {
       setState(defaultState());
     }
+  }, []);
+
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const dragState = dragStateRef.current;
+      if (!dragState) {
+        return;
+      }
+      setFloatingMenuPos({
+        x: Math.max(12, event.clientX - dragState.offsetX),
+        y: Math.max(12, event.clientY - dragState.offsetY),
+      });
+    }
+
+    function handlePointerUp() {
+      dragStateRef.current = null;
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
   }, []);
 
   function patch<K extends keyof EditorState>(key: K, value: EditorState[K]) {
@@ -540,24 +567,38 @@ export function PluginEditorShell() {
     }
   }
 
+  function handleFloatingMenuPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const menu = event.currentTarget.parentElement;
+    if (!menu) {
+      return;
+    }
+    const rect = menu.getBoundingClientRect();
+    dragStateRef.current = {
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    setFloatingMenuPos({
+      x: rect.left,
+      y: rect.top,
+    });
+  }
+
   return (
     <div className="plugin-editor-page">
-      <section className="panel plugin-editor-toolbar">
-        <div className="plugin-editor-toolbar-main">
-          <Link href="/debug/searcher" className="btn btn-secondary plugin-editor-toolbar-back">
-            <ArrowLeft size={16} />
-            <span>返回检索测试</span>
-          </Link>
-          <div className="plugin-editor-toolbar-copy">
-            <span className="ruleset-debug-eyebrow">
-              <Sparkles size={14} />
-              Plugin Builder
-            </span>
-            <h2>插件编辑器</h2>
-            <p>在独立工作台里配置单个 YAML 插件，逐步调试 request、workflow 和 scrape。</p>
-          </div>
+      <Link href="/debug/searcher" className="workspace-close-btn plugin-editor-close-btn" aria-label="关闭插件编辑器" title="关闭插件编辑器">
+        <X size={18} />
+      </Link>
+
+      <div
+        className={`panel plugin-editor-floating-menu ${floatingMenuPos ? "" : "plugin-editor-floating-menu-default"}`}
+        style={floatingMenuPos ? { left: `${floatingMenuPos.x}px`, top: `${floatingMenuPos.y}px` } : undefined}
+      >
+        <div className="plugin-editor-floating-menu-handle" onPointerDown={handleFloatingMenuPointerDown}>
+          <GripVertical size={14} />
+          <span>Plugin Builder</span>
+          <Sparkles size={14} />
         </div>
-        <div className="plugin-editor-toolbar-actions">
+        <div className="plugin-editor-floating-menu-actions">
           <button className="btn btn-primary" type="button" onClick={() => void run("compile")} disabled={busyAction !== ""}>
             {busyAction === "compile" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <FileCode2 size={16} />}
             <span>编译草稿</span>
@@ -575,7 +616,7 @@ export function PluginEditorShell() {
             <span>导入 YAML</span>
           </button>
         </div>
-      </section>
+      </div>
 
       <div className="plugin-editor-workbench">
         <section className="plugin-editor-column plugin-editor-column-form">

@@ -4911,55 +4911,53 @@ textarea.input {
 }
 
 .plugin-editor-page {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
   min-height: 0;
   height: 100%;
   overflow: hidden;
 }
 
-.plugin-editor-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
-  padding: 20px 24px;
-  background:
-    radial-gradient(circle at top left, rgba(176, 88, 39, 0.08), transparent 36%),
-    linear-gradient(135deg, rgba(255, 247, 236, 0.96), rgba(255, 255, 255, 0.72));
-  position: sticky;
-  top: 0;
-  z-index: 4;
+.plugin-editor-close-btn {
+  top: 16px;
+  right: 16px;
 }
 
-.plugin-editor-toolbar-main {
+.plugin-editor-floating-menu {
+  position: absolute;
+  z-index: 8;
+  width: 220px;
+  padding: 10px;
+  background: rgba(255, 250, 243, 0.96);
+  border-radius: 18px;
+}
+
+.plugin-editor-floating-menu-default {
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+
+.plugin-editor-floating-menu-handle {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.plugin-editor-toolbar-back {
-  flex: 0 0 auto;
-}
-
-.plugin-editor-toolbar-copy h2 {
-  margin: 10px 0 8px;
-  font-size: 28px;
-}
-
-.plugin-editor-toolbar-copy p {
-  margin: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 10px;
   color: var(--muted);
-  line-height: 1.7;
-  max-width: 760px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: grab;
+  user-select: none;
 }
 
-.plugin-editor-toolbar-actions {
+.plugin-editor-floating-menu-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  min-width: 280px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .plugin-editor-workbench {
@@ -4969,6 +4967,7 @@ textarea.input {
   min-height: 0;
   flex: 1;
   overflow: hidden;
+  padding-top: 8px;
 }
 
 .plugin-editor-column {
@@ -5002,12 +5001,16 @@ textarea.input {
 }
 
 .plugin-editor-panel-fragment {
-  display: grid;
-  gap: 16px;
+  display: block;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
+}
+
+.plugin-editor-panel-fragment > * + * {
+  margin-top: 16px;
 }
 
 .plugin-editor-column-output,
