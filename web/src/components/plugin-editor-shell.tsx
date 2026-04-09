@@ -279,7 +279,8 @@ export function PluginEditorShell() {
   const [copyMessage, setCopyMessage] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
-  const dragStateRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
+  const dragStateRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number } | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -328,12 +329,18 @@ export function PluginEditorShell() {
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
       const dragState = dragStateRef.current;
-      if (!dragState) {
+      const page = pageRef.current;
+      if (!dragState || !page) {
         return;
       }
+      const pageRect = page.getBoundingClientRect();
+      const menuWidth = dragState.width;
+      const menuHeight = dragState.height;
+      const maxX = Math.max(12, pageRect.width - menuWidth - 12);
+      const maxY = Math.max(12, pageRect.height - menuHeight - 12);
       setFloatingMenuPos({
-        x: Math.max(12, event.clientX - dragState.offsetX),
-        y: Math.max(12, event.clientY - dragState.offsetY),
+        x: Math.min(Math.max(event.clientX - pageRect.left - dragState.offsetX, 12), maxX),
+        y: Math.min(Math.max(event.clientY - pageRect.top - dragState.offsetY, 12), maxY),
       });
     }
 
@@ -569,22 +576,26 @@ export function PluginEditorShell() {
 
   function handleFloatingMenuPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     const menu = event.currentTarget.parentElement;
-    if (!menu) {
+    const page = pageRef.current;
+    if (!menu || !page) {
       return;
     }
     const rect = menu.getBoundingClientRect();
+    const pageRect = page.getBoundingClientRect();
     dragStateRef.current = {
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
     };
     setFloatingMenuPos({
-      x: rect.left,
-      y: rect.top,
+      x: Math.min(Math.max(rect.left - pageRect.left, 12), Math.max(12, pageRect.width - rect.width - 12)),
+      y: Math.min(Math.max(rect.top - pageRect.top, 12), Math.max(12, pageRect.height - rect.height - 12)),
     });
   }
 
   return (
-    <div className="plugin-editor-page">
+    <div ref={pageRef} className="plugin-editor-page">
       <Link href="/debug/searcher" className="workspace-close-btn plugin-editor-close-btn" aria-label="关闭插件编辑器" title="关闭插件编辑器">
         <X size={18} />
       </Link>
@@ -611,7 +622,7 @@ export function PluginEditorShell() {
             <Copy size={16} />
             <span>复制 YAML</span>
           </button>
-          <button className="btn btn-secondary" type="button" onClick={() => setImportOpen(true)} disabled={busyAction !== ""}>
+          <button className="btn btn-primary" type="button" onClick={() => setImportOpen(true)} disabled={busyAction !== ""}>
             <Import size={16} />
             <span>导入 YAML</span>
           </button>
