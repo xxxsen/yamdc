@@ -4973,7 +4973,6 @@ textarea.input {
 
 .plugin-editor-column {
   min-height: 0;
-  overflow: auto;
   padding-right: 4px;
 }
 
@@ -4983,21 +4982,32 @@ textarea.input {
   gap: 16px;
   grid-column: 1;
   grid-row: 1 / span 2;
+  overflow: hidden;
+  padding-right: 0;
 }
 
 .plugin-editor-editor-shell {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .plugin-editor-tabs-editor {
   margin-bottom: 4px;
+  flex: 0 0 auto;
 }
 
 .plugin-editor-panel-fragment {
   display: grid;
   gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .plugin-editor-column-output,
@@ -5005,6 +5015,7 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: auto;
 }
 
 .plugin-editor-column-output {
