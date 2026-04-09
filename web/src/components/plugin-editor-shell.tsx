@@ -717,50 +717,38 @@ export function PluginEditorShell() {
             </div>
             {state.multiRequestEnabled ? (
               <div className="plugin-editor-fields">
-                <RequestForm
-                  method={state.multiRequestMethod}
-                  path={state.multiRequestPath}
-                  rawURL={state.multiRequestURL}
-                  queryJSON={state.multiRequestQueryJSON}
-                  headersJSON={state.multiRequestHeadersJSON}
-                  cookiesJSON={state.multiRequestCookiesJSON}
-                  bodyJSON={state.multiRequestBodyJSON}
-                  acceptStatusText={state.multiRequestAcceptStatusText}
-                  notFoundStatusText={state.multiRequestNotFoundStatusText}
-                  decodeCharset={state.multiRequestDecodeCharset}
-                  onChange={(key, value) => patch(key, value)}
-                  prefix="multiRequest"
-                />
-                <div className="plugin-editor-form-grid">
-                  <label className="plugin-editor-field plugin-editor-field-wide">
-                    <span>Candidates</span>
-                    <textarea
-                      className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                      value={state.multiCandidatesText}
-                      onChange={(event) => patch("multiCandidatesText", event.target.value)}
-                      placeholder="每行一个 candidate 模板"
-                    />
-                  </label>
-                  <label className="searcher-debug-switch">
-                    <input type="checkbox" checked={state.multiUnique} onChange={(event) => patch("multiUnique", event.target.checked)} />
-                    <span>unique candidates</span>
-                  </label>
-                  <label className="plugin-editor-field">
-                    <span>Success Mode</span>
-                    <select className="input" value={state.multiSuccessMode} onChange={(event) => patch("multiSuccessMode", event.target.value)}>
-                      <option value="and">and</option>
-                      <option value="or">or</option>
-                    </select>
-                  </label>
-                  <label className="plugin-editor-field plugin-editor-field-wide">
-                    <span>Success Conditions</span>
-                    <textarea
-                      className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                      value={state.multiSuccessConditionsText}
-                      onChange={(event) => patch("multiSuccessConditionsText", event.target.value)}
-                      placeholder={'每行一个条件，例如：\ncontains("${body}", "片名")'}
-                    />
-                  </label>
+                <div className="plugin-editor-subcard">
+                  <div className="plugin-editor-subcard-head">
+                    <strong>Multi Request</strong>
+                    <span>基于当前 request，用多个 candidate 重复请求并按条件命中。</span>
+                  </div>
+                  <div className="plugin-editor-form-grid">
+                    <label className="plugin-editor-field plugin-editor-field-wide">
+                      <span>Candidates</span>
+                      <textarea
+                        className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                        value={state.multiCandidatesText}
+                        onChange={(event) => patch("multiCandidatesText", event.target.value)}
+                        placeholder="每行一个 candidate 模板"
+                      />
+                    </label>
+                    <label className="plugin-editor-field">
+                      <span>Success Mode</span>
+                      <select className="input" value={state.multiSuccessMode} onChange={(event) => patch("multiSuccessMode", event.target.value)}>
+                        <option value="and">and</option>
+                        <option value="or">or</option>
+                      </select>
+                    </label>
+                    <label className="plugin-editor-field plugin-editor-field-wide">
+                      <span>Success Conditions</span>
+                      <textarea
+                        className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                        value={state.multiSuccessConditionsText}
+                        onChange={(event) => patch("multiSuccessConditionsText", event.target.value)}
+                        placeholder={'每行一个条件，例如：\ncontains("${body}", "片名")'}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1568,22 +1556,12 @@ function buildDraft(state: EditorState): PluginEditorDraft {
     };
   }
   if (state.multiRequestEnabled) {
+    const baseRequest = buildRequestFromState(state);
     draft.request = null;
     draft.multi_request = {
       candidates: splitLines(state.multiCandidatesText),
-      unique: state.multiUnique,
-      request: {
-        method: state.multiRequestMethod.trim() || "GET",
-        path: state.multiRequestPath.trim() || undefined,
-        url: state.multiRequestURL.trim() || undefined,
-        query: parseJSON<Record<string, string>>(state.multiRequestQueryJSON, "multi_request query"),
-        headers: parseJSON<Record<string, string>>(state.multiRequestHeadersJSON, "multi_request headers"),
-        cookies: parseJSON<Record<string, string>>(state.multiRequestCookiesJSON, "multi_request cookies"),
-        body: parseNullableJSON<NonNullable<PluginEditorDraft["request"]>["body"]>(state.multiRequestBodyJSON, "multi_request body"),
-        accept_status_codes: parseIntegerList(state.multiRequestAcceptStatusText),
-        not_found_status_codes: parseIntegerList(state.multiRequestNotFoundStatusText),
-        response: state.multiRequestDecodeCharset.trim() ? { decode_charset: state.multiRequestDecodeCharset.trim() } : undefined,
-      },
+      unique: true,
+      request: baseRequest,
       success_when: {
         mode: state.multiSuccessMode,
         conditions: splitLines(state.multiSuccessConditionsText),
@@ -1672,18 +1650,18 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
 
   if (draft.multi_request) {
     next.multiRequestEnabled = true;
-    next.multiRequestMethod = draft.multi_request.request?.method ?? next.multiRequestMethod;
-    next.multiRequestPath = draft.multi_request.request?.path ?? "";
-    next.multiRequestURL = draft.multi_request.request?.url ?? "";
-    next.multiRequestQueryJSON = JSON.stringify(draft.multi_request.request?.query ?? {}, null, 2);
-    next.multiRequestHeadersJSON = JSON.stringify(draft.multi_request.request?.headers ?? {}, null, 2);
-    next.multiRequestCookiesJSON = JSON.stringify(draft.multi_request.request?.cookies ?? {}, null, 2);
-    next.multiRequestBodyJSON = JSON.stringify(draft.multi_request.request?.body ?? null, null, 2);
-    next.multiRequestAcceptStatusText = (draft.multi_request.request?.accept_status_codes ?? []).join(",");
-    next.multiRequestNotFoundStatusText = (draft.multi_request.request?.not_found_status_codes ?? []).join(",");
-    next.multiRequestDecodeCharset = draft.multi_request.request?.response?.decode_charset ?? "";
+    next.requestMethod = draft.multi_request.request?.method ?? next.requestMethod;
+    next.requestPath = draft.multi_request.request?.path ?? "";
+    next.requestURL = draft.multi_request.request?.url ?? "";
+    next.requestQueryJSON = JSON.stringify(draft.multi_request.request?.query ?? {}, null, 2);
+    next.requestHeadersJSON = JSON.stringify(draft.multi_request.request?.headers ?? {}, null, 2);
+    next.requestCookiesJSON = JSON.stringify(draft.multi_request.request?.cookies ?? {}, null, 2);
+    next.requestBodyJSON = JSON.stringify(draft.multi_request.request?.body ?? null, null, 2);
+    next.requestAcceptStatusText = (draft.multi_request.request?.accept_status_codes ?? []).join(",");
+    next.requestNotFoundStatusText = (draft.multi_request.request?.not_found_status_codes ?? []).join(",");
+    next.requestDecodeCharset = draft.multi_request.request?.response?.decode_charset ?? "";
     next.multiCandidatesText = (draft.multi_request.candidates ?? []).join("\n");
-    next.multiUnique = draft.multi_request.unique ?? true;
+    next.multiUnique = true;
     next.multiSuccessMode = draft.multi_request.success_when?.mode ?? "and";
     next.multiSuccessConditionsText = (draft.multi_request.success_when?.conditions ?? []).join("\n");
   } else if (draft.request) {

@@ -5126,6 +5126,29 @@ textarea.input {
   gap: 14px;
 }
 
+.plugin-editor-subcard {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 248, 236, 0.58);
+}
+
+.plugin-editor-subcard-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.plugin-editor-subcard-head strong {
+  font-size: 14px;
+}
+
+.plugin-editor-subcard-head span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .plugin-editor-kv-list {
   display: flex;
   flex-direction: column;
