@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Plus,
   Braces,
   Copy,
   FileCode2,
@@ -410,7 +411,7 @@ export function PluginEditorShell() {
     }));
   }
 
-  function addTransform(fieldID: string) {
+  function addTransform(fieldID: string, afterTransformID?: string) {
     setState((prev) => ({
       ...prev,
       fields: prev.fields.map((field) =>
@@ -418,19 +419,7 @@ export function PluginEditorShell() {
           ? field
           : {
               ...field,
-              transforms: [
-                ...field.transforms,
-                {
-                  id: `transform-${Date.now()}`,
-                  kind: "trim",
-                  old: "",
-                  newValue: "",
-                  cutset: "",
-                  sep: "",
-                  index: "",
-                  value: "",
-                },
-              ],
+              transforms: insertTransform(field.transforms, afterTransformID),
             },
       ),
     }));
@@ -881,7 +870,7 @@ export function PluginEditorShell() {
                       </label>
                       <label className="searcher-debug-switch plugin-editor-field-inline-required">
                         <input type="checkbox" checked={field.required} onChange={(event) => patchField(field.id, (prev) => ({ ...prev, required: event.target.checked }))} />
-                        <span>required</span>
+                        <span>REQUIRED</span>
                       </label>
                       <button
                         className="btn btn-secondary plugin-editor-field-card-remove"
@@ -928,6 +917,26 @@ export function PluginEditorShell() {
                       <div className="plugin-editor-transform-list">
                         {(field.transforms ?? []).map((transform) => (
                           <div key={transform.id} className="plugin-editor-transform-card">
+                            <div className="plugin-editor-transform-actions">
+                              <button
+                                className="btn btn-secondary plugin-editor-transform-action"
+                                type="button"
+                                aria-label="新增 transform"
+                                title="新增 transform"
+                                onClick={() => addTransform(field.id, transform.id)}
+                              >
+                                <Plus size={14} />
+                              </button>
+                              <button
+                                className="btn btn-secondary plugin-editor-transform-action"
+                                type="button"
+                                aria-label="删除 transform"
+                                title="删除 transform"
+                                onClick={() => removeTransform(field.id, transform.id)}
+                              >
+                                <span aria-hidden="true">×</span>
+                              </button>
+                            </div>
                             <label className="plugin-editor-transform-inline-field plugin-editor-transform-inline-field-kind">
                               <span>Kind</span>
                               <select
@@ -954,23 +963,8 @@ export function PluginEditorShell() {
                               transform={transform}
                               onChange={(updater) => patchTransform(field.id, transform.id, updater)}
                             />
-                            <button
-                              className="btn btn-secondary plugin-editor-transform-remove"
-                              type="button"
-                              aria-label="删除 transform"
-                              title="删除 transform"
-                              onClick={() => removeTransform(field.id, transform.id)}
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </div>
                         ))}
-                        <div className="plugin-editor-inline-actions">
-                          <button className="btn btn-primary" type="button" onClick={() => addTransform(field.id)}>
-                            <Braces size={16} />
-                            <span>新增 Transform</span>
-                          </button>
-                        </div>
                       </div>
                     </label>
                   </div>
@@ -1912,6 +1906,27 @@ function makeDefaultTransform(seed: string): TransformForm {
     index: "",
     value: "",
   };
+}
+
+function insertTransform(items: TransformForm[], afterTransformID?: string): TransformForm[] {
+  const next = {
+    id: `transform-${Date.now()}`,
+    kind: "trim",
+    old: "",
+    newValue: "",
+    cutset: "",
+    sep: "",
+    index: "",
+    value: "",
+  };
+  if (!afterTransformID) {
+    return [...items, next];
+  }
+  const index = items.findIndex((item) => item.id === afterTransformID);
+  if (index < 0) {
+    return [...items, next];
+  }
+  return [...items.slice(0, index + 1), next, ...items.slice(index + 1)];
 }
 
 function getFieldMeta(name: string): FieldMeta {

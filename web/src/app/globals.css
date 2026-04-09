@@ -5214,15 +5214,40 @@ textarea.input {
 }
 
 .plugin-editor-transform-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   border-radius: 14px;
-  padding: 10px 12px;
+  padding: 14px 12px 10px;
   background: rgba(255, 248, 236, 0.78);
   border: 1px solid rgba(105, 79, 51, 0.1);
   min-width: 0;
   flex-wrap: nowrap;
+}
+
+.plugin-editor-transform-actions {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plugin-editor-transform-action {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.96);
+  border-color: rgba(105, 79, 51, 0.16);
+}
+
+.plugin-editor-transform-action span {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .plugin-editor-transform-head,
@@ -5272,15 +5297,6 @@ textarea.input {
 .plugin-editor-transform-inline-spacer {
   flex: 1 1 0;
   min-width: 0;
-}
-
-.plugin-editor-transform-remove {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  margin-left: auto;
-  flex: 0 0 auto;
 }
 
 .plugin-editor-panel-subhead h4 {
