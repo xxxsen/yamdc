@@ -28,6 +28,8 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const isMediaLibraryRoute = pathname.startsWith("/media-library");
+  const isPluginEditorRoute = pathname.startsWith("/debug/plugin-editor");
+  const isWideWorkspaceRoute = isMediaLibraryRoute || isPluginEditorRoute;
 
   useEffect(() => {
     const updateCurrentTime = () => {
@@ -41,12 +43,12 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isMediaLibraryRoute) {
+    if (typeof window === "undefined" || isWideWorkspaceRoute) {
       return;
     }
     const nextPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     window.sessionStorage.setItem(MEDIA_LIBRARY_RETURN_KEY, nextPath);
-  }, [isMediaLibraryRoute, pathname]);
+  }, [isWideWorkspaceRoute, pathname]);
 
   const handleExitMediaLibrary = () => {
     if (typeof window === "undefined") {
@@ -62,8 +64,8 @@ export function AppShell({
   };
 
   return (
-    <div className={`app-shell ${collapsed ? "app-shell-collapsed" : ""} ${isMediaLibraryRoute ? "app-shell-wide" : ""}`}>
-      {!collapsed && !isMediaLibraryRoute ? (
+    <div className={`app-shell ${collapsed ? "app-shell-collapsed" : ""} ${isWideWorkspaceRoute ? "app-shell-wide" : ""}`}>
+      {!collapsed && !isWideWorkspaceRoute ? (
         <aside className="panel sidebar">
           <div className="sidebar-brand">
             <div className="sidebar-brand-top">
@@ -99,13 +101,13 @@ export function AppShell({
           </button>
         </aside>
       ) : null}
-      <main className={`main-content ${isMediaLibraryRoute ? "main-content-wide" : ""}`}>{children}</main>
+      <main className={`main-content ${isWideWorkspaceRoute ? "main-content-wide" : ""}`}>{children}</main>
       {isMediaLibraryRoute ? (
         <button className="workspace-close-btn" type="button" aria-label="退出媒体库工作区" onClick={handleExitMediaLibrary}>
           <X size={18} />
         </button>
       ) : null}
-      {collapsed && !isMediaLibraryRoute ? (
+      {collapsed && !isWideWorkspaceRoute ? (
         <button
           className="sidebar-edge-toggle sidebar-edge-toggle-open"
           onClick={() => setCollapsed(false)}

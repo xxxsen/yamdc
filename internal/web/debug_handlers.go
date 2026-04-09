@@ -8,8 +8,22 @@ import (
 	"github.com/xxxsen/common/logutil"
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
+	plugyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"go.uber.org/zap"
 )
+
+type pluginEditorRequest struct {
+	Draft  *plugyaml.PluginSpec `json:"draft"`
+	Number string               `json:"number"`
+	Case   *plugyaml.CaseSpec   `json:"case"`
+	YAML   string               `json:"yaml"`
+}
+
+type pluginEditorResponse struct {
+	OK       bool        `json:"ok"`
+	Warnings []string    `json:"warnings"`
+	Data     interface{} `json:"data"`
+}
 
 func (a *API) handleNumberCleanerExplain(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -92,6 +106,228 @@ func (a *API) handleSearcherDebugSearch(w http.ResponseWriter, r *http.Request) 
 		zap.Strings("used_plugins", result.UsedPlugins),
 	)
 	writeSuccess(w, http.StatusOK, "ok", result)
+}
+
+func (a *API) handlePluginEditorCompile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	if req.Draft == nil {
+		writeFail(w, errCodeInputRequired, "draft is required")
+		return
+	}
+	result, err := a.editor.Compile(r.Context(), req.Draft)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor compile failed", zap.Error(err))
+		writeFail(w, errCodePluginEditorCompileFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data:     result,
+	})
+}
+
+func (a *API) handlePluginEditorImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	req.YAML = strings.TrimSpace(req.YAML)
+	if req.YAML == "" {
+		writeFail(w, errCodeInputRequired, "yaml is required")
+		return
+	}
+	result, err := a.editor.ImportYAML(r.Context(), req.YAML)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor import failed", zap.Error(err))
+		writeFail(w, errCodePluginEditorImportFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data: map[string]interface{}{
+			"draft": result,
+		},
+	})
+}
+
+func (a *API) handlePluginEditorRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	if req.Draft == nil {
+		writeFail(w, errCodeInputRequired, "draft is required")
+		return
+	}
+	req.Number = strings.TrimSpace(req.Number)
+	if req.Number == "" {
+		writeFail(w, errCodeInputRequired, "number is required")
+		return
+	}
+	result, err := a.editor.RequestDebug(r.Context(), req.Draft, req.Number)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor request debug failed",
+			zap.String("number", req.Number),
+			zap.Error(err),
+		)
+		writeFail(w, errCodePluginEditorRequestFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data:     result,
+	})
+}
+
+func (a *API) handlePluginEditorScrape(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	if req.Draft == nil {
+		writeFail(w, errCodeInputRequired, "draft is required")
+		return
+	}
+	req.Number = strings.TrimSpace(req.Number)
+	if req.Number == "" {
+		writeFail(w, errCodeInputRequired, "number is required")
+		return
+	}
+	result, err := a.editor.ScrapeDebug(r.Context(), req.Draft, req.Number)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor scrape debug failed",
+			zap.String("number", req.Number),
+			zap.Error(err),
+		)
+		writeFail(w, errCodePluginEditorScrapeFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data:     result,
+	})
+}
+
+func (a *API) handlePluginEditorWorkflow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	if req.Draft == nil {
+		writeFail(w, errCodeInputRequired, "draft is required")
+		return
+	}
+	req.Number = strings.TrimSpace(req.Number)
+	if req.Number == "" {
+		writeFail(w, errCodeInputRequired, "number is required")
+		return
+	}
+	result, err := a.editor.WorkflowDebug(r.Context(), req.Draft, req.Number)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor workflow debug failed",
+			zap.String("number", req.Number),
+			zap.Error(err),
+		)
+		writeFail(w, errCodePluginEditorWorkflowFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data:     result,
+	})
+}
+
+func (a *API) handlePluginEditorCase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.editor == nil {
+		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		return
+	}
+	var req pluginEditorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	if req.Draft == nil {
+		writeFail(w, errCodeInputRequired, "draft is required")
+		return
+	}
+	if req.Case == nil {
+		writeFail(w, errCodeInputRequired, "case is required")
+		return
+	}
+	result, err := a.editor.CaseDebug(r.Context(), req.Draft, *req.Case)
+	if err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor case debug failed",
+			zap.String("case_name", strings.TrimSpace(req.Case.Name)),
+			zap.Error(err),
+		)
+		writeFail(w, errCodePluginEditorCaseFailed, err.Error())
+		return
+	}
+	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+		OK:       true,
+		Warnings: []string{},
+		Data: map[string]interface{}{
+			"result": result,
+		},
+	})
 }
 
 func (a *API) handleHandlerDebugHandlers(w http.ResponseWriter, r *http.Request) {

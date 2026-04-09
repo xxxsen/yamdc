@@ -4910,12 +4910,585 @@ textarea.input {
   line-height: 1.7;
 }
 
+.plugin-editor-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.plugin-editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  padding: 20px 24px;
+  background:
+    radial-gradient(circle at top left, rgba(176, 88, 39, 0.08), transparent 36%),
+    linear-gradient(135deg, rgba(255, 247, 236, 0.96), rgba(255, 255, 255, 0.72));
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.plugin-editor-toolbar-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.plugin-editor-toolbar-back {
+  flex: 0 0 auto;
+}
+
+.plugin-editor-toolbar-copy h2 {
+  margin: 10px 0 8px;
+  font-size: 28px;
+}
+
+.plugin-editor-toolbar-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 760px;
+}
+
+.plugin-editor-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 280px;
+}
+
+.plugin-editor-workbench {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.15fr) minmax(420px, 0.95fr);
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.plugin-editor-column {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.plugin-editor-column-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.plugin-editor-editor-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.plugin-editor-tabs-editor {
+  margin-bottom: 4px;
+}
+
+.plugin-editor-panel-fragment {
+  display: grid;
+  gap: 16px;
+}
+
+.plugin-editor-column-output,
+.plugin-editor-column-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.plugin-editor-column-output {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.plugin-editor-column-output > .plugin-editor-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.plugin-editor-column-side {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.plugin-editor-panel {
+  padding: 20px;
+}
+
+.plugin-editor-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.plugin-editor-panel-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.plugin-editor-panel-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.plugin-editor-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.plugin-editor-form-grid-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.plugin-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plugin-editor-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.plugin-editor-field-wide {
+  grid-column: 1 / -1;
+}
+
+.plugin-editor-textarea {
+  min-height: 140px;
+  padding: 12px 14px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.plugin-editor-textarea-compact {
+  min-height: 88px;
+}
+
+.plugin-editor-textarea-lg {
+  min-height: 220px;
+}
+
+.plugin-editor-json-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.plugin-editor-switch-row,
+.plugin-editor-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.plugin-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.plugin-editor-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-editor-kv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.plugin-editor-field-card {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.plugin-editor-field-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.plugin-editor-field-card-remove {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.plugin-editor-field-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plugin-editor-field-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.plugin-editor-field-inline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.plugin-editor-field-inline span {
+  min-width: 74px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plugin-editor-field-inline .input {
+  min-width: 0;
+}
+
+.plugin-editor-field-inline-name {
+  flex: 0 0 220px;
+}
+
+.plugin-editor-field-inline-kind {
+  flex: 0 0 240px;
+}
+
+.plugin-editor-field-inline-expr {
+  flex: 1 1 0;
+}
+
+.plugin-editor-field-inline-switches {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.plugin-editor-field-inline-required {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.plugin-editor-transform-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-editor-transform-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 236, 0.78);
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.plugin-editor-transform-head,
+.plugin-editor-panel-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.plugin-editor-transform-inline-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.plugin-editor-transform-inline-field span {
+  flex: 0 0 auto;
+  min-width: 52px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.plugin-editor-transform-inline-field .input {
+  min-width: 0;
+}
+
+.plugin-editor-transform-inline-field-kind {
+  flex: 0 0 240px;
+}
+
+.plugin-editor-transform-inline-field-kind .input {
+  max-width: none;
+}
+
+.plugin-editor-transform-inline-field-index .input {
+  max-width: 96px;
+}
+
+.plugin-editor-transform-inline-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.plugin-editor-transform-remove {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.plugin-editor-panel-subhead h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.plugin-editor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: flex-start;
+}
+
+.plugin-editor-tabs-sub {
+  margin-bottom: 0;
+}
+
+.plugin-editor-output-section {
+  display: grid;
+  gap: 14px;
+}
+
+.plugin-editor-output-section-fill {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.plugin-editor-output-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.plugin-editor-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plugin-editor-summary-card {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 248, 236, 0.92);
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plugin-editor-summary-card span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.plugin-editor-summary-card strong {
+  font-size: 16px;
+}
+
+.plugin-editor-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plugin-editor-preview-card {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 248, 236, 0.92);
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plugin-editor-preview-card span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.plugin-editor-preview-card strong {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.plugin-editor-preview-card-wide {
+  grid-column: 1 / -1;
+}
+
+.plugin-editor-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-editor-timeline-step {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 248, 236, 0.92);
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  display: grid;
+  gap: 8px;
+}
+
+.plugin-editor-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-editor-timeline-head span,
+.plugin-editor-timeline-detail {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.plugin-editor-header-list {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  flex: 0 0 auto;
+}
+
+.plugin-editor-body-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.plugin-editor-header-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  background: rgba(255, 248, 236, 0.86);
+  align-items: start;
+}
+
+.plugin-editor-header-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plugin-editor-header-row strong {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: block;
+}
+
+.plugin-editor-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 12, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+.plugin-editor-modal {
+  width: min(860px, 100%);
+  max-height: min(82vh, 920px);
+  overflow: auto;
+}
+
 @media (max-width: 1120px) {
   .debug-tools-page,
   .handler-debug-chain-top,
   .handler-debug-chain-workspace,
   .handler-debug-hero,
   .handler-debug-pic-diff-compare,
+  .plugin-editor-toolbar,
+  .plugin-editor-workbench,
+  .plugin-editor-form-grid,
+  .plugin-editor-json-grid,
+  .plugin-editor-kv-row,
+  .plugin-editor-header-row,
+  .plugin-editor-summary-grid,
   .handler-debug-results,
   .searcher-debug-hero,
   .searcher-debug-grid,
@@ -4927,11 +5500,20 @@ textarea.input {
   .ruleset-debug-step-body {
     grid-template-columns: 1fr;
   }
+
+  .plugin-editor-transform-card {
+    flex-wrap: wrap;
+  }
+
+  .plugin-editor-transform-inline-field-kind {
+    flex-basis: 100%;
+  }
 }
 
 @media (max-width: 720px) {
   .debug-tools-nav-panel,
   .handler-debug-hero,
+  .plugin-editor-toolbar,
   .searcher-debug-hero,
   .ruleset-debug-hero,
   .ruleset-debug-summary-panel,
@@ -4956,5 +5538,20 @@ textarea.input {
 
   .ruleset-debug-run-button {
     width: 100%;
+  }
+
+  .plugin-editor-toolbar-actions,
+  .plugin-editor-inline-actions,
+  .plugin-editor-switch-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plugin-editor-toolbar-main {
+    flex-direction: column;
+  }
+
+  .plugin-editor-modal-backdrop {
+    padding: 16px;
   }
 }
