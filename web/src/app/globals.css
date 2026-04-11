@@ -5028,6 +5028,10 @@ textarea.input {
   overflow: hidden;
 }
 
+.plugin-editor-editor-shell > .plugin-editor-panel-head {
+  margin-bottom: 0;
+}
+
 .plugin-editor-tabs-editor {
   margin-bottom: 4px;
   flex: 0 0 auto;
@@ -5048,7 +5052,8 @@ textarea.input {
   gap: 16px;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .plugin-editor-panel-fragment > * + * {
@@ -5179,17 +5184,12 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
 }
 
 .plugin-editor-workflow-scroll {
-  flex: 1 1 auto;
-  min-height: 240px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
+  min-height: auto;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .plugin-editor-subcard {
