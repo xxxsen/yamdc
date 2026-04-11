@@ -707,11 +707,11 @@ export function PluginEditorShell() {
           <article id="plugin-editor-section-basic" className="plugin-editor-panel-fragment">
             <div className="plugin-editor-form-grid">
               <label className="plugin-editor-field">
-                <span>插件名</span>
+                <span>Plugin Name</span>
                 <input className="input" value={state.name} onChange={(event) => patch("name", event.target.value)} />
               </label>
               <label className="plugin-editor-field">
-                <span>类型</span>
+                <span>Type</span>
                 <select className="input" value={state.type} onChange={(event) => patch("type", event.target.value)}>
                   <option value="one-step">one-step</option>
                   <option value="two-step">two-step</option>
@@ -738,7 +738,7 @@ export function PluginEditorShell() {
                 />
               </label>
               <label className="plugin-editor-field plugin-editor-field-wide">
-                <span>测试番号</span>
+                <span>Test Number</span>
                 <input className="input" value={state.number} onChange={(event) => patch("number", event.target.value)} />
               </label>
             </div>
@@ -831,8 +831,8 @@ export function PluginEditorShell() {
                   <div className="plugin-editor-fields">
                     <div className="plugin-editor-subcard">
                       <div className="plugin-editor-subcard-head">
-                        <strong>数据选择</strong>
-                        <span>从首次请求结果中提取数据并参与匹配。</span>
+                        <strong>Data Selector</strong>
+                        <span>从首次请求结果中提取候选数据，供后续匹配使用。</span>
                       </div>
                       <div className="plugin-editor-fields">
                         {state.workflowSelectors.map((selector) => (
@@ -880,7 +880,7 @@ export function PluginEditorShell() {
                     <div className="plugin-editor-subcard">
                       <div className="plugin-editor-subcard-head">
                         <strong>Item Variables</strong>
-                        <span>定义选择器 item 的派生变量。</span>
+                        <span>定义每个选中项的派生变量。</span>
                       </div>
                       <WorkflowItemVariablesEditor
                         items={state.workflowItemVariables}
@@ -892,8 +892,8 @@ export function PluginEditorShell() {
 
                     <div className="plugin-editor-subcard">
                       <div className="plugin-editor-subcard-head">
-                        <strong>匹配规则</strong>
-                        <span>控制选择器结果的匹配方式、数量约束和返回模板。</span>
+                        <strong>Data Matcher</strong>
+                        <span>配置候选数据的匹配方式、数量约束和返回模板。</span>
                       </div>
                       <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
                         <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
@@ -1101,9 +1101,15 @@ export function PluginEditorShell() {
               ))}
             </div>
             <div className="plugin-editor-inline-actions">
-              <button className="btn btn-primary" type="button" onClick={addField} disabled={!canAddField}>
-                <Braces size={16} />
-                <span>新增字段</span>
+              <button
+                className="btn btn-secondary plugin-editor-transform-action"
+                type="button"
+                aria-label="新增字段"
+                title="新增字段"
+                onClick={addField}
+                disabled={!canAddField}
+              >
+                <Plus size={14} />
               </button>
             </div>
           </article>
