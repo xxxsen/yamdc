@@ -355,10 +355,10 @@ export function PluginEditorShell() {
   const draftPreview = useMemo(() => (previewDraft ? JSON.stringify(previewDraft, null, 2) : ""), [previewDraft]);
   const canAddField = state.fields.length < FIELD_OPTIONS.length;
   const sectionItems: Array<{ id: string; section: EditorSection; label: string }> = [
-    { id: "plugin-editor-section-basic", section: "basic", label: "基础信息" },
-    { id: "plugin-editor-section-request", section: "request", label: "请求配置" },
-    { id: "plugin-editor-section-scrape", section: "scrape", label: "字段配置" },
-    { id: "plugin-editor-section-postprocess", section: "postprocess", label: "额外配置" },
+    { id: "plugin-editor-section-basic", section: "basic", label: "Basic" },
+    { id: "plugin-editor-section-request", section: "request", label: "Request" },
+    { id: "plugin-editor-section-scrape", section: "scrape", label: "Fields" },
+    { id: "plugin-editor-section-postprocess", section: "postprocess", label: "Advanced" },
   ];
 
   useEffect(() => {
