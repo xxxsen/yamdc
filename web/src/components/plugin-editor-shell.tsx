@@ -776,60 +776,18 @@ export function PluginEditorShell() {
             <div className="plugin-editor-switch-row">
               <label className="searcher-debug-switch">
                 <input type="checkbox" checked={state.workflowEnabled} onChange={(event) => patch("workflowEnabled", event.target.checked)} />
-                <span>启用 workflow.search_select</span>
+                <span>启用</span>
               </label>
-              <button className="btn btn-primary" type="button" onClick={() => void run("workflow")} disabled={busyAction !== ""}>
+              <button className="btn btn-primary plugin-editor-switch-row-action" type="button" onClick={() => void run("workflow")} disabled={busyAction !== ""}>
                 {busyAction === "workflow" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Route size={16} />}
-                <span>调试 Workflow</span>
+                <span>调试</span>
               </button>
             </div>
             {state.workflowEnabled ? (
               <div className="plugin-editor-fields">
-                <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
-                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
-                    <span>Match Mode</span>
-                    <select className="input" value={state.workflowMatchMode} onChange={(event) => patch("workflowMatchMode", event.target.value)}>
-                      <option value="and">and</option>
-                      <option value="or">or</option>
-                    </select>
-                  </label>
-                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
-                    <span>Expect Count</span>
-                    <input className="input" value={state.workflowExpectCountText} onChange={(event) => patch("workflowExpectCountText", event.target.value)} placeholder="可选，例如 1" />
-                  </label>
-                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-lg">
-                    <span>Return Template</span>
-                    <input className="input" value={state.workflowReturn} onChange={(event) => patch("workflowReturn", event.target.value)} placeholder="${item.read_link}" />
-                  </label>
-                </div>
-                <div className="plugin-editor-form-grid">
-                  <label className="plugin-editor-field plugin-editor-field-wide">
-                    <span>Match Conditions</span>
-                    <textarea
-                      className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                      value={state.workflowMatchConditionsText}
-                      onChange={(event) => patch("workflowMatchConditionsText", event.target.value)}
-                      placeholder={'每行一个条件，例如：\ncontains("${item.read_title}", "${number}")'}
-                    />
-                  </label>
-                </div>
-
                 <div className="plugin-editor-subcard">
                   <div className="plugin-editor-subcard-head">
-                    <strong>Item Variables</strong>
-                    <span>定义选择器 item 的派生变量。</span>
-                  </div>
-                  <WorkflowItemVariablesEditor
-                    items={state.workflowItemVariables}
-                    onAdd={() => addKVPair("workflowItemVariables")}
-                    onRemove={(id) => removeKVPair("workflowItemVariables", id)}
-                    onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
-                  />
-                </div>
-
-                <div className="plugin-editor-subcard">
-                  <div className="plugin-editor-subcard-head">
-                    <strong>数据匹配</strong>
+                    <strong>数据选择</strong>
                     <span>从首次请求结果中提取数据并参与匹配。</span>
                   </div>
                 <div className="plugin-editor-fields">
@@ -873,6 +831,54 @@ export function PluginEditorShell() {
                     </div>
                   ))}
                 </div>
+                </div>
+
+                <div className="plugin-editor-subcard">
+                  <div className="plugin-editor-subcard-head">
+                    <strong>Item Variables</strong>
+                    <span>定义选择器 item 的派生变量。</span>
+                  </div>
+                  <WorkflowItemVariablesEditor
+                    items={state.workflowItemVariables}
+                    onAdd={() => addKVPair("workflowItemVariables")}
+                    onRemove={(id) => removeKVPair("workflowItemVariables", id)}
+                    onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
+                  />
+                </div>
+
+                <div className="plugin-editor-subcard">
+                  <div className="plugin-editor-subcard-head">
+                    <strong>匹配规则</strong>
+                    <span>控制选择器结果的匹配方式、数量约束和返回模板。</span>
+                  </div>
+                  <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
+                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
+                      <span>Match Mode</span>
+                      <select className="input" value={state.workflowMatchMode} onChange={(event) => patch("workflowMatchMode", event.target.value)}>
+                        <option value="and">and</option>
+                        <option value="or">or</option>
+                      </select>
+                    </label>
+                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
+                      <span>Expect Count</span>
+                      <input className="input" value={state.workflowExpectCountText} onChange={(event) => patch("workflowExpectCountText", event.target.value)} placeholder="可选，例如 1" />
+                    </label>
+                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-lg">
+                      <span>Return Template</span>
+                      <input className="input" value={state.workflowReturn} onChange={(event) => patch("workflowReturn", event.target.value)} placeholder="${item.read_link}" />
+                    </label>
+                  </div>
+                  <div className="plugin-editor-form-grid">
+                    <label className="plugin-editor-field plugin-editor-field-wide">
+                      <span>Match Conditions</span>
+                      <textarea
+                        className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                        value={state.workflowMatchConditionsText}
+                        onChange={(event) => patch("workflowMatchConditionsText", event.target.value)}
+                        placeholder={'每行一个条件，例如：\ncontains("${item.read_title}", "${number}")'}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="plugin-editor-panel-subhead">

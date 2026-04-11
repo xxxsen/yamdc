@@ -5120,6 +5120,10 @@ textarea.input {
   flex-wrap: wrap;
 }
 
+.plugin-editor-switch-row-action {
+  margin-left: auto;
+}
+
 .plugin-editor-fields {
   display: flex;
   flex-direction: column;
