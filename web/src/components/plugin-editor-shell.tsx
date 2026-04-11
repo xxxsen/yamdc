@@ -194,6 +194,7 @@ const FIELD_META: Record<string, FieldMeta> = {
 };
 
 const FIELD_OPTIONS = Object.keys(FIELD_META);
+const META_LANG_OPTIONS = ["ja", "en", "zh-cn", "zh-tw"] as const;
 
 const DEFAULT_FIELD: FieldForm = {
   id: "title",
@@ -446,9 +447,10 @@ export function PluginEditorShell() {
   }
 
   function addKVPair(key: "workflowItemVariables" | "postAssign") {
+    const nextKey = key === "postAssign" ? nextUnusedKVFieldName(state.postAssign) : "";
     setState((prev) => ({
       ...prev,
-      [key]: [...prev[key], { id: `kv-${Date.now()}`, key: "", value: "" }],
+      [key]: [...prev[key], { id: `kv-${Date.now()}`, key: nextKey, value: "" }],
     }));
   }
 
@@ -1109,42 +1111,83 @@ export function PluginEditorShell() {
 
           {activeSection === "postprocess" ? (
           <article id="plugin-editor-section-postprocess" className="plugin-editor-panel-fragment">
-            <div className="plugin-editor-json-grid">
-              <div className="plugin-editor-field">
-                <span>Postprocess Assign</span>
+            <div className="plugin-editor-fields">
+              <div className="plugin-editor-subcard">
+                <div className="plugin-editor-subcard-head">
+                  <strong>Postprocess Assign</strong>
+                  <span>定义后处理阶段的字段赋值表达式，引用已有字段时使用 `{"${meta.title}"}` 这种写法。</span>
+                </div>
                 <KVPairEditor
                   items={state.postAssign}
                   emptyLabel="暂未定义 assign。"
-                  keyLabel="字段名"
-                  valueLabel="模板"
+                  keyLabel="Field"
+                  valueLabel="Expression"
+                  keyOptions={FIELD_OPTIONS}
+                  valuePlaceholder="${meta.title} hello world"
                   onAdd={() => addKVPair("postAssign")}
                   onRemove={(id) => removeKVPair("postAssign", id)}
                   onChange={(id, updater) => patchKVPair("postAssign", id, updater)}
                 />
               </div>
-              <div className="plugin-editor-field">
-                <span>Defaults</span>
+
+              <div className="plugin-editor-subcard">
+                <div className="plugin-editor-subcard-head">
+                  <strong>Defaults</strong>
+                  <span>设置标题、简介、类型和演员等默认语言。</span>
+                </div>
                 <div className="plugin-editor-form-grid">
                   <label className="plugin-editor-field">
                     <span>Title Lang</span>
-                    <input className="input" value={state.postTitleLang} onChange={(event) => patch("postTitleLang", event.target.value)} />
+                    <select className="input" value={state.postTitleLang} onChange={(event) => patch("postTitleLang", event.target.value)}>
+                      <option value="">DEFAULT</option>
+                      {META_LANG_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="plugin-editor-field">
                     <span>Plot Lang</span>
-                    <input className="input" value={state.postPlotLang} onChange={(event) => patch("postPlotLang", event.target.value)} />
+                    <select className="input" value={state.postPlotLang} onChange={(event) => patch("postPlotLang", event.target.value)}>
+                      <option value="">DEFAULT</option>
+                      {META_LANG_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="plugin-editor-field">
                     <span>Genres Lang</span>
-                    <input className="input" value={state.postGenresLang} onChange={(event) => patch("postGenresLang", event.target.value)} />
+                    <select className="input" value={state.postGenresLang} onChange={(event) => patch("postGenresLang", event.target.value)}>
+                      <option value="">DEFAULT</option>
+                      {META_LANG_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="plugin-editor-field">
                     <span>Actors Lang</span>
-                    <input className="input" value={state.postActorsLang} onChange={(event) => patch("postActorsLang", event.target.value)} />
+                    <select className="input" value={state.postActorsLang} onChange={(event) => patch("postActorsLang", event.target.value)}>
+                      <option value="">DEFAULT</option>
+                      {META_LANG_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
               </div>
-              <div className="plugin-editor-field">
-                <span>Switch Config</span>
+
+              <div className="plugin-editor-subcard">
+                <div className="plugin-editor-subcard-head">
+                  <strong>Switch Config</strong>
+                  <span>配置后处理阶段的可选开关。</span>
+                </div>
                 <div className="plugin-editor-fields">
                   <label className="searcher-debug-switch">
                     <input
@@ -1765,6 +1808,8 @@ function KVPairEditor(props: {
   emptyLabel: string;
   keyLabel: string;
   valueLabel: string;
+  keyOptions?: string[];
+  valuePlaceholder?: string;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (id: string, updater: (item: KVPairForm) => KVPairForm) => void;
@@ -1772,27 +1817,55 @@ function KVPairEditor(props: {
   return (
     <div className="plugin-editor-kv-list">
       {props.items.length === 0 ? <div className="ruleset-debug-empty">{props.emptyLabel}</div> : null}
-      {props.items.map((item) => (
-        <div key={item.id} className="plugin-editor-kv-row">
-          <label className="plugin-editor-field">
-            <span>{props.keyLabel}</span>
-            <input className="input" value={item.key} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, key: event.target.value }))} />
-          </label>
-          <label className="plugin-editor-field">
-            <span>{props.valueLabel}</span>
-            <input className="input" value={item.value} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, value: event.target.value }))} />
-          </label>
-          <button className="btn btn-secondary" type="button" onClick={() => props.onRemove(item.id)}>
-            删除
+      {props.items.map((item) => {
+        const selectableKeys = props.keyOptions
+          ? props.keyOptions.filter((option) => option === item.key || !props.items.some((other) => other.id !== item.id && other.key === option))
+          : [];
+        return (
+          <div key={item.id} className="plugin-editor-kv-row plugin-editor-kv-row-compact">
+            <div className="plugin-editor-transform-actions plugin-editor-kv-actions">
+              <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增项" title="新增项" onClick={props.onAdd}>
+                <Plus size={14} />
+              </button>
+              <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="删除项" title="删除项" onClick={() => props.onRemove(item.id)}>
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <label className="plugin-editor-field-inline plugin-editor-kv-inline-key">
+              <span>{props.keyLabel}</span>
+              {props.keyOptions ? (
+                <select className="input" value={item.key} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, key: event.target.value }))}>
+                  <option value="">Select field</option>
+                  {selectableKeys.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  {item.key && !props.keyOptions.includes(item.key) ? <option value={item.key}>{item.key}</option> : null}
+                </select>
+              ) : (
+                <input className="input" value={item.key} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, key: event.target.value }))} />
+              )}
+            </label>
+            <label className="plugin-editor-field-inline plugin-editor-kv-inline-value">
+              <span>{props.valueLabel}</span>
+              <input
+                className="input"
+                value={item.value}
+                placeholder={props.valuePlaceholder}
+                onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, value: event.target.value }))}
+              />
+            </label>
+          </div>
+        );
+      })}
+      {props.items.length === 0 ? (
+        <div className="plugin-editor-inline-actions">
+          <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增项" title="新增项" onClick={props.onAdd}>
+            <Plus size={14} />
           </button>
         </div>
-      ))}
-      <div className="plugin-editor-inline-actions">
-        <button className="btn btn-primary" type="button" onClick={props.onAdd}>
-          <Braces size={16} />
-          <span>新增项</span>
-        </button>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -2434,6 +2507,11 @@ function getFieldMeta(name: string): FieldMeta {
 
 function nextUnusedFieldName(fields: FieldForm[]) {
   const used = new Set(fields.map((field) => field.name));
+  return FIELD_OPTIONS.find((option) => !used.has(option)) ?? "";
+}
+
+function nextUnusedKVFieldName(items: KVPairForm[]) {
+  const used = new Set(items.map((item) => item.key).filter(Boolean));
   return FIELD_OPTIONS.find((option) => !used.has(option)) ?? "";
 }
 
