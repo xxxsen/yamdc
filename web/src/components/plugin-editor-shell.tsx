@@ -1333,25 +1333,42 @@ export function PluginEditorShell() {
       {importOpen ? (
         <div className="plugin-editor-modal-backdrop" role="presentation" onClick={() => setImportOpen(false)}>
           <div className="panel plugin-editor-modal" role="dialog" aria-modal="true" aria-label="导入 YAML" onClick={(event) => event.stopPropagation()}>
-            <div className="plugin-editor-panel-head">
-              <h3>导入 YAML</h3>
-              <span>回填当前表单</span>
+            <div className="plugin-editor-modal-head">
+              <div className="plugin-editor-modal-title-group">
+                <div className="plugin-editor-modal-badge">
+                  <Import size={16} />
+                  <span>Import</span>
+                </div>
+                <div className="plugin-editor-modal-title-copy">
+                  <h3>导入 YAML</h3>
+                  <span>粘贴已有插件配置，并将内容回填到当前编辑器表单。</span>
+                </div>
+              </div>
+              <button className="btn btn-secondary plugin-editor-modal-close" type="button" aria-label="关闭导入窗口" title="关闭导入窗口" onClick={() => setImportOpen(false)}>
+                <X size={16} />
+              </button>
             </div>
-            <label className="plugin-editor-field">
-              <span>Plugin YAML</span>
-              <textarea
-                className="input plugin-editor-textarea plugin-editor-textarea-lg"
-                value={state.importYAML}
-                onChange={(event) => patch("importYAML", event.target.value)}
-                onKeyDown={handleEditorTextareaKeyDown}
-                placeholder="粘贴已有插件 YAML"
-              />
-            </label>
-            <div className="plugin-editor-inline-actions">
+            <div className="plugin-editor-modal-body">
+              <div className="plugin-editor-modal-tip">
+                <strong>支持内容</strong>
+                <span>支持直接粘贴完整插件 YAML。导入后会覆盖当前表单内容。</span>
+              </div>
+              <label className="plugin-editor-field plugin-editor-modal-editor">
+                <span>Plugin YAML</span>
+                <textarea
+                  className="input plugin-editor-textarea plugin-editor-textarea-lg plugin-editor-modal-textarea"
+                  value={state.importYAML}
+                  onChange={(event) => patch("importYAML", event.target.value)}
+                  onKeyDown={handleEditorTextareaKeyDown}
+                  placeholder={"version: 1\nname: fixture\ntype: one-step\nhosts:\n  - https://example.com"}
+                />
+              </label>
+            </div>
+            <div className="plugin-editor-modal-actions">
               <button className="btn btn-secondary" type="button" onClick={() => setImportOpen(false)} disabled={busyAction !== ""}>
                 取消
               </button>
-              <button className="btn btn-primary" type="button" onClick={() => void handleImportYAML()} disabled={busyAction !== ""}>
+              <button className="btn btn-primary plugin-editor-modal-submit" type="button" onClick={() => void handleImportYAML()} disabled={busyAction !== ""}>
                 {busyAction === "import" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Import size={16} />}
                 <span>导入 YAML</span>
               </button>

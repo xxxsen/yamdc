@@ -5980,14 +5980,133 @@ textarea.input {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(20, 16, 12, 0.42);
-  backdrop-filter: blur(6px);
+  background:
+    radial-gradient(circle at top, rgba(255, 248, 236, 0.2), transparent 34%),
+    rgba(20, 16, 12, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .plugin-editor-modal {
-  width: min(860px, 100%);
-  max-height: min(82vh, 920px);
-  overflow: auto;
+  width: min(920px, 100%);
+  max-height: min(86vh, 920px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(105, 79, 51, 0.16);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.98), rgba(255, 247, 236, 0.97));
+  box-shadow:
+    0 30px 90px rgba(18, 14, 10, 0.28),
+    0 2px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.plugin-editor-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid rgba(105, 79, 51, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0));
+}
+
+.plugin-editor-modal-title-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.plugin-editor-modal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.plugin-editor-modal-title-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.plugin-editor-modal-title-copy h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.plugin-editor-modal-title-copy span {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.plugin-editor-modal-close {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.plugin-editor-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 0;
+  min-height: 0;
+}
+
+.plugin-editor-modal-tip {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  background: rgba(255, 251, 244, 0.88);
+}
+
+.plugin-editor-modal-tip strong {
+  font-size: 13px;
+}
+
+.plugin-editor-modal-tip span {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.plugin-editor-modal-editor {
+  gap: 10px;
+}
+
+.plugin-editor-modal-textarea {
+  min-height: min(52vh, 520px);
+  padding: 18px 18px 20px;
+  border-radius: 18px;
+  background: rgba(255, 253, 249, 0.95);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.plugin-editor-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 24px 24px;
+  margin-top: 18px;
+  border-top: 1px solid rgba(105, 79, 51, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 252, 246, 0.9));
+}
+
+.plugin-editor-modal-submit {
+  min-width: 144px;
 }
 
 @media (max-width: 1120px) {
