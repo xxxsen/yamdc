@@ -706,58 +706,66 @@ export function PluginEditorShell() {
 
           {activeSection === "basic" ? (
           <article id="plugin-editor-section-basic" className="plugin-editor-panel-fragment">
-            <div className="plugin-editor-form-grid">
-              <label className="plugin-editor-field">
-                <span>Plugin Name</span>
-                <input className="input" value={state.name} onChange={(event) => patch("name", event.target.value)} />
-              </label>
-              <label className="plugin-editor-field">
-                <span>Type</span>
-                <select className="input" value={state.type} onChange={(event) => patch("type", event.target.value)}>
-                  <option value="one-step">one-step</option>
-                  <option value="two-step">two-step</option>
-                </select>
-              </label>
-              <label className="plugin-editor-field plugin-editor-field-wide">
-                <span>Hosts</span>
-                <textarea
-                  className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                  value={state.hostsText}
-                  onChange={(event) => patch("hostsText", event.target.value)}
-                  onKeyDown={handleEditorTextareaKeyDown}
-                  placeholder="每行一个 host"
-                />
-              </label>
-              <label className="plugin-editor-field plugin-editor-field-wide">
-                <span>Precheck Patterns</span>
-                <textarea
-                  className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                  value={state.precheckPatternsText}
-                  onChange={(event) => patch("precheckPatternsText", event.target.value)}
-                  onKeyDown={handleEditorTextareaKeyDown}
-                  placeholder="每行一个正则"
-                />
-              </label>
-              <label className="plugin-editor-field plugin-editor-field-wide">
-                <span>Test Number</span>
-                <input className="input" value={state.number} onChange={(event) => patch("number", event.target.value)} />
-              </label>
-            </div>
-            <div className="plugin-editor-subcard">
-              <div className="plugin-editor-subcard-head">
-                <strong>Precheck Variables</strong>
-                <span>定义预检阶段可复用的变量，后续可通过 `vars.xxx` 引用。</span>
+            <div className="plugin-editor-fields">
+              <div className="plugin-editor-subcard">
+                <div className="plugin-editor-subcard-head">
+                  <strong>Plugin</strong>
+                  <span>配置插件基础信息、Host 和预检规则。</span>
+                </div>
+                <div className="plugin-editor-form-grid">
+                  <label className="plugin-editor-field">
+                    <span>Plugin Name</span>
+                    <input className="input" value={state.name} onChange={(event) => patch("name", event.target.value)} />
+                  </label>
+                  <label className="plugin-editor-field">
+                    <span>Type</span>
+                    <select className="input" value={state.type} onChange={(event) => patch("type", event.target.value)}>
+                      <option value="one-step">one-step</option>
+                      <option value="two-step">two-step</option>
+                    </select>
+                  </label>
+                  <label className="plugin-editor-field plugin-editor-field-wide">
+                    <span>Hosts</span>
+                    <textarea
+                      className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                      value={state.hostsText}
+                      onChange={(event) => patch("hostsText", event.target.value)}
+                      onKeyDown={handleEditorTextareaKeyDown}
+                      placeholder="每行一个 host"
+                    />
+                  </label>
+                  <label className="plugin-editor-field plugin-editor-field-wide">
+                    <span>Precheck Patterns</span>
+                    <textarea
+                      className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                      value={state.precheckPatternsText}
+                      onChange={(event) => patch("precheckPatternsText", event.target.value)}
+                      onKeyDown={handleEditorTextareaKeyDown}
+                      placeholder="每行一个正则"
+                    />
+                  </label>
+                  <label className="plugin-editor-field plugin-editor-field-wide">
+                    <span>Test Number</span>
+                    <input className="input" value={state.number} onChange={(event) => patch("number", event.target.value)} />
+                  </label>
+                </div>
               </div>
-              <WorkflowItemVariablesEditor
-                items={state.precheckVariables}
-                onAdd={() => addKVPair("precheckVariables")}
-                onRemove={(id) => removeKVPair("precheckVariables", id)}
-                onChange={(id, updater) => patchKVPair("precheckVariables", id, updater)}
-                keyLabel="Name"
-                valueLabel="Expression"
-                valuePlaceholder='${clean_number(${number})}'
-                emptyLabel="暂未定义 precheck variables。"
-              />
+              <div className="plugin-editor-subcard">
+                <div className="plugin-editor-subcard-head">
+                  <strong>Precheck Variables</strong>
+                  <span>定义预检阶段可复用的变量，后续可通过 `vars.xxx` 引用。</span>
+                </div>
+                <WorkflowItemVariablesEditor
+                  items={state.precheckVariables}
+                  onAdd={() => addKVPair("precheckVariables")}
+                  onRemove={(id) => removeKVPair("precheckVariables", id)}
+                  onChange={(id, updater) => patchKVPair("precheckVariables", id, updater)}
+                  keyLabel="Name"
+                  valueLabel="Expression"
+                  valuePlaceholder='${clean_number(${number})}'
+                  emptyLabel="暂未定义 precheck variables。"
+                />
+              </div>
             </div>
           </article>
           ) : null}
