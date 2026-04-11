@@ -31,10 +31,10 @@ import {
   type PluginEditorWorkflowDebugResult,
 } from "@/lib/api";
 
-type EditorTab = "compile" | "request" | "draft";
+type EditorTab = "compile" | "basic" | "request" | "response" | "workflow" | "scrape" | "draft";
 type EditorSection = "basic" | "request" | "scrape" | "postprocess";
-type RequestOutputTab = "basic" | "request" | "response" | "workflow" | "scrape";
 type RunAction = "compile" | "request" | "workflow" | "scrape";
+type ToastState = { message: string; tone: "info" | "danger" } | null;
 
 type FieldForm = {
   id: string;
@@ -307,7 +307,6 @@ function splitRequestTarget(value: string) {
 
 export function PluginEditorShell() {
   const [tab, setTab] = useState<EditorTab>("compile");
-  const [requestOutputTab, setRequestOutputTab] = useState<RequestOutputTab>("basic");
   const [activeSection, setActiveSection] = useState<EditorSection>("basic");
   const [state, setState] = useState<EditorState>(defaultState);
   const [compileResult, setCompileResult] = useState<PluginEditorCompileResult | null>(null);
@@ -316,7 +315,7 @@ export function PluginEditorShell() {
   const [scrapeResult, setScrapeResult] = useState<PluginEditorScrapeDebugResult | null>(null);
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState<RunAction | "import" | "">("");
-  const [copyMessage, setCopyMessage] = useState("");
+  const [toast, setToast] = useState<ToastState>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number } | null>(null);
@@ -333,6 +332,14 @@ export function PluginEditorShell() {
     }, 160);
     return () => window.clearTimeout(timer);
   }, [state]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const previewDraft = useMemo(() => {
     if (tab !== "draft") {
@@ -545,7 +552,7 @@ export function PluginEditorShell() {
       const draft = buildDraft(state);
       setBusyAction(action);
       setError("");
-      setCopyMessage("");
+      setToast(null);
       if (action === "compile") {
         const result = await compilePluginDraft(draft);
         setCompileResult(result.data);
@@ -561,8 +568,7 @@ export function PluginEditorShell() {
       if (action === "workflow") {
         const result = await debugPluginDraftWorkflow(draft, state.number.trim());
         setWorkflowResult(result.data);
-        setRequestOutputTab("workflow");
-        setTab("request");
+        setTab("workflow");
         return;
       }
       if (action === "scrape") {
@@ -574,8 +580,7 @@ export function PluginEditorShell() {
         setRequestResult(requestDebug.data);
         setWorkflowResult(workflowDebug?.data ?? null);
         setScrapeResult(scrapeDebug.data);
-        setRequestOutputTab("basic");
-        setTab("request");
+        setTab("basic");
         return;
       }
     } catch (nextError) {
@@ -592,9 +597,9 @@ export function PluginEditorShell() {
     }
     try {
       await navigator.clipboard.writeText(yaml);
-      setCopyMessage("YAML 已复制。");
+      setToast({ message: "YAML 已复制。", tone: "info" });
     } catch {
-      setCopyMessage("复制失败，请手动复制。");
+      setToast({ message: "复制失败，请手动复制。", tone: "danger" });
     }
   }
 
@@ -602,7 +607,7 @@ export function PluginEditorShell() {
     try {
       setBusyAction("import");
       setError("");
-      setCopyMessage("");
+      setToast(null);
       const result = await importPluginDraftYAML(state.importYAML);
       setState((prev) => ({
         ...stateFromDraft(result.data.draft),
@@ -612,7 +617,7 @@ export function PluginEditorShell() {
       setRequestResult(null);
       setWorkflowResult(null);
       setScrapeResult(null);
-      setCopyMessage("YAML 已导入并回填到表单。");
+      setToast({ message: "YAML 已导入并回填到表单。", tone: "info" });
       setImportOpen(false);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "YAML 导入失败");
@@ -1173,8 +1178,12 @@ export function PluginEditorShell() {
             </div>
             <div className="plugin-editor-tabs">
               {[
-                ["compile", "Compile"],
+                ["basic", "Basic"],
                 ["request", "Request"],
+                ["response", "Response"],
+                ["workflow", "Workflow"],
+                ["scrape", "Scrape"],
+                ["compile", "Compile"],
                 ["draft", "Draft"],
               ].map(([key, label]) => (
                 <button
@@ -1188,10 +1197,9 @@ export function PluginEditorShell() {
               ))}
             </div>
             {error ? <div className="ruleset-debug-error">{error}</div> : null}
-            {copyMessage ? <div className="handler-debug-message">{copyMessage}</div> : null}
 
             {tab === "compile" ? (
-              <div className="plugin-editor-output-section">
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
                 <div className="plugin-editor-summary-grid">
                   <div className="plugin-editor-summary-card">
                     <span>request</span>
@@ -1210,44 +1218,46 @@ export function PluginEditorShell() {
                     <strong>{compileResult?.summary.field_count ?? 0}</strong>
                   </div>
                 </div>
-                <details className="searcher-debug-json-block" open>
-                  <summary>YAML 输出</summary>
-                  <pre className="searcher-debug-json plugin-editor-json-scroll">{compileResult?.yaml || "先执行一次编译。"}</pre>
-                </details>
+                <div className="plugin-editor-output-detail-block plugin-editor-output-fill-block">
+                  <div className="plugin-editor-output-block-title">YAML 输出</div>
+                  <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{compileResult?.yaml || "先执行一次编译。"}</pre>
+                </div>
+              </div>
+            ) : null}
+
+            {tab === "basic" ? (
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+                <RequestBasicPanel result={requestResult} />
               </div>
             ) : null}
 
             {tab === "request" ? (
               <div className="plugin-editor-output-section plugin-editor-output-section-fill">
-                <div className="plugin-editor-tabs plugin-editor-tabs-sub">
-                  {[
-                    ["basic", "Basic"],
-                    ["request", "Request"],
-                    ["response", "Response"],
-                    ["workflow", "Workflow"],
-                    ["scrape", "Scrape"],
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      className={`handler-debug-tab ${requestOutputTab === key ? "handler-debug-tab-active" : ""}`}
-                      type="button"
-                      onClick={() => setRequestOutputTab(key as RequestOutputTab)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {requestOutputTab === "basic" ? <RequestBasicPanel result={requestResult} /> : null}
-                {requestOutputTab === "request" ? <RequestDetailPanel request={requestResult?.request} /> : null}
-                {requestOutputTab === "response" ? <ResponseDetailPanel response={requestResult?.response} /> : null}
-                {requestOutputTab === "workflow" ? <WorkflowOutputPanel result={workflowResult} /> : null}
-                {requestOutputTab === "scrape" ? <ScrapeJSONPanel result={scrapeResult} /> : null}
+                <RequestDetailPanel request={requestResult?.request} />
+              </div>
+            ) : null}
+
+            {tab === "response" ? (
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+                <ResponseDetailPanel response={requestResult?.response} />
+              </div>
+            ) : null}
+
+            {tab === "workflow" ? (
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+                <WorkflowOutputPanel result={workflowResult} />
+              </div>
+            ) : null}
+
+            {tab === "scrape" ? (
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+                <ScrapeJSONPanel result={scrapeResult} />
               </div>
             ) : null}
 
             {tab === "draft" ? (
-              <div className="plugin-editor-output-section">
-                <pre className="searcher-debug-json plugin-editor-json-scroll">{draftPreview || "当前草稿无效。"}</pre>
+              <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+                <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{draftPreview || "当前草稿无效。"}</pre>
               </div>
             ) : null}
 
@@ -1283,6 +1293,12 @@ export function PluginEditorShell() {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div className="file-list-toast" data-tone={toast.tone === "danger" ? "danger" : undefined}>
+          {toast.message}
         </div>
       ) : null}
     </div>

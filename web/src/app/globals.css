@@ -4485,6 +4485,38 @@ textarea.input {
   margin-top: 14px;
 }
 
+.plugin-editor-output-fill-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.plugin-editor-output-fill-block[open] {
+  min-height: 0;
+}
+
+.plugin-editor-output-fill-block summary {
+  flex: 0 0 auto;
+}
+
+.plugin-editor-output-fill-block .searcher-debug-json {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  overflow: auto;
+}
+
+.plugin-editor-output-block-title {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  user-select: none;
+}
+
 .searcher-debug-json-block summary {
   cursor: pointer;
   color: var(--muted);
