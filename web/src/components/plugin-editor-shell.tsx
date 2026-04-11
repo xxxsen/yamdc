@@ -292,21 +292,6 @@ function defaultState(): EditorState {
   };
 }
 
-function requestTargetValue(path: string, rawURL: string) {
-  return path || rawURL || "";
-}
-
-function splitRequestTarget(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return { path: "", url: "" };
-  }
-  if (trimmed.startsWith("/") || (!trimmed.includes("://") && trimmed.startsWith("${"))) {
-    return { path: trimmed, url: "" };
-  }
-  return { path: "", url: trimmed };
-}
-
 export function PluginEditorShell() {
   const [tab, setTab] = useState<EditorTab>("compile");
   const [activeSection, setActiveSection] = useState<EditorSection>("basic");
@@ -779,7 +764,8 @@ export function PluginEditorShell() {
               </div>
               <RequestForm
                 method={state.requestMethod}
-                target={requestTargetValue(state.requestPath, state.requestURL)}
+                path={state.requestPath}
+                rawURL={state.requestURL}
                 queryJSON={state.requestQueryJSON}
                 headersJSON={state.requestHeadersJSON}
                 cookiesJSON={state.requestCookiesJSON}
@@ -959,7 +945,8 @@ export function PluginEditorShell() {
                   </div>
                   <RequestForm
                     method={state.workflowNextMethod}
-                    target={requestTargetValue(state.workflowNextPath, state.workflowNextURL)}
+                    path={state.workflowNextPath}
+                    rawURL={state.workflowNextURL}
                     queryJSON={state.workflowNextQueryJSON}
                     headersJSON={state.workflowNextHeadersJSON}
                     cookiesJSON={state.workflowNextCookiesJSON}
@@ -1384,7 +1371,8 @@ export function PluginEditorShell() {
 
 function RequestForm(props: {
   method: string;
-  target: string;
+  path: string;
+  rawURL: string;
   queryJSON: string;
   headersJSON: string;
   cookiesJSON: string;
@@ -1403,11 +1391,26 @@ function RequestForm(props: {
   const key = <K extends keyof EditorState>(name: string) => `${prefix}${name}` as K;
   const targetPathKey = key("Path");
   const targetURLKey = key("URL");
+  const targetMode = props.rawURL ? "url" : "path";
+  const targetValue = targetMode === "url" ? props.rawURL : props.path;
 
-  function handleTargetChange(value: string) {
-    const next = splitRequestTarget(value);
-    props.onChange(targetPathKey, next.path as EditorState[typeof targetPathKey]);
-    props.onChange(targetURLKey, next.url as EditorState[typeof targetURLKey]);
+  function handleTargetModeChange(mode: "path" | "url") {
+    const current = targetValue;
+    if (mode === "url") {
+      props.onChange(targetPathKey, "" as EditorState[typeof targetPathKey]);
+      props.onChange(targetURLKey, current as EditorState[typeof targetURLKey]);
+      return;
+    }
+    props.onChange(targetPathKey, current as EditorState[typeof targetPathKey]);
+    props.onChange(targetURLKey, "" as EditorState[typeof targetURLKey]);
+  }
+
+  function handleTargetValueChange(value: string) {
+    if (targetMode === "url") {
+      props.onChange(targetURLKey, value as EditorState[typeof targetURLKey]);
+      return;
+    }
+    props.onChange(targetPathKey, value as EditorState[typeof targetPathKey]);
   }
 
   return (
@@ -1422,9 +1425,21 @@ function RequestForm(props: {
                 <option value="POST">POST</option>
               </select>
             </label>
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xs plugin-editor-request-inline-field-next-top">
+            <span>Target Type</span>
+            <select className="input" value={targetMode} onChange={(event) => handleTargetModeChange(event.target.value as "path" | "url")}>
+              <option value="path">path</option>
+              <option value="url">url</option>
+            </select>
+          </label>
           <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg plugin-editor-request-inline-field-next-top">
-            <span>Path</span>
-            <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
+            <span>{targetMode === "url" ? "URL" : "Path"}</span>
+            <input
+              className="input"
+              value={targetValue}
+              onChange={(event) => handleTargetValueChange(event.target.value)}
+              placeholder={targetMode === "url" ? "例如 https://example.com/${number}" : "例如 /search/${number}"}
+            />
           </label>
         </div>
           <div className="plugin-editor-request-inline-row plugin-editor-request-inline-row-next-meta">
@@ -1459,9 +1474,21 @@ function RequestForm(props: {
               <option value="POST">POST</option>
             </select>
           </label>
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xs">
+            <span>Target Type</span>
+            <select className="input" value={targetMode} onChange={(event) => handleTargetModeChange(event.target.value as "path" | "url")}>
+              <option value="path">path</option>
+              <option value="url">url</option>
+            </select>
+          </label>
           <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg">
-            <span>Path</span>
-            <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
+            <span>{targetMode === "url" ? "URL" : "Path"}</span>
+            <input
+              className="input"
+              value={targetValue}
+              onChange={(event) => handleTargetValueChange(event.target.value)}
+              placeholder={targetMode === "url" ? "例如 https://example.com/${number}" : "例如 /search/${number}"}
+            />
           </label>
           <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
             <span>Accept Status</span>
@@ -2107,11 +2134,10 @@ function buildDraft(state: EditorState): PluginEditorDraft {
 }
 
 function buildRequestFromState(state: EditorState): NonNullable<PluginEditorDraft["request"]> {
-  const target = splitRequestTarget(requestTargetValue(state.requestPath, state.requestURL));
   return {
     method: state.requestMethod.trim() || "GET",
-    path: target.path || undefined,
-    url: target.url || undefined,
+    path: state.requestPath.trim() || undefined,
+    url: state.requestURL.trim() || undefined,
     query: parseStringRecord(state.requestQueryJSON, "request query"),
     headers: parseStringRecord(state.requestHeadersJSON, "request headers"),
     cookies: parseStringRecord(state.requestCookiesJSON, "request cookies"),
@@ -2123,11 +2149,10 @@ function buildRequestFromState(state: EditorState): NonNullable<PluginEditorDraf
 }
 
 function buildWorkflowNextRequestFromState(state: EditorState): NonNullable<NonNullable<PluginEditorDraft["workflow"]>["search_select"]>["next_request"] {
-  const target = splitRequestTarget(requestTargetValue(state.workflowNextPath, state.workflowNextURL));
   return {
     method: state.workflowNextMethod.trim() || "GET",
-    path: target.path || undefined,
-    url: target.url || undefined,
+    path: state.workflowNextPath.trim() || undefined,
+    url: state.workflowNextURL.trim() || undefined,
     query: parseStringRecord(state.workflowNextQueryJSON, "workflow next query"),
     headers: parseStringRecord(state.workflowNextHeadersJSON, "workflow next headers"),
     cookies: parseStringRecord(state.workflowNextCookiesJSON, "workflow next cookies"),
@@ -2188,8 +2213,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
   if (draft.multi_request) {
     next.multiRequestEnabled = true;
     next.requestMethod = draft.multi_request.request?.method ?? next.requestMethod;
-    next.requestPath = draft.multi_request.request?.path ?? draft.multi_request.request?.url ?? "";
-    next.requestURL = "";
+    next.requestPath = draft.multi_request.request?.path ?? "";
+    next.requestURL = draft.multi_request.request?.url ?? "";
     next.requestQueryJSON = JSON.stringify(draft.multi_request.request?.query ?? {}, null, 2);
     next.requestHeadersJSON = JSON.stringify(draft.multi_request.request?.headers ?? {}, null, 2);
     next.requestCookiesJSON = JSON.stringify(draft.multi_request.request?.cookies ?? {}, null, 2);
@@ -2204,8 +2229,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
     next.multiSuccessConditionsText = (draft.multi_request.success_when?.conditions ?? []).join("\n");
   } else if (draft.request) {
     next.requestMethod = draft.request.method ?? next.requestMethod;
-    next.requestPath = draft.request.path ?? draft.request.url ?? "";
-    next.requestURL = "";
+    next.requestPath = draft.request.path ?? "";
+    next.requestURL = draft.request.url ?? "";
     next.requestQueryJSON = JSON.stringify(draft.request.query ?? {}, null, 2);
     next.requestHeadersJSON = JSON.stringify(draft.request.headers ?? {}, null, 2);
     next.requestCookiesJSON = JSON.stringify(draft.request.cookies ?? {}, null, 2);
@@ -2235,8 +2260,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
         : "";
     next.workflowReturn = searchSelect.return ?? "${item.read_link}";
     next.workflowNextMethod = searchSelect.next_request?.method ?? "GET";
-    next.workflowNextPath = searchSelect.next_request?.path ?? searchSelect.next_request?.url ?? "";
-    next.workflowNextURL = "";
+    next.workflowNextPath = searchSelect.next_request?.path ?? "";
+    next.workflowNextURL = searchSelect.next_request?.url ?? "";
     next.workflowNextQueryJSON = JSON.stringify(searchSelect.next_request?.query ?? {}, null, 2);
     next.workflowNextHeadersJSON = JSON.stringify(searchSelect.next_request?.headers ?? {}, null, 2);
     next.workflowNextCookiesJSON = JSON.stringify(searchSelect.next_request?.cookies ?? {}, null, 2);
