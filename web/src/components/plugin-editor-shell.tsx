@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   compilePluginDraft,
@@ -73,6 +73,8 @@ type KVPairForm = {
   value: string;
 };
 
+type RequestBodyDraft = NonNullable<NonNullable<PluginEditorDraft["request"]>["body"]>;
+
 type EditorState = {
   name: string;
   type: string;
@@ -85,6 +87,7 @@ type EditorState = {
   requestQueryJSON: string;
   requestHeadersJSON: string;
   requestCookiesJSON: string;
+  requestBodyKind: string;
   requestBodyJSON: string;
   requestAcceptStatusText: string;
   requestNotFoundStatusText: string;
@@ -100,6 +103,7 @@ type EditorState = {
   multiRequestQueryJSON: string;
   multiRequestHeadersJSON: string;
   multiRequestCookiesJSON: string;
+  multiRequestBodyKind: string;
   multiRequestBodyJSON: string;
   multiRequestAcceptStatusText: string;
   multiRequestNotFoundStatusText: string;
@@ -119,6 +123,7 @@ type EditorState = {
   workflowNextQueryJSON: string;
   workflowNextHeadersJSON: string;
   workflowNextCookiesJSON: string;
+  workflowNextBodyKind: string;
   workflowNextBodyJSON: string;
   workflowNextAcceptStatusText: string;
   workflowNextNotFoundStatusText: string;
@@ -209,6 +214,7 @@ function defaultState(): EditorState {
     requestQueryJSON: "{}",
     requestHeadersJSON: "{}",
     requestCookiesJSON: "{}",
+    requestBodyKind: "json",
     requestBodyJSON: "null",
     requestAcceptStatusText: "200",
     requestNotFoundStatusText: "404",
@@ -224,6 +230,7 @@ function defaultState(): EditorState {
     multiRequestQueryJSON: "{}",
     multiRequestHeadersJSON: "{}",
     multiRequestCookiesJSON: "{}",
+    multiRequestBodyKind: "json",
     multiRequestBodyJSON: "null",
     multiRequestAcceptStatusText: "200",
     multiRequestNotFoundStatusText: "404",
@@ -250,6 +257,7 @@ function defaultState(): EditorState {
     workflowNextQueryJSON: "{}",
     workflowNextHeadersJSON: "{}",
     workflowNextCookiesJSON: "{}",
+    workflowNextBodyKind: "json",
     workflowNextBodyJSON: "null",
     workflowNextAcceptStatusText: "200",
     workflowNextNotFoundStatusText: "404",
@@ -281,22 +289,29 @@ export function PluginEditorShell() {
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number } | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
+  const deferredState = useDeferredValue(state);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(DEFAULT_DRAFT_STORAGE_KEY, JSON.stringify(state));
-    window.localStorage.setItem(DEFAULT_NUMBER_STORAGE_KEY, state.number);
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(DEFAULT_DRAFT_STORAGE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(DEFAULT_NUMBER_STORAGE_KEY, state.number);
+    }, 160);
+    return () => window.clearTimeout(timer);
   }, [state]);
 
   const previewDraft = useMemo(() => {
+    if (tab !== "draft") {
+      return null;
+    }
     try {
-      return buildDraft(state);
+      return buildDraft(deferredState);
     } catch {
       return null;
     }
-  }, [state]);
+  }, [deferredState, tab]);
 
   const draftPreview = useMemo(() => (previewDraft ? JSON.stringify(previewDraft, null, 2) : ""), [previewDraft]);
   const canAddField = state.fields.length < FIELD_OPTIONS.length;
@@ -698,6 +713,7 @@ export function PluginEditorShell() {
               queryJSON={state.requestQueryJSON}
               headersJSON={state.requestHeadersJSON}
               cookiesJSON={state.requestCookiesJSON}
+              bodyKind={state.requestBodyKind}
               bodyJSON={state.requestBodyJSON}
               acceptStatusText={state.requestAcceptStatusText}
               notFoundStatusText={state.requestNotFoundStatusText}
@@ -712,7 +728,7 @@ export function PluginEditorShell() {
                   checked={state.multiRequestEnabled}
                   onChange={(event) => patch("multiRequestEnabled", event.target.checked)}
                 />
-                <span>启用 multi_request</span>
+                <span>多候选请求</span>
               </label>
             </div>
             {state.multiRequestEnabled ? (
@@ -729,7 +745,7 @@ export function PluginEditorShell() {
                         className="input plugin-editor-textarea plugin-editor-textarea-compact"
                         value={state.multiCandidatesText}
                         onChange={(event) => patch("multiCandidatesText", event.target.value)}
-                        placeholder="每行一个 candidate 模板"
+                        placeholder={'每行一个 candidate 模板，例如：\n${number}\n${to_upper(${number})}\n${replace(${number}, "-", "_")}\n${replace(${number}, "_", "")}'}
                       />
                     </label>
                     <label className="plugin-editor-field">
@@ -769,22 +785,24 @@ export function PluginEditorShell() {
             </div>
             {state.workflowEnabled ? (
               <div className="plugin-editor-fields">
-                <div className="plugin-editor-form-grid">
-                  <label className="plugin-editor-field">
+                <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
+                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
                     <span>Match Mode</span>
                     <select className="input" value={state.workflowMatchMode} onChange={(event) => patch("workflowMatchMode", event.target.value)}>
                       <option value="and">and</option>
                       <option value="or">or</option>
                     </select>
                   </label>
-                  <label className="plugin-editor-field">
+                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
                     <span>Expect Count</span>
                     <input className="input" value={state.workflowExpectCountText} onChange={(event) => patch("workflowExpectCountText", event.target.value)} placeholder="可选，例如 1" />
                   </label>
-                  <label className="plugin-editor-field plugin-editor-field-wide">
+                  <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-lg">
                     <span>Return Template</span>
                     <input className="input" value={state.workflowReturn} onChange={(event) => patch("workflowReturn", event.target.value)} placeholder="${item.read_link}" />
                   </label>
+                </div>
+                <div className="plugin-editor-form-grid">
                   <label className="plugin-editor-field plugin-editor-field-wide">
                     <span>Match Conditions</span>
                     <textarea
@@ -796,53 +814,65 @@ export function PluginEditorShell() {
                   </label>
                 </div>
 
-                <div className="plugin-editor-panel-subhead">
-                  <h4>Item Variables</h4>
+                <div className="plugin-editor-subcard">
+                  <div className="plugin-editor-subcard-head">
+                    <strong>Item Variables</strong>
+                    <span>定义选择器 item 的派生变量。</span>
+                  </div>
+                  <WorkflowItemVariablesEditor
+                    items={state.workflowItemVariables}
+                    onAdd={() => addKVPair("workflowItemVariables")}
+                    onRemove={(id) => removeKVPair("workflowItemVariables", id)}
+                    onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
+                  />
                 </div>
-                <KVPairEditor
-                  items={state.workflowItemVariables}
-                  emptyLabel="暂未定义 item_variables。"
-                  keyLabel="变量名"
-                  valueLabel="模板"
-                  onAdd={() => addKVPair("workflowItemVariables")}
-                  onRemove={(id) => removeKVPair("workflowItemVariables", id)}
-                  onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
-                />
 
+                <div className="plugin-editor-subcard">
+                  <div className="plugin-editor-subcard-head">
+                    <strong>数据匹配</strong>
+                    <span>从首次请求结果中提取数据并参与匹配。</span>
+                  </div>
                 <div className="plugin-editor-fields">
                   {state.workflowSelectors.map((selector) => (
-                    <div key={selector.id} className="plugin-editor-field-card">
-                      <div className="plugin-editor-field-card-head">
-                        <strong>{selector.name || "未命名 selector"}</strong>
-                        <button className="btn btn-secondary" type="button" onClick={() => removeWorkflowSelector(selector.id)}>
-                          删除
+                    <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
+                      <div className="plugin-editor-transform-actions">
+                        <button
+                          className="btn btn-secondary plugin-editor-transform-action"
+                          type="button"
+                          aria-label="新增 selector"
+                          title="新增 selector"
+                          onClick={addWorkflowSelector}
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          className="btn btn-secondary plugin-editor-transform-action"
+                          type="button"
+                          aria-label="删除 selector"
+                          title="删除 selector"
+                          onClick={() => removeWorkflowSelector(selector.id)}
+                        >
+                          <Trash2 size={14} />
                         </button>
                       </div>
-                      <div className="plugin-editor-form-grid">
-                        <label className="plugin-editor-field">
-                          <span>Name</span>
-                          <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
-                        </label>
-                        <label className="plugin-editor-field">
-                          <span>Kind</span>
-                          <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
-                            <option value="xpath">xpath</option>
-                            <option value="jsonpath">jsonpath</option>
-                          </select>
-                        </label>
-                        <label className="plugin-editor-field plugin-editor-field-wide">
-                          <span>Expr</span>
-                          <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
-                        </label>
-                      </div>
+                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
+                        <span>Name</span>
+                        <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
+                      </label>
+                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-kind">
+                        <span>Kind</span>
+                        <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
+                          <option value="xpath">xpath</option>
+                          <option value="jsonpath">jsonpath</option>
+                        </select>
+                      </label>
+                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-expr">
+                        <span>Expr</span>
+                        <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
+                      </label>
                     </div>
                   ))}
-                  <div className="plugin-editor-inline-actions">
-                    <button className="btn btn-primary" type="button" onClick={addWorkflowSelector}>
-                      <Braces size={16} />
-                      <span>新增 Selector</span>
-                    </button>
-                  </div>
+                </div>
                 </div>
 
                 <div className="plugin-editor-panel-subhead">
@@ -855,6 +885,7 @@ export function PluginEditorShell() {
                   queryJSON={state.workflowNextQueryJSON}
                   headersJSON={state.workflowNextHeadersJSON}
                   cookiesJSON={state.workflowNextCookiesJSON}
+                  bodyKind={state.workflowNextBodyKind}
                   bodyJSON={state.workflowNextBodyJSON}
                   acceptStatusText={state.workflowNextAcceptStatusText}
                   notFoundStatusText={state.workflowNextNotFoundStatusText}
@@ -1222,6 +1253,7 @@ function RequestForm(props: {
   queryJSON: string;
   headersJSON: string;
   cookiesJSON: string;
+  bodyKind: string;
   bodyJSON: string;
   acceptStatusText: string;
   notFoundStatusText: string;
@@ -1229,38 +1261,34 @@ function RequestForm(props: {
   prefix?: "workflowNext" | "multiRequest";
   onChange: <K extends keyof EditorState>(key: K, value: EditorState[K]) => void;
 }) {
-  const prefix = props.prefix ?? "";
+  const prefix = props.prefix ?? "request";
   const key = <K extends keyof EditorState>(name: string) => `${prefix}${name}` as K;
 
   return (
     <>
-      <div className="plugin-editor-form-grid">
-        <label className="plugin-editor-field">
+      <div className="plugin-editor-request-inline-row">
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-method">
           <span>Method</span>
           <select className="input" value={props.method} onChange={(event) => props.onChange(key("Method"), event.target.value as EditorState[keyof EditorState])}>
             <option value="GET">GET</option>
             <option value="POST">POST</option>
           </select>
         </label>
-        <label className="plugin-editor-field">
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg">
           <span>Path</span>
           <input className="input" value={props.path} onChange={(event) => props.onChange(key("Path"), event.target.value as EditorState[keyof EditorState])} />
         </label>
-        <label className="plugin-editor-field plugin-editor-field-wide">
-          <span>Raw URL</span>
-          <input className="input" value={props.rawURL} onChange={(event) => props.onChange(key("URL"), event.target.value as EditorState[keyof EditorState])} placeholder="可选，覆盖 path" />
-        </label>
-        <label className="plugin-editor-field">
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
           <span>Accept Status</span>
           <input className="input" value={props.acceptStatusText} onChange={(event) => props.onChange(key("AcceptStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="200,302" />
         </label>
-        <label className="plugin-editor-field">
-          <span>Not Found Status</span>
-          <input className="input" value={props.notFoundStatusText} onChange={(event) => props.onChange(key("NotFoundStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="404" />
-        </label>
-        <label className="plugin-editor-field plugin-editor-field-wide">
-          <span>Decode Charset</span>
-          <input className="input" value={props.decodeCharset} onChange={(event) => props.onChange(key("DecodeCharset"), event.target.value as EditorState[keyof EditorState])} placeholder="例如 euc-jp" />
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-content-type">
+          <span>Content-Type</span>
+          <select className="input" value={props.bodyKind} onChange={(event) => props.onChange(key("BodyKind"), event.target.value as EditorState[keyof EditorState])}>
+            <option value="json">json</option>
+            <option value="form">form</option>
+            <option value="raw">raw</option>
+          </select>
         </label>
       </div>
       <div className="plugin-editor-json-grid">
@@ -1273,14 +1301,33 @@ function RequestForm(props: {
           <textarea className="input plugin-editor-textarea" value={props.headersJSON} onChange={(event) => props.onChange(key("HeadersJSON"), event.target.value as EditorState[keyof EditorState])} />
         </label>
         <label className="plugin-editor-field">
-          <span>Cookies JSON</span>
-          <textarea className="input plugin-editor-textarea" value={props.cookiesJSON} onChange={(event) => props.onChange(key("CookiesJSON"), event.target.value as EditorState[keyof EditorState])} />
-        </label>
-        <label className="plugin-editor-field">
-          <span>Body JSON</span>
+          <span>Body</span>
           <textarea className="input plugin-editor-textarea" value={props.bodyJSON} onChange={(event) => props.onChange(key("BodyJSON"), event.target.value as EditorState[keyof EditorState])} />
         </label>
       </div>
+      <details className="plugin-editor-advanced">
+        <summary>高级选项</summary>
+        <div className="plugin-editor-request-inline-row plugin-editor-advanced-grid">
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-raw">
+            <span>Raw URL</span>
+            <input className="input" value={props.rawURL} onChange={(event) => props.onChange(key("URL"), event.target.value as EditorState[keyof EditorState])} placeholder="可选，覆盖 path" />
+          </label>
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+            <span>Not Found Status</span>
+            <input className="input" value={props.notFoundStatusText} onChange={(event) => props.onChange(key("NotFoundStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="404" />
+          </label>
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+            <span>Decode Charset</span>
+            <input className="input" value={props.decodeCharset} onChange={(event) => props.onChange(key("DecodeCharset"), event.target.value as EditorState[keyof EditorState])} placeholder="例如 euc-jp" />
+          </label>
+        </div>
+        <div className="plugin-editor-form-grid plugin-editor-advanced-grid">
+          <label className="plugin-editor-field plugin-editor-field-wide">
+            <span>Cookies JSON</span>
+            <textarea className="input plugin-editor-textarea" value={props.cookiesJSON} onChange={(event) => props.onChange(key("CookiesJSON"), event.target.value as EditorState[keyof EditorState])} />
+          </label>
+        </div>
+      </details>
     </>
   );
 }
@@ -1450,6 +1497,46 @@ function KVPairEditor(props: {
   );
 }
 
+function WorkflowItemVariablesEditor(props: {
+  items: KVPairForm[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onChange: (id: string, updater: (item: KVPairForm) => KVPairForm) => void;
+}) {
+  return (
+    <div className="plugin-editor-kv-list">
+      {props.items.length === 0 ? <div className="ruleset-debug-empty">暂未定义 item_variables。</div> : null}
+      {props.items.map((item) => (
+        <div key={item.id} className="plugin-editor-kv-row plugin-editor-kv-row-compact">
+          <label className="plugin-editor-field-inline plugin-editor-kv-inline-key">
+            <span>Name</span>
+            <input className="input" value={item.key} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, key: event.target.value }))} />
+          </label>
+          <label className="plugin-editor-field-inline plugin-editor-kv-inline-value">
+            <span>Template</span>
+            <input className="input" value={item.value} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, value: event.target.value }))} />
+          </label>
+          <div className="plugin-editor-transform-actions plugin-editor-kv-actions">
+            <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
+              <Plus size={14} />
+            </button>
+            <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="删除变量" title="删除变量" onClick={() => props.onRemove(item.id)}>
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      ))}
+      {props.items.length === 0 ? (
+        <div className="plugin-editor-inline-actions">
+          <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
+            <Plus size={14} />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TransformParamFields(props: {
   transform: TransformForm;
   onChange: (updater: (prev: TransformForm) => TransformForm) => void;
@@ -1610,7 +1697,7 @@ function buildRequestFromState(state: EditorState): NonNullable<PluginEditorDraf
     query: parseJSON<Record<string, string>>(state.requestQueryJSON, "request query"),
     headers: parseJSON<Record<string, string>>(state.requestHeadersJSON, "request headers"),
     cookies: parseJSON<Record<string, string>>(state.requestCookiesJSON, "request cookies"),
-    body: parseNullableJSON<NonNullable<PluginEditorDraft["request"]>["body"]>(state.requestBodyJSON, "request body"),
+    body: buildRequestBody(state.requestBodyKind, state.requestBodyJSON, "request body"),
     accept_status_codes: parseIntegerList(state.requestAcceptStatusText),
     not_found_status_codes: parseIntegerList(state.requestNotFoundStatusText),
     response: state.requestDecodeCharset.trim() ? { decode_charset: state.requestDecodeCharset.trim() } : undefined,
@@ -1625,10 +1712,32 @@ function buildWorkflowNextRequestFromState(state: EditorState): NonNullable<NonN
     query: parseJSON<Record<string, string>>(state.workflowNextQueryJSON, "workflow next query"),
     headers: parseJSON<Record<string, string>>(state.workflowNextHeadersJSON, "workflow next headers"),
     cookies: parseJSON<Record<string, string>>(state.workflowNextCookiesJSON, "workflow next cookies"),
-    body: parseNullableJSON<NonNullable<PluginEditorDraft["request"]>["body"]>(state.workflowNextBodyJSON, "workflow next body"),
+    body: buildRequestBody(state.workflowNextBodyKind, state.workflowNextBodyJSON, "workflow next body"),
     accept_status_codes: parseIntegerList(state.workflowNextAcceptStatusText),
     not_found_status_codes: parseIntegerList(state.workflowNextNotFoundStatusText),
     response: state.workflowNextDecodeCharset.trim() ? { decode_charset: state.workflowNextDecodeCharset.trim() } : undefined,
+  };
+}
+
+function buildRequestBody(kind: string, value: string, label: string): NonNullable<PluginEditorDraft["request"]>["body"] {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "null") {
+    return null;
+  }
+  if (kind === "raw") {
+    return {
+      kind,
+      content: value,
+    };
+  }
+  const parsed = parseJSON<Record<string, unknown>>(value, label);
+  const values = Object.entries(parsed ?? {}).reduce<Record<string, string>>((acc, [key, item]) => {
+    acc[key] = item == null ? "" : String(item);
+    return acc;
+  }, {});
+  return {
+    kind: kind || "json",
+    values,
   };
 }
 
@@ -1656,7 +1765,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
     next.requestQueryJSON = JSON.stringify(draft.multi_request.request?.query ?? {}, null, 2);
     next.requestHeadersJSON = JSON.stringify(draft.multi_request.request?.headers ?? {}, null, 2);
     next.requestCookiesJSON = JSON.stringify(draft.multi_request.request?.cookies ?? {}, null, 2);
-    next.requestBodyJSON = JSON.stringify(draft.multi_request.request?.body ?? null, null, 2);
+    next.requestBodyKind = draft.multi_request.request?.body?.kind ?? "json";
+    next.requestBodyJSON = stringifyRequestBody(draft.multi_request.request?.body ?? null);
     next.requestAcceptStatusText = (draft.multi_request.request?.accept_status_codes ?? []).join(",");
     next.requestNotFoundStatusText = (draft.multi_request.request?.not_found_status_codes ?? []).join(",");
     next.requestDecodeCharset = draft.multi_request.request?.response?.decode_charset ?? "";
@@ -1671,7 +1781,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
     next.requestQueryJSON = JSON.stringify(draft.request.query ?? {}, null, 2);
     next.requestHeadersJSON = JSON.stringify(draft.request.headers ?? {}, null, 2);
     next.requestCookiesJSON = JSON.stringify(draft.request.cookies ?? {}, null, 2);
-    next.requestBodyJSON = JSON.stringify(draft.request.body ?? null, null, 2);
+    next.requestBodyKind = draft.request.body?.kind ?? "json";
+    next.requestBodyJSON = stringifyRequestBody(draft.request.body ?? null);
     next.requestAcceptStatusText = (draft.request.accept_status_codes ?? []).join(",");
     next.requestNotFoundStatusText = (draft.request.not_found_status_codes ?? []).join(",");
     next.requestDecodeCharset = draft.request.response?.decode_charset ?? "";
@@ -1701,7 +1812,8 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
     next.workflowNextQueryJSON = JSON.stringify(searchSelect.next_request?.query ?? {}, null, 2);
     next.workflowNextHeadersJSON = JSON.stringify(searchSelect.next_request?.headers ?? {}, null, 2);
     next.workflowNextCookiesJSON = JSON.stringify(searchSelect.next_request?.cookies ?? {}, null, 2);
-    next.workflowNextBodyJSON = JSON.stringify(searchSelect.next_request?.body ?? null, null, 2);
+    next.workflowNextBodyKind = searchSelect.next_request?.body?.kind ?? "json";
+    next.workflowNextBodyJSON = stringifyRequestBody(searchSelect.next_request?.body ?? null);
     next.workflowNextAcceptStatusText = (searchSelect.next_request?.accept_status_codes ?? []).join(",");
     next.workflowNextNotFoundStatusText = (searchSelect.next_request?.not_found_status_codes ?? []).join(",");
     next.workflowNextDecodeCharset = searchSelect.next_request?.response?.decode_charset ?? "";
@@ -1787,12 +1899,14 @@ function parseJSON<T>(value: string, label: string): T {
   }
 }
 
-function parseNullableJSON<T>(value: string, label: string): T | null {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed === "null") {
-    return null;
+function stringifyRequestBody(body: RequestBodyDraft | null | undefined) {
+  if (!body) {
+    return "null";
   }
-  return parseJSON<T>(value, label);
+  if (body.kind === "raw") {
+    return body.content ?? "";
+  }
+  return JSON.stringify(body.values ?? {}, null, 2);
 }
 
 function parseIntegerList(value: string) {
@@ -1827,6 +1941,9 @@ function normalizeEditorState(state: EditorState): EditorState {
   const legacySwitchConfig = parseLegacyObject<NonNullable<NonNullable<PluginEditorDraft["postprocess"]>["switch_config"]>>(legacyState.postSwitchJSON);
   return {
     ...state,
+    requestBodyKind: state.requestBodyKind || "json",
+    multiRequestBodyKind: state.multiRequestBodyKind || "json",
+    workflowNextBodyKind: state.workflowNextBodyKind || "json",
     fields: (state.fields ?? []).map((field, index) => {
       const legacy = field as FieldForm & { transformsJSON?: string };
       const transforms =

@@ -5149,6 +5149,25 @@ textarea.input {
   line-height: 1.6;
 }
 
+.plugin-editor-advanced {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 236, 0.44);
+}
+
+.plugin-editor-advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  user-select: none;
+}
+
+.plugin-editor-advanced-grid {
+  margin-top: 12px;
+}
+
 .plugin-editor-kv-list {
   display: flex;
   flex-direction: column;
@@ -5160,6 +5179,18 @@ textarea.input {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
+}
+
+.plugin-editor-kv-row-compact {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 12px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  background: rgba(255, 248, 236, 0.78);
 }
 
 .plugin-editor-field-card {
@@ -5188,6 +5219,18 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.plugin-editor-workflow-inline-row {
+  margin-bottom: 14px;
+}
+
+.plugin-editor-workflow-inline-field-sm {
+  flex: 0 0 180px;
+}
+
+.plugin-editor-workflow-inline-field-lg {
+  flex: 1 1 0;
 }
 
 .plugin-editor-field-inline-row {
@@ -5244,6 +5287,89 @@ textarea.input {
   white-space: nowrap;
 }
 
+.plugin-editor-request-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.plugin-editor-request-inline-field-sm {
+  flex: 0 0 128px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-lg {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-raw {
+  flex: 0 0 280px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-xl {
+  flex: 0 0 420px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-method {
+  flex: 0 0 160px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-content-type {
+  flex: 0 0 216px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-field-accept {
+  flex: 0 0 208px;
+  min-width: 0;
+}
+
+.plugin-editor-request-inline-row .plugin-editor-field-inline {
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.plugin-editor-request-inline-row .plugin-editor-field-inline span {
+  min-width: 0;
+  width: auto;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.plugin-editor-request-inline-field-method {
+  grid-template-columns: 62px minmax(0, 1fr);
+}
+
+.plugin-editor-request-inline-field-lg {
+  flex: 1 1 220px;
+}
+
+.plugin-editor-request-inline-field-accept {
+  grid-template-columns: 104px minmax(0, 1fr);
+}
+
+.plugin-editor-request-inline-field-content-type {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.plugin-editor-request-inline-row .plugin-editor-field-inline .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.plugin-editor-advanced-grid .plugin-editor-request-inline-field-lg,
+.plugin-editor-advanced-grid .plugin-editor-request-inline-field-raw,
+.plugin-editor-advanced-grid .plugin-editor-request-inline-field-xl {
+  margin-top: 0;
+}
+
 .plugin-editor-transform-list {
   display: flex;
   flex-direction: column;
@@ -5263,6 +5389,10 @@ textarea.input {
   flex-wrap: nowrap;
 }
 
+.plugin-editor-selector-card {
+  padding-top: 16px;
+}
+
 .plugin-editor-transform-actions {
   position: absolute;
   top: -10px;
@@ -5280,6 +5410,18 @@ textarea.input {
   border-radius: 999px;
   background: rgba(255, 250, 243, 0.96);
   border-color: rgba(105, 79, 51, 0.16);
+}
+
+.plugin-editor-kv-inline-key {
+  flex: 0 0 240px;
+}
+
+.plugin-editor-kv-inline-value {
+  flex: 1 1 0;
+}
+
+.plugin-editor-kv-actions {
+  right: 10px;
 }
 
 .plugin-editor-transform-action span {
@@ -5321,6 +5463,18 @@ textarea.input {
 
 .plugin-editor-transform-inline-field-kind {
   flex: 0 0 240px;
+}
+
+.plugin-editor-selector-inline-field-name {
+  flex: 0 0 220px;
+}
+
+.plugin-editor-selector-inline-field-kind {
+  flex: 0 0 220px;
+}
+
+.plugin-editor-selector-inline-field-expr {
+  flex: 1 1 0;
 }
 
 .plugin-editor-transform-inline-field-kind .input {
