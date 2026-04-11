@@ -5009,6 +5009,15 @@ textarea.input {
   padding-right: 4px;
 }
 
+.plugin-editor-request-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .plugin-editor-panel-fragment > * + * {
   margin-top: 16px;
 }
@@ -5018,7 +5027,8 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .plugin-editor-column-output {
@@ -5031,6 +5041,7 @@ textarea.input {
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
+  height: 100%;
 }
 
 .plugin-editor-column-side {
@@ -5128,6 +5139,23 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.plugin-editor-workflow-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.plugin-editor-workflow-scroll {
+  flex: 1 1 auto;
+  min-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .plugin-editor-subcard {
@@ -5675,6 +5703,7 @@ textarea.input {
 .plugin-editor-output-section {
   display: grid;
   gap: 14px;
+  min-height: 0;
 }
 
 .plugin-editor-output-section-fill {
@@ -5758,6 +5787,10 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  max-height: min(34vh, 360px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .plugin-editor-timeline-step {
@@ -5774,6 +5807,7 @@ textarea.input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .plugin-editor-timeline-head span,
@@ -5781,6 +5815,9 @@ textarea.input {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .plugin-editor-header-list {
@@ -5796,6 +5833,66 @@ textarea.input {
 .plugin-editor-body-panel {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
+}
+
+.plugin-editor-json-scroll {
+  max-height: min(52vh, 720px);
+}
+
+.plugin-editor-output-detail-block {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 236, 0.44);
+}
+
+.plugin-editor-output-detail-block summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  user-select: none;
+}
+
+.plugin-editor-output-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-editor-output-detail-block > * + * {
+  margin-top: 12px;
+}
+
+.plugin-editor-expr-runner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-editor-expr-runner-card {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 248, 236, 0.72);
+}
+
+.plugin-editor-expr-runner-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 88px;
+  gap: 10px;
+  align-items: center;
+}
+
+.plugin-editor-expr-kind {
+  width: 100%;
+}
+
+.plugin-editor-expr-output {
+  margin-top: 0;
+  height: 220px;
   overflow: auto;
 }
 

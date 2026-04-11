@@ -739,7 +739,7 @@ export function PluginEditorShell() {
           ) : null}
 
           {activeSection === "request" ? (
-          <article id="plugin-editor-section-request" className="plugin-editor-panel-fragment">
+          <article id="plugin-editor-section-request" className="plugin-editor-panel-fragment plugin-editor-request-shell">
             <div className="plugin-editor-subcard">
               <div className="plugin-editor-subcard-head">
                 <strong>Request</strong>
@@ -764,7 +764,7 @@ export function PluginEditorShell() {
             </div>
 
             <div className="plugin-editor-switch-row">
-              <label className="searcher-debug-switch">
+              <label className="searcher-debug-switch" title="使用多个 candidate 基于当前 Request 重复请求，并按成功条件命中。">
                 <input
                   type="checkbox"
                   checked={state.multiRequestEnabled}
@@ -813,110 +813,113 @@ export function PluginEditorShell() {
               </div>
             ) : null}
             <div className="plugin-editor-switch-row">
-              <label className="searcher-debug-switch">
+              <label className="searcher-debug-switch" title="启用 search_select，从首次请求结果中选择目标数据并可进入下一跳请求。">
                 <input type="checkbox" checked={state.workflowEnabled} onChange={(event) => patch("workflowEnabled", event.target.checked)} />
                 <span>Workflow</span>
               </label>
             </div>
             {state.workflowEnabled ? (
-              <div className="plugin-editor-fields">
-                <div className="plugin-editor-subcard">
-                  <div className="plugin-editor-subcard-head">
-                    <strong>数据选择</strong>
-                    <span>从首次请求结果中提取数据并参与匹配。</span>
-                  </div>
+              <div className="plugin-editor-workflow-shell">
+                <div className="plugin-editor-workflow-scroll">
                   <div className="plugin-editor-fields">
-                    {state.workflowSelectors.map((selector) => (
-                      <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
-                        <div className="plugin-editor-transform-actions">
-                          <button
-                            className="btn btn-secondary plugin-editor-transform-action"
-                            type="button"
-                            aria-label="新增 selector"
-                            title="新增 selector"
-                            onClick={addWorkflowSelector}
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <button
-                            className="btn btn-secondary plugin-editor-transform-action"
-                            type="button"
-                            aria-label="删除 selector"
-                            title="删除 selector"
-                            onClick={() => removeWorkflowSelector(selector.id)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
-                          <span>Name</span>
-                          <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
-                        </label>
-                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-kind">
-                          <span>Kind</span>
-                          <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
-                            <option value="xpath">xpath</option>
-                            <option value="jsonpath">jsonpath</option>
+                    <div className="plugin-editor-subcard">
+                      <div className="plugin-editor-subcard-head">
+                        <strong>数据选择</strong>
+                        <span>从首次请求结果中提取数据并参与匹配。</span>
+                      </div>
+                      <div className="plugin-editor-fields">
+                        {state.workflowSelectors.map((selector) => (
+                          <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
+                            <div className="plugin-editor-transform-actions">
+                              <button
+                                className="btn btn-secondary plugin-editor-transform-action"
+                                type="button"
+                                aria-label="新增 selector"
+                                title="新增 selector"
+                                onClick={addWorkflowSelector}
+                              >
+                                <Plus size={14} />
+                              </button>
+                              <button
+                                className="btn btn-secondary plugin-editor-transform-action"
+                                type="button"
+                                aria-label="删除 selector"
+                                title="删除 selector"
+                                onClick={() => removeWorkflowSelector(selector.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                            <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
+                              <span>Name</span>
+                              <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
+                            </label>
+                            <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-kind">
+                              <span>Kind</span>
+                              <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
+                                <option value="xpath">xpath</option>
+                                <option value="jsonpath">jsonpath</option>
+                              </select>
+                            </label>
+                            <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-expr">
+                              <span>Expr</span>
+                              <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="plugin-editor-subcard">
+                      <div className="plugin-editor-subcard-head">
+                        <strong>Item Variables</strong>
+                        <span>定义选择器 item 的派生变量。</span>
+                      </div>
+                      <WorkflowItemVariablesEditor
+                        items={state.workflowItemVariables}
+                        onAdd={() => addKVPair("workflowItemVariables")}
+                        onRemove={(id) => removeKVPair("workflowItemVariables", id)}
+                        onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
+                      />
+                    </div>
+
+                    <div className="plugin-editor-subcard">
+                      <div className="plugin-editor-subcard-head">
+                        <strong>匹配规则</strong>
+                        <span>控制选择器结果的匹配方式、数量约束和返回模板。</span>
+                      </div>
+                      <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
+                        <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
+                          <span>Match Mode</span>
+                          <select className="input" value={state.workflowMatchMode} onChange={(event) => patch("workflowMatchMode", event.target.value)}>
+                            <option value="and">and</option>
+                            <option value="or">or</option>
                           </select>
                         </label>
-                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-expr">
-                          <span>Expr</span>
-                          <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
+                        <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
+                          <span>Expect Count</span>
+                          <input className="input" value={state.workflowExpectCountText} onChange={(event) => patch("workflowExpectCountText", event.target.value)} placeholder="可选，例如 1" />
+                        </label>
+                        <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-lg">
+                          <span>Return Template</span>
+                          <input className="input" value={state.workflowReturn} onChange={(event) => patch("workflowReturn", event.target.value)} placeholder="${item.read_link}" />
                         </label>
                       </div>
-                    ))}
+                      <div className="plugin-editor-form-grid">
+                        <label className="plugin-editor-field plugin-editor-field-wide">
+                          <span>Match Conditions</span>
+                          <textarea
+                            className="input plugin-editor-textarea plugin-editor-textarea-compact"
+                            value={state.workflowMatchConditionsText}
+                            onChange={(event) => patch("workflowMatchConditionsText", event.target.value)}
+                            onKeyDown={handleEditorTextareaKeyDown}
+                            placeholder={'每行一个条件，例如：\ncontains("${item.read_title}", "${number}")'}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                <div className="plugin-editor-subcard">
-                  <div className="plugin-editor-subcard-head">
-                    <strong>Item Variables</strong>
-                    <span>定义选择器 item 的派生变量。</span>
-                  </div>
-                  <WorkflowItemVariablesEditor
-                    items={state.workflowItemVariables}
-                    onAdd={() => addKVPair("workflowItemVariables")}
-                    onRemove={(id) => removeKVPair("workflowItemVariables", id)}
-                    onChange={(id, updater) => patchKVPair("workflowItemVariables", id, updater)}
-                  />
-                </div>
-
-                <div className="plugin-editor-subcard">
-                  <div className="plugin-editor-subcard-head">
-                    <strong>匹配规则</strong>
-                    <span>控制选择器结果的匹配方式、数量约束和返回模板。</span>
-                  </div>
-                  <div className="plugin-editor-request-inline-row plugin-editor-workflow-inline-row">
-                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
-                      <span>Match Mode</span>
-                      <select className="input" value={state.workflowMatchMode} onChange={(event) => patch("workflowMatchMode", event.target.value)}>
-                        <option value="and">and</option>
-                        <option value="or">or</option>
-                      </select>
-                    </label>
-                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-sm">
-                      <span>Expect Count</span>
-                      <input className="input" value={state.workflowExpectCountText} onChange={(event) => patch("workflowExpectCountText", event.target.value)} placeholder="可选，例如 1" />
-                    </label>
-                    <label className="plugin-editor-field-inline plugin-editor-workflow-inline-field-lg">
-                      <span>Return Template</span>
-                      <input className="input" value={state.workflowReturn} onChange={(event) => patch("workflowReturn", event.target.value)} placeholder="${item.read_link}" />
-                    </label>
-                  </div>
-                  <div className="plugin-editor-form-grid">
-                    <label className="plugin-editor-field plugin-editor-field-wide">
-                      <span>Match Conditions</span>
-                      <textarea
-                        className="input plugin-editor-textarea plugin-editor-textarea-compact"
-                        value={state.workflowMatchConditionsText}
-                        onChange={(event) => patch("workflowMatchConditionsText", event.target.value)}
-                        onKeyDown={handleEditorTextareaKeyDown}
-                        placeholder={'每行一个条件，例如：\ncontains("${item.read_title}", "${number}")'}
-                      />
-                    </label>
-                  </div>
-                </div>
-
                 <div className="plugin-editor-subcard">
                   <div className="plugin-editor-subcard-head">
                     <strong>Next Request</strong>
@@ -941,9 +944,7 @@ export function PluginEditorShell() {
                   />
                 </div>
               </div>
-            ) : (
-              <div className="ruleset-debug-empty">two-step 插件或需要搜索结果选择时再启用 workflow。</div>
-            )}
+            ) : null}
           </article>
           ) : null}
 
@@ -1211,7 +1212,7 @@ export function PluginEditorShell() {
                 </div>
                 <details className="searcher-debug-json-block" open>
                   <summary>YAML 输出</summary>
-                  <pre className="searcher-debug-json">{compileResult?.yaml || "先执行一次编译。"}</pre>
+                  <pre className="searcher-debug-json plugin-editor-json-scroll">{compileResult?.yaml || "先执行一次编译。"}</pre>
                 </details>
               </div>
             ) : null}
@@ -1246,7 +1247,7 @@ export function PluginEditorShell() {
 
             {tab === "draft" ? (
               <div className="plugin-editor-output-section">
-                <pre className="searcher-debug-json">{draftPreview || "当前草稿无效。"}</pre>
+                <pre className="searcher-debug-json plugin-editor-json-scroll">{draftPreview || "当前草稿无效。"}</pre>
               </div>
             ) : null}
 
@@ -1303,7 +1304,6 @@ function RequestForm(props: {
   expandAdvanced?: boolean;
   compactJSONBlocks?: boolean;
   nextRequestLayout?: boolean;
-  topAction?: React.ReactNode;
   onChange: <K extends keyof EditorState>(key: K, value: EditorState[K]) => void;
 }) {
   const prefix = props.prefix ?? "request";
@@ -1333,7 +1333,6 @@ function RequestForm(props: {
             <span>Path</span>
             <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
           </label>
-          {props.topAction ? <div className="plugin-editor-request-top-action">{props.topAction}</div> : null}
         </div>
           <div className="plugin-editor-request-inline-row plugin-editor-request-inline-row-next-meta">
             <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
@@ -1371,7 +1370,6 @@ function RequestForm(props: {
             <span>Path</span>
             <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
           </label>
-          {props.topAction ? <div className="plugin-editor-request-top-action">{props.topAction}</div> : null}
           <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
             <span>Accept Status</span>
             <input className="input" value={props.acceptStatusText} onChange={(event) => props.onChange(key("AcceptStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="200,302" />
@@ -1511,24 +1509,63 @@ function RequestDetailPanel({ request }: { request?: PluginEditorRequestDebugRes
   if (!request) {
     return <div className="ruleset-debug-empty">暂无请求数据。</div>;
   }
+  const headerCount = Object.keys(request.headers).length;
   return (
     <div className="plugin-editor-output-detail">
-      <HeaderList headers={request.headers} />
+      <details className="plugin-editor-output-detail-block">
+        <summary className="plugin-editor-output-detail-summary">
+          <span>Headers</span>
+          <span className={`plugin-editor-request-json-count ${headerCount > 0 ? "" : "plugin-editor-request-json-count-hidden"}`}>{headerCount}</span>
+        </summary>
+        <HeaderList headers={request.headers} />
+      </details>
       <BodyPanel body={request.body} contentType={request.headers["Content-Type"] || request.headers["content-type"] || ""} emptyLabel="请求体为空。" />
     </div>
   );
 }
 
 function ResponseDetailPanel({ response }: { response?: PluginEditorRequestDebugResult["response"] | null }) {
+  const [expr, setExpr] = useState("");
+  const [kind, setKind] = useState<"xpath" | "jsonpath">("xpath");
+  const [output, setOutput] = useState("");
   if (!response) {
     return <div className="ruleset-debug-empty">暂无响应数据。</div>;
   }
   const contentType = response.headers["content-type"]?.[0] || response.headers["Content-Type"]?.[0] || "";
   const headerMap = Object.fromEntries(Object.entries(response.headers).map(([key, values]) => [key, values.join(", ")]));
+  const headerCount = Object.keys(headerMap).length;
+  const body = response.body || response.body_preview;
+
+  function runExpr() {
+    setOutput(runResponseExpr({ body, expr, kind, contentType }));
+  }
+
   return (
     <div className="plugin-editor-output-detail">
-      <HeaderList headers={headerMap} />
-      <BodyPanel body={response.body || response.body_preview} contentType={contentType} emptyLabel="响应体为空。" />
+      <details className="plugin-editor-output-detail-block">
+        <summary className="plugin-editor-output-detail-summary">
+          <span>Headers</span>
+          <span className={`plugin-editor-request-json-count ${headerCount > 0 ? "" : "plugin-editor-request-json-count-hidden"}`}>{headerCount}</span>
+        </summary>
+        <HeaderList headers={headerMap} />
+      </details>
+      <BodyPanel body={body} contentType={contentType} emptyLabel="响应体为空。" />
+      <details className="plugin-editor-output-detail-block">
+        <summary>Expr Filter</summary>
+        <div className="plugin-editor-expr-runner plugin-editor-expr-runner-card">
+          <div className="plugin-editor-expr-runner-top">
+            <input className="input" value={expr} onChange={(event) => setExpr(event.target.value)} placeholder={kind === "xpath" ? '//title/text()' : '$.result.name'} />
+            <select className="input plugin-editor-expr-kind" value={kind} onChange={(event) => setKind(event.target.value as "xpath" | "jsonpath")}>
+              <option value="xpath">xpath</option>
+              <option value="jsonpath">json</option>
+            </select>
+            <button className="btn btn-primary" type="button" onClick={runExpr}>
+              Run
+            </button>
+          </div>
+          <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-expr-output">{output || "暂无结果"}</pre>
+        </div>
+      </details>
     </div>
   );
 }
@@ -1540,7 +1577,7 @@ function WorkflowOutputPanel({ result }: { result: PluginEditorWorkflowDebugResu
   return (
     <div className="plugin-editor-output-section">
       <WorkflowDebugPreview result={result} />
-      <pre className="searcher-debug-json">{JSON.stringify(result, null, 2)}</pre>
+      <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(result, null, 2)}</pre>
     </div>
   );
 }
@@ -1567,7 +1604,7 @@ function ScrapeJSONPanel({ result }: { result: PluginEditorScrapeDebugResult | n
   if (!result) {
     return <div className="ruleset-debug-empty">暂无抓取结果。</div>;
   }
-  return <pre className="searcher-debug-json">{JSON.stringify(result.meta ?? result.fields, null, 2)}</pre>;
+  return <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(result.meta ?? result.fields, null, 2)}</pre>;
 }
 
 function HeaderList({ headers }: { headers: Record<string, string> }) {
@@ -1617,6 +1654,90 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
       <pre className="searcher-debug-json">{props.body}</pre>
     </div>
   );
+}
+
+function runResponseExpr(input: { body: string; expr: string; kind: "xpath" | "jsonpath"; contentType: string }) {
+  const expr = input.expr.trim();
+  if (!expr) {
+    return "请输入表达式。";
+  }
+  try {
+    if (input.kind === "xpath") {
+      return runXPathExpr(input.body, expr);
+    }
+    return runJSONExpr(input.body, expr);
+  } catch (error) {
+    return error instanceof Error ? error.message : "表达式执行失败。";
+  }
+}
+
+function runXPathExpr(body: string, expr: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(body, "text/html");
+  const result = doc.evaluate(expr, doc, null, XPathResult.ANY_TYPE, null);
+  const values: string[] = [];
+  switch (result.resultType) {
+    case XPathResult.STRING_TYPE:
+      return result.stringValue || "";
+    case XPathResult.NUMBER_TYPE:
+      return String(result.numberValue);
+    case XPathResult.BOOLEAN_TYPE:
+      return String(result.booleanValue);
+    default: {
+      let node = result.iterateNext();
+      while (node) {
+        if ("textContent" in node) {
+          values.push(node.textContent ?? "");
+        } else {
+          values.push(String(node));
+        }
+        node = result.iterateNext();
+      }
+      return values.length > 0 ? JSON.stringify(values, null, 2) : "无匹配结果";
+    }
+  }
+}
+
+function runJSONExpr(body: string, expr: string) {
+  const data = JSON.parse(body);
+  const normalized = expr.replace(/^\$\./, "").replace(/^\$/, "");
+  if (!normalized) {
+    return JSON.stringify(data, null, 2);
+  }
+  const tokens = normalized.split(".").filter(Boolean);
+  let current: unknown[] = [data];
+  for (const token of tokens) {
+    const next: unknown[] = [];
+    const arrayMatch = token.match(/^([A-Za-z0-9_-]+)\[\*\]$/);
+    const indexMatch = token.match(/^([A-Za-z0-9_-]+)\[(\d+)\]$/);
+    for (const item of current) {
+      if (arrayMatch) {
+        const value = item && typeof item === "object" ? (item as Record<string, unknown>)[arrayMatch[1]] : undefined;
+        if (Array.isArray(value)) {
+          next.push(...value);
+        }
+        continue;
+      }
+      if (indexMatch) {
+        const value = item && typeof item === "object" ? (item as Record<string, unknown>)[indexMatch[1]] : undefined;
+        if (Array.isArray(value)) {
+          next.push(value[Number(indexMatch[2])]);
+        }
+        continue;
+      }
+      if (item && typeof item === "object") {
+        next.push((item as Record<string, unknown>)[token]);
+      }
+    }
+    current = next.filter((item) => item !== undefined);
+  }
+  if (current.length === 0) {
+    return "无匹配结果";
+  }
+  if (current.length === 1) {
+    return typeof current[0] === "string" ? current[0] : JSON.stringify(current[0], null, 2);
+  }
+  return JSON.stringify(current, null, 2);
 }
 
 function KVPairEditor(props: {
