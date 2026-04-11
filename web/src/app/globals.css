@@ -5431,6 +5431,11 @@ textarea.input {
   min-width: 0;
 }
 
+.plugin-editor-request-top-action {
+  flex: 0 0 auto;
+  align-self: flex-end;
+}
+
 .plugin-editor-request-inline-field-xs-stack {
   display: flex;
   flex-direction: column;

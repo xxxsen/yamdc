@@ -33,7 +33,7 @@ import {
 } from "@/lib/api";
 
 type EditorTab = "compile" | "request" | "workflow" | "draft";
-type EditorSection = "basic" | "request" | "workflow" | "scrape" | "postprocess";
+type EditorSection = "basic" | "request" | "scrape" | "postprocess";
 type RequestOutputTab = "basic" | "request" | "response" | "scrape";
 type RunAction = "compile" | "request" | "workflow" | "scrape";
 
@@ -351,7 +351,6 @@ export function PluginEditorShell() {
   const sectionItems: Array<{ id: string; section: EditorSection; label: string }> = [
     { id: "plugin-editor-section-basic", section: "basic", label: "基础信息" },
     { id: "plugin-editor-section-request", section: "request", label: "请求配置" },
-    { id: "plugin-editor-section-workflow", section: "workflow", label: "Workflow" },
     { id: "plugin-editor-section-scrape", section: "scrape", label: "字段配置" },
     { id: "plugin-editor-section-postprocess", section: "postprocess", label: "额外配置" },
   ];
@@ -741,22 +740,39 @@ export function PluginEditorShell() {
 
           {activeSection === "request" ? (
           <article id="plugin-editor-section-request" className="plugin-editor-panel-fragment">
-            <RequestForm
-              method={state.requestMethod}
-              target={requestTargetValue(state.requestPath, state.requestURL)}
-              queryJSON={state.requestQueryJSON}
-              headersJSON={state.requestHeadersJSON}
-              cookiesJSON={state.requestCookiesJSON}
-              bodyKind={state.requestBodyKind}
-              bodyJSON={state.requestBodyJSON}
-              acceptStatusText={state.requestAcceptStatusText}
-              notFoundStatusText={state.requestNotFoundStatusText}
-              decodeCharset={state.requestDecodeCharset}
-              onChange={(key, value) => patch(key, value)}
-              nextRequestLayout
-              compactJSONBlocks
-              expandAdvanced
-            />
+            <div className="plugin-editor-subcard">
+              <div className="plugin-editor-subcard-head">
+                <strong>Request</strong>
+                <span>配置首次请求及其响应判定规则。</span>
+              </div>
+              <RequestForm
+                method={state.requestMethod}
+                target={requestTargetValue(state.requestPath, state.requestURL)}
+                queryJSON={state.requestQueryJSON}
+                headersJSON={state.requestHeadersJSON}
+                cookiesJSON={state.requestCookiesJSON}
+                bodyKind={state.requestBodyKind}
+                bodyJSON={state.requestBodyJSON}
+                acceptStatusText={state.requestAcceptStatusText}
+                notFoundStatusText={state.requestNotFoundStatusText}
+                decodeCharset={state.requestDecodeCharset}
+                onChange={(key, value) => patch(key, value)}
+                nextRequestLayout
+                compactJSONBlocks
+                expandAdvanced
+                topAction={
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => void run("workflow")}
+                    disabled={busyAction !== "" || !state.workflowEnabled}
+                  >
+                    {busyAction === "workflow" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Route size={16} />}
+                    <span>Debug</span>
+                  </button>
+                }
+              />
+            </div>
 
             <div className="plugin-editor-switch-row">
               <label className="searcher-debug-switch">
@@ -765,14 +781,14 @@ export function PluginEditorShell() {
                   checked={state.multiRequestEnabled}
                   onChange={(event) => patch("multiRequestEnabled", event.target.checked)}
                 />
-                <span>多候选请求</span>
+                <span>Multiple Candidates</span>
               </label>
             </div>
             {state.multiRequestEnabled ? (
               <div className="plugin-editor-fields">
                 <div className="plugin-editor-subcard">
                   <div className="plugin-editor-subcard-head">
-                    <strong>Multi Request</strong>
+                    <strong>Multiple Candidates</strong>
                     <span>基于当前 request，用多个 candidate 重复请求并按条件命中。</span>
                   </div>
                   <div className="plugin-editor-form-grid">
@@ -807,20 +823,11 @@ export function PluginEditorShell() {
                 </div>
               </div>
             ) : null}
-          </article>
-          ) : null}
-
-          {activeSection === "workflow" ? (
-          <article id="plugin-editor-section-workflow" className="plugin-editor-panel-fragment">
             <div className="plugin-editor-switch-row">
               <label className="searcher-debug-switch">
                 <input type="checkbox" checked={state.workflowEnabled} onChange={(event) => patch("workflowEnabled", event.target.checked)} />
-                <span>启用</span>
+                <span>Workflow</span>
               </label>
-              <button className="btn btn-primary plugin-editor-switch-row-action" type="button" onClick={() => void run("workflow")} disabled={busyAction !== ""}>
-                {busyAction === "workflow" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Route size={16} />}
-                <span>调试</span>
-              </button>
             </div>
             {state.workflowEnabled ? (
               <div className="plugin-editor-fields">
@@ -829,47 +836,47 @@ export function PluginEditorShell() {
                     <strong>数据选择</strong>
                     <span>从首次请求结果中提取数据并参与匹配。</span>
                   </div>
-                <div className="plugin-editor-fields">
-                  {state.workflowSelectors.map((selector) => (
-                    <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
-                      <div className="plugin-editor-transform-actions">
-                        <button
-                          className="btn btn-secondary plugin-editor-transform-action"
-                          type="button"
-                          aria-label="新增 selector"
-                          title="新增 selector"
-                          onClick={addWorkflowSelector}
-                        >
-                          <Plus size={14} />
-                        </button>
-                        <button
-                          className="btn btn-secondary plugin-editor-transform-action"
-                          type="button"
-                          aria-label="删除 selector"
-                          title="删除 selector"
-                          onClick={() => removeWorkflowSelector(selector.id)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                  <div className="plugin-editor-fields">
+                    {state.workflowSelectors.map((selector) => (
+                      <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
+                        <div className="plugin-editor-transform-actions">
+                          <button
+                            className="btn btn-secondary plugin-editor-transform-action"
+                            type="button"
+                            aria-label="新增 selector"
+                            title="新增 selector"
+                            onClick={addWorkflowSelector}
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            className="btn btn-secondary plugin-editor-transform-action"
+                            type="button"
+                            aria-label="删除 selector"
+                            title="删除 selector"
+                            onClick={() => removeWorkflowSelector(selector.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
+                          <span>Name</span>
+                          <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
+                        </label>
+                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-kind">
+                          <span>Kind</span>
+                          <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
+                            <option value="xpath">xpath</option>
+                            <option value="jsonpath">jsonpath</option>
+                          </select>
+                        </label>
+                        <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-expr">
+                          <span>Expr</span>
+                          <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
+                        </label>
                       </div>
-                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
-                        <span>Name</span>
-                        <input className="input" value={selector.name} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, name: event.target.value }))} />
-                      </label>
-                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-kind">
-                        <span>Kind</span>
-                        <select className="input" value={selector.kind} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, kind: event.target.value }))}>
-                          <option value="xpath">xpath</option>
-                          <option value="jsonpath">jsonpath</option>
-                        </select>
-                      </label>
-                      <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-expr">
-                        <span>Expr</span>
-                        <input className="input" value={selector.expr} onChange={(event) => patchWorkflowSelector(selector.id, (prev) => ({ ...prev, expr: event.target.value }))} />
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="plugin-editor-subcard">
@@ -936,14 +943,14 @@ export function PluginEditorShell() {
                     bodyJSON={state.workflowNextBodyJSON}
                     acceptStatusText={state.workflowNextAcceptStatusText}
                     notFoundStatusText={state.workflowNextNotFoundStatusText}
-                  decodeCharset={state.workflowNextDecodeCharset}
-                  onChange={(key, value) => patch(key, value)}
-                  prefix="workflowNext"
-                  expandAdvanced
-                  compactJSONBlocks
-                  nextRequestLayout
-                />
-              </div>
+                    decodeCharset={state.workflowNextDecodeCharset}
+                    onChange={(key, value) => patch(key, value)}
+                    prefix="workflowNext"
+                    expandAdvanced
+                    compactJSONBlocks
+                    nextRequestLayout
+                  />
+                </div>
               </div>
             ) : (
               <div className="ruleset-debug-empty">two-step 插件或需要搜索结果选择时再启用 workflow。</div>
@@ -1313,6 +1320,7 @@ function RequestForm(props: {
   expandAdvanced?: boolean;
   compactJSONBlocks?: boolean;
   nextRequestLayout?: boolean;
+  topAction?: React.ReactNode;
   onChange: <K extends keyof EditorState>(key: K, value: EditorState[K]) => void;
 }) {
   const prefix = props.prefix ?? "request";
@@ -1338,11 +1346,12 @@ function RequestForm(props: {
                 <option value="POST">POST</option>
               </select>
             </label>
-            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg plugin-editor-request-inline-field-next-top">
-              <span>Path</span>
-              <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
-            </label>
-          </div>
+          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg plugin-editor-request-inline-field-next-top">
+            <span>Path</span>
+            <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
+          </label>
+          {props.topAction ? <div className="plugin-editor-request-top-action">{props.topAction}</div> : null}
+        </div>
           <div className="plugin-editor-request-inline-row plugin-editor-request-inline-row-next-meta">
             <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
               <span>Accept Status</span>
@@ -1379,6 +1388,7 @@ function RequestForm(props: {
             <span>Path</span>
             <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
           </label>
+          {props.topAction ? <div className="plugin-editor-request-top-action">{props.topAction}</div> : null}
           <label className="plugin-editor-field-inline plugin-editor-request-inline-field-accept">
             <span>Accept Status</span>
             <input className="input" value={props.acceptStatusText} onChange={(event) => props.onChange(key("AcceptStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="200,302" />
@@ -1849,9 +1859,9 @@ function buildRequestFromState(state: EditorState): NonNullable<PluginEditorDraf
     method: state.requestMethod.trim() || "GET",
     path: target.path || undefined,
     url: target.url || undefined,
-    query: parseJSON<Record<string, string>>(state.requestQueryJSON, "request query"),
-    headers: parseJSON<Record<string, string>>(state.requestHeadersJSON, "request headers"),
-    cookies: parseJSON<Record<string, string>>(state.requestCookiesJSON, "request cookies"),
+    query: parseStringRecord(state.requestQueryJSON, "request query"),
+    headers: parseStringRecord(state.requestHeadersJSON, "request headers"),
+    cookies: parseStringRecord(state.requestCookiesJSON, "request cookies"),
     body: buildRequestBody(state.requestBodyKind, state.requestBodyJSON, "request body"),
     accept_status_codes: parseIntegerList(state.requestAcceptStatusText),
     not_found_status_codes: parseIntegerList(state.requestNotFoundStatusText),
@@ -1865,9 +1875,9 @@ function buildWorkflowNextRequestFromState(state: EditorState): NonNullable<NonN
     method: state.workflowNextMethod.trim() || "GET",
     path: target.path || undefined,
     url: target.url || undefined,
-    query: parseJSON<Record<string, string>>(state.workflowNextQueryJSON, "workflow next query"),
-    headers: parseJSON<Record<string, string>>(state.workflowNextHeadersJSON, "workflow next headers"),
-    cookies: parseJSON<Record<string, string>>(state.workflowNextCookiesJSON, "workflow next cookies"),
+    query: parseStringRecord(state.workflowNextQueryJSON, "workflow next query"),
+    headers: parseStringRecord(state.workflowNextHeadersJSON, "workflow next headers"),
+    cookies: parseStringRecord(state.workflowNextCookiesJSON, "workflow next cookies"),
     body: buildRequestBody(state.workflowNextBodyKind, state.workflowNextBodyJSON, "workflow next body"),
     accept_status_codes: parseIntegerList(state.workflowNextAcceptStatusText),
     not_found_status_codes: parseIntegerList(state.workflowNextNotFoundStatusText),
@@ -1895,6 +1905,14 @@ function buildRequestBody(kind: string, value: string, label: string): NonNullab
     kind: kind || "json",
     values,
   };
+}
+
+function parseStringRecord(value: string, label: string) {
+  const parsed = parseJSON<Record<string, unknown>>(normalizeJSONObjectText(value), label);
+  return Object.entries(parsed ?? {}).reduce<Record<string, string>>((acc, [key, item]) => {
+    acc[key] = item == null ? "" : String(item);
+    return acc;
+  }, {});
 }
 
 function stateFromDraft(draft: PluginEditorDraft): EditorState {
@@ -2116,6 +2134,18 @@ function normalizeEditorState(state: EditorState): EditorState {
     requestBodyKind: state.requestBodyKind || "json",
     multiRequestBodyKind: state.multiRequestBodyKind || "json",
     workflowNextBodyKind: state.workflowNextBodyKind || "json",
+    requestQueryJSON: normalizeJSONObjectText(state.requestQueryJSON),
+    requestHeadersJSON: normalizeJSONObjectText(state.requestHeadersJSON),
+    requestCookiesJSON: normalizeJSONObjectText(state.requestCookiesJSON),
+    requestBodyJSON: normalizeRequestBodyText(state.requestBodyJSON, state.requestBodyKind || "json"),
+    multiRequestQueryJSON: normalizeJSONObjectText(state.multiRequestQueryJSON),
+    multiRequestHeadersJSON: normalizeJSONObjectText(state.multiRequestHeadersJSON),
+    multiRequestCookiesJSON: normalizeJSONObjectText(state.multiRequestCookiesJSON),
+    multiRequestBodyJSON: normalizeRequestBodyText(state.multiRequestBodyJSON, state.multiRequestBodyKind || "json"),
+    workflowNextQueryJSON: normalizeJSONObjectText(state.workflowNextQueryJSON),
+    workflowNextHeadersJSON: normalizeJSONObjectText(state.workflowNextHeadersJSON),
+    workflowNextCookiesJSON: normalizeJSONObjectText(state.workflowNextCookiesJSON),
+    workflowNextBodyJSON: normalizeRequestBodyText(state.workflowNextBodyJSON, state.workflowNextBodyKind || "json"),
     fields: (state.fields ?? []).map((field, index) => {
       const legacy = field as FieldForm & { transformsJSON?: string };
       const transforms =
@@ -2140,6 +2170,20 @@ function normalizeEditorState(state: EditorState): EditorState {
     postDisableReleaseDateCheck: state.postDisableReleaseDateCheck || Boolean(legacySwitchConfig?.disable_release_date_check),
     postDisableNumberReplace: state.postDisableNumberReplace || Boolean(legacySwitchConfig?.disable_number_replace),
   };
+}
+
+function normalizeJSONObjectText(value: string | undefined) {
+  if (!value || !value.trim()) {
+    return "{}";
+  }
+  return value;
+}
+
+function normalizeRequestBodyText(value: string | undefined, kind: string) {
+  if (!value || !value.trim()) {
+    return kind === "raw" ? "" : "null";
+  }
+  return value;
 }
 
 function normalizeKVSource(items: KVPairForm[] | undefined, raw: string | undefined, seed: string): KVPairForm[] {

@@ -119,6 +119,7 @@ func (a *API) handlePluginEditorCompile(w http.ResponseWriter, r *http.Request) 
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor compile decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -150,6 +151,7 @@ func (a *API) handlePluginEditorImport(w http.ResponseWriter, r *http.Request) {
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor import decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -184,6 +186,7 @@ func (a *API) handlePluginEditorRequest(w http.ResponseWriter, r *http.Request) 
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor request decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -223,6 +226,7 @@ func (a *API) handlePluginEditorScrape(w http.ResponseWriter, r *http.Request) {
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor scrape decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -262,6 +266,7 @@ func (a *API) handlePluginEditorWorkflow(w http.ResponseWriter, r *http.Request)
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor workflow decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -301,6 +306,7 @@ func (a *API) handlePluginEditorCase(w http.ResponseWriter, r *http.Request) {
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logutil.GetLogger(r.Context()).Warn("plugin editor case decode failed", zap.Error(err))
 		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
