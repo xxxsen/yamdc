@@ -5842,6 +5842,16 @@ textarea.input {
   max-height: min(52vh, 720px);
 }
 
+.plugin-editor-json-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.plugin-editor-output-section-fill .plugin-editor-json-fill {
+  max-height: none;
+}
+
 .plugin-editor-output-detail-block {
   border: 1px solid rgba(105, 79, 51, 0.12);
   border-radius: 14px;

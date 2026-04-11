@@ -1575,9 +1575,9 @@ function WorkflowOutputPanel({ result }: { result: PluginEditorWorkflowDebugResu
     return <div className="ruleset-debug-empty">暂无 workflow 结果。</div>;
   }
   return (
-    <div className="plugin-editor-output-section">
+    <div className="plugin-editor-output-section plugin-editor-output-section-fill">
       <WorkflowDebugPreview result={result} />
-      <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(result, null, 2)}</pre>
+      <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{JSON.stringify(result, null, 2)}</pre>
     </div>
   );
 }
@@ -1604,7 +1604,11 @@ function ScrapeJSONPanel({ result }: { result: PluginEditorScrapeDebugResult | n
   if (!result) {
     return <div className="ruleset-debug-empty">暂无抓取结果。</div>;
   }
-  return <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(result.meta ?? result.fields, null, 2)}</pre>;
+  return (
+    <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+      <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{JSON.stringify(result.meta ?? result.fields, null, 2)}</pre>
+    </div>
+  );
 }
 
 function HeaderList({ headers }: { headers: Record<string, string> }) {
