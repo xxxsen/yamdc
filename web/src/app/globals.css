@@ -4965,6 +4965,7 @@ textarea.input {
   grid-template-columns: minmax(420px, 1.15fr) minmax(420px, 0.95fr);
   gap: 16px;
   min-height: 0;
+  height: 100%;
   flex: 1;
   overflow: hidden;
   padding-top: 8px;
@@ -4980,7 +4981,7 @@ textarea.input {
   flex-direction: column;
   gap: 16px;
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   overflow: hidden;
   padding-right: 0;
 }
@@ -5034,6 +5035,7 @@ textarea.input {
 .plugin-editor-column-output {
   grid-column: 2;
   grid-row: 1;
+  height: 100%;
 }
 
 .plugin-editor-column-output > .plugin-editor-panel {
