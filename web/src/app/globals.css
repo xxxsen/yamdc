@@ -5789,10 +5789,11 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0;
-  max-height: min(34vh, 360px);
-  overflow: auto;
-  padding-right: 4px;
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .plugin-editor-timeline-step {
