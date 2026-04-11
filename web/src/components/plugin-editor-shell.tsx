@@ -8,7 +8,6 @@ import {
   GripVertical,
   Import,
   LoaderCircle,
-  Route,
   ScanSearch,
   Sparkles,
   Trash2,
@@ -32,9 +31,9 @@ import {
   type PluginEditorWorkflowDebugResult,
 } from "@/lib/api";
 
-type EditorTab = "compile" | "request" | "workflow" | "draft";
+type EditorTab = "compile" | "request" | "draft";
 type EditorSection = "basic" | "request" | "scrape" | "postprocess";
-type RequestOutputTab = "basic" | "request" | "response" | "scrape";
+type RequestOutputTab = "basic" | "request" | "response" | "workflow" | "scrape";
 type RunAction = "compile" | "request" | "workflow" | "scrape";
 
 type FieldForm = {
@@ -562,7 +561,8 @@ export function PluginEditorShell() {
       if (action === "workflow") {
         const result = await debugPluginDraftWorkflow(draft, state.number.trim());
         setWorkflowResult(result.data);
-        setTab("workflow");
+        setRequestOutputTab("workflow");
+        setTab("request");
         return;
       }
       if (action === "scrape") {
@@ -760,17 +760,6 @@ export function PluginEditorShell() {
                 nextRequestLayout
                 compactJSONBlocks
                 expandAdvanced
-                topAction={
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => void run("workflow")}
-                    disabled={busyAction !== "" || !state.workflowEnabled}
-                  >
-                    {busyAction === "workflow" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Route size={16} />}
-                    <span>Debug</span>
-                  </button>
-                }
               />
             </div>
 
@@ -1185,7 +1174,6 @@ export function PluginEditorShell() {
               {[
                 ["compile", "Compile"],
                 ["request", "Request"],
-                ["workflow", "Workflow"],
                 ["draft", "Draft"],
               ].map(([key, label]) => (
                 <button
@@ -1235,6 +1223,7 @@ export function PluginEditorShell() {
                     ["basic", "Basic"],
                     ["request", "Request"],
                     ["response", "Response"],
+                    ["workflow", "Workflow"],
                     ["scrape", "Scrape"],
                   ].map(([key, label]) => (
                     <button
@@ -1250,14 +1239,8 @@ export function PluginEditorShell() {
                 {requestOutputTab === "basic" ? <RequestBasicPanel result={requestResult} /> : null}
                 {requestOutputTab === "request" ? <RequestDetailPanel request={requestResult?.request} /> : null}
                 {requestOutputTab === "response" ? <ResponseDetailPanel response={requestResult?.response} /> : null}
+                {requestOutputTab === "workflow" ? <WorkflowOutputPanel result={workflowResult} /> : null}
                 {requestOutputTab === "scrape" ? <ScrapeJSONPanel result={scrapeResult} /> : null}
-              </div>
-            ) : null}
-
-            {tab === "workflow" ? (
-              <div className="plugin-editor-output-section">
-                {workflowResult ? <WorkflowDebugPreview result={workflowResult} /> : null}
-                <pre className="searcher-debug-json">{workflowResult ? JSON.stringify(workflowResult, null, 2) : "暂无结果"}</pre>
               </div>
             ) : null}
 
@@ -1546,6 +1529,18 @@ function ResponseDetailPanel({ response }: { response?: PluginEditorRequestDebug
     <div className="plugin-editor-output-detail">
       <HeaderList headers={headerMap} />
       <BodyPanel body={response.body || response.body_preview} contentType={contentType} emptyLabel="响应体为空。" />
+    </div>
+  );
+}
+
+function WorkflowOutputPanel({ result }: { result: PluginEditorWorkflowDebugResult | null }) {
+  if (!result) {
+    return <div className="ruleset-debug-empty">暂无 workflow 结果。</div>;
+  }
+  return (
+    <div className="plugin-editor-output-section">
+      <WorkflowDebugPreview result={result} />
+      <pre className="searcher-debug-json">{JSON.stringify(result, null, 2)}</pre>
     </div>
   );
 }
