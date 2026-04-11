@@ -11,3 +11,4 @@ config.json
 .codex
 /.cache
 /bin
+/tmp

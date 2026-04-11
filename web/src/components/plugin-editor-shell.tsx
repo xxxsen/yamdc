@@ -179,7 +179,7 @@ const FIELD_META: Record<string, FieldMeta> = {
   },
   duration: {
     label: "duration",
-    parserOptions: ["duration_default", "duration_mmss", "duration_human"],
+    parserOptions: ["duration_default", "duration_hhmmss", "duration_mm", "duration_mmss", "duration_human"],
     defaultParser: "duration_default",
     fixedMulti: false,
   },
@@ -1044,6 +1044,9 @@ export function PluginEditorShell() {
                                 {option}
                               </option>
                             ))}
+                            {field.parserKind && !(fieldMeta.parserOptions ?? []).includes(field.parserKind) ? (
+                              <option value={field.parserKind}>{field.parserKind}</option>
+                            ) : null}
                           </select>
                         </label>
                       ) : null}
@@ -2564,7 +2567,7 @@ function applyFieldMeta(field: FieldForm): FieldForm {
   const next = { ...field };
   if (meta.fixedParser) {
     next.parserKind = meta.fixedParser;
-  } else if (meta.defaultParser && (!next.parserKind || !meta.parserOptions?.includes(next.parserKind))) {
+  } else if (meta.defaultParser && !next.parserKind) {
     next.parserKind = meta.defaultParser;
   }
   if (!showParserLayout(next.parserKind)) {
