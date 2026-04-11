@@ -1328,14 +1328,14 @@ function RequestForm(props: {
       {props.nextRequestLayout ? (
         <>
           <div className="plugin-editor-request-inline-row">
-            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-method">
+            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-method plugin-editor-request-inline-field-next-top">
               <span>Method</span>
               <select className="input" value={props.method} onChange={(event) => props.onChange(key("Method"), event.target.value as EditorState[keyof EditorState])}>
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
               </select>
             </label>
-            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg">
+            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-lg plugin-editor-request-inline-field-next-top">
               <span>Path</span>
               <input className="input" value={props.target} onChange={(event) => handleTargetChange(event.target.value)} placeholder='以 / 开头表示 path；其他内容按 raw url 处理' />
             </label>
@@ -1345,6 +1345,10 @@ function RequestForm(props: {
               <span>Accept Status</span>
               <input className="input" value={props.acceptStatusText} onChange={(event) => props.onChange(key("AcceptStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="200,302" />
             </label>
+            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-next-not-found">
+              <span title="Not Found Status">Not Found Status</span>
+              <input className="input" value={props.notFoundStatusText} onChange={(event) => props.onChange(key("NotFoundStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="404" />
+            </label>
             <label className="plugin-editor-field-inline plugin-editor-request-inline-field-content-type">
               <span>Content-Type</span>
               <select className="input" value={props.bodyKind} onChange={(event) => props.onChange(key("BodyKind"), event.target.value as EditorState[keyof EditorState])}>
@@ -1352,10 +1356,6 @@ function RequestForm(props: {
                 <option value="form">form</option>
                 <option value="raw">raw</option>
               </select>
-            </label>
-            <label className="plugin-editor-field-inline plugin-editor-request-inline-field-next-not-found">
-              <span title="Not Found Status">Not Found Status</span>
-              <input className="input" value={props.notFoundStatusText} onChange={(event) => props.onChange(key("NotFoundStatusText"), event.target.value as EditorState[keyof EditorState])} placeholder="404" />
             </label>
             <label className="plugin-editor-field-inline plugin-editor-request-inline-field-next-charset">
               <span title="Decode Charset">Decode Charset</span>
