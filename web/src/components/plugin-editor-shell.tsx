@@ -753,6 +753,9 @@ export function PluginEditorShell() {
               notFoundStatusText={state.requestNotFoundStatusText}
               decodeCharset={state.requestDecodeCharset}
               onChange={(key, value) => patch(key, value)}
+              nextRequestLayout
+              compactJSONBlocks
+              expandAdvanced
             />
 
             <div className="plugin-editor-switch-row">
