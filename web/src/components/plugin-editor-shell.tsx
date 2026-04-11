@@ -195,6 +195,23 @@ const FIELD_META: Record<string, FieldMeta> = {
 
 const FIELD_OPTIONS = Object.keys(FIELD_META);
 const META_LANG_OPTIONS = ["ja", "en", "zh-cn", "zh-tw"] as const;
+const IMPORT_YAML_EXAMPLE = `version: 1
+name: fixture
+type: one-step
+hosts:
+  - https://example.com
+request:
+  method: GET
+  path: /search/\${number}
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+      parser: string
+      required: true`;
 
 const DEFAULT_FIELD: FieldForm = {
   id: "title",
@@ -304,6 +321,7 @@ export function PluginEditorShell() {
   const [busyAction, setBusyAction] = useState<RunAction | "import" | "">("");
   const [toast, setToast] = useState<ToastState>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [exampleOpen, setExampleOpen] = useState(false);
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number } | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
@@ -1353,6 +1371,15 @@ export function PluginEditorShell() {
                 <strong>支持内容</strong>
                 <span>支持直接粘贴完整插件 YAML。导入后会覆盖当前表单内容。</span>
               </div>
+              <div className="plugin-editor-modal-example">
+                <div className="plugin-editor-modal-example-copy">
+                  <strong>参考结构</strong>
+                  <span>查看一份最小可用的 YAML 示例，方便直接按结构粘贴或修改。</span>
+                </div>
+                <button className="btn btn-secondary plugin-editor-modal-example-btn" type="button" onClick={() => setExampleOpen(true)}>
+                  查看 YAML 示例
+                </button>
+              </div>
               <label className="plugin-editor-field plugin-editor-modal-editor">
                 <span>Plugin YAML</span>
                 <textarea
@@ -1363,6 +1390,10 @@ export function PluginEditorShell() {
                   placeholder={"version: 1\nname: fixture\ntype: one-step\nhosts:\n  - https://example.com"}
                 />
               </label>
+              <div className="plugin-editor-modal-warning">
+                <strong>注意</strong>
+                <span>导入后会直接替换当前编辑器中的配置内容，未保存的修改将被覆盖。</span>
+              </div>
             </div>
             <div className="plugin-editor-modal-actions">
               <button className="btn btn-secondary" type="button" onClick={() => setImportOpen(false)} disabled={busyAction !== ""}>
@@ -1371,6 +1402,36 @@ export function PluginEditorShell() {
               <button className="btn btn-primary plugin-editor-modal-submit" type="button" onClick={() => void handleImportYAML()} disabled={busyAction !== ""}>
                 {busyAction === "import" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Import size={16} />}
                 <span>导入 YAML</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {exampleOpen ? (
+        <div className="plugin-editor-modal-backdrop" role="presentation" onClick={() => setExampleOpen(false)}>
+          <div className="panel plugin-editor-modal plugin-editor-modal-example-dialog" role="dialog" aria-modal="true" aria-label="YAML 示例" onClick={(event) => event.stopPropagation()}>
+            <div className="plugin-editor-modal-head">
+              <div className="plugin-editor-modal-title-group">
+                <div className="plugin-editor-modal-badge">
+                  <FileCode2 size={16} />
+                  <span>Example</span>
+                </div>
+                <div className="plugin-editor-modal-title-copy">
+                  <h3>YAML 示例</h3>
+                  <span>这是一份最小可用参考结构，你可以按需复制并修改。</span>
+                </div>
+              </div>
+              <button className="btn btn-secondary plugin-editor-modal-close" type="button" aria-label="关闭示例窗口" title="关闭示例窗口" onClick={() => setExampleOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="plugin-editor-modal-body">
+              <pre className="plugin-editor-modal-example-code plugin-editor-modal-example-code-dialog">{IMPORT_YAML_EXAMPLE}</pre>
+            </div>
+            <div className="plugin-editor-modal-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setExampleOpen(false)}>
+                关闭
               </button>
             </div>
           </div>

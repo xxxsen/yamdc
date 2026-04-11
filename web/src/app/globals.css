@@ -5989,6 +5989,8 @@ textarea.input {
 .plugin-editor-modal {
   width: min(920px, 100%);
   max-height: min(86vh, 920px);
+  display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(105, 79, 51, 0.16);
@@ -6006,6 +6008,7 @@ textarea.input {
   justify-content: space-between;
   gap: 18px;
   padding: 24px 24px 18px;
+  flex: 0 0 auto;
   border-bottom: 1px solid rgba(105, 79, 51, 0.1);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0));
 }
@@ -6058,8 +6061,10 @@ textarea.input {
 .plugin-editor-modal-body {
   display: grid;
   gap: 16px;
-  padding: 20px 24px 0;
+  padding: 20px 24px 20px;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .plugin-editor-modal-tip {
@@ -6084,14 +6089,85 @@ textarea.input {
   gap: 10px;
 }
 
+.plugin-editor-modal-example {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 252, 246, 0.76);
+}
+
+.plugin-editor-modal-example-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.plugin-editor-modal-example-copy strong {
+  font-size: 13px;
+}
+
+.plugin-editor-modal-example-copy span {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.plugin-editor-modal-example-btn {
+  flex: 0 0 auto;
+}
+
+.plugin-editor-modal-example-code {
+  margin: 0;
+  padding: 16px 18px;
+  color: #3f3328;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 18px;
+  border: 1px solid rgba(105, 79, 51, 0.1);
+  background: rgba(255, 253, 249, 0.95);
+  overflow: auto;
+}
+
+.plugin-editor-modal-example-dialog {
+  width: min(760px, 100%);
+}
+
+.plugin-editor-modal-example-code-dialog {
+  min-height: min(50vh, 520px);
+}
+
 .plugin-editor-modal-textarea {
-  min-height: min(52vh, 520px);
+  min-height: min(30vh, 300px);
+  max-height: min(42vh, 420px);
   padding: 18px 18px 20px;
   border-radius: 18px;
   background: rgba(255, 253, 249, 0.95);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
   font-size: 13px;
   line-height: 1.65;
+}
+
+.plugin-editor-modal-warning {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  background: rgba(255, 244, 230, 0.9);
+}
+
+.plugin-editor-modal-warning strong {
+  color: #c2410c;
+  font-size: 13px;
+}
+
+.plugin-editor-modal-warning span {
+  color: #7c2d12;
+  line-height: 1.6;
 }
 
 .plugin-editor-modal-actions {
@@ -6101,6 +6177,7 @@ textarea.input {
   gap: 12px;
   padding: 18px 24px 24px;
   margin-top: 18px;
+  flex: 0 0 auto;
   border-top: 1px solid rgba(105, 79, 51, 0.1);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 252, 246, 0.9));
 }
