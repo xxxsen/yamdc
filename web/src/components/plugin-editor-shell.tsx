@@ -2,7 +2,6 @@
 
 import {
   Plus,
-  Braces,
   Copy,
   FileCode2,
   GripVertical,
@@ -98,6 +97,7 @@ type EditorState = {
   hostsText: string;
   number: string;
   precheckPatternsText: string;
+  precheckVariables: KVPairForm[];
   requestMethod: string;
   requestPath: string;
   requestURL: string;
@@ -226,6 +226,7 @@ function defaultState(): EditorState {
     hostsText: "https://example.com",
     number: "ABC-123",
     precheckPatternsText: "",
+    precheckVariables: [],
     requestMethod: "GET",
     requestPath: "/search/${number}",
     requestURL: "",
@@ -300,7 +301,7 @@ function splitRequestTarget(value: string) {
   if (!trimmed) {
     return { path: "", url: "" };
   }
-  if (trimmed.startsWith("/")) {
+  if (trimmed.startsWith("/") || (!trimmed.includes("://") && trimmed.startsWith("${"))) {
     return { path: trimmed, url: "" };
   }
   return { path: "", url: trimmed };
@@ -436,7 +437,7 @@ export function PluginEditorShell() {
   }
 
   function patchKVPair(
-    key: "workflowItemVariables" | "postAssign",
+    key: "workflowItemVariables" | "postAssign" | "precheckVariables",
     id: string,
     updater: (item: KVPairForm) => KVPairForm,
   ) {
@@ -446,7 +447,7 @@ export function PluginEditorShell() {
     }));
   }
 
-  function addKVPair(key: "workflowItemVariables" | "postAssign") {
+  function addKVPair(key: "workflowItemVariables" | "postAssign" | "precheckVariables") {
     const nextKey = key === "postAssign" ? nextUnusedKVFieldName(state.postAssign) : "";
     setState((prev) => ({
       ...prev,
@@ -454,7 +455,7 @@ export function PluginEditorShell() {
     }));
   }
 
-  function removeKVPair(key: "workflowItemVariables" | "postAssign", id: string) {
+  function removeKVPair(key: "workflowItemVariables" | "postAssign" | "precheckVariables", id: string) {
     setState((prev) => ({
       ...prev,
       [key]: prev[key].filter((item) => item.id !== id),
@@ -741,6 +742,22 @@ export function PluginEditorShell() {
                 <span>Test Number</span>
                 <input className="input" value={state.number} onChange={(event) => patch("number", event.target.value)} />
               </label>
+            </div>
+            <div className="plugin-editor-subcard">
+              <div className="plugin-editor-subcard-head">
+                <strong>Precheck Variables</strong>
+                <span>定义预检阶段可复用的变量，后续可通过 `vars.xxx` 引用。</span>
+              </div>
+              <WorkflowItemVariablesEditor
+                items={state.precheckVariables}
+                onAdd={() => addKVPair("precheckVariables")}
+                onRemove={(id) => removeKVPair("precheckVariables", id)}
+                onChange={(id, updater) => patchKVPair("precheckVariables", id, updater)}
+                keyLabel="Name"
+                valueLabel="Expression"
+                valuePlaceholder='${clean_number(${number})}'
+                emptyLabel="暂未定义 precheck variables。"
+              />
             </div>
           </article>
           ) : null}
@@ -1878,22 +1895,31 @@ function KVPairEditor(props: {
 
 function WorkflowItemVariablesEditor(props: {
   items: KVPairForm[];
+  emptyLabel?: string;
+  keyLabel?: string;
+  valueLabel?: string;
+  valuePlaceholder?: string;
   onAdd: () => void;
   onRemove: (id: string) => void;
   onChange: (id: string, updater: (item: KVPairForm) => KVPairForm) => void;
 }) {
   return (
     <div className="plugin-editor-kv-list">
-      {props.items.length === 0 ? <div className="ruleset-debug-empty">暂未定义 item_variables。</div> : null}
+      {props.items.length === 0 ? <div className="ruleset-debug-empty">{props.emptyLabel ?? "暂未定义 item_variables。"}</div> : null}
       {props.items.map((item) => (
         <div key={item.id} className="plugin-editor-kv-row plugin-editor-kv-row-compact">
           <label className="plugin-editor-field-inline plugin-editor-kv-inline-key">
-            <span>Name</span>
+            <span>{props.keyLabel ?? "Name"}</span>
             <input className="input" value={item.key} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, key: event.target.value }))} />
           </label>
           <label className="plugin-editor-field-inline plugin-editor-kv-inline-value">
-            <span>Template</span>
-            <input className="input" value={item.value} onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, value: event.target.value }))} />
+            <span>{props.valueLabel ?? "Template"}</span>
+            <input
+              className="input"
+              value={item.value}
+              placeholder={props.valuePlaceholder}
+              onChange={(event) => props.onChange(item.id, (prev) => ({ ...prev, value: event.target.value }))}
+            />
           </label>
           <div className="plugin-editor-transform-actions plugin-editor-kv-actions">
             <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
@@ -2015,10 +2041,11 @@ function buildDraft(state: EditorState): PluginEditorDraft {
     },
   };
   const precheckPatterns = splitLines(state.precheckPatternsText);
-  if (precheckPatterns.length > 0) {
+  const precheckVariables = pairsToRecord(state.precheckVariables);
+  if (precheckPatterns.length > 0 || Object.keys(precheckVariables).length > 0) {
     draft.precheck = {
       number_patterns: precheckPatterns,
-      variables: {},
+      variables: precheckVariables,
     };
   }
   if (state.multiRequestEnabled) {
@@ -2136,6 +2163,7 @@ function stateFromDraft(draft: PluginEditorDraft): EditorState {
   next.type = draft.type ?? next.type;
   next.hostsText = (draft.hosts ?? []).join("\n");
   next.precheckPatternsText = (draft.precheck?.number_patterns ?? []).join("\n");
+  next.precheckVariables = recordToPairs(draft.precheck?.variables);
   next.scrapeFormat = draft.scrape?.format ?? next.scrapeFormat;
   next.fields = draftToFields(draft);
   next.postAssign = recordToPairs(draft.postprocess?.assign);
@@ -2337,6 +2365,7 @@ function parseOptionalInteger(value: string) {
 
 function normalizeEditorState(state: EditorState): EditorState {
   const legacyState = state as EditorState & {
+    precheckVariablesJSON?: string;
     workflowItemVariablesJSON?: string;
     postAssignJSON?: string;
     postDefaultsJSON?: string;
@@ -2376,6 +2405,7 @@ function normalizeEditorState(state: EditorState): EditorState {
       state.workflowSelectors && Array.isArray(state.workflowSelectors) && state.workflowSelectors.length > 0
         ? state.workflowSelectors
         : defaultState().workflowSelectors,
+    precheckVariables: normalizeKVSource(state.precheckVariables, legacyState.precheckVariablesJSON, "precheck-variable"),
     workflowItemVariables: normalizeKVSource(state.workflowItemVariables, legacyState.workflowItemVariablesJSON, "workflow-item"),
     postAssign: normalizeKVSource(state.postAssign, legacyState.postAssignJSON, "post-assign"),
     postTitleLang: state.postTitleLang || legacyDefaults?.title_lang || defaultState().postTitleLang,
