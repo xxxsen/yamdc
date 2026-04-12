@@ -99,6 +99,24 @@ function taskPercent(state: TaskState | null) {
   return Math.max(0, Math.min(100, Math.round((state.processed / state.total) * 100)));
 }
 
+function toMoveToMediaLibraryMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : "启动移动到媒体库失败";
+  const text = raw.trim();
+  if (text.includes("move to media library is already running")) {
+    return "媒体库移动任务已在进行中";
+  }
+  if (text.includes("media library sync is running")) {
+    return "媒体库同步进行中，暂时无法移动";
+  }
+  if (text.includes("library dir is not configured")) {
+    return "未配置媒体库目录";
+  }
+  if (text.includes("save dir is not configured")) {
+    return "未配置保存目录";
+  }
+  return raw;
+}
+
 const POSTER_ASPECT = 2 / 3;
 
 function TokenEditor({
@@ -500,6 +518,22 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     setMoveStarting(true);
     setMoveProgressVisible(true);
     setMoveCompletedFlash(false);
+    setMessage("媒体库移动已启动");
+    setMediaStatus((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        move: {
+          ...current.move,
+          status: "running",
+          message: "移动到媒体库中",
+          updated_at: Date.now(),
+          started_at: current.move.started_at || Date.now(),
+        },
+      };
+    });
     startTransition(async () => {
       try {
         await triggerMoveToMediaLibrary();
@@ -507,8 +541,28 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         setMediaStatus(next);
         setMoveProgressVisible(next.move.status === "running");
       } catch (error) {
-        setMoveProgressVisible(false);
-        setMessage(error instanceof Error ? error.message : "启动移动到媒体库失败");
+        const message = toMoveToMediaLibraryMessage(error);
+        setMessage(message);
+        if (message === "媒体库移动任务已在进行中") {
+          setMoveProgressVisible(true);
+          setMediaStatus((current) => {
+            if (!current) {
+              return current;
+            }
+            return {
+              ...current,
+              move: {
+                ...current.move,
+                status: "running",
+                message: "移动到媒体库中",
+                updated_at: Date.now(),
+              },
+            };
+          });
+        } else {
+          setMoveProgressVisible(false);
+          void refreshMediaStatus();
+        }
       } finally {
         setMoveStarting(false);
       }
@@ -838,11 +892,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     原文
                   </button>
                 </div>
-                {message ? (
-                  <span className="review-message" data-tone={/失败|error/i.test(message) ? "danger" : "info"}>
-                    {message}
-                  </span>
-                ) : null}
               </div>
             </div>
 
@@ -1195,6 +1244,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {message ? (
+        <div className="app-toast app-toast-top" data-tone={/失败|error/i.test(message) ? "danger" : undefined} role="status" aria-live="polite">
+          {message}
         </div>
       ) : null}
     </div>

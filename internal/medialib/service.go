@@ -310,6 +310,7 @@ func (s *Service) GetStatusSnapshot(ctx context.Context) (*StatusSnapshot, error
 
 func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", reason))
+	startedAt := time.Now()
 	if !s.IsConfigured() {
 		return nil
 	}
@@ -331,6 +332,12 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	_ = s.saveTaskState(ctx, state)
 	keep := make(map[string]struct{}, len(itemDirs))
 	for index, absPath := range itemDirs {
+		logger.Info("media library sync item started",
+			zap.Int("index", index+1),
+			zap.Int("total", len(itemDirs)),
+			zap.String("abs_path", absPath),
+		)
+		itemStartedAt := time.Now()
 		result := s.syncOneItem(ctx, logger, keep, absPath)
 		state.Processed = index + 1
 		state.Current = result.RelPath
@@ -340,17 +347,30 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 		if result.Failed {
 			state.ErrorCount++
 		}
+		logger.Info("media library sync item finished",
+			zap.Int("index", index+1),
+			zap.Int("total", len(itemDirs)),
+			zap.String("rel_path", result.RelPath),
+			zap.Bool("success", result.Success),
+			zap.Bool("failed", result.Failed),
+			zap.Duration("duration", time.Since(itemStartedAt)),
+		)
 		s.persistTaskProgress(ctx, &state)
 	}
-	if err := s.deleteMissing(ctx, keep); err != nil {
+	deletedCount, err := s.deleteMissing(ctx, keep)
+	if err != nil {
 		logger.Warn("delete stale media library items failed", zap.Error(err))
 		state.ErrorCount++
+	} else if deletedCount > 0 {
+		logger.Info("media library stale rows deleted", zap.Int("count", deletedCount))
 	}
 	s.finishTask(ctx, &state, fmt.Sprintf("媒体库同步完成 (%s)", reason))
 	logger.Info("media library sync completed",
 		zap.Int("total", state.Total),
 		zap.Int("success_count", state.SuccessCount),
 		zap.Int("error_count", state.ErrorCount),
+		zap.Int("deleted_count", deletedCount),
+		zap.Duration("duration", time.Since(startedAt)),
 	)
 	return nil
 }
@@ -470,6 +490,11 @@ func (s *Service) syncOneItem(ctx context.Context, logger *zap.Logger, keep map[
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
 	keep[relPath] = struct{}{}
+	logger.Info("media library detail synced",
+		zap.String("rel_path", relPath),
+		zap.Int("variant_count", len(detail.Variants)),
+		zap.Int("file_count", len(detail.Files)),
+	)
 	return itemTaskResult{RelPath: relPath, Success: true}
 }
 
@@ -562,10 +587,10 @@ func (s *Service) upsertDetail(ctx context.Context, detail *Detail) error {
 	return nil
 }
 
-func (s *Service) deleteMissing(ctx context.Context, keep map[string]struct{}) error {
+func (s *Service) deleteMissing(ctx context.Context, keep map[string]struct{}) (int, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT rel_path FROM yamdc_media_library_tab`)
 	if err != nil {
-		return fmt.Errorf("list existing media library rel paths failed: %w", err)
+		return 0, fmt.Errorf("list existing media library rel paths failed: %w", err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -574,21 +599,21 @@ func (s *Service) deleteMissing(ctx context.Context, keep map[string]struct{}) e
 	for rows.Next() {
 		var relPath string
 		if err := rows.Scan(&relPath); err != nil {
-			return fmt.Errorf("scan media library rel path failed: %w", err)
+			return 0, fmt.Errorf("scan media library rel path failed: %w", err)
 		}
 		if _, ok := keep[relPath]; !ok {
 			paths = append(paths, relPath)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate media library rel paths failed: %w", err)
+		return 0, fmt.Errorf("iterate media library rel paths failed: %w", err)
 	}
 	for _, relPath := range paths {
 		if _, err := s.db.ExecContext(ctx, `DELETE FROM yamdc_media_library_tab WHERE rel_path = ?`, relPath); err != nil {
-			return fmt.Errorf("delete stale media library row failed: %w", err)
+			return 0, fmt.Errorf("delete stale media library row failed: %w", err)
 		}
 	}
-	return nil
+	return len(paths), nil
 }
 
 func (s *Service) getTaskState(ctx context.Context, taskKey string) (TaskState, error) {

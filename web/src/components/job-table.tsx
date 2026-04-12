@@ -57,7 +57,9 @@ export function JobTable({ initialData }: Props) {
       return false;
     }
     const hasApprovedNumber =
-      job.number_source === "manual" || (job.number_clean_status === "success" && job.number_clean_confidence === "high");
+      job.number_source === "manual" ||
+      (job.number_clean_status === "success" &&
+        (job.number_clean_confidence === "high" || job.number_clean_confidence === "medium"));
     const isRunnable = job.status === "init" || job.status === "failed";
     return hasApprovedNumber && isRunnable;
   };
@@ -273,7 +275,7 @@ export function JobTable({ initialData }: Props) {
 
   const handleStartEditNumber = (job: JobItem) => {
     setEditingJobId(job.id);
-    setEditingNumber(job.number);
+    setEditingNumber(requiresManualNumberReview(job) ? "" : job.number);
   };
 
   const handleCancelEditNumber = () => {
@@ -511,9 +513,9 @@ export function JobTable({ initialData }: Props) {
             />
           </label>
           <div className="file-list-toolbar-actions">
-            <button className="btn btn-primary" onClick={handleScan} disabled={isPending}>
-              <RefreshCw size={16} />
-              立即扫描
+            <button className="btn btn-primary" onClick={handleScan} disabled={isPending || isScanning}>
+              <RefreshCw size={16} className={isScanning ? "media-library-sync-icon-spinning" : ""} />
+              {isScanning ? "扫描中..." : "立即扫描"}
             </button>
           </div>
         </div>
@@ -594,7 +596,7 @@ export function JobTable({ initialData }: Props) {
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
                           disabled={!canSelectJob(job) || isPending}
-                          title={!canSelectJob(job) ? "仅高置信度或手动编辑后的番号可加入批量提交" : "选择任务"}
+                          title={!canSelectJob(job) ? "中高置信度或手动编辑后的番号可加入批量提交" : "选择任务"}
                           onChange={() => handleToggleSelectJob(job.id)}
                         />
                         <div className="file-path-copy">
@@ -621,6 +623,7 @@ export function JobTable({ initialData }: Props) {
                                 className="input"
                                 style={{ width: "100%", minWidth: 0, height: 40, boxSizing: "border-box", padding: "0 12px" }}
                                 value={editingNumber}
+                                placeholder="请输入确认后的番号"
                                 autoFocus
                                 onChange={(e) => setEditingNumber(e.target.value)}
                                 onBlur={() => handleCommitEditNumber(job)}
@@ -640,8 +643,8 @@ export function JobTable({ initialData }: Props) {
                             <div className="file-number-display">
                               {renderNumberStatusIcon(job)}
                               <div className="file-number-copy">
-                                <span className="file-number-value" title={job.number}>
-                                  {job.number}
+                                <span className="file-number-value" title={requiresManualNumberReview(job) ? "待手动确认" : job.number}>
+                                  {requiresManualNumberReview(job) ? "待确认" : job.number}
                                 </span>
                                 <span className="file-number-note">{getNumberHint(job)}</span>
                               </div>

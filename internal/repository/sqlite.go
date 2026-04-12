@@ -30,12 +30,22 @@ func NewSQLite(path string) (*SQLite, error) {
 	if err != nil {
 		return nil, err
 	}
+	configureSQLite(db)
 	repo := &SQLite{db: db}
 	if err := repo.init(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return repo, nil
+}
+
+func configureSQLite(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	_, _ = db.Exec(`PRAGMA busy_timeout = 5000`)
 }
 
 func (s *SQLite) DB() *sql.DB {
