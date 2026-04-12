@@ -113,6 +113,46 @@ func TestServiceWorkflowDebugWithPrecheckVariablesAndNextRequestURL(t *testing.T
 	require.Equal(t, srv.URL+"/detail/1", result.Steps[2].Request.URL)
 }
 
+func TestServiceWorkflowDebugRejectsInitialNonAcceptedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`<html><body><a class="item" href="/detail/1">ABC-123 title</a></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "status code:404")
+}
+
+func TestServiceWorkflowDebugRejectsNextRequestNonAcceptedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			_, _ = w.Write([]byte(`<html><body><a class="item" href="/detail/1">ABC-123 title</a></body></html>`))
+		case "/detail/1":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`<html><body><h1 class="title">Target</h1></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "status code:404")
+}
+
 func TestServiceCaseDebug(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1><div class="actors"><span>Alice</span></div></body></html>`))

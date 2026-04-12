@@ -308,6 +308,9 @@ func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec,
 			Request:  ptrRequestDebug(requestDebug(req)),
 			Response: resp,
 		})
+		if err := checkAcceptedStatus(plg.spec.request, resp.StatusCode); err != nil {
+			return nil, err
+		}
 		baseResp = resp
 	}
 	if plg.spec.workflow == nil {
@@ -859,6 +862,9 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 	}
 	resp, err := captureHTTPResponse(rsp, w.nextRequest.decodeCharset)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkAcceptedStatus(w.nextRequest, resp.StatusCode); err != nil {
 		return nil, err
 	}
 	return []WorkflowDebugStep{
