@@ -374,10 +374,18 @@ export function PluginEditorShell() {
       }
       if (action === "scrape") {
         const scrapeDebug = await debugPluginDraftScrape(draft, state.number.trim());
-        setRequestResult({
-          request: scrapeDebug.data.request,
-          response: scrapeDebug.data.response,
-        });
+        // When multi_request is enabled, the request debug endpoint returns
+        // `attempts` data that the scrape endpoint does not include.
+        // Call it separately to preserve that info in the basics panel.
+        if (state.multiRequestEnabled) {
+          const reqDebug = await debugPluginDraftRequest(draft, state.number.trim());
+          setRequestResult(reqDebug.data);
+        } else {
+          setRequestResult({
+            request: scrapeDebug.data.request,
+            response: scrapeDebug.data.response,
+          });
+        }
         if (state.workflowEnabled) {
           const workflowDebug = await debugPluginDraftWorkflow(draft, state.number.trim());
           setWorkflowResult(workflowDebug.data);

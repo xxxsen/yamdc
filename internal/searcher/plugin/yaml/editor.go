@@ -15,6 +15,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 	"golang.org/x/net/html"
 	"gopkg.in/yaml.v3"
 )
@@ -80,6 +81,7 @@ type ScrapeDebugResult struct {
 	Response *HTTPResponseDebug          `json:"response,omitempty"`
 	Fields   map[string]FieldDebugResult `json:"fields"`
 	Meta     *model.MovieMeta            `json:"meta,omitempty"`
+	Error    string                      `json:"error,omitempty"`
 }
 
 type WorkflowMatchDetail struct {
@@ -108,6 +110,7 @@ type WorkflowDebugStep struct {
 
 type WorkflowDebugResult struct {
 	Steps []WorkflowDebugStep `json:"steps"`
+	Error string              `json:"error,omitempty"`
 }
 
 type CaseOutput struct {
@@ -156,6 +159,7 @@ func DebugRequest(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, 
 		return nil, err
 	}
 	ctx = pluginapi.InitContainer(ctx)
+	ctx = meta.SetNumberId(ctx, number)
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
@@ -190,6 +194,7 @@ func DebugScrape(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, n
 		return nil, err
 	}
 	ctx = pluginapi.InitContainer(ctx)
+	ctx = meta.SetNumberId(ctx, number)
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
@@ -266,6 +271,7 @@ func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec,
 		return nil, err
 	}
 	ctx = pluginapi.InitContainer(ctx)
+	ctx = meta.SetNumberId(ctx, number)
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
@@ -283,33 +289,40 @@ func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec,
 	var baseResp *HTTPResponseDebug
 	if plg.spec.multiRequest != nil {
 		mr, finalCtx, err := debugWorkflowMultiRequest(ctx, cli, plg, evalCtx)
-		if err != nil {
-			return nil, err
+		if mr != nil {
+			result.Steps = append(result.Steps, mr.steps...)
 		}
-		result.Steps = append(result.Steps, mr.steps...)
+		if err != nil {
+			result.Error = fmt.Sprintf("multi_request failed: %s", err.Error())
+			return result, nil
+		}
 		evalCtx = finalCtx
 		baseResp = mr.response
 	} else {
 		req, err := plg.buildRequest(ctx, plg.spec.request, evalCtx)
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("build request failed: %s", err.Error())
+			return result, nil
 		}
 		rsp, err := cli.Do(req)
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
+			return result, nil
 		}
 		resp, err := captureHTTPResponse(rsp, plg.spec.request.decodeCharset)
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
+			return result, nil
 		}
 		result.Steps = append(result.Steps, WorkflowDebugStep{
 			Stage:    "request",
-			Summary:  "opened initial page",
+			Summary:  fmt.Sprintf("opened initial page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
 			Request:  ptrRequestDebug(requestDebug(req)),
 			Response: resp,
 		})
 		if err := checkAcceptedStatus(plg.spec.request, resp.StatusCode); err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("status check failed: url=%s %s", req.URL.String(), err.Error())
+			return result, nil
 		}
 		baseResp = resp
 	}
@@ -317,10 +330,10 @@ func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec,
 		return result, nil
 	}
 	steps, err := debugWorkflowSearchSelect(ctx, cli, plg, evalCtx, baseResp)
-	if err != nil {
-		return nil, err
-	}
 	result.Steps = append(result.Steps, steps...)
+	if err != nil {
+		result.Error = err.Error()
+	}
 	return result, nil
 }
 
@@ -703,10 +716,15 @@ func debugWorkflowMultiRequest(ctx context.Context, cli client.IHTTPClient, plg 
 	for _, candidateTmpl := range plg.spec.multiRequest.candidates {
 		candidate, err := candidateTmpl.Render(evalCtx)
 		if err != nil {
-			return nil, nil, err
+			return result, nil, fmt.Errorf("render candidate template failed: %w", err)
 		}
 		if plg.spec.multiRequest.unique {
 			if _, ok := seen[candidate]; ok {
+				result.steps = append(result.steps, WorkflowDebugStep{
+					Stage:     "multi_request",
+					Candidate: candidate,
+					Summary:   "skipped (duplicate candidate)",
+				})
 				continue
 			}
 			seen[candidate] = struct{}{}
@@ -714,7 +732,7 @@ func debugWorkflowMultiRequest(ctx context.Context, cli client.IHTTPClient, plg 
 		itemCtx := &evalContext{number: evalCtx.number, host: evalCtx.host, vars: evalCtx.vars, candidate: candidate}
 		req, err := plg.buildRequest(ctx, plg.spec.multiRequest.request, itemCtx)
 		if err != nil {
-			return nil, nil, err
+			return result, nil, fmt.Errorf("build request for candidate %q failed: %w", candidate, err)
 		}
 		step := WorkflowDebugStep{
 			Stage:     "multi_request",
@@ -723,62 +741,76 @@ func debugWorkflowMultiRequest(ctx context.Context, cli client.IHTTPClient, plg 
 		}
 		rsp, err := cli.Do(req)
 		if err != nil {
-			step.Summary = err.Error()
+			step.Summary = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
 			result.steps = append(result.steps, step)
 			continue
 		}
 		resp, err := captureHTTPResponse(rsp, plg.spec.multiRequest.request.decodeCharset)
 		if err != nil {
-			return nil, nil, err
+			step.Summary = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
+			result.steps = append(result.steps, step)
+			continue
 		}
 		step.Response = resp
 		if err := checkAcceptedStatus(plg.spec.multiRequest.request, resp.StatusCode); err != nil {
-			step.Summary = err.Error()
+			step.Summary = fmt.Sprintf("status=%d rejected: %s", resp.StatusCode, err.Error())
 			result.steps = append(result.steps, step)
 			continue
 		}
 		node, err := htmlquery.Parse(strings.NewReader(resp.Body))
 		if err != nil {
-			return nil, nil, err
+			step.Summary = fmt.Sprintf("parse html failed: %s", err.Error())
+			result.steps = append(result.steps, step)
+			continue
 		}
 		itemCtx.body = resp.Body
 		matched, err := plg.spec.multiRequest.successWhen.Eval(itemCtx, node)
 		if err != nil {
-			return nil, nil, err
-		}
-		if !matched {
-			step.Summary = "candidate did not match success_when"
+			step.Summary = fmt.Sprintf("eval success_when failed: %s", err.Error())
 			result.steps = append(result.steps, step)
 			continue
 		}
-		step.Summary = "candidate matched"
+		if !matched {
+			step.Summary = fmt.Sprintf("success_when not matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
+			result.steps = append(result.steps, step)
+			continue
+		}
+		step.Summary = fmt.Sprintf("candidate matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
 		result.steps = append(result.steps, step)
+		result.response = resp
 		return result, itemCtx, nil
 	}
-	return result, nil, fmt.Errorf("no multi_request matched")
+	return result, nil, fmt.Errorf("no multi_request candidate matched after trying %d candidate(s)", len(seen))
 }
 
 func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg *YAMLSearchPlugin, evalCtx *evalContext, baseResp *HTTPResponseDebug) ([]WorkflowDebugStep, error) {
 	if baseResp == nil {
-		return nil, fmt.Errorf("missing workflow base response")
+		return nil, fmt.Errorf("missing workflow base response (no request stage returned a body)")
 	}
 	node, err := htmlquery.Parse(strings.NewReader(baseResp.Body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse response body as HTML failed: body_size=%d err=%s", len(baseResp.Body), err.Error())
 	}
 	body := baseResp.Body
 	w := plg.spec.workflow
 	results := make(map[string][]string, len(w.selectors))
 	expectedLen := -1
+	selectorSummary := make([]string, 0, len(w.selectors))
 	for _, sel := range w.selectors {
 		items := decoder.DecodeList(node, sel.expr)
 		results[sel.name] = items
+		selectorSummary = append(selectorSummary, fmt.Sprintf("%s=%d", sel.name, len(items)))
 		if expectedLen == -1 {
 			expectedLen = len(items)
 			continue
 		}
 		if expectedLen != len(items) {
-			return nil, fmt.Errorf("selector result count mismatch")
+			step := WorkflowDebugStep{
+				Stage:     "search_select",
+				Summary:   fmt.Sprintf("selector count mismatch: %s", strings.Join(selectorSummary, ", ")),
+				Selectors: results,
+			}
+			return []WorkflowDebugStep{step}, fmt.Errorf("search_select selector result count mismatch: %s (all selectors must return the same number of results)", strings.Join(selectorSummary, ", "))
 		}
 	}
 	step := WorkflowDebugStep{
@@ -807,7 +839,8 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 		for key, tmpl := range w.itemVariables {
 			v, err := tmpl.Render(itemCtx)
 			if err != nil {
-				return nil, err
+				step.Summary = fmt.Sprintf("item_variables render failed at index %d: %s", i, err.Error())
+				return []WorkflowDebugStep{step}, err
 			}
 			itemCtx.itemVariables[key] = v
 		}
@@ -820,7 +853,8 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 			for _, cond := range w.match.conditions {
 				ok, err := cond.Eval(itemCtx, node)
 				if err != nil {
-					return nil, err
+					step.Summary = fmt.Sprintf("eval condition failed at index %d: %s", i, err.Error())
+					return []WorkflowDebugStep{step}, err
 				}
 				itemDbg.MatchDetails = append(itemDbg.MatchDetails, WorkflowMatchDetail{
 					Condition: renderCondition(cond),
@@ -829,7 +863,8 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 			}
 			ok, err := w.match.Eval(itemCtx, node)
 			if err != nil {
-				return nil, err
+				step.Summary = fmt.Sprintf("eval match failed at index %d: %s", i, err.Error())
+				return []WorkflowDebugStep{step}, err
 			}
 			matchPass = ok
 		}
@@ -840,38 +875,52 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 		}
 	}
 	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
-		return nil, fmt.Errorf("search_select matched count mismatch, got:%d expect:%d", len(matched), w.match.expectCount)
+		step.Summary = fmt.Sprintf("matched %d/%d items (expect_count=%d), selector_counts=[%s], response_body_size=%d",
+			len(matched), expectedLen, w.match.expectCount, strings.Join(selectorSummary, ", "), len(body))
+		return []WorkflowDebugStep{step}, fmt.Errorf("search_select matched count mismatch: got %d but expect_count=%d (total_items=%d, selectors=[%s], body_size=%d). Check the response tab to verify the correct page was fetched",
+			len(matched), w.match.expectCount, expectedLen, strings.Join(selectorSummary, ", "), len(body))
 	}
 	if len(matched) == 0 {
-		return nil, fmt.Errorf("no search_select result matched")
+		step.Summary = fmt.Sprintf("0/%d items matched, selector_counts=[%s], response_body_size=%d",
+			expectedLen, strings.Join(selectorSummary, ", "), len(body))
+		return []WorkflowDebugStep{step}, fmt.Errorf("search_select: no item matched out of %d candidates (selectors=[%s], body_size=%d). Check the response tab to verify the correct page was fetched",
+			expectedLen, strings.Join(selectorSummary, ", "), len(body))
 	}
-	step.Summary = fmt.Sprintf("%d item matched", len(matched))
+	step.Summary = fmt.Sprintf("%d/%d items matched", len(matched), expectedLen)
 	value, err := w.ret.Render(matched[0])
 	if err != nil {
-		return nil, err
+		step.Summary += fmt.Sprintf(", return render failed: %s", err.Error())
+		return []WorkflowDebugStep{step}, fmt.Errorf("render return template failed: %w", err)
 	}
 	step.SelectedValue = value
 	matched[0].value = value
 	nextReq, err := plg.buildRequest(ctx, w.nextRequest, matched[0])
 	if err != nil {
-		return nil, err
+		step.Summary += fmt.Sprintf(", build next_request failed: %s", err.Error())
+		return []WorkflowDebugStep{step}, fmt.Errorf("build next_request failed: selected_value=%s err=%w", value, err)
 	}
 	rsp, err := cli.Do(nextReq)
 	if err != nil {
-		return nil, err
+		return []WorkflowDebugStep{step}, fmt.Errorf("next_request failed: url=%s err=%w", nextReq.URL.String(), err)
 	}
 	resp, err := captureHTTPResponse(rsp, w.nextRequest.decodeCharset)
 	if err != nil {
-		return nil, err
+		return []WorkflowDebugStep{step}, fmt.Errorf("read next_request response failed: url=%s err=%w", nextReq.URL.String(), err)
 	}
 	if err := checkAcceptedStatus(w.nextRequest, resp.StatusCode); err != nil {
-		return nil, err
+		nextStep := WorkflowDebugStep{
+			Stage:    "next_request",
+			Summary:  fmt.Sprintf("detail page status rejected: url=%s status=%d", nextReq.URL.String(), resp.StatusCode),
+			Request:  ptrRequestDebug(requestDebug(nextReq)),
+			Response: resp,
+		}
+		return []WorkflowDebugStep{step, nextStep}, fmt.Errorf("next_request status check failed: url=%s %w", nextReq.URL.String(), err)
 	}
 	return []WorkflowDebugStep{
 		step,
 		{
 			Stage:    "next_request",
-			Summary:  "opened detail page",
+			Summary:  fmt.Sprintf("opened detail page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
 			Request:  ptrRequestDebug(requestDebug(nextReq)),
 			Response: resp,
 		},

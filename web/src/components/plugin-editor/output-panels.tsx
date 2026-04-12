@@ -126,9 +126,17 @@ function WorkflowDebugPreview({ result }: { result: PluginEditorWorkflowDebugRes
           </div>
           {step.candidate ? <div className="plugin-editor-timeline-detail">candidate: {step.candidate}</div> : null}
           {step.selected_value ? <div className="plugin-editor-timeline-detail">selected: {step.selected_value}</div> : null}
-          {step.items?.length ? <div className="plugin-editor-timeline-detail">matched items: {step.items.filter((item) => item.matched).length}</div> : null}
+          {step.items?.length ? <div className="plugin-editor-timeline-detail">matched items: {step.items.filter((item) => item.matched).length}/{step.items.length}</div> : null}
         </article>
       ))}
+      {result.error ? (
+        <article className="plugin-editor-timeline-step plugin-editor-timeline-step-error">
+          <div className="plugin-editor-timeline-head">
+            <strong>error</strong>
+            <span>{result.error}</span>
+          </div>
+        </article>
+      ) : null}
     </div>
   );
 }
@@ -139,6 +147,7 @@ export function ScrapeJSONPanel({ result }: { result: PluginEditorScrapeDebugRes
   }
   return (
     <div className="plugin-editor-output-section plugin-editor-output-section-fill">
+      {result.error ? <div className="plugin-editor-output-error">{result.error}</div> : null}
       <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{JSON.stringify(result.meta ?? result.fields, null, 2)}</pre>
     </div>
   );

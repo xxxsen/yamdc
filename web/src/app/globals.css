@@ -5954,6 +5954,30 @@ textarea.input {
   gap: 8px;
 }
 
+.plugin-editor-timeline-step-error {
+  background: rgba(254, 226, 226, 0.88);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.plugin-editor-timeline-step-error .plugin-editor-timeline-head strong {
+  color: #dc2626;
+}
+
+.plugin-editor-timeline-step-error .plugin-editor-timeline-head span {
+  color: #991b1b;
+}
+
+.plugin-editor-output-error {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(254, 226, 226, 0.88);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
 .plugin-editor-timeline-head {
   display: flex;
   align-items: center;
