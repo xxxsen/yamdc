@@ -665,8 +665,9 @@ textarea.input {
 
 .file-list-toast {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 60;
   max-width: min(420px, calc(100vw - 48px));
   padding: 12px 14px;
@@ -677,12 +678,42 @@ textarea.input {
   font-size: 14px;
   box-shadow: 0 16px 32px rgba(58, 35, 20, 0.14);
   backdrop-filter: blur(12px);
+  text-align: center;
+  pointer-events: none;
 }
 
 .file-list-toast[data-tone="danger"] {
   border-color: rgba(157, 43, 43, 0.12);
   background: rgba(157, 43, 43, 0.08);
   color: var(--danger);
+}
+
+.app-toast {
+  position: fixed;
+  z-index: 80;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(39, 93, 138, 0.14);
+  background: rgba(39, 93, 138, 0.08);
+  color: var(--info);
+  font-size: 14px;
+  box-shadow: 0 16px 32px rgba(58, 35, 20, 0.14);
+  backdrop-filter: blur(12px);
+  text-align: center;
+  pointer-events: none;
+}
+
+.app-toast[data-tone="danger"] {
+  border-color: rgba(157, 43, 43, 0.12);
+  background: rgba(157, 43, 43, 0.08);
+  color: var(--danger);
+}
+
+.app-toast-top {
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .list-loading-overlay {
@@ -1184,8 +1215,18 @@ textarea.input {
   }
 
   .file-list-toast {
+    top: 16px;
+    left: 16px;
     right: 16px;
-    bottom: 16px;
+    transform: none;
+    max-width: calc(100vw - 32px);
+  }
+
+  .app-toast {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    transform: none;
     max-width: calc(100vw - 32px);
   }
 
@@ -2616,6 +2657,18 @@ textarea.input {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(91, 67, 44, 0.08);
   color: var(--muted);
+}
+
+.library-item-badge-row {
+  display: flex;
+  margin-top: 6px;
+}
+
+.library-conflict-badge {
+  min-width: 0;
+  border-color: rgba(180, 79, 45, 0.28);
+  background: rgba(180, 79, 45, 0.1);
+  color: var(--accent-strong);
 }
 
 .library-sync-panel {

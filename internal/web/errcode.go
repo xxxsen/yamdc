@@ -53,6 +53,7 @@ const (
 	errCodeLibraryDetailReloadFailed = 120010
 	errCodeLibraryAssetReplaceFailed = 120011
 	errCodeLibraryPosterCropFailed   = 120012
+	errCodeLibraryItemDeleteFailed   = 120013
 
 	// Media library errors.
 	errCodeListMediaLibraryFailed         = 130001

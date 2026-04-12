@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ type libraryListItem struct {
 	FileCount    int      `json:"file_count"`
 	VideoCount   int      `json:"video_count"`
 	VariantCount int      `json:"variant_count"`
+	Conflict     bool     `json:"conflict"`
 }
 
 type libraryMeta struct {
@@ -102,7 +104,7 @@ func (a *API) handleListLibrary(w http.ResponseWriter, r *http.Request) {
 		writeFail(w, errCodeListLibraryFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", toLibraryListItems(items))
+	writeSuccess(w, http.StatusOK, "ok", a.toLibraryListItems(items))
 }
 
 func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +125,7 @@ func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 			writeFail(w, errCodeLibraryItemReadFailed, err.Error())
 			return
 		}
-		writeSuccess(w, http.StatusOK, "ok", toLibraryDetail(detail))
+		writeSuccess(w, http.StatusOK, "ok", a.toLibraryDetail(detail))
 	case http.MethodPatch:
 		var req struct {
 			Meta libraryMeta `json:"meta"`
@@ -139,7 +141,19 @@ func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logutil.GetLogger(r.Context()).Info("library item updated", zap.String("path", detail.Item.RelPath))
-		writeSuccess(w, http.StatusOK, "library item updated", toLibraryDetail(detail))
+		writeSuccess(w, http.StatusOK, "library item updated", a.toLibraryDetail(detail))
+	case http.MethodDelete:
+		if err := svc.DeleteSaveItem(pathValue); err != nil {
+			if os.IsNotExist(err) {
+				writeFail(w, errCodeLibraryItemNotFound, err.Error())
+				return
+			}
+			logutil.GetLogger(r.Context()).Warn("library item delete failed", zap.String("path", pathValue), zap.Error(err))
+			writeFail(w, errCodeLibraryItemDeleteFailed, err.Error())
+			return
+		}
+		logutil.GetLogger(r.Context()).Info("library item deleted", zap.String("path", pathValue))
+		writeSuccess(w, http.StatusOK, "library item deleted", nil)
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -192,7 +206,7 @@ func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logutil.GetLogger(r.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", detail.Item.RelPath))
-		writeSuccess(w, http.StatusOK, "library file deleted", toLibraryDetail(detail))
+		writeSuccess(w, http.StatusOK, "library file deleted", a.toLibraryDetail(detail))
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -249,7 +263,7 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 		zap.String("kind", kind),
 		zap.String("file_name", header.Filename),
 	)
-	writeSuccess(w, http.StatusOK, "library asset replaced", toLibraryDetail(detail))
+	writeSuccess(w, http.StatusOK, "library asset replaced", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
@@ -299,18 +313,20 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 		zap.Int("width", req.Width),
 		zap.Int("height", req.Height),
 	)
-	writeSuccess(w, http.StatusOK, "library poster cropped", toLibraryDetail(detail))
+	writeSuccess(w, http.StatusOK, "library poster cropped", a.toLibraryDetail(detail))
 }
 
-func toLibraryListItems(items []medialib.Item) []libraryListItem {
+func (a *API) toLibraryListItems(items []medialib.Item) []libraryListItem {
+	conflicts := a.loadLibraryConflictFlags()
 	out := make([]libraryListItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, toLibraryListItem(item))
+		out = append(out, toLibraryListItem(item, conflicts))
 	}
 	return out
 }
 
-func toLibraryListItem(item medialib.Item) libraryListItem {
+func toLibraryListItem(item medialib.Item, conflicts map[string]struct{}) libraryListItem {
+	_, conflict := conflicts[buildLibraryConflictKey(item.RelPath, item.Number)]
 	return libraryListItem{
 		RelPath:      item.RelPath,
 		Name:         item.Name,
@@ -325,20 +341,46 @@ func toLibraryListItem(item medialib.Item) libraryListItem {
 		FileCount:    item.FileCount,
 		VideoCount:   item.VideoCount,
 		VariantCount: item.VariantCount,
+		Conflict:     conflict,
 	}
 }
 
-func toLibraryDetail(detail *medialib.Detail) *libraryDetail {
+func (a *API) toLibraryDetail(detail *medialib.Detail) *libraryDetail {
 	if detail == nil {
 		return nil
 	}
+	conflicts := a.loadLibraryConflictFlags()
 	return &libraryDetail{
-		Item:              toLibraryListItem(detail.Item),
+		Item:              toLibraryListItem(detail.Item, conflicts),
 		Meta:              toLibraryMeta(detail.Meta),
 		Variants:          toLibraryVariants(detail.Variants),
 		PrimaryVariantKey: detail.PrimaryVariantKey,
 		Files:             toLibraryFiles(detail.Files),
 	}
+}
+
+func (a *API) loadLibraryConflictFlags() map[string]struct{} {
+	out := map[string]struct{}{}
+	if a.media == nil || !a.media.IsConfigured() {
+		return out
+	}
+	items, err := a.media.ListItems(context.Background(), medialib.ListItemsOptions{})
+	if err != nil {
+		return out
+	}
+	for _, item := range items {
+		out[buildLibraryConflictKey(item.RelPath, item.Number)] = struct{}{}
+	}
+	return out
+}
+
+func buildLibraryConflictKey(relPath string, number string) string {
+	relPath = strings.TrimSpace(relPath)
+	number = strings.TrimSpace(number)
+	if number != "" {
+		return "number:" + strings.ToUpper(number)
+	}
+	return "path:" + relPath
 }
 
 func toLibraryMeta(meta medialib.Meta) libraryMeta {

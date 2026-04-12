@@ -148,6 +148,7 @@ func newSqliteStorage(path string, cleanupInterval time.Duration) (*sqliteStore,
 	if err != nil {
 		return nil, err
 	}
+	configureSqliteStoreDB(db)
 	s := &sqliteStore{
 		db:              db,
 		cleanupInterval: cleanupInterval,
@@ -170,6 +171,15 @@ func MustNewSqliteStorage(path string) IStorage {
 		panic(err)
 	}
 	return s
+}
+
+func configureSqliteStoreDB(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	_, _ = db.Exec(`PRAGMA busy_timeout = 5000`)
 }
 
 func (s *sqliteStore) Close() error {

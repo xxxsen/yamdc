@@ -32,6 +32,12 @@ type Service struct {
 
 	mu      sync.Mutex
 	running map[int64]struct{}
+	queue   chan queuedJob
+}
+
+type queuedJob struct {
+	ctx   context.Context
+	jobID int64
 }
 
 type JobConflict struct {
@@ -46,14 +52,17 @@ func NewService(
 	cap *capture.Capture,
 	storage store.IStorage,
 ) *Service {
-	return &Service{
+	svc := &Service{
 		jobRepo:    jobRepo,
 		logRepo:    logRepo,
 		scrapeRepo: scrapeRepo,
 		capture:    cap,
 		storage:    storage,
 		running:    make(map[int64]struct{}),
+		queue:      make(chan queuedJob, 1024),
 	}
+	go svc.runWorker()
+	return svc
 }
 
 func requiresManualNumberReview(j *jobdef.Job) bool {
@@ -386,8 +395,17 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		s.finish(jobID)
 		return fmt.Errorf("job status is not runnable")
 	}
-	go s.runOne(context.WithoutCancel(ctx), jobID)
+	s.queue <- queuedJob{
+		ctx:   context.WithoutCancel(ctx),
+		jobID: jobID,
+	}
 	return nil
+}
+
+func (s *Service) runWorker() {
+	for item := range s.queue {
+		s.runOne(item.ctx, item.jobID)
+	}
 }
 
 func (s *Service) runOne(ctx context.Context, jobID int64) {

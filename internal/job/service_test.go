@@ -4,10 +4,16 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/jobdef"
+	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
+	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
 )
@@ -160,6 +166,60 @@ func TestServiceRunRequiresManualEditForLowConfidenceNumber(t *testing.T) {
 	require.Equal(t, jobdef.StatusInit, got.Status)
 }
 
+func TestServiceRunProcessesJobsSequentially(t *testing.T) {
+	svc, repo, _ := newTestServiceWithSQLite(t)
+	cap, maxConcurrent := newSequentialTestCapture(t)
+	svc.capture = cap
+
+	dir := t.TempDir()
+	file1 := filepath.Join(dir, "SEQ-001.mp4")
+	file2 := filepath.Join(dir, "SEQ-002.mp4")
+	require.NoError(t, os.WriteFile(file1, []byte("x"), 0644))
+	require.NoError(t, os.WriteFile(file2, []byte("x"), 0644))
+
+	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file1),
+		FileExt:               filepath.Ext(file1),
+		RelPath:               filepath.Base(file1),
+		AbsPath:               file1,
+		Number:                "SEQ-001",
+		RawNumber:             "SEQ-001",
+		CleanedNumber:         "SEQ-001",
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file2),
+		FileExt:               filepath.Ext(file2),
+		RelPath:               filepath.Base(file2),
+		AbsPath:               file2,
+		Number:                "SEQ-002",
+		RawNumber:             "SEQ-002",
+		CleanedNumber:         "SEQ-002",
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	require.NoError(t, svc.Run(context.Background(), jobID1))
+	require.NoError(t, svc.Run(context.Background(), jobID2))
+
+	require.Eventually(t, func() bool {
+		job1, err := repo.GetByID(context.Background(), jobID1)
+		require.NoError(t, err)
+		job2, err := repo.GetByID(context.Background(), jobID2)
+		require.NoError(t, err)
+		return job1 != nil && job2 != nil &&
+			job1.Status == jobdef.StatusReviewing &&
+			job2.Status == jobdef.StatusReviewing
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.EqualValues(t, 1, maxConcurrent.Load())
+}
+
 func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
@@ -195,6 +255,51 @@ func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
 	require.Equal(t, newFile, got.AbsPath)
 	require.Equal(t, "HEYZO-0040.mp4", got.FileName)
 	require.Equal(t, "HEYZO-0040.mp4", got.RelPath)
+}
+
+type sequentialTestSearcher struct {
+	current int32
+	max     atomic.Int32
+}
+
+func (s *sequentialTestSearcher) Name() string                    { return "sequential-test" }
+func (s *sequentialTestSearcher) Check(ctx context.Context) error { return nil }
+
+func (s *sequentialTestSearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
+	current := atomic.AddInt32(&s.current, 1)
+	defer atomic.AddInt32(&s.current, -1)
+	for {
+		max := s.max.Load()
+		if current <= max || s.max.CompareAndSwap(max, current) {
+			break
+		}
+	}
+	time.Sleep(120 * time.Millisecond)
+	return &model.MovieMeta{
+		Number: n.GetNumberID(),
+		Title:  "Sequential Test",
+		Cover:  &model.File{Name: "cover.jpg", Key: "cover-key"},
+		Poster: &model.File{Name: "poster.jpg", Key: "poster-key"},
+	}, true, nil
+}
+
+type noopProcessor struct{}
+
+func (p *noopProcessor) Name() string                                             { return "noop" }
+func (p *noopProcessor) Process(ctx context.Context, fc *model.FileContext) error { return nil }
+
+func newSequentialTestCapture(t *testing.T) (*capture.Capture, *atomic.Int32) {
+	t.Helper()
+	searcher := &sequentialTestSearcher{}
+	cap, err := capture.New(
+		capture.WithScanDir(t.TempDir()),
+		capture.WithSaveDir(t.TempDir()),
+		capture.WithSeacher(searcher),
+		capture.WithProcessor(processor.IProcessor(&noopProcessor{})),
+		capture.WithStorage(store.NewMemStorage()),
+	)
+	require.NoError(t, err)
+	return cap, &searcher.max
 }
 
 func TestServiceGetJobConflictDetectsDuplicateTargetFileName(t *testing.T) {

@@ -693,42 +693,42 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
               {moveRunning ? <p className="review-list-subtitle">媒体库正在同步迁移，审批按钮已临时锁定。</p> : null}
             </div>
           </div>
-            <div className="review-bulk-toolbar">
-              <label className="review-bulk-select-all">
-                <input
-                  ref={selectAllRef}
+          <div className="review-bulk-toolbar">
+            <label className="review-bulk-select-all">
+              <input
+                ref={selectAllRef}
                 type="checkbox"
                 checked={allSelectableChecked}
                 disabled={items.length === 0 || isPending || moveRunning}
                 title="选择当前列表中的全部 review 任务"
                 onChange={handleToggleSelectAll}
-                />
-                <span>全选</span>
-              </label>
-              <div className="review-bulk-toolbar-actions">
-                {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
-                <button
-                  type="button"
-                  className="btn review-inline-icon-btn review-bulk-approve-btn"
-                  onClick={handleImportSelected}
-                  disabled={selectedCount === 0 || isPending || moveRunning}
-                  aria-label="批量审批"
-                  title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
-                >
-                  <Check size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="btn review-inline-icon-btn review-bulk-delete-btn"
-                  onClick={handleDeleteSelected}
-                  disabled={selectedCount === 0 || isPending}
-                  aria-label="批量删除"
-                  title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              />
+              <span>全选</span>
+            </label>
+            <div className="review-bulk-toolbar-actions">
+              {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
+              <button
+                type="button"
+                className="btn review-inline-icon-btn review-bulk-approve-btn"
+                onClick={handleImportSelected}
+                disabled={selectedCount === 0 || isPending || moveRunning}
+                aria-label="批量审批"
+                title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
+              >
+                <Check size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn review-inline-icon-btn review-bulk-delete-btn"
+                onClick={handleDeleteSelected}
+                disabled={selectedCount === 0 || isPending}
+                aria-label="批量删除"
+                title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
+          </div>
           <div className="review-job-list">
             {items.length === 0 ? <div className="review-empty-state">当前没有待 review 的任务</div> : null}
             {items.map((job, index) => (

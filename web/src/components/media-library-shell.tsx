@@ -38,11 +38,27 @@ function mergeYearOptions(current: string[], next: string[]) {
   return Array.from(new Set([...current, ...next])).sort((left, right) => Number.parseInt(right, 10) - Number.parseInt(left, 10));
 }
 
+function toMediaLibrarySyncMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : "启动媒体库同步失败";
+  const text = raw.trim();
+  if (text.includes("media library sync is already running")) {
+    return "媒体库正在同步中";
+  }
+  if (text.includes("move to media library is running")) {
+    return "媒体库移动任务进行中，暂时无法同步";
+  }
+  if (text.includes("library dir is not configured")) {
+    return "未配置媒体库目录";
+  }
+  return raw;
+}
+
 export function MediaLibraryShell({ items: initialItems, initialStatus }: Props) {
   const [items, setItems] = useState(initialItems);
   const [yearOptions, setYearOptions] = useState(() => extractYearOptions(initialItems));
   const [configured, setConfigured] = useState(Boolean(initialStatus?.configured));
   const [syncRunning, setSyncRunning] = useState(initialStatus?.sync.status === "running");
+  const [syncStarting, setSyncStarting] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>("all");
@@ -61,6 +77,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const yearPickerRef = useRef<HTMLDivElement | null>(null);
   const prevSyncRunningRef = useRef(initialStatus?.sync.status === "running");
+  const observedSyncRunningRef = useRef(initialStatus?.sync.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
 
   const resetViewport = () => {
@@ -119,10 +136,15 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     try {
       const next = await getMediaLibraryStatus();
       setConfigured(Boolean(next.configured));
-      const syncRunning = next.sync.status === "running";
-      setSyncRunning(syncRunning);
-      if (prevSyncRunningRef.current && !syncRunning) {
+      const nextSyncRunning = next.sync.status === "running";
+      setSyncRunning(nextSyncRunning);
+      if (nextSyncRunning) {
+        setSyncStarting(false);
+        observedSyncRunningRef.current = true;
+      }
+      if (observedSyncRunningRef.current && prevSyncRunningRef.current && !nextSyncRunning) {
         setSyncCompletedFlash(true);
+        observedSyncRunningRef.current = false;
         const nextItems = await listMediaLibraryItems({
           keyword: deferredKeyword,
           year: yearFilter,
@@ -132,7 +154,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
         });
         setItems(nextItems);
       }
-      prevSyncRunningRef.current = syncRunning;
+      prevSyncRunningRef.current = nextSyncRunning;
     } catch {
       // ignore polling errors
     }
@@ -172,21 +194,23 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     void refreshItems(params);
   }, [configured, deferredKeyword, yearFilter, sizeFilter, sortMode, sortOrder]);
 
+  const syncBusy = syncStarting || syncRunning;
+  const syncButtonLabel = syncBusy ? "同步中..." : syncCompletedFlash ? "同步完成" : "同步媒体库";
+
   useEffect(() => {
-    if (!syncRunning) {
+    if (!syncBusy) {
       return;
     }
     const timer = window.setInterval(() => {
       void refreshStatus();
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [syncRunning]);
+  }, [syncBusy]);
 
   const filteredItems = items;
   const visibleYearOptions = yearOptions.slice(0, 13);
   const overflowYearOptions = yearOptions.slice(13);
   const isOverflowYearSelected = yearFilter !== "all" && overflowYearOptions.includes(yearFilter);
-  const syncButtonLabel = syncRunning ? "同步中..." : syncCompletedFlash ? "同步完成" : "同步媒体库";
 
   useEffect(() => {
     const root = browserRef.current;
@@ -371,29 +395,43 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                   <button
                     type="button"
                     className="btn btn-primary media-library-sync-btn"
-                    disabled={isPending || syncRunning}
+                    disabled={isPending || syncBusy}
                     onClick={() => {
                       startTransition(async () => {
+                        setSyncCompletedFlash(false);
+                        setSyncMessage("媒体库同步已启动");
+                        setSyncStarting(true);
                         try {
-                          setSyncCompletedFlash(false);
-                          setSyncMessage("");
                           await triggerMediaLibrarySync();
-                          setSyncRunning(true);
-                          prevSyncRunningRef.current = true;
+                          const nextStatus = await getMediaLibraryStatus();
+                          setConfigured(Boolean(nextStatus.configured));
+                          const nextSyncRunning = nextStatus.sync.status === "running";
+                          setSyncRunning(nextSyncRunning);
+                          setSyncStarting(false);
+                          if (nextSyncRunning) {
+                            observedSyncRunningRef.current = true;
+                          }
+                          prevSyncRunningRef.current = nextSyncRunning;
                         } catch (error) {
-                          setSyncMessage(error instanceof Error ? error.message : "启动媒体库同步失败");
+                          const message = toMediaLibrarySyncMessage(error);
+                          setSyncMessage(message);
+                          if (message === "媒体库正在同步中") {
+                            setSyncStarting(false);
+                            setSyncRunning(true);
+                            prevSyncRunningRef.current = true;
+                            observedSyncRunningRef.current = true;
+                            return;
+                          }
+                          setSyncStarting(false);
+                          setSyncRunning(false);
+                          prevSyncRunningRef.current = false;
                         }
                       });
                     }}
                   >
-                    <RefreshCw size={16} className={syncRunning ? "media-library-sync-icon-spinning" : ""} />
+                    <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
                     {syncButtonLabel}
                   </button>
-                  {syncMessage ? (
-                    <span className="review-message" data-tone={/失败|error/i.test(syncMessage) ? "danger" : "info"}>
-                      {syncMessage}
-                    </span>
-                  ) : null}
                 </div>
               </div>
             </aside>
@@ -475,6 +513,11 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
               />
             ) : null}
           </div>
+        </div>
+      ) : null}
+      {syncMessage ? (
+        <div className="app-toast app-toast-top" data-tone={/失败|error/i.test(syncMessage) ? "danger" : undefined} role="status" aria-live="polite">
+          {syncMessage}
         </div>
       ) : null}
     </div>
