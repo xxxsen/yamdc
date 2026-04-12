@@ -359,6 +359,31 @@ func TestEngineLibraryFileRouteGetNotFound(t *testing.T) {
 	require.NotEmpty(t, payload.Message)
 }
 
+func TestEngineLibraryItemRouteDelete(t *testing.T) {
+	saveDir := t.TempDir()
+	itemDir := filepath.Join(saveDir, "demo")
+	require.NoError(t, os.MkdirAll(itemDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte("<movie></movie>"), 0o644))
+
+	api := &API{saveDir: saveDir}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/library/item?path=demo", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	resp := rec.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var payload struct {
+		Code int `json:"code"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	_, statErr := os.Stat(itemDir)
+	require.True(t, os.IsNotExist(statErr))
+}
+
 func TestHandlePluginEditorCompile(t *testing.T) {
 	editorSvc, err := plugineditor.NewService(client.MustNewClient())
 	require.NoError(t, err)
