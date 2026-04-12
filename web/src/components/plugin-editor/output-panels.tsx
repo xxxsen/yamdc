@@ -184,20 +184,37 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
       formatted = props.body;
     }
     return (
-      <div className="plugin-editor-body-panel">
-        <pre className="searcher-debug-json">{formatted}</pre>
-      </div>
+      <details className="plugin-editor-output-detail-block plugin-editor-body-block" open>
+        <summary className="plugin-editor-output-detail-summary">
+          <span>Body</span>
+        </summary>
+        <div className="plugin-editor-body-panel">
+          <pre className="searcher-debug-json plugin-editor-json-scroll">{formatted}</pre>
+        </div>
+      </details>
     );
   }
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const params = new URLSearchParams(props.body);
     const headers = Object.fromEntries(params.entries());
-    return <HeaderList headers={headers} />;
+    return (
+      <details className="plugin-editor-output-detail-block plugin-editor-body-block" open>
+        <summary className="plugin-editor-output-detail-summary">
+          <span>Body</span>
+        </summary>
+        <HeaderList headers={headers} />
+      </details>
+    );
   }
   return (
-    <div className="plugin-editor-body-panel">
-      <pre className="searcher-debug-json">{props.body}</pre>
-    </div>
+    <details className="plugin-editor-output-detail-block plugin-editor-body-block" open>
+      <summary className="plugin-editor-output-detail-summary">
+        <span>Body</span>
+      </summary>
+      <div className="plugin-editor-body-panel">
+        <pre className="searcher-debug-json plugin-editor-json-scroll">{props.body}</pre>
+      </div>
+    </details>
   );
 }
 
@@ -267,7 +284,7 @@ function SelectorDebugPanel({ selectors }: { selectors: Record<string, string[]>
             <strong>{name}</strong>
             <span>{values.length}</span>
           </div>
-          <pre className="searcher-debug-json">{JSON.stringify(values, null, 2)}</pre>
+          <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(values, null, 2)}</pre>
         </div>
       ))}
     </div>
@@ -285,9 +302,9 @@ function WorkflowItemsPanel({ items }: { items: PluginEditorWorkflowDebugResult[
               {item.matched ? "matched" : "skipped"}
             </span>
           </div>
-          <pre className="searcher-debug-json">{JSON.stringify(item.item, null, 2)}</pre>
+          <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(item.item, null, 2)}</pre>
           {item.item_variables && Object.keys(item.item_variables).length ? (
-            <pre className="searcher-debug-json">{JSON.stringify({ item_variables: item.item_variables }, null, 2)}</pre>
+            <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify({ item_variables: item.item_variables }, null, 2)}</pre>
           ) : null}
           {item.match_details?.length ? (
             <div className="plugin-editor-workflow-condition-list">

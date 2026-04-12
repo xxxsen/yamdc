@@ -6009,11 +6009,13 @@ textarea.input {
 .plugin-editor-body-panel {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  max-height: none;
 }
 
 .plugin-editor-json-scroll {
   max-height: min(52vh, 720px);
+  overflow: auto;
 }
 
 .plugin-editor-json-fill {
@@ -6031,6 +6033,8 @@ textarea.input {
   border-radius: 14px;
   padding: 10px 12px;
   background: rgba(255, 248, 236, 0.44);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .plugin-editor-output-detail-block summary {
@@ -6052,10 +6056,27 @@ textarea.input {
   margin-top: 12px;
 }
 
+.plugin-editor-body-block {
+  overflow: hidden;
+}
+
+.plugin-editor-body-block[open] > * + * {
+  margin-top: 12px;
+}
+
+.plugin-editor-body-panel .searcher-debug-json {
+  margin-top: 0;
+}
+
 .plugin-editor-workflow-selector-list,
 .plugin-editor-workflow-item-list {
   display: grid;
   gap: 10px;
+  max-height: min(44vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-width: 0;
 }
 
 .plugin-editor-workflow-debug-card {
@@ -6065,6 +6086,8 @@ textarea.input {
   background: rgba(255, 248, 236, 0.6);
   display: grid;
   gap: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .plugin-editor-workflow-debug-head {
@@ -6107,6 +6130,11 @@ textarea.input {
 .plugin-editor-workflow-condition-list {
   display: grid;
   gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-width: 0;
 }
 
 .plugin-editor-workflow-condition-row {
@@ -6121,6 +6149,14 @@ textarea.input {
 .plugin-editor-workflow-condition-row strong {
   flex: 0 0 auto;
   text-transform: uppercase;
+}
+
+.plugin-editor-workflow-debug-card .searcher-debug-json {
+  min-width: 0;
+  max-width: 100%;
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 0;
 }
 
 .plugin-editor-expr-runner {
