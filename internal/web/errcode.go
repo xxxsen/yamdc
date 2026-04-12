@@ -75,6 +75,13 @@ const (
 	errCodeNumberCleanerExplainFailed  = 140002
 	errCodeSearcherDebuggerUnavailable = 140101
 	errCodeSearcherDebugSearchFailed   = 140102
+	errCodePluginEditorUnavailable     = 140103
+	errCodePluginEditorCompileFailed   = 140104
+	errCodePluginEditorRequestFailed   = 140105
+	errCodePluginEditorScrapeFailed    = 140106
+	errCodePluginEditorWorkflowFailed  = 140107
+	errCodePluginEditorCaseFailed      = 140108
+	errCodePluginEditorImportFailed    = 140109
 	errCodeHandlerDebuggerUnavailable  = 140201
 	errCodeHandlerDebugRunFailed       = 140202
 

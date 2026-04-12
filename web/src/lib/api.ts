@@ -326,6 +326,221 @@ export interface HandlerDebugResult {
   }>;
 }
 
+export interface PluginEditorParser {
+  kind?: string;
+  layout?: string;
+}
+
+export interface PluginEditorSelector {
+  kind: string;
+  expr: string;
+  multi?: boolean;
+}
+
+export interface PluginEditorTransform {
+  kind: string;
+  old?: string;
+  new?: string;
+  cutset?: string;
+  sep?: string;
+  index?: number;
+  value?: string;
+}
+
+export interface PluginEditorField {
+  selector: PluginEditorSelector;
+  transforms?: PluginEditorTransform[];
+  parser?: string | PluginEditorParser;
+  required?: boolean;
+}
+
+export interface PluginEditorDraft {
+  version: number;
+  name: string;
+  type: string;
+  hosts: string[];
+  precheck?: {
+    number_patterns?: string[];
+    variables?: Record<string, string>;
+  } | null;
+  request?: {
+    method?: string;
+    path?: string;
+    url?: string;
+    query?: Record<string, string>;
+    headers?: Record<string, string>;
+    cookies?: Record<string, string>;
+    body?: {
+      kind?: string;
+      values?: Record<string, string>;
+      content?: string;
+    } | null;
+    accept_status_codes?: number[];
+    not_found_status_codes?: number[];
+    response?: {
+      decode_charset?: string;
+    } | null;
+  } | null;
+  multi_request?: {
+    candidates?: string[];
+    unique?: boolean;
+    request?: PluginEditorDraft["request"];
+    success_when?: {
+      mode?: string;
+      conditions?: string[];
+      expect_count?: number;
+    } | null;
+  } | null;
+  workflow?: {
+    search_select?: {
+      selectors?: Array<{ name: string; kind: string; expr: string }>;
+      item_variables?: Record<string, string>;
+      match?: {
+        mode?: string;
+        conditions?: string[];
+        expect_count?: number;
+      } | null;
+      return?: string;
+      next_request?: PluginEditorDraft["request"];
+    } | null;
+  } | null;
+  scrape: {
+    format: string;
+    fields: Record<string, PluginEditorField>;
+  };
+  postprocess?: {
+    assign?: Record<string, string>;
+    defaults?: {
+      title_lang?: string;
+      plot_lang?: string;
+      genres_lang?: string;
+      actors_lang?: string;
+    } | null;
+    switch_config?: {
+      disable_release_date_check?: boolean;
+      disable_number_replace?: boolean;
+    } | null;
+  } | null;
+}
+
+export interface PluginEditorCompileSummary {
+  has_request: boolean;
+  has_multi_request: boolean;
+  has_workflow: boolean;
+  scrape_format: string;
+  field_count: number;
+}
+
+export interface PluginEditorCompileResult {
+  yaml: string;
+  summary: PluginEditorCompileSummary;
+}
+
+export interface PluginEditorHTTPRequestDebug {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface PluginEditorHTTPResponseDebug {
+  status_code: number;
+  headers: Record<string, string[]>;
+  body: string;
+  body_preview: string;
+}
+
+export interface PluginEditorRequestDebugAttempt {
+  candidate?: string;
+  request: PluginEditorHTTPRequestDebug;
+  response?: PluginEditorHTTPResponseDebug | null;
+  matched: boolean;
+  error?: string;
+}
+
+export interface PluginEditorRequestDebugResult {
+  candidate?: string;
+  request: PluginEditorHTTPRequestDebug;
+  response?: PluginEditorHTTPResponseDebug | null;
+  attempts?: PluginEditorRequestDebugAttempt[];
+}
+
+export interface PluginEditorTransformStep {
+  kind: string;
+  input: unknown;
+  output: unknown;
+}
+
+export interface PluginEditorFieldDebugResult {
+  selector_values: string[];
+  transform_steps: PluginEditorTransformStep[];
+  parser_result?: unknown;
+  required: boolean;
+  matched: boolean;
+}
+
+export interface PluginEditorScrapeDebugResult {
+  request: PluginEditorHTTPRequestDebug;
+  response?: PluginEditorHTTPResponseDebug | null;
+  fields: Record<string, PluginEditorFieldDebugResult>;
+  meta?: SearcherDebugMovieMeta | null;
+}
+
+export interface PluginEditorWorkflowMatchDetail {
+  condition: string;
+  pass: boolean;
+}
+
+export interface PluginEditorWorkflowSelectorItem {
+  index: number;
+  item: Record<string, string>;
+  item_variables?: Record<string, string>;
+  matched: boolean;
+  match_details?: PluginEditorWorkflowMatchDetail[];
+}
+
+export interface PluginEditorWorkflowStep {
+  stage: string;
+  summary: string;
+  candidate?: string;
+  request?: PluginEditorHTTPRequestDebug | null;
+  response?: PluginEditorHTTPResponseDebug | null;
+  selectors?: Record<string, string[]>;
+  items?: PluginEditorWorkflowSelectorItem[];
+  selected_value?: string;
+}
+
+export interface PluginEditorWorkflowDebugResult {
+  steps: PluginEditorWorkflowStep[];
+}
+
+export interface PluginEditorCaseSpec {
+  name: string;
+  input: string;
+  output: {
+    title?: string;
+    tag_set?: string[];
+    actor_set?: string[];
+    status?: string;
+  };
+}
+
+export interface PluginEditorCaseDebugResult {
+  pass: boolean;
+  errmsg: string;
+  meta?: SearcherDebugMovieMeta | null;
+}
+
+export interface PluginEditorImportResult {
+  draft: PluginEditorDraft;
+}
+
+interface PluginEditorEnvelope<T> {
+  ok: boolean;
+  warnings: string[];
+  data: T;
+}
+
 interface APIResponse<T> {
   code: number;
   message: string;
@@ -644,6 +859,78 @@ export async function debugHandler(payload: HandlerDebugRequest) {
     body: JSON.stringify(payload),
   });
   const data = await readAPIResponse<HandlerDebugResult>(resp, "debug handler failed");
+  return data.data;
+}
+
+export async function compilePluginDraft(draft: PluginEditorDraft) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/compile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ draft }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorCompileResult>>(resp, "compile plugin draft failed");
+  return data.data;
+}
+
+export async function importPluginDraftYAML(yaml: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/import`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ yaml }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorImportResult>>(resp, "import plugin yaml failed");
+  return data.data;
+}
+
+export async function debugPluginDraftRequest(draft: PluginEditorDraft, number: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/request`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ draft, number }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorRequestDebugResult>>(resp, "plugin request debug failed");
+  return data.data;
+}
+
+export async function debugPluginDraftWorkflow(draft: PluginEditorDraft, number: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/workflow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ draft, number }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorWorkflowDebugResult>>(resp, "plugin workflow debug failed");
+  return data.data;
+}
+
+export async function debugPluginDraftScrape(draft: PluginEditorDraft, number: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/scrape`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ draft, number }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorScrapeDebugResult>>(resp, "plugin scrape debug failed");
+  return data.data;
+}
+
+export async function debugPluginDraftCase(draft: PluginEditorDraft, caseSpec: PluginEditorCaseSpec) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/case`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ draft, case: caseSpec }),
+  });
+  const data = await readAPIResponse<PluginEditorEnvelope<{ result: PluginEditorCaseDebugResult }>>(resp, "plugin case debug failed");
   return data.data;
 }
 

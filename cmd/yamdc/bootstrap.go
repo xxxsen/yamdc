@@ -26,6 +26,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
+	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -376,6 +377,10 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		}
 		return nil
 	})
+	editorSvc, err := plugineditor.NewService(ysctx.HTTPClient)
+	if err != nil {
+		return fmt.Errorf("init plugin editor service failed, err:%w", err)
+	}
 	ysctx.API = web.NewAPI(
 		ysctx.JobRepo,
 		ysctx.ScanSvc,
@@ -386,6 +391,7 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		ysctx.NumberCleaner,
 		ysctx.SearcherDebugger,
 		ysctx.HandlerDebugger,
+		editorSvc,
 	)
 	return nil
 }

@@ -17,6 +17,11 @@ const TOOL_ITEMS = [
     description: "输入番号后，直接验证 searcher 插件链的检索结果。",
   },
   {
+    href: "/debug/plugin-editor",
+    title: "插件编辑器",
+    description: "创建单个 YAML 插件，逐步调试 request、workflow、scrape 和 case。",
+  },
+  {
     href: "/debug/handler",
     title: "Handler 测试",
     description: "编辑当前 handler 链和 Meta JSON，直接观察处理前后的差异。",
@@ -25,6 +30,11 @@ const TOOL_ITEMS = [
 
 export function DebugToolsShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const isPluginEditorRoute = pathname.startsWith("/debug/plugin-editor");
+
+  if (isPluginEditorRoute) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="debug-tools-page">

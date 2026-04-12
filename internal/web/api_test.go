@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -21,6 +22,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
+	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
@@ -210,7 +212,7 @@ func TestEngineJobRunRoute(t *testing.T) {
 	require.Len(t, items.Items, 1)
 	item := items.Items[0]
 
-	api := NewAPI(jobRepo, nil, jobSvc, "", nil, store.NewMemStorage(), nil, nil, nil)
+	api := NewAPI(jobRepo, nil, jobSvc, "", nil, store.NewMemStorage(), nil, nil, nil, nil)
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
@@ -274,7 +276,7 @@ func TestEngineReviewSaveRoute(t *testing.T) {
 	err = scrapeRepo.SaveReviewData(context.Background(), item.ID, `{"number":"ABC-456","title":"old"}`)
 	require.NoError(t, err)
 
-	api := NewAPI(jobRepo, nil, jobSvc, "", nil, store.NewMemStorage(), nil, nil, nil)
+	api := NewAPI(jobRepo, nil, jobSvc, "", nil, store.NewMemStorage(), nil, nil, nil, nil)
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
@@ -355,6 +357,247 @@ func TestEngineLibraryFileRouteGetNotFound(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
 	require.Equal(t, errCodeLibraryFileNotFound, payload.Code)
 	require.NotEmpty(t, payload.Message)
+}
+
+func TestHandlePluginEditorCompile(t *testing.T) {
+	editorSvc, err := plugineditor.NewService(client.MustNewClient())
+	require.NoError(t, err)
+	api := &API{editor: editorSvc}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/compile", strings.NewReader(`{
+		"draft":{
+			"version":1,
+			"name":"fixture",
+			"type":"one-step",
+			"hosts":["https://fixture.example"],
+			"request":{"method":"GET","path":"/search/${number}"},
+			"scrape":{
+				"format":"html",
+				"fields":{
+					"title":{
+						"selector":{"kind":"xpath","expr":"//title/text()"},
+						"parser":"string",
+						"required":true
+					}
+				}
+			}
+		}
+	}`))
+	rec := httptest.NewRecorder()
+	api.handlePluginEditorCompile(rec, req)
+
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				YAML string `json:"yaml"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.True(t, payload.Data.OK)
+	require.Contains(t, payload.Data.Data.YAML, "version: 1")
+}
+
+func TestHandlePluginEditorScrape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1></body></html>`))
+	}))
+	defer srv.Close()
+
+	editorSvc, err := plugineditor.NewService(client.MustNewClient())
+	require.NoError(t, err)
+	api := &API{editor: editorSvc}
+
+	body := fmt.Sprintf(`{
+		"number":"ABC-123",
+		"draft":{
+			"version":1,
+			"name":"fixture",
+			"type":"one-step",
+			"hosts":["%s"],
+			"request":{"method":"GET","path":"/search/${number}"},
+			"scrape":{
+				"format":"html",
+				"fields":{
+					"title":{
+						"selector":{"kind":"xpath","expr":"//h1[@class='title']/text()"},
+						"transforms":[{"kind":"trim"}],
+						"parser":"string",
+						"required":true
+					}
+				}
+			}
+		}
+	}`, srv.URL)
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/scrape", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handlePluginEditorScrape(rec, req)
+
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Meta struct {
+					Title string `json:"title"`
+				} `json:"meta"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.True(t, payload.Data.OK)
+	require.Equal(t, "Sample Title", payload.Data.Data.Meta.Title)
+}
+
+func TestHandlePluginEditorWorkflow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			_, _ = w.Write([]byte(`<html><body><a class="item" href="/detail/1">ABC-123 title</a></body></html>`))
+		case "/detail/1":
+			_, _ = w.Write([]byte(`<html><body><h1 class="title">Target</h1></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	editorSvc, err := plugineditor.NewService(client.MustNewClient())
+	require.NoError(t, err)
+	api := &API{editor: editorSvc}
+
+	body := fmt.Sprintf(`{
+		"number":"ABC-123",
+		"draft":{
+			"version":1,
+			"name":"fixture-two-step",
+			"type":"two-step",
+			"hosts":["%s"],
+			"request":{"method":"GET","path":"/search"},
+			"workflow":{
+				"search_select":{
+					"selectors":[
+						{"name":"read_link","kind":"xpath","expr":"//a[@class='item']/@href"},
+						{"name":"read_title","kind":"xpath","expr":"//a[@class='item']/text()"}
+					],
+					"match":{
+						"mode":"and",
+						"conditions":["contains(\"${item.read_title}\", \"${number}\")"],
+						"expect_count":1
+					},
+					"return":"${item.read_link}",
+					"next_request":{"method":"GET","path":"${build_url(${host}, ${value})}"}
+				}
+			},
+			"scrape":{
+				"format":"html",
+				"fields":{"title":{"selector":{"kind":"xpath","expr":"//h1/text()"},"parser":"string","required":true}}
+			}
+		}
+	}`, srv.URL)
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/workflow", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handlePluginEditorWorkflow(rec, req)
+
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Steps []struct {
+					Stage string `json:"stage"`
+				} `json:"steps"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.True(t, payload.Data.OK)
+	require.Len(t, payload.Data.Data.Steps, 3)
+}
+
+func TestHandlePluginEditorCase(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1><div class="actors"><span>Alice</span></div></body></html>`))
+	}))
+	defer srv.Close()
+
+	editorSvc, err := plugineditor.NewService(client.MustNewClient())
+	require.NoError(t, err)
+	api := &API{editor: editorSvc}
+
+	body := fmt.Sprintf(`{
+		"draft":{
+			"version":1,
+			"name":"fixture",
+			"type":"one-step",
+			"hosts":["%s"],
+			"request":{"method":"GET","path":"/search/${number}"},
+			"scrape":{
+				"format":"html",
+				"fields":{
+					"title":{"selector":{"kind":"xpath","expr":"//h1[@class='title']/text()"},"transforms":[{"kind":"trim"}],"parser":"string","required":true},
+					"actors":{"selector":{"kind":"xpath","expr":"//div[@class='actors']/span/text()","multi":true},"parser":"string_list","required":false}
+				}
+			}
+		},
+		"case":{
+			"name":"case-1",
+			"input":"ABC-123",
+			"output":{"title":"Sample Title","actor_set":["Alice"],"status":"success"}
+		}
+	}`, srv.URL)
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/case", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handlePluginEditorCase(rec, req)
+
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Result struct {
+					Pass bool `json:"pass"`
+				} `json:"result"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.True(t, payload.Data.OK)
+	require.True(t, payload.Data.Data.Result.Pass)
+}
+
+func TestHandlePluginEditorImport(t *testing.T) {
+	editorSvc, err := plugineditor.NewService(client.MustNewClient())
+	require.NoError(t, err)
+	api := &API{editor: editorSvc}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/import", strings.NewReader(`{
+		"yaml":"version: 1\nname: fixture\ntype: one-step\nhosts:\n  - https://fixture.example\nrequest:\n  method: GET\n  path: /search/${number}\nscrape:\n  format: html\n  fields:\n    title:\n      selector:\n        kind: xpath\n        expr: //title/text()\n      parser: string\n      required: true\n"
+	}`))
+	rec := httptest.NewRecorder()
+	api.handlePluginEditorImport(rec, req)
+
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Draft struct {
+					Name string `json:"name"`
+				} `json:"draft"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.True(t, payload.Data.OK)
+	require.Equal(t, "fixture", payload.Data.Data.Draft.Name)
 }
 
 func TestEngineMediaLibraryFileRouteGet(t *testing.T) {
