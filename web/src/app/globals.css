@@ -4992,6 +4992,50 @@ textarea.input {
   gap: 8px;
 }
 
+.plugin-editor-split-action {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 0;
+  z-index: 2;
+}
+
+.plugin-editor-split-action-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.plugin-editor-split-action-toggle {
+  padding: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.plugin-editor-split-action-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  background: rgba(255, 252, 246, 0.98);
+  box-shadow: 0 16px 40px rgba(18, 14, 10, 0.16);
+}
+
+.plugin-editor-split-action-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-align: left;
+  color: #fff7ed;
+}
+
 .plugin-editor-workbench {
   display: grid;
   grid-template-columns: minmax(420px, 1.15fr) minmax(420px, 0.95fr);

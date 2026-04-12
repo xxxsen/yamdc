@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronDown,
   Plus,
   Copy,
   FileCode2,
@@ -299,8 +300,8 @@ function defaultState(): EditorState {
     workflowNextNotFoundStatusText: "404",
     workflowNextDecodeCharset: "",
     postAssign: [],
-    postTitleLang: "ja",
-    postPlotLang: "ja",
+    postTitleLang: "",
+    postPlotLang: "",
     postGenresLang: "",
     postActorsLang: "",
     postDisableReleaseDateCheck: false,
@@ -322,9 +323,11 @@ export function PluginEditorShell() {
   const [toast, setToast] = useState<ToastState>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [exampleOpen, setExampleOpen] = useState(false);
+  const [compileMenuOpen, setCompileMenuOpen] = useState(false);
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number } | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
+  const compileMenuRef = useRef<HTMLDivElement | null>(null);
   const deferredState = useDeferredValue(state);
 
   useEffect(() => {
@@ -345,6 +348,19 @@ export function PluginEditorShell() {
     const timer = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!compileMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      if (!compileMenuRef.current?.contains(event.target as Node)) {
+        setCompileMenuOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [compileMenuOpen]);
 
   const previewDraft = useMemo(() => {
     if (tab !== "draft") {
@@ -652,6 +668,26 @@ export function PluginEditorShell() {
     });
   }
 
+  function handleClearDraft() {
+    const next = defaultState();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(DEFAULT_DRAFT_STORAGE_KEY);
+      window.localStorage.removeItem(DEFAULT_NUMBER_STORAGE_KEY);
+    }
+    setState(next);
+    setCompileResult(null);
+    setRequestResult(null);
+    setWorkflowResult(null);
+    setScrapeResult(null);
+    setError("");
+    setTab("compile");
+    setActiveSection("basic");
+    setImportOpen(false);
+    setExampleOpen(false);
+    setCompileMenuOpen(false);
+    setToast({ message: "草稿已清空。", tone: "info" });
+  }
+
   return (
     <div ref={pageRef} className="plugin-editor-page">
       <Link href="/debug/searcher" className="workspace-close-btn plugin-editor-close-btn" aria-label="关闭插件编辑器" title="关闭插件编辑器">
@@ -668,10 +704,30 @@ export function PluginEditorShell() {
           <Sparkles size={14} />
         </div>
         <div className="plugin-editor-floating-menu-actions">
-          <button className="btn btn-primary" type="button" onClick={() => void run("compile")} disabled={busyAction !== ""}>
-            {busyAction === "compile" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <FileCode2 size={16} />}
-            <span>编译草稿</span>
-          </button>
+          <div ref={compileMenuRef} className="plugin-editor-split-action">
+            <button className="btn btn-primary plugin-editor-split-action-main" type="button" onClick={() => void run("compile")} disabled={busyAction !== ""}>
+              {busyAction === "compile" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <FileCode2 size={16} />}
+              <span>编译草稿</span>
+            </button>
+            <button
+              className="btn btn-primary plugin-editor-split-action-toggle"
+              type="button"
+              aria-label="展开编译草稿菜单"
+              title="展开编译草稿菜单"
+              aria-expanded={compileMenuOpen}
+              onClick={() => setCompileMenuOpen((prev) => !prev)}
+              disabled={busyAction !== ""}
+            >
+              <ChevronDown size={14} />
+            </button>
+            {compileMenuOpen ? (
+              <div className="plugin-editor-split-action-menu">
+                <button className="btn btn-primary plugin-editor-split-action-menu-item" type="button" onClick={handleClearDraft}>
+                  清空草稿
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button className="btn btn-primary" type="button" onClick={() => void run("scrape")} disabled={busyAction !== ""}>
             {busyAction === "scrape" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <ScanSearch size={16} />}
             <span>运行调试</span>
