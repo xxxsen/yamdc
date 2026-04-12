@@ -3,7 +3,6 @@
 import {
   ChevronDown,
   Plus,
-  Copy,
   FileCode2,
   GripVertical,
   Import,
@@ -722,6 +721,20 @@ export function PluginEditorShell() {
             </button>
             {compileMenuOpen ? (
               <div className="plugin-editor-split-action-menu">
+                <button className="btn btn-primary plugin-editor-split-action-menu-item" type="button" onClick={handleCopyYAML} disabled={!compileResult?.yaml}>
+                  复制 YAML
+                </button>
+                <button
+                  className="btn btn-primary plugin-editor-split-action-menu-item"
+                  type="button"
+                  onClick={() => {
+                    setCompileMenuOpen(false);
+                    setImportOpen(true);
+                  }}
+                  disabled={busyAction !== ""}
+                >
+                  导入 YAML
+                </button>
                 <button className="btn btn-primary plugin-editor-split-action-menu-item" type="button" onClick={handleClearDraft}>
                   清空草稿
                 </button>
@@ -731,14 +744,6 @@ export function PluginEditorShell() {
           <button className="btn btn-primary" type="button" onClick={() => void run("scrape")} disabled={busyAction !== ""}>
             {busyAction === "scrape" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <ScanSearch size={16} />}
             <span>运行调试</span>
-          </button>
-          <button className="btn btn-primary" type="button" onClick={handleCopyYAML} disabled={!compileResult?.yaml}>
-            <Copy size={16} />
-            <span>复制 YAML</span>
-          </button>
-          <button className="btn btn-primary" type="button" onClick={() => setImportOpen(true)} disabled={busyAction !== ""}>
-            <Import size={16} />
-            <span>导入 YAML</span>
           </button>
         </div>
       </div>
