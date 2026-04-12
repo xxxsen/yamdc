@@ -245,19 +245,23 @@ func DebugScrape(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, n
 	case formatHTML:
 		node, err := htmlquery.Parse(bytes.NewReader(decoded))
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("parse html failed: %s", err.Error())
+			return result, nil
 		}
 		result.Meta, err = plg.traceDecodeHTML(ctx, node, result.Fields)
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("trace html fields failed: %s", err.Error())
+			return result, nil
 		}
 	case formatJSON:
 		result.Meta, err = plg.traceDecodeJSON(ctx, decoded, result.Fields)
 		if err != nil {
-			return nil, err
+			result.Error = fmt.Sprintf("trace json fields failed: %s", err.Error())
+			return result, nil
 		}
 	default:
-		return nil, fmt.Errorf("unsupported scrape format:%s", plg.spec.scrape.format)
+		result.Error = fmt.Sprintf("unsupported scrape format:%s", plg.spec.scrape.format)
+		return result, nil
 	}
 	if result.Meta != nil {
 		plg.applyPostprocess(ctx, result.Meta)
