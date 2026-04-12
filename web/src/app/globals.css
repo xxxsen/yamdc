@@ -5954,6 +5954,30 @@ textarea.input {
   gap: 8px;
 }
 
+.plugin-editor-timeline-step-error {
+  background: rgba(254, 226, 226, 0.88);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.plugin-editor-timeline-step-error .plugin-editor-timeline-head strong {
+  color: #dc2626;
+}
+
+.plugin-editor-timeline-step-error .plugin-editor-timeline-head span {
+  color: #991b1b;
+}
+
+.plugin-editor-output-error {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(254, 226, 226, 0.88);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
 .plugin-editor-timeline-head {
   display: flex;
   align-items: center;
@@ -5985,11 +6009,13 @@ textarea.input {
 .plugin-editor-body-panel {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  max-height: none;
 }
 
 .plugin-editor-json-scroll {
   max-height: min(52vh, 720px);
+  overflow: auto;
 }
 
 .plugin-editor-json-fill {
@@ -6007,6 +6033,8 @@ textarea.input {
   border-radius: 14px;
   padding: 10px 12px;
   background: rgba(255, 248, 236, 0.44);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .plugin-editor-output-detail-block summary {
@@ -6026,6 +6054,109 @@ textarea.input {
 
 .plugin-editor-output-detail-block > * + * {
   margin-top: 12px;
+}
+
+.plugin-editor-body-block {
+  overflow: hidden;
+}
+
+.plugin-editor-body-block[open] > * + * {
+  margin-top: 12px;
+}
+
+.plugin-editor-body-panel .searcher-debug-json {
+  margin-top: 0;
+}
+
+.plugin-editor-workflow-selector-list,
+.plugin-editor-workflow-item-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(44vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-width: 0;
+}
+
+.plugin-editor-workflow-debug-card {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 236, 0.6);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.plugin-editor-workflow-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-editor-workflow-debug-head strong {
+  font-size: 13px;
+}
+
+.plugin-editor-workflow-debug-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plugin-editor-workflow-match-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plugin-editor-workflow-match-chip-hit {
+  background: rgba(187, 247, 208, 0.85);
+  color: #166534;
+}
+
+.plugin-editor-workflow-match-chip-miss {
+  background: rgba(254, 226, 226, 0.88);
+  color: #991b1b;
+}
+
+.plugin-editor-workflow-condition-list {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-width: 0;
+}
+
+.plugin-editor-workflow-condition-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.plugin-editor-workflow-condition-row strong {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
+.plugin-editor-workflow-debug-card .searcher-debug-json {
+  min-width: 0;
+  max-width: 100%;
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 0;
 }
 
 .plugin-editor-expr-runner {

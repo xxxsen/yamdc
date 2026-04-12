@@ -485,6 +485,7 @@ export interface PluginEditorScrapeDebugResult {
   response?: PluginEditorHTTPResponseDebug | null;
   fields: Record<string, PluginEditorFieldDebugResult>;
   meta?: SearcherDebugMovieMeta | null;
+  error?: string;
 }
 
 export interface PluginEditorWorkflowMatchDetail {
@@ -513,6 +514,7 @@ export interface PluginEditorWorkflowStep {
 
 export interface PluginEditorWorkflowDebugResult {
   steps: PluginEditorWorkflowStep[];
+  error?: string;
 }
 
 export interface PluginEditorCaseSpec {
