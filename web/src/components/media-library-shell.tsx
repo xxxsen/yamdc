@@ -407,8 +407,8 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                           setConfigured(Boolean(nextStatus.configured));
                           const nextSyncRunning = nextStatus.sync.status === "running";
                           setSyncRunning(nextSyncRunning);
+                          setSyncStarting(false);
                           if (nextSyncRunning) {
-                            setSyncStarting(false);
                             observedSyncRunningRef.current = true;
                           }
                           prevSyncRunningRef.current = nextSyncRunning;
