@@ -2659,6 +2659,18 @@ textarea.input {
   color: var(--muted);
 }
 
+.library-item-badge-row {
+  display: flex;
+  margin-top: 6px;
+}
+
+.library-conflict-badge {
+  min-width: 0;
+  border-color: rgba(180, 79, 45, 0.28);
+  background: rgba(180, 79, 45, 0.1);
+  color: var(--accent-strong);
+}
+
 .library-sync-panel {
   display: grid;
   gap: 10px;

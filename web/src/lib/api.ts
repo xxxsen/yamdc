@@ -69,6 +69,7 @@ export interface LibraryListItem {
   file_count: number;
   video_count: number;
   variant_count: number;
+  conflict: boolean;
 }
 
 export interface LibraryMeta {
@@ -733,6 +734,15 @@ export async function updateLibraryItem(path: string, meta: LibraryMeta) {
   });
   const data = await readAPIResponse<LibraryDetail>(resp, "update library item failed");
   return data.data;
+}
+
+export async function deleteLibraryItem(path: string) {
+  const query = new URLSearchParams({ path });
+  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+    method: "DELETE",
+  });
+  const data = await readAPIResponse<unknown>(resp, "delete library item failed");
+  return data;
 }
 
 export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover" | "fanart", file: File) {

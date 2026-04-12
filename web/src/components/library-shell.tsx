@@ -1,10 +1,10 @@
 "use client";
 
-import { Crop, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Crop, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, type SetStateAction, type SyntheticEvent, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
-import { cropLibraryPosterFromCover, deleteLibraryFile, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
+import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
@@ -233,6 +233,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const lastSavedMetaRef = useRef(initialDetail ? serializeMeta(initialDraftMeta) : "");
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const assetOverridesRef = useRef<Record<string, string>>({});
+  const observedMoveRunningRef = useRef(initialMediaStatus?.move.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
@@ -267,13 +268,15 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const moveState = mediaStatus?.move ?? null;
   const moveRunning = moveState?.status === "running";
   const mediaSyncRunning = mediaStatus?.sync.status === "running";
-  const shouldPollMediaStatus = moveRunning || mediaSyncRunning;
-  const refreshBusy = refreshRunning;
   const moveBusy = moveStarting || moveRunning;
+  const shouldPollMediaStatus = moveBusy || mediaSyncRunning;
+  const refreshBusy = refreshRunning;
   const moveProgress = moveState ? taskPercent(moveState) : 0;
   const refreshButtonLabel = refreshRunning ? "扫描中..." : refreshCompletedFlash ? "扫描完成" : "重新扫描库";
-  const moveButtonLabel = moveStarting
-    ? "启动中..."
+  const moveButtonLabel = moveBusy
+    ? moveRunning
+      ? `移动中 ${moveState?.processed ?? 0}/${moveState?.total ?? 0}`
+      : "移动中..."
     : moveRunning
       ? `移动中 ${moveState?.processed ?? 0}/${moveState?.total ?? 0}`
       : moveCompletedFlash
@@ -321,6 +324,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   useEffect(() => {
     if (moveRunning) {
       setMoveProgressVisible(true);
+      observedMoveRunningRef.current = true;
     }
   }, [moveRunning]);
 
@@ -527,7 +531,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         ...current,
         move: {
           ...current.move,
-          status: "running",
+          status: "starting",
           message: "移动到媒体库中",
           updated_at: Date.now(),
           started_at: current.move.started_at || Date.now(),
@@ -559,6 +563,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
               },
             };
           });
+          observedMoveRunningRef.current = true;
         } else {
           setMoveProgressVisible(false);
           void refreshMediaStatus();
@@ -572,7 +577,8 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const prevMoveRunningRef = useRef(moveRunning);
 
   useEffect(() => {
-    if (prevMoveRunningRef.current && !moveRunning) {
+    if (observedMoveRunningRef.current && prevMoveRunningRef.current && !moveRunning) {
+      observedMoveRunningRef.current = false;
       setRefreshRunning(true);
       startTransition(async () => {
         try {
@@ -684,6 +690,40 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         setMessage("Extrafanart 已删除");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "删除 extrafanart 失败");
+      }
+    });
+  };
+
+  const handleDeleteLibraryItem = () => {
+    if (!detail) {
+      return;
+    }
+    const targetPath = detail.item.rel_path;
+    startTransition(async () => {
+      try {
+        setMessage("删除已入库目录...");
+        await deleteLibraryItem(targetPath);
+        const nextItems = await listLibraryItems();
+        setItems(nextItems);
+        if (nextItems.length === 0) {
+          setDetail(null);
+          detailRef.current = null;
+          updateDraftMeta(cloneMeta(null));
+          setSelectedPath("");
+          setSelectedVariantKey("");
+          lastSavedPathRef.current = "";
+          lastSavedMetaRef.current = "";
+          setMessage("已入库目录已删除");
+          return;
+        }
+        const nextSelected = nextItems.some((item) => item.rel_path === selectedPath && item.rel_path !== targetPath)
+          ? selectedPath
+          : nextItems[0].rel_path;
+        const nextDetail = await getLibraryItem(nextSelected);
+        syncDetail(nextDetail);
+        setMessage("已入库目录已删除");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "删除已入库目录失败");
       }
     });
   };
@@ -829,6 +869,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     <span className="library-item-number">{item.number || "未命名番号"}</span>
                     <span className="library-item-time">{formatUnixMillis(item.updated_at)}</span>
                   </div>
+                  {item.conflict ? (
+                    <div className="library-item-badge-row">
+                      <span className="badge library-conflict-badge">已存在(冲突)</span>
+                    </div>
+                  ) : null}
                   <div className="library-item-title" title={item.title || item.name}>{item.title || item.name}</div>
                   <div className="library-item-meta">{item.actors.length > 0 ? item.actors.join(" / ") : "暂无演员信息"}</div>
                   <div className="library-item-path">{item.rel_path}</div>
@@ -892,6 +937,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     原文
                   </button>
                 </div>
+                {detail.item.conflict ? <span className="badge library-conflict-badge">已存在(冲突)</span> : null}
+                <button className="btn file-action-btn file-action-btn-ghost" type="button" onClick={handleDeleteLibraryItem} disabled={isPending}>
+                  <Trash2 size={16} />
+                  删除
+                </button>
               </div>
             </div>
 
@@ -920,18 +970,18 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   <div className="review-top-fields">
                     <div className="review-field">
                       <span className="review-label review-label-side">标题</span>
-                        <input
-                          className="input review-input-strong"
-                          placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
-                          value={activeTitleValue}
-                          onChange={(e) =>
+                      <input
+                        className="input review-input-strong"
+                        placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
+                        value={activeTitleValue}
+                        onChange={(e) =>
                           updateDraftMeta((prev) => ({
                             ...prev,
                             [copyMode === "translated" ? "title_translated" : "title"]: e.target.value,
                           }))
-                          }
-                          onBlur={handleBlurSave}
-                        />
+                        }
+                        onBlur={handleBlurSave}
+                      />
                     </div>
                     <div className="review-meta-row review-meta-row-2 review-meta-row-top">
                       <div className="review-field">

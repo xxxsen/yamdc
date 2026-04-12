@@ -105,3 +105,18 @@ func (s *Service) DeleteSaveFile(raw string) (*Detail, error) {
 	}
 	return s.deleteRootFile(s.saveDir, filepath.ToSlash(itemRelPath), relPath)
 }
+
+func (s *Service) DeleteSaveItem(raw string) error {
+	_, absPath, err := s.ResolveSavePath(raw)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("library item is not a directory")
+	}
+	return os.RemoveAll(absPath)
+}
