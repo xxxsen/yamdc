@@ -354,6 +354,10 @@ export function PluginEditorShell() {
       setBusyAction(action);
       setError("");
       setToast(null);
+      setCompileResult(null);
+      setRequestResult(null);
+      setWorkflowResult(null);
+      setScrapeResult(null);
       if (action === "compile") {
         const result = await compilePluginDraft(draft);
         setCompileResult(result.data);
