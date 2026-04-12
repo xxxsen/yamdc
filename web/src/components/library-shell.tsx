@@ -566,7 +566,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
           observedMoveRunningRef.current = true;
         } else {
           setMoveProgressVisible(false);
-          void refreshMediaStatus();
+          void getMediaLibraryStatus().then((next) => setMediaStatus(next)).catch(() => {});
         }
       } finally {
         setMoveStarting(false);
