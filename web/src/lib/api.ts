@@ -612,7 +612,7 @@ export async function listLibraryItems() {
     cache: "no-store",
   });
   const data = await readAPIResponse<LibraryListItem[]>(resp, "list library failed");
-  return data.data;
+  return data.data.map(normalizeLibraryListItem);
 }
 
 export async function listMediaLibraryItems(params?: {
@@ -643,7 +643,7 @@ export async function listMediaLibraryItems(params?: {
     cache: "no-store",
   });
   const data = await readAPIResponse<MediaLibraryItem[]>(resp, "list media library failed");
-  return data.data;
+  return data.data.map(normalizeMediaLibraryItem);
 }
 
 export async function getMediaLibraryItem(id: number) {
@@ -652,7 +652,7 @@ export async function getMediaLibraryItem(id: number) {
     cache: "no-store",
   });
   const data = await readAPIResponse<MediaLibraryDetail>(resp, "get media library item failed");
-  return data.data;
+  return normalizeMediaLibraryDetail(data.data);
 }
 
 export async function updateMediaLibraryItem(id: number, meta: LibraryMeta) {
@@ -665,7 +665,7 @@ export async function updateMediaLibraryItem(id: number, meta: LibraryMeta) {
     body: JSON.stringify({ meta }),
   });
   const data = await readAPIResponse<MediaLibraryDetail>(resp, "update media library item failed");
-  return data.data;
+  return normalizeMediaLibraryDetail(data.data);
 }
 
 export async function replaceMediaLibraryAsset(id: number, variant: string, kind: "poster" | "cover" | "fanart", file: File) {
@@ -680,7 +680,7 @@ export async function replaceMediaLibraryAsset(id: number, variant: string, kind
     body: form,
   });
   const data = await readAPIResponse<MediaLibraryDetail>(resp, "replace media library asset failed");
-  return data.data;
+  return normalizeMediaLibraryDetail(data.data);
 }
 
 export async function deleteMediaLibraryFile(id: number, path: string) {
@@ -689,7 +689,7 @@ export async function deleteMediaLibraryFile(id: number, path: string) {
     method: "DELETE",
   });
   const data = await readAPIResponse<MediaLibraryDetail>(resp, "delete media library file failed");
-  return data.data;
+  return normalizeMediaLibraryDetail(data.data);
 }
 
 export async function getMediaLibraryStatus() {
@@ -722,7 +722,7 @@ export async function getLibraryItem(path: string) {
     cache: "no-store",
   });
   const data = await readAPIResponse<LibraryDetail>(resp, "get library item failed");
-  return data.data;
+  return normalizeLibraryDetail(data.data);
 }
 
 export async function updateLibraryItem(path: string, meta: LibraryMeta) {
@@ -735,7 +735,7 @@ export async function updateLibraryItem(path: string, meta: LibraryMeta) {
     body: JSON.stringify({ meta }),
   });
   const data = await readAPIResponse<LibraryDetail>(resp, "update library item failed");
-  return data.data;
+  return normalizeLibraryDetail(data.data);
 }
 
 export async function deleteLibraryItem(path: string) {
@@ -782,7 +782,7 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
   if (data.code !== 0) {
     throw new Error(data.message || "replace library asset failed");
   }
-  return data.data;
+  return normalizeLibraryDetail(data.data);
 }
 
 export async function cropLibraryPosterFromCover(
@@ -802,7 +802,7 @@ export async function cropLibraryPosterFromCover(
     body: JSON.stringify(rect),
   });
   const data = await readAPIResponse<LibraryDetail>(resp, "crop library poster failed");
-  return data.data;
+  return normalizeLibraryDetail(data.data);
 }
 
 export async function deleteLibraryFile(path: string) {
@@ -811,7 +811,57 @@ export async function deleteLibraryFile(path: string) {
     method: "DELETE",
   });
   const data = await readAPIResponse<LibraryDetail>(resp, "delete library file failed");
-  return data.data;
+  return normalizeLibraryDetail(data.data);
+}
+
+function normalizeLibraryListItem(item: LibraryListItem): LibraryListItem {
+  return {
+    ...item,
+    actors: Array.isArray(item.actors) ? item.actors : [],
+  };
+}
+
+function normalizeLibraryMeta(meta: LibraryMeta): LibraryMeta {
+  return {
+    ...meta,
+    actors: Array.isArray(meta.actors) ? meta.actors : [],
+    genres: Array.isArray(meta.genres) ? meta.genres : [],
+  };
+}
+
+function normalizeLibraryDetail(detail: LibraryDetail): LibraryDetail {
+  return {
+    ...detail,
+    item: normalizeLibraryListItem(detail.item),
+    meta: normalizeLibraryMeta(detail.meta),
+    variants: (detail.variants ?? []).map((variant) => ({
+      ...variant,
+      meta: normalizeLibraryMeta(variant.meta),
+      files: Array.isArray(variant.files) ? variant.files : [],
+    })),
+    files: Array.isArray(detail.files) ? detail.files : [],
+  };
+}
+
+function normalizeMediaLibraryItem(item: MediaLibraryItem): MediaLibraryItem {
+  return {
+    ...item,
+    actors: Array.isArray(item.actors) ? item.actors : [],
+  };
+}
+
+function normalizeMediaLibraryDetail(detail: MediaLibraryDetail): MediaLibraryDetail {
+  return {
+    ...detail,
+    item: normalizeMediaLibraryItem(detail.item),
+    meta: normalizeLibraryMeta(detail.meta),
+    variants: (detail.variants ?? []).map((variant) => ({
+      ...variant,
+      meta: normalizeLibraryMeta(variant.meta),
+      files: Array.isArray(variant.files) ? variant.files : [],
+    })),
+    files: Array.isArray(detail.files) ? detail.files : [],
+  };
 }
 
 export async function triggerScan() {

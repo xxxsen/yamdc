@@ -333,7 +333,7 @@ func toLibraryListItem(item medialib.Item, conflicts map[string]struct{}) librar
 		Title:        item.Title,
 		Number:       item.Number,
 		ReleaseDate:  item.ReleaseDate,
-		Actors:       append([]string(nil), item.Actors...),
+		Actors:       cloneStringSlice(item.Actors),
 		UpdatedAt:    item.UpdatedAt,
 		HasNFO:       item.HasNFO,
 		PosterPath:   item.PosterPath,
@@ -397,8 +397,8 @@ func toLibraryMeta(meta medialib.Meta) libraryMeta {
 		Label:           meta.Label,
 		Series:          meta.Series,
 		Director:        meta.Director,
-		Actors:          append([]string(nil), meta.Actors...),
-		Genres:          append([]string(nil), meta.Genres...),
+		Actors:          cloneStringSlice(meta.Actors),
+		Genres:          cloneStringSlice(meta.Genres),
 		PosterPath:      meta.PosterPath,
 		CoverPath:       meta.CoverPath,
 		FanartPath:      meta.FanartPath,
@@ -422,8 +422,8 @@ func fromLibraryMeta(meta libraryMeta) medialib.Meta {
 		Label:           meta.Label,
 		Series:          meta.Series,
 		Director:        meta.Director,
-		Actors:          append([]string(nil), meta.Actors...),
-		Genres:          append([]string(nil), meta.Genres...),
+		Actors:          cloneStringSlice(meta.Actors),
+		Genres:          cloneStringSlice(meta.Genres),
 		PosterPath:      meta.PosterPath,
 		CoverPath:       meta.CoverPath,
 		FanartPath:      meta.FanartPath,
@@ -431,6 +431,13 @@ func fromLibraryMeta(meta libraryMeta) medialib.Meta {
 		Source:          meta.Source,
 		ScrapedAt:       meta.ScrapedAt,
 	}
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
 }
 
 func toLibraryFiles(files []medialib.FileItem) []libraryFileItem {

@@ -65,6 +65,10 @@ function getCardImage(item: LibraryListItem) {
   return item.poster_path || item.cover_path;
 }
 
+function itemActors(item: LibraryListItem) {
+  return Array.isArray(item.actors) ? item.actors : [];
+}
+
 function getVariantPosterPath(detail: LibraryDetail | null, variantKey: string) {
   const variant = pickVariant(detail, variantKey);
   return variant?.poster_path || variant?.meta.poster_path || detail?.meta.poster_path || detail?.item.poster_path || "";
@@ -240,10 +244,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const filteredItems = !query
     ? items
     : items.filter((item) => {
+      const actors = itemActors(item);
       const haystack = [
         item.title,
         item.number,
-        item.actors.join(" "),
+        actors.join(" "),
       ]
         .join(" ")
         .toLowerCase();
@@ -875,7 +880,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     </div>
                   ) : null}
                   <div className="library-item-title" title={item.title || item.name}>{item.title || item.name}</div>
-                  <div className="library-item-meta">{item.actors.length > 0 ? item.actors.join(" / ") : "暂无演员信息"}</div>
+                  <div className="library-item-meta">{itemActors(item).length > 0 ? itemActors(item).join(" / ") : "暂无演员信息"}</div>
                   <div className="library-item-path">{item.rel_path}</div>
                   <div className="library-item-footnote">{item.variant_count > 1 ? `${item.variant_count} 个文件实例` : "单实例目录"}</div>
                 </div>
