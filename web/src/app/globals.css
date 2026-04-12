@@ -6052,6 +6052,77 @@ textarea.input {
   margin-top: 12px;
 }
 
+.plugin-editor-workflow-selector-list,
+.plugin-editor-workflow-item-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plugin-editor-workflow-debug-card {
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 248, 236, 0.6);
+  display: grid;
+  gap: 10px;
+}
+
+.plugin-editor-workflow-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-editor-workflow-debug-head strong {
+  font-size: 13px;
+}
+
+.plugin-editor-workflow-debug-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plugin-editor-workflow-match-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plugin-editor-workflow-match-chip-hit {
+  background: rgba(187, 247, 208, 0.85);
+  color: #166534;
+}
+
+.plugin-editor-workflow-match-chip-miss {
+  background: rgba(254, 226, 226, 0.88);
+  color: #991b1b;
+}
+
+.plugin-editor-workflow-condition-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plugin-editor-workflow-condition-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.plugin-editor-workflow-condition-row strong {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
 .plugin-editor-expr-runner {
   display: flex;
   flex-direction: column;

@@ -32,8 +32,8 @@ func TestEditorContextNumberPropagation(t *testing.T) {
 		Type:    "two-step",
 		Hosts:   []string{"https://example.com"},
 		Request: &RequestSpec{
-			Method: "GET",
-			Path:   "/search/${number}", // Expecting the context number to be populated here
+			Method:            "GET",
+			Path:              "/search/${number}", // Expecting the context number to be populated here
 			AcceptStatusCodes: []int{200},
 			Response: &ResponseSpec{
 				DecodeCharset: "utf-8",
@@ -46,8 +46,8 @@ func TestEditorContextNumberPropagation(t *testing.T) {
 				},
 				Return: "${item.link}",
 				NextRequest: &RequestSpec{
-					Method: "GET",
-					Path:   "/detail/${number}",
+					Method:            "GET",
+					Path:              "/detail/${number}",
 					AcceptStatusCodes: []int{200},
 				},
 			},

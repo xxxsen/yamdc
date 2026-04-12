@@ -127,9 +127,13 @@ func TestServiceWorkflowDebugRejectsInitialNonAcceptedStatus(t *testing.T) {
 
 	svc, err := NewService(client.MustNewClient())
 	require.NoError(t, err)
-	_, err = svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "status code:404")
+	result, err := svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, result.Error, "status code:404")
+	require.Len(t, result.Steps, 1)
+	require.Equal(t, "request", result.Steps[0].Stage)
+	require.Equal(t, http.StatusNotFound, result.Steps[0].Response.StatusCode)
 }
 
 func TestServiceWorkflowDebugRejectsNextRequestNonAcceptedStatus(t *testing.T) {
@@ -148,9 +152,38 @@ func TestServiceWorkflowDebugRejectsNextRequestNonAcceptedStatus(t *testing.T) {
 
 	svc, err := NewService(client.MustNewClient())
 	require.NoError(t, err)
-	_, err = svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "status code:404")
+	result, err := svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, result.Error, "status code:404")
+	require.Len(t, result.Steps, 3)
+	require.Equal(t, "next_request", result.Steps[2].Stage)
+	require.Equal(t, http.StatusNotFound, result.Steps[2].Response.StatusCode)
+}
+
+func TestServiceWorkflowDebugReturnsStepDetailsWhenSearchSelectMatchFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			_, _ = w.Write([]byte(`<html><body><a class="item" href="/detail/1">OTHER-999 title</a></body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	result, err := svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, result.Error, "search_select matched count mismatch")
+	require.Len(t, result.Steps, 2)
+	require.Equal(t, "request", result.Steps[0].Stage)
+	require.Equal(t, "search_select", result.Steps[1].Stage)
+	require.NotEmpty(t, result.Steps[1].Selectors)
+	require.Len(t, result.Steps[1].Items, 1)
+	require.False(t, result.Steps[1].Items[0].Matched)
 }
 
 func TestServiceCaseDebug(t *testing.T) {

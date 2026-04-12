@@ -377,6 +377,14 @@ export function PluginEditorShell() {
         return;
       }
       if (action === "scrape") {
+        if (state.workflowEnabled) {
+          const workflowDebug = await debugPluginDraftWorkflow(draft, state.number.trim());
+          setWorkflowResult(workflowDebug.data);
+          if (workflowDebug.data.error) {
+            setTab("workflow");
+            return;
+          }
+        }
         const scrapeDebug = await debugPluginDraftScrape(draft, state.number.trim());
         // When multi_request is enabled, the request debug endpoint returns
         // `attempts` data that the scrape endpoint does not include.
@@ -390,14 +398,11 @@ export function PluginEditorShell() {
             response: scrapeDebug.data.response,
           });
         }
-        if (state.workflowEnabled) {
-          const workflowDebug = await debugPluginDraftWorkflow(draft, state.number.trim());
-          setWorkflowResult(workflowDebug.data);
-        } else {
+        if (!state.workflowEnabled) {
           setWorkflowResult(null);
         }
         setScrapeResult(scrapeDebug.data);
-        setTab("basic");
+        setTab(state.workflowEnabled ? "scrape" : "basic");
         return;
       }
     } catch (nextError) {
