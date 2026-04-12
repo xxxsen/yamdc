@@ -1897,19 +1897,17 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
   }
   const contentType = props.contentType.toLowerCase();
   if (contentType.includes("application/json")) {
+    let formatted = props.body;
     try {
-      return (
-        <div className="plugin-editor-body-panel">
-          <pre className="searcher-debug-json">{JSON.stringify(JSON.parse(props.body), null, 2)}</pre>
-        </div>
-      );
+      formatted = JSON.stringify(JSON.parse(props.body), null, 2);
     } catch {
-      return (
-        <div className="plugin-editor-body-panel">
-          <pre className="searcher-debug-json">{props.body}</pre>
-        </div>
-      );
+      formatted = props.body;
     }
+    return (
+      <div className="plugin-editor-body-panel">
+        <pre className="searcher-debug-json">{formatted}</pre>
+      </div>
+    );
   }
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const params = new URLSearchParams(props.body);
