@@ -5215,6 +5215,26 @@ textarea.input {
   line-height: 1.6;
 }
 
+.plugin-editor-doc-note {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.plugin-editor-doc-note strong {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.plugin-editor-doc-note span {
+  color: #334155;
+  line-height: 1.6;
+}
+
 .plugin-editor-advanced {
   border: 1px solid rgba(105, 79, 51, 0.12);
   border-radius: 16px;

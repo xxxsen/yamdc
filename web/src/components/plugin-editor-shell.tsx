@@ -1154,7 +1154,11 @@ export function PluginEditorShell() {
               <div className="plugin-editor-subcard">
                 <div className="plugin-editor-subcard-head">
                   <strong>Postprocess Assign</strong>
-                  <span>定义后处理阶段的字段赋值表达式，引用已有字段时使用 `{"${meta.title}"}` 这种写法。</span>
+                  <span>定义后处理阶段的字段赋值表达式。内置变量可直接使用，抓取字段请通过 `meta.xxx` 引用。</span>
+                </div>
+                <div className="plugin-editor-doc-note">
+                  <strong>变量规则</strong>
+                  <span>内置变量可直接使用，例如 `{"${number}"}`、`{"${host}"}`；已抓取字段请使用 `{"${meta.title}"}`、`{"${meta.number}"}`；预检变量请使用 `{"${vars.xxx}"}`。</span>
                 </div>
                 <KVPairEditor
                   items={state.postAssign}
