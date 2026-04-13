@@ -38,7 +38,6 @@ func convertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 		Studio:          m.Studio,
 		Maker:           m.Studio,
 		Art:             nfo.Art{},
-		Mpaa:            "JP-18+",
 		Director:        "",
 		Label:           m.Label,
 		Thumb:           "",

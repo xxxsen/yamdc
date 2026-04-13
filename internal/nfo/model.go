@@ -22,7 +22,7 @@ type Movie struct {
 	Maker           string     `xml:"maker,omitempty"`           //与Studio一致即可
 	Genres          []string   `xml:"genre,omitempty"`           //与标签保持一致即可
 	Art             Art        `xml:"art,omitempty"`             //图片列表
-	Mpaa            string     `xml:"mpaa,omitempty"`            //分级信息, 例如JP-18+
+	Mpaa            string     `xml:"mpaa,omitempty"`            // MPAA rating
 	Director        string     `xml:"director,omitempty"`        //导演
 	Actors          []Actor    `xml:"actor,omitempty"`           //演员
 	Poster          string     `xml:"poster,omitempty"`          //海报

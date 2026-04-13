@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	defaultTagUncensored      = "附加标记"
+	defaultTagUncensored      = "未审查"
 	defaultTagChineseSubtitle = "字幕版"
 	defaultTag4K              = "4K"
 	defaultTagLeak            = "特别版"
