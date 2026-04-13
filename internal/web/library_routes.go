@@ -3,12 +3,12 @@ package web
 import "github.com/gin-gonic/gin"
 
 func (a *API) registerEngineLibraryRoutes(group *gin.RouterGroup) {
-	group.GET("/api/library", gin.WrapF(a.handleListLibrary))
-	group.GET("/api/library/item", gin.WrapF(a.handleLibraryItem))
-	group.PATCH("/api/library/item", gin.WrapF(a.handleLibraryItem))
-	group.DELETE("/api/library/item", gin.WrapF(a.handleLibraryItem))
-	group.GET("/api/library/file", gin.WrapF(a.handleLibraryFile))
-	group.DELETE("/api/library/file", gin.WrapF(a.handleLibraryFile))
-	group.POST("/api/library/asset", gin.WrapF(a.handleLibraryAsset))
-	group.POST("/api/library/poster-crop", gin.WrapF(a.handleLibraryPosterCrop))
+	group.GET("/api/library", a.handleListLibrary)
+	group.GET("/api/library/item", a.handleLibraryItemGet)
+	group.PATCH("/api/library/item", a.handleLibraryItemPatch)
+	group.DELETE("/api/library/item", a.handleLibraryItemDelete)
+	group.GET("/api/library/file", a.handleLibraryFileGet)
+	group.DELETE("/api/library/file", a.handleLibraryFileDelete)
+	group.POST("/api/library/asset", a.handleLibraryAsset)
+	group.POST("/api/library/poster-crop", a.handleLibraryPosterCrop)
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
@@ -38,6 +41,15 @@ func phandlerDebugRuntime() appdeps.Runtime {
 	}
 }
 
+func executeGinHandler(method string, target string, body io.Reader, handler gin.HandlerFunc) *httptest.ResponseRecorder {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(method, target, body)
+	handler(ctx)
+	return rec
+}
+
 func TestParseStatusesDefault(t *testing.T) {
 	items := parseStatuses("")
 	require.Equal(t, []jobdef.Status{
@@ -61,11 +73,13 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 	memStore := store.NewMemStorage()
 	require.NoError(t, store.PutDataTo(context.Background(), memStore, "img-key", []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}))
 
+	api := &API{store: memStore}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/assets/img-key", nil)
 	rec := httptest.NewRecorder()
-
-	api := &API{store: memStore}
-	api.handleAsset(rec, req)
+	engine.ServeHTTP(rec, req)
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -73,15 +87,12 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 }
 
 func TestHandleHandlerDebugRun(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
+	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
 		"mode":"single",
 		"handler_id":"number_title",
 		"meta":{"number":"ABC-123","title":"sample title"}
-	}`))
-	rec := httptest.NewRecorder()
-
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
-	api.handleHandlerDebugRun(rec, req)
+	}`), api.handleHandlerDebugRun)
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -109,15 +120,12 @@ func TestHandleHandlerDebugRunChain(t *testing.T) {
 		}), nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
+	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
 		"mode":"chain",
 		"handler_ids":["test_chain_fail","test_chain_ok"],
 		"meta":{"number":"ABC-123","title":"sample title"}
-	}`))
-	rec := httptest.NewRecorder()
-
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
-	api.handleHandlerDebugRun(rec, req)
+	}`), api.handleHandlerDebugRun)
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -317,6 +325,40 @@ func TestEngineAssetRouteGet(t *testing.T) {
 	require.Equal(t, "image/png", resp.Header.Get("Content-Type"))
 }
 
+func TestEngineAssetRoutePost(t *testing.T) {
+	memStore := store.NewMemStorage()
+	api := &API{store: memStore}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+
+	var body strings.Builder
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "poster.png")
+	require.NoError(t, err)
+	_, err = part.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a})
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/assets/poster.png", strings.NewReader(body.String()))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	resp := rec.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			Name string `json:"name"`
+			Key  string `json:"key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, 0, payload.Code)
+	require.Equal(t, "poster.png", payload.Data.Name)
+	require.NotEmpty(t, payload.Data.Key)
+}
+
 func TestEngineLibraryFileRouteGet(t *testing.T) {
 	saveDir := t.TempDir()
 	filePath := filepath.Join(saveDir, "demo", "cover.jpg")
@@ -389,7 +431,7 @@ func TestHandlePluginEditorCompile(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/compile", strings.NewReader(`{
+	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/compile", strings.NewReader(`{
 		"draft":{
 			"version":1,
 			"name":"fixture",
@@ -407,9 +449,7 @@ func TestHandlePluginEditorCompile(t *testing.T) {
 				}
 			}
 		}
-	}`))
-	rec := httptest.NewRecorder()
-	api.handlePluginEditorCompile(rec, req)
+	}`), api.handlePluginEditorCompile)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -457,9 +497,7 @@ func TestHandlePluginEditorScrape(t *testing.T) {
 			}
 		}
 	}`, srv.URL)
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/scrape", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handlePluginEditorScrape(rec, req)
+	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/scrape", strings.NewReader(body), api.handlePluginEditorScrape)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -524,9 +562,7 @@ func TestHandlePluginEditorWorkflow(t *testing.T) {
 			}
 		}
 	}`, srv.URL)
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/workflow", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handlePluginEditorWorkflow(rec, req)
+	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/workflow", strings.NewReader(body), api.handlePluginEditorWorkflow)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -576,9 +612,7 @@ func TestHandlePluginEditorCase(t *testing.T) {
 			"output":{"title":"Sample Title","actor_set":["Alice"],"status":"success"}
 		}
 	}`, srv.URL)
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/case", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handlePluginEditorCase(rec, req)
+	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/case", strings.NewReader(body), api.handlePluginEditorCase)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -602,11 +636,9 @@ func TestHandlePluginEditorImport(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/debug/plugin-editor/import", strings.NewReader(`{
+	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/import", strings.NewReader(`{
 		"yaml":"version: 1\nname: fixture\ntype: one-step\nhosts:\n  - https://fixture.example\nrequest:\n  method: GET\n  path: /search/${number}\nscrape:\n  format: html\n  fields:\n    title:\n      selector:\n        kind: xpath\n        expr: //title/text()\n      parser: string\n      required: true\n"
-	}`))
-	rec := httptest.NewRecorder()
-	api.handlePluginEditorImport(rec, req)
+	}`), api.handlePluginEditorImport)
 
 	var payload struct {
 		Code int `json:"code"`

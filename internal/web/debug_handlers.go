@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -25,148 +26,128 @@ type pluginEditorResponse struct {
 	Data     interface{} `json:"data"`
 }
 
-func (a *API) handleNumberCleanerExplain(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleNumberCleanerExplain(c *gin.Context) {
 	if a.cleaner == nil {
-		writeFail(w, errCodeNumberCleanerUnavailable, "number cleaner is not available")
+		writeFail(c.Writer, errCodeNumberCleanerUnavailable, "number cleaner is not available")
 		return
 	}
 	var req struct {
 		Input string `json:"input"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	req.Input = strings.TrimSpace(req.Input)
 	if req.Input == "" {
-		writeFail(w, errCodeInputRequired, "input is required")
+		writeFail(c.Writer, errCodeInputRequired, "input is required")
 		return
 	}
 	result, err := a.cleaner.Explain(req.Input)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("number cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
-		writeFail(w, errCodeNumberCleanerExplainFailed, err.Error())
+		logutil.GetLogger(c.Request.Context()).Warn("number cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
+		writeFail(c.Writer, errCodeNumberCleanerExplainFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("number cleaner explain completed",
+	logutil.GetLogger(c.Request.Context()).Info("number cleaner explain completed",
 		zap.String("input", req.Input),
 		zap.Int("steps", len(result.Steps)),
 		zap.String("number_id", result.Final.NumberID),
 		zap.String("status", string(result.Final.Status)),
 	)
-	writeSuccess(w, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, http.StatusOK, "ok", result)
 }
 
-func (a *API) handleSearcherDebugPlugins(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleSearcherDebugPlugins(c *gin.Context) {
 	if a.debugger == nil {
-		writeFail(w, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
+		writeFail(c.Writer, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", a.debugger.Plugins())
+	writeSuccess(c.Writer, http.StatusOK, "ok", a.debugger.Plugins())
 }
 
-func (a *API) handleSearcherDebugSearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleSearcherDebugSearch(c *gin.Context) {
 	if a.debugger == nil {
-		writeFail(w, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
+		writeFail(c.Writer, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
 		return
 	}
 	var req searcher.DebugSearchOptions
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
-	result, err := a.debugger.DebugSearch(r.Context(), req)
+	result, err := a.debugger.DebugSearch(c.Request.Context(), req)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("searcher debug search failed",
+		logutil.GetLogger(c.Request.Context()).Warn("searcher debug search failed",
 			zap.String("input", strings.TrimSpace(req.Input)),
 			zap.Strings("plugins", req.Plugins),
 			zap.Bool("use_cleaner", req.UseCleaner),
 			zap.Error(err),
 		)
-		writeFail(w, errCodeSearcherDebugSearchFailed, err.Error())
+		writeFail(c.Writer, errCodeSearcherDebugSearchFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("searcher debug search completed",
+	logutil.GetLogger(c.Request.Context()).Info("searcher debug search completed",
 		zap.String("input", result.Input),
 		zap.String("number_id", result.NumberID),
 		zap.Bool("found", result.Found),
 		zap.String("matched_plugin", result.MatchedPlugin),
 		zap.Strings("used_plugins", result.UsedPlugins),
 	)
-	writeSuccess(w, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, http.StatusOK, "ok", result)
 }
 
-func (a *API) handlePluginEditorCompile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorCompile(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor compile decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor compile decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Draft == nil {
-		writeFail(w, errCodeInputRequired, "draft is required")
+		writeFail(c.Writer, errCodeInputRequired, "draft is required")
 		return
 	}
-	result, err := a.editor.Compile(r.Context(), req.Draft)
+	result, err := a.editor.Compile(c.Request.Context(), req.Draft)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor compile failed", zap.Error(err))
-		writeFail(w, errCodePluginEditorCompileFailed, err.Error())
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor compile failed", zap.Error(err))
+		writeFail(c.Writer, errCodePluginEditorCompileFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
 	})
 }
 
-func (a *API) handlePluginEditorImport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorImport(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor import decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor import decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	req.YAML = strings.TrimSpace(req.YAML)
 	if req.YAML == "" {
-		writeFail(w, errCodeInputRequired, "yaml is required")
+		writeFail(c.Writer, errCodeInputRequired, "yaml is required")
 		return
 	}
-	result, err := a.editor.ImportYAML(r.Context(), req.YAML)
+	result, err := a.editor.ImportYAML(c.Request.Context(), req.YAML)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor import failed", zap.Error(err))
-		writeFail(w, errCodePluginEditorImportFailed, err.Error())
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor import failed", zap.Error(err))
+		writeFail(c.Writer, errCodePluginEditorImportFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data: map[string]interface{}{
@@ -175,159 +156,143 @@ func (a *API) handlePluginEditorImport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) handlePluginEditorRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorRequest(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor request decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor request decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Draft == nil {
-		writeFail(w, errCodeInputRequired, "draft is required")
+		writeFail(c.Writer, errCodeInputRequired, "draft is required")
 		return
 	}
 	req.Number = strings.TrimSpace(req.Number)
 	if req.Number == "" {
-		writeFail(w, errCodeInputRequired, "number is required")
+		writeFail(c.Writer, errCodeInputRequired, "number is required")
 		return
 	}
-	result, err := a.editor.RequestDebug(r.Context(), req.Draft, req.Number)
+	result, err := a.editor.RequestDebug(c.Request.Context(), req.Draft, req.Number)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor request debug failed",
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor request debug failed",
 			zap.String("number", req.Number),
 			zap.Error(err),
 		)
-		writeFail(w, errCodePluginEditorRequestFailed, err.Error())
+		writeFail(c.Writer, errCodePluginEditorRequestFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
 	})
 }
 
-func (a *API) handlePluginEditorScrape(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorScrape(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor scrape decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor scrape decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Draft == nil {
-		writeFail(w, errCodeInputRequired, "draft is required")
+		writeFail(c.Writer, errCodeInputRequired, "draft is required")
 		return
 	}
 	req.Number = strings.TrimSpace(req.Number)
 	if req.Number == "" {
-		writeFail(w, errCodeInputRequired, "number is required")
+		writeFail(c.Writer, errCodeInputRequired, "number is required")
 		return
 	}
-	result, err := a.editor.ScrapeDebug(r.Context(), req.Draft, req.Number)
+	result, err := a.editor.ScrapeDebug(c.Request.Context(), req.Draft, req.Number)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor scrape debug failed",
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor scrape debug failed",
 			zap.String("number", req.Number),
 			zap.Error(err),
 		)
-		writeFail(w, errCodePluginEditorScrapeFailed, err.Error())
+		writeFail(c.Writer, errCodePluginEditorScrapeFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
 	})
 }
 
-func (a *API) handlePluginEditorWorkflow(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorWorkflow(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor workflow decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor workflow decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Draft == nil {
-		writeFail(w, errCodeInputRequired, "draft is required")
+		writeFail(c.Writer, errCodeInputRequired, "draft is required")
 		return
 	}
 	req.Number = strings.TrimSpace(req.Number)
 	if req.Number == "" {
-		writeFail(w, errCodeInputRequired, "number is required")
+		writeFail(c.Writer, errCodeInputRequired, "number is required")
 		return
 	}
-	result, err := a.editor.WorkflowDebug(r.Context(), req.Draft, req.Number)
+	result, err := a.editor.WorkflowDebug(c.Request.Context(), req.Draft, req.Number)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor workflow debug failed",
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor workflow debug failed",
 			zap.String("number", req.Number),
 			zap.Error(err),
 		)
-		writeFail(w, errCodePluginEditorWorkflowFailed, err.Error())
+		writeFail(c.Writer, errCodePluginEditorWorkflowFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
 	})
 }
 
-func (a *API) handlePluginEditorCase(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handlePluginEditorCase(c *gin.Context) {
 	if a.editor == nil {
-		writeFail(w, errCodePluginEditorUnavailable, "plugin editor is not available")
+		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor case decode failed", zap.Error(err))
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor case decode failed", zap.Error(err))
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Draft == nil {
-		writeFail(w, errCodeInputRequired, "draft is required")
+		writeFail(c.Writer, errCodeInputRequired, "draft is required")
 		return
 	}
 	if req.Case == nil {
-		writeFail(w, errCodeInputRequired, "case is required")
+		writeFail(c.Writer, errCodeInputRequired, "case is required")
 		return
 	}
-	result, err := a.editor.CaseDebug(r.Context(), req.Draft, *req.Case)
+	result, err := a.editor.CaseDebug(c.Request.Context(), req.Draft, *req.Case)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("plugin editor case debug failed",
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor case debug failed",
 			zap.String("case_name", strings.TrimSpace(req.Case.Name)),
 			zap.Error(err),
 		)
-		writeFail(w, errCodePluginEditorCaseFailed, err.Error())
+		writeFail(c.Writer, errCodePluginEditorCaseFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data: map[string]interface{}{
@@ -336,49 +301,41 @@ func (a *API) handlePluginEditorCase(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) handleHandlerDebugHandlers(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleHandlerDebugHandlers(c *gin.Context) {
 	if a.handlers == nil {
-		writeFail(w, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
+		writeFail(c.Writer, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", a.handlers.Handlers())
+	writeSuccess(c.Writer, http.StatusOK, "ok", a.handlers.Handlers())
 }
 
-func (a *API) handleHandlerDebugRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleHandlerDebugRun(c *gin.Context) {
 	if a.handlers == nil {
-		writeFail(w, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
+		writeFail(c.Writer, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
 		return
 	}
 	var req phandler.DebugRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
-	result, err := a.handlers.Debug(r.Context(), req)
+	result, err := a.handlers.Debug(c.Request.Context(), req)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("handler debug run failed",
+		logutil.GetLogger(c.Request.Context()).Warn("handler debug run failed",
 			zap.String("mode", strings.TrimSpace(req.Mode)),
 			zap.String("handler_id", strings.TrimSpace(req.HandlerID)),
 			zap.Strings("handler_ids", req.HandlerIDs),
 			zap.Error(err),
 		)
-		writeFail(w, errCodeHandlerDebugRunFailed, err.Error())
+		writeFail(c.Writer, errCodeHandlerDebugRunFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("handler debug run completed",
+	logutil.GetLogger(c.Request.Context()).Info("handler debug run completed",
 		zap.String("mode", result.Mode),
 		zap.String("handler_id", result.HandlerID),
 		zap.Int("steps", len(result.Steps)),
 		zap.String("number_id", result.NumberID),
 		zap.String("result_error", result.Error),
 	)
-	writeSuccess(w, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, http.StatusOK, "ok", result)
 }

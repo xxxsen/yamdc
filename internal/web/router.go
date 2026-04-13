@@ -37,5 +37,5 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func (a *API) registerEngineCoreRoutes(group *gin.RouterGroup) {
-	group.GET("/api/healthz", gin.WrapF(a.handleHealthz))
+	group.GET("/api/healthz", a.handleHealthz)
 }

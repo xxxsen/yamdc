@@ -17,8 +17,8 @@ import (
 )
 
 func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
-	group.POST("/api/scan", gin.WrapF(a.handleScan))
-	group.GET("/api/jobs", gin.WrapF(a.handleListJobs))
+	group.POST("/api/scan", a.handleScan)
+	group.GET("/api/jobs", a.handleListJobs)
 
 	group.POST("/api/jobs/:id/run", a.handleJobRun)
 	group.POST("/api/jobs/:id/rerun", a.handleJobRerun)
@@ -33,37 +33,29 @@ func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
 	group.POST("/api/review/jobs/:id/asset", a.handleReviewAsset)
 }
 
-func (a *API) handleScan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
+func (a *API) handleScan(c *gin.Context) {
+	logutil.GetLogger(c.Request.Context()).Info("manual scan requested")
+	if err := a.scanner.Scan(c.Request.Context()); err != nil {
+		logutil.GetLogger(c.Request.Context()).Error("manual scan failed", zap.Error(err))
+		writeFail(c.Writer, errCodeScanFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("manual scan requested")
-	if err := a.scanner.Scan(r.Context()); err != nil {
-		logutil.GetLogger(r.Context()).Error("manual scan failed", zap.Error(err))
-		writeFail(w, errCodeScanFailed, err.Error())
-		return
-	}
-	logutil.GetLogger(r.Context()).Info("manual scan completed")
-	writeSuccess(w, http.StatusOK, "scan triggered", nil)
+	logutil.GetLogger(c.Request.Context()).Info("manual scan completed")
+	writeSuccess(c.Writer, http.StatusOK, "scan triggered", nil)
 }
 
-func (a *API) handleListJobs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
-	statuses := parseStatuses(r.URL.Query().Get("status"))
+func (a *API) handleListJobs(c *gin.Context) {
+	statuses := parseStatuses(c.Query("status"))
 	page := 1
 	pageSize := 50
-	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
-	all := r.URL.Query().Get("all") == "true"
-	if raw := r.URL.Query().Get("page"); raw != "" {
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	all := c.Query("all") == "true"
+	if raw := c.Query("page"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			page = parsed
 		}
 	}
-	if raw := r.URL.Query().Get("page_size"); raw != "" && !all {
+	if raw := c.Query("page_size"); raw != "" && !all {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			pageSize = parsed
 		}
@@ -71,16 +63,16 @@ func (a *API) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	if all {
 		pageSize = 0
 	}
-	items, err := a.jobRepo.ListJobs(r.Context(), statuses, keyword, page, pageSize)
+	items, err := a.jobRepo.ListJobs(c.Request.Context(), statuses, keyword, page, pageSize)
 	if err != nil {
-		writeFail(w, errCodeListJobsFailed, err.Error())
+		writeFail(c.Writer, errCodeListJobsFailed, err.Error())
 		return
 	}
-	if err := a.jobSvc.ApplyJobConflicts(r.Context(), items.Items); err != nil {
-		writeFail(w, errCodeApplyJobConflictsFailed, err.Error())
+	if err := a.jobSvc.ApplyJobConflicts(c.Request.Context(), items.Items); err != nil {
+		writeFail(c.Writer, errCodeApplyJobConflictsFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", items)
+	writeSuccess(c.Writer, http.StatusOK, "ok", items)
 }
 
 func parseStatuses(raw string) []jobdef.Status {

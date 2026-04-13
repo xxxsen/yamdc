@@ -2,10 +2,13 @@ package medialib
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/common/logger"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
@@ -17,6 +20,16 @@ func newTestMediaService(t *testing.T) *Service {
 		require.NoError(t, sqlite.Close())
 	})
 	return NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+}
+
+func withCapturedLogs(t *testing.T) (string, func()) {
+	t.Helper()
+	logPath := filepath.Join(t.TempDir(), "app.log")
+	lg := logger.Init(logPath, "debug", 1, 1024*1024, 1, false)
+	return logPath, func() {
+		_ = lg.Sync()
+		logger.Init("", "debug", 0, 0, 0, true)
+	}
 }
 
 func TestServiceStartRecoversRunningTaskStates(t *testing.T) {
@@ -77,4 +90,64 @@ func TestServiceStartKeepsNonRunningTaskState(t *testing.T) {
 	require.Equal(t, "completed", state.Status)
 	require.Equal(t, "ok", state.Message)
 	require.Equal(t, int64(200), state.FinishedAt)
+}
+
+func TestRunFullSyncLogsSyncedMediaMetadata(t *testing.T) {
+	logPath, cleanup := withCapturedLogs(t)
+	defer cleanup()
+
+	libraryDir := t.TempDir()
+	saveDir := t.TempDir()
+	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, sqlite.Close()) }()
+
+	itemDir := filepath.Join(libraryDir, "movie")
+	require.NoError(t, os.MkdirAll(itemDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<movie>
+  <title>Sample Title</title>
+  <originaltitle>Sample Original</originaltitle>
+  <id>ABC-123</id>
+  <premiered>2024-01-02</premiered>
+</movie>`), 0o644))
+
+	svc := NewService(sqlite.DB(), libraryDir, saveDir)
+	require.NoError(t, svc.runFullSync(context.Background(), "manual"))
+
+	raw, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	logs := string(raw)
+	require.Contains(t, logs, "media library sync item started")
+	require.Contains(t, logs, "media library detail synced")
+	require.Contains(t, logs, "rel_path")
+	require.Contains(t, logs, "movie")
+	require.Contains(t, logs, "ABC-123")
+	require.Contains(t, logs, "Sample Title")
+}
+
+func TestRunMoveLogsPerItemProgress(t *testing.T) {
+	logPath, cleanup := withCapturedLogs(t)
+	defer cleanup()
+
+	libraryDir := t.TempDir()
+	saveDir := t.TempDir()
+	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, sqlite.Close()) }()
+
+	itemDir := filepath.Join(saveDir, "movie")
+	require.NoError(t, os.MkdirAll(itemDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte(`<movie><title>Moved</title><id>XYZ-987</id></movie>`), 0o644))
+
+	svc := NewService(sqlite.DB(), libraryDir, saveDir)
+	require.NoError(t, svc.runMove(context.Background()))
+
+	raw, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	logs := string(raw)
+	require.Contains(t, logs, "move to media library item started")
+	require.Contains(t, logs, "move to media library item finished")
+	require.Contains(t, logs, "media library sync completed")
+	require.True(t, strings.Contains(logs, "movie"))
 }
