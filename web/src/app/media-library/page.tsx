@@ -2,6 +2,8 @@ import { MediaLibraryShell } from "@/components/media-library-shell";
 import type { MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
 import { getMediaLibraryStatus, listMediaLibraryItems } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function MediaLibraryPage() {
   let items: MediaLibraryItem[] = [];
   let initialStatus: MediaLibraryStatus | null = null;
