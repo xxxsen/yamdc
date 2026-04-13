@@ -417,7 +417,8 @@ func (s *Service) runMove(ctx context.Context) error {
 		)
 		s.persistTaskProgress(ctx, &state)
 	}
-	_ = s.runFullSync(ctx, "move")
+	//移动电影, 但是不执行全量sync, 这个太慢了, 用户手动触发即可
+	//_ = s.runFullSync(ctx, "move")
 	s.finishTask(ctx, &state, "移动到媒体库完成")
 	logger.Info("move to media library completed",
 		zap.Int("total", state.Total),
