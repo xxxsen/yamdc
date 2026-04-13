@@ -29,6 +29,7 @@ export function JobTable({ initialData }: Props) {
   const [editingJobId, setEditingJobId] = useState<number | null>(null);
   const [editingNumber, setEditingNumber] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
+  const [hasHydrated, setHasHydrated] = useState(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
@@ -108,6 +109,12 @@ export function JobTable({ initialData }: Props) {
     { value: "reviewing", label: "待复核", count: reviewingCount },
     { value: "failed", label: "失败", count: failedCount },
   ] as const;
+
+  const bulkSelectionDisabled = !hasHydrated || selectableJobs.length === 0 || isPending;
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -548,7 +555,7 @@ export function JobTable({ initialData }: Props) {
                       ref={selectAllRef}
                       type="checkbox"
                       checked={allSelectableChecked}
-                      disabled={selectableJobs.length === 0 || isPending}
+                      disabled={bulkSelectionDisabled}
                       title="选择当前列表中所有可批量提交的文件"
                       onChange={handleToggleSelectAll}
                     />
@@ -595,7 +602,7 @@ export function JobTable({ initialData }: Props) {
                         <input
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
-                          disabled={!canSelectJob(job) || isPending}
+                          disabled={!hasHydrated || !canSelectJob(job) || isPending}
                           title={!canSelectJob(job) ? "中高置信度或手动编辑后的影片 ID 可加入批量提交" : "选择任务"}
                           onChange={() => handleToggleSelectJob(job.id)}
                         />
