@@ -48,9 +48,9 @@ func TestLoadPluginCaseFileFromDirScansJSON(t *testing.T) {
 func TestResolvePluginRuntimeName(t *testing.T) {
 	resolved := &pluginbundle.ResolvedBundle{
 		Plugins: map[string][]byte{
-			"alpha":                          []byte("a"),
-			"__bundle__SOURCE_A__bundle_a":   []byte("b"),
-			"__bundle__COLLECTION__special":  []byte("c"),
+			"alpha":                         []byte("a"),
+			"__bundle__SOURCE_A__bundle_a":  []byte("b"),
+			"__bundle__COLLECTION__special": []byte("c"),
 		},
 	}
 

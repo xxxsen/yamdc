@@ -11,8 +11,8 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
+	"github.com/xxxsen/yamdc/internal/number"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
@@ -35,7 +35,7 @@ type DebugSearchResult struct {
 	Found          bool                          `json:"found"`
 	Category       string                        `json:"category"`
 	Uncensor       bool                          `json:"uncensor"`
-	CleanerResult  *movieidcleaner.Result         `json:"cleaner_result,omitempty"`
+	CleanerResult  *movieidcleaner.Result        `json:"cleaner_result,omitempty"`
 	Meta           *model.MovieMeta              `json:"meta,omitempty"`
 	PluginResults  []PluginDebugResult           `json:"plugin_results"`
 	AvailableTools SearcherDebugPluginCollection `json:"available_tools"`

@@ -9,8 +9,8 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
+	"github.com/xxxsen/yamdc/internal/number"
 )
 
 type DebugHandlerInstance struct {
