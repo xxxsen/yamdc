@@ -148,6 +148,6 @@ func TestRunMoveLogsPerItemProgress(t *testing.T) {
 	logs := string(raw)
 	require.Contains(t, logs, "move to media library item started")
 	require.Contains(t, logs, "move to media library item finished")
-	require.Contains(t, logs, "media library sync completed")
+	require.Contains(t, logs, "move to media library completed")
 	require.True(t, strings.Contains(logs, "movie"))
 }
