@@ -90,6 +90,83 @@ func (s *Service) ListLogs(ctx context.Context, jobID int64) ([]repository.LogIt
 	return s.logRepo.ListByJobID(ctx, jobID, 500)
 }
 
+func (s *Service) addJobLog(ctx context.Context, jobID int64, level, stage, message, detail string) {
+	if s == nil || s.logRepo == nil {
+		return
+	}
+	_ = s.logRepo.Add(ctx, jobID, level, stage, message, detail)
+}
+
+func buildScrapeSummary(fc *model.FileContext) string {
+	if fc == nil {
+		return ""
+	}
+	numberID := ""
+	if fc.Number != nil {
+		numberID = fc.Number.GetNumberID()
+	}
+	parts := make([]string, 0, 8)
+	parts = append(parts,
+		fmt.Sprintf("file=%s", strings.TrimSpace(fc.FileName)),
+		fmt.Sprintf("number=%s", firstNonEmptyString(numberID, fc.SaveFileBase)),
+	)
+	if fc.Meta != nil {
+		parts = append(parts,
+			fmt.Sprintf("meta_number=%s", strings.TrimSpace(fc.Meta.Number)),
+			fmt.Sprintf("title=%s", strings.TrimSpace(fc.Meta.Title)),
+			fmt.Sprintf("title_translated=%s", strings.TrimSpace(fc.Meta.TitleTranslated)),
+			fmt.Sprintf("actors=%d", len(fc.Meta.Actors)),
+			fmt.Sprintf("samples=%d", len(fc.Meta.SampleImages)),
+			fmt.Sprintf("source=%s", strings.TrimSpace(fc.Meta.ExtInfo.ScrapeInfo.Source)),
+		)
+		if fc.Meta.Cover != nil {
+			parts = append(parts, fmt.Sprintf("cover=%s", strings.TrimSpace(fc.Meta.Cover.Name)))
+		}
+		if fc.Meta.Poster != nil {
+			parts = append(parts, fmt.Sprintf("poster=%s", strings.TrimSpace(fc.Meta.Poster.Name)))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func buildJobFailureDetail(job *jobdef.Job, sourcePath string, fc *model.FileContext, err error) string {
+	parts := make([]string, 0, 10)
+	if job != nil {
+		parts = append(parts,
+			fmt.Sprintf("job_id=%d", job.ID),
+			fmt.Sprintf("status=%s", job.Status),
+			fmt.Sprintf("job_number=%s", strings.TrimSpace(job.Number)),
+			fmt.Sprintf("raw_number=%s", strings.TrimSpace(job.RawNumber)),
+			fmt.Sprintf("cleaned_number=%s", strings.TrimSpace(job.CleanedNumber)),
+			fmt.Sprintf("source_file=%s", strings.TrimSpace(job.AbsPath)),
+		)
+	}
+	if strings.TrimSpace(sourcePath) != "" {
+		parts = append(parts, fmt.Sprintf("resolved_source=%s", strings.TrimSpace(sourcePath)))
+	}
+	if fc != nil {
+		parsedNumber := ""
+		if fc.Number != nil {
+			parsedNumber = fc.Number.GetNumberID()
+		}
+		parts = append(parts,
+			fmt.Sprintf("parsed_number=%s", strings.TrimSpace(parsedNumber)),
+			fmt.Sprintf("save_file_base=%s", strings.TrimSpace(fc.SaveFileBase)),
+		)
+		if fc.Meta != nil {
+			parts = append(parts,
+				fmt.Sprintf("meta_source=%s", strings.TrimSpace(fc.Meta.ExtInfo.ScrapeInfo.Source)),
+				fmt.Sprintf("meta_title=%s", strings.TrimSpace(fc.Meta.Title)),
+				fmt.Sprintf("meta_samples=%d", len(fc.Meta.SampleImages)),
+			)
+		}
+	}
+	if err != nil {
+		parts = append(parts, fmt.Sprintf("error=%v", err))
+	}
+	return strings.Join(parts, "\n")
+}
+
 func (s *Service) GetScrapeData(ctx context.Context, jobID int64) (*repository.ScrapeData, error) {
 	return s.scrapeRepo.GetByJobID(ctx, jobID)
 }
@@ -124,7 +201,7 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 		logger.Error("persist updated job number failed", zap.Error(err))
 		return nil, err
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "number", "job number updated", numberText)
+	s.addJobLog(ctx, jobID, "info", "number", "job number updated", numberText)
 	logger.Info("job number updated", zap.String("normalized_number", numberText))
 	updated, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
@@ -160,7 +237,7 @@ func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData st
 		logger.Error("save review data failed", zap.Error(err))
 		return err
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "review", "review data saved", "")
+	s.addJobLog(ctx, jobID, "info", "review", "review data saved", "")
 	logger.Info("review data saved", zap.String("number", meta.Number), zap.String("title", meta.Title))
 	return nil
 }
@@ -239,7 +316,7 @@ func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, wi
 		logger.Error("save cropped poster review data failed", zap.Error(err))
 		return nil, err
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "review", "poster cropped from cover", fmt.Sprintf("%d,%d,%d,%d", x, y, width, height))
+	s.addJobLog(ctx, jobID, "info", "review", "poster cropped from cover", fmt.Sprintf("%d,%d,%d,%d", x, y, width, height))
 	logger.Info("poster cropped from cover", zap.String("poster_key", meta.Poster.Key))
 	return meta.Poster, nil
 }
@@ -302,10 +379,10 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 		return fmt.Errorf("resolve file context failed: %w", err)
 	}
 	fc.Meta = &meta
-	_ = s.logRepo.Add(ctx, jobID, "info", "import", "import started", "")
+	s.addJobLog(ctx, jobID, "info", "import", "import started", "")
 	logger.Info("import started", zap.String("number", j.Number))
 	if err := s.capture.ImportMeta(ctx, fc); err != nil {
-		_ = s.logRepo.Add(ctx, jobID, "error", "import", "import failed", err.Error())
+		s.addJobLog(ctx, jobID, "error", "import", "import failed", err.Error())
 		logger.Error("import failed", zap.Error(err))
 		return err
 	}
@@ -315,7 +392,7 @@ func (s *Service) Import(ctx context.Context, jobID int64) error {
 	if err := s.jobRepo.MarkDone(ctx, jobID); err != nil {
 		return err
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "import", "import completed", fc.SaveDir)
+	s.addJobLog(ctx, jobID, "info", "import", "import completed", fc.SaveDir)
 	logger.Info("import completed", zap.String("save_dir", fc.SaveDir))
 	return nil
 }
@@ -410,35 +487,39 @@ func (s *Service) runWorker() {
 
 func (s *Service) runOne(ctx context.Context, jobID int64) {
 	defer s.finish(jobID)
-	_ = s.logRepo.Add(ctx, jobID, "info", "job", "job started", "")
+	s.addJobLog(ctx, jobID, "info", "job", "job started", "")
 
 	j, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("load job failed: %v", err))
+		s.failJob(ctx, jobID, "job", fmt.Sprintf("load job failed: %v", err), buildJobFailureDetail(nil, "", nil, err))
 		return
 	}
 	if j == nil {
 		return
 	}
+	s.addJobLog(ctx, jobID, "info", "job", "job loaded", fmt.Sprintf("status=%s\nnumber=%s\npath=%s", j.Status, j.Number, j.AbsPath))
 	sourcePath, err := s.resolveJobSourcePath(ctx, j)
 	if err != nil {
-		s.failJob(ctx, jobID, err.Error())
+		s.failJob(ctx, jobID, "source", err.Error(), buildJobFailureDetail(j, "", nil, err))
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "prepare", "resolve file context", sourcePath)
+	s.addJobLog(ctx, jobID, "info", "source", "job source resolved", sourcePath)
+	s.addJobLog(ctx, jobID, "info", "prepare", "resolve file context", sourcePath)
 	fc, err := s.capture.ResolveFileContext(sourcePath, j.Number)
 	if err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("resolve file failed: %v", err))
+		s.failJob(ctx, jobID, "prepare", fmt.Sprintf("resolve file failed: %v", err), buildJobFailureDetail(j, sourcePath, nil, err))
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "scrape", "scrape meta start", fc.Number.GetNumberID())
+	s.addJobLog(ctx, jobID, "info", "prepare", "file context resolved", fmt.Sprintf("file=%s\nnumber=%s\nsave_file_base=%s", fc.FileName, fc.Number.GetNumberID(), fc.SaveFileBase))
+	s.addJobLog(ctx, jobID, "info", "scrape", "scrape meta start", fmt.Sprintf("number=%s\nsource=%s", fc.Number.GetNumberID(), sourcePath))
 	if err := s.capture.ScrapeMeta(ctx, fc); err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("scrape meta failed: %v", err))
+		s.failJob(ctx, jobID, "scrape", fmt.Sprintf("scrape meta failed: %v", err), buildJobFailureDetail(j, sourcePath, fc, err))
 		return
 	}
+	s.addJobLog(ctx, jobID, "info", "scrape", "scrape meta result", buildScrapeSummary(fc))
 	raw, err := json.Marshal(fc.Meta)
 	if err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("marshal meta failed: %v", err))
+		s.failJob(ctx, jobID, "scrape", fmt.Sprintf("marshal meta failed: %v", err), buildJobFailureDetail(j, sourcePath, fc, err))
 		return
 	}
 	source := ""
@@ -446,20 +527,21 @@ func (s *Service) runOne(ctx context.Context, jobID int64) {
 		source = fc.Meta.ExtInfo.ScrapeInfo.Source
 	}
 	if err := s.scrapeRepo.UpsertRawData(ctx, jobID, source, string(raw)); err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("save scrape data failed: %v", err))
+		s.failJob(ctx, jobID, "scrape", fmt.Sprintf("save scrape data failed: %v", err), buildJobFailureDetail(j, sourcePath, fc, err))
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "scrape", "scrape meta completed", source)
+	s.addJobLog(ctx, jobID, "info", "scrape", "scrape data saved", fmt.Sprintf("source=%s\nbytes=%d", source, len(raw)))
+	s.addJobLog(ctx, jobID, "info", "scrape", "scrape meta completed", source)
 	ok, err := s.jobRepo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusReviewing, "")
 	if err != nil {
-		s.failJob(ctx, jobID, fmt.Sprintf("update reviewing failed: %v", err))
+		s.failJob(ctx, jobID, "job", fmt.Sprintf("update reviewing failed: %v", err), buildJobFailureDetail(j, sourcePath, fc, err))
 		return
 	}
 	if !ok {
-		s.failJob(ctx, jobID, "job status changed unexpectedly")
+		s.failJob(ctx, jobID, "job", "job status changed unexpectedly", buildJobFailureDetail(j, sourcePath, fc, nil))
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, "info", "job", "job moved to reviewing", "")
+	s.addJobLog(ctx, jobID, "info", "job", "job moved to reviewing", buildScrapeSummary(fc))
 }
 
 func (s *Service) resolveJobSourcePath(ctx context.Context, j *jobdef.Job) (string, error) {
@@ -595,7 +677,7 @@ func (s *Service) syncJobSourcePath(ctx context.Context, j *jobdef.Job, sourcePa
 	j.FileExt = fileExt
 	j.RelPath = relPath
 	j.AbsPath = sourcePath
-	_ = s.logRepo.Add(ctx, j.ID, "warn", "source", "job source path refreshed", sourcePath)
+	s.addJobLog(ctx, j.ID, "warn", "source", "job source path refreshed", sourcePath)
 	return nil
 }
 
@@ -703,9 +785,9 @@ func buildJobConflict(items []jobdef.Job) *JobConflict {
 	}
 }
 
-func (s *Service) failJob(ctx context.Context, jobID int64, message string) {
+func (s *Service) failJob(ctx context.Context, jobID int64, stage string, message string, detail string) {
 	_, _ = s.jobRepo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, message)
-	_ = s.logRepo.Add(ctx, jobID, "error", "job", message, "")
+	s.addJobLog(ctx, jobID, "error", stage, message, detail)
 }
 
 func (s *Service) finish(jobID int64) {
