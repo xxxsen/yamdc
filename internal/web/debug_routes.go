@@ -3,7 +3,7 @@ package web
 import "github.com/gin-gonic/gin"
 
 func (a *API) registerEngineDebugRoutes(group *gin.RouterGroup) {
-	group.POST("/api/debug/number-cleaner/explain", a.handleNumberCleanerExplain)
+	group.POST("/api/debug/movieid-cleaner/explain", a.handleMovieIDCleanerExplain)
 	group.GET("/api/debug/searcher/plugins", a.handleSearcherDebugPlugins)
 	group.POST("/api/debug/searcher/search", a.handleSearcherDebugSearch)
 	group.POST("/api/debug/plugin-editor/compile", a.handlePluginEditorCompile)

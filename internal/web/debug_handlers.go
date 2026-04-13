@@ -26,9 +26,9 @@ type pluginEditorResponse struct {
 	Data     interface{} `json:"data"`
 }
 
-func (a *API) handleNumberCleanerExplain(c *gin.Context) {
+func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
 	if a.cleaner == nil {
-		writeFail(c.Writer, errCodeNumberCleanerUnavailable, "number cleaner is not available")
+		writeFail(c.Writer, errCodeMovieIDCleanerUnavailable, "movieid cleaner is not available")
 		return
 	}
 	var req struct {
@@ -45,11 +45,11 @@ func (a *API) handleNumberCleanerExplain(c *gin.Context) {
 	}
 	result, err := a.cleaner.Explain(req.Input)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("number cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
-		writeFail(c.Writer, errCodeNumberCleanerExplainFailed, err.Error())
+		logutil.GetLogger(c.Request.Context()).Warn("movieid cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
+		writeFail(c.Writer, errCodeMovieIDCleanerExplainFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("number cleaner explain completed",
+	logutil.GetLogger(c.Request.Context()).Info("movieid cleaner explain completed",
 		zap.String("input", req.Input),
 		zap.Int("steps", len(result.Steps)),
 		zap.String("number_id", result.Final.NumberID),

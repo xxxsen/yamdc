@@ -43,7 +43,7 @@ func TestJsonWithComments(t *testing.T) {
 
 func TestDefaultConfigDoesNotPinRemoteBundleURLs(t *testing.T) {
 	c := defaultConfig()
-	require.Empty(t, c.NumberCleanerConfig.SourceType)
-	require.Empty(t, c.NumberCleanerConfig.Location)
+	require.Empty(t, c.MovieIDRulesetConfig.SourceType)
+	require.Empty(t, c.MovieIDRulesetConfig.Location)
 	require.Empty(t, c.SearcherPluginConfig.Sources)
 }

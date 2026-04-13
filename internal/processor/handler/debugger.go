@@ -10,7 +10,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 )
 
 type DebugHandlerInstance struct {
@@ -53,12 +53,12 @@ type DebugHandlerOption struct {
 
 type Debugger struct {
 	deps      appdeps.Runtime
-	cleaner   numbercleaner.Cleaner
+	cleaner   movieidcleaner.Cleaner
 	instances []DebugHandlerInstance
 	configs   map[string]DebugHandlerOption
 }
 
-func NewDebugger(deps appdeps.Runtime, cleaner numbercleaner.Cleaner, handlers []string, configs map[string]DebugHandlerOption) *Debugger {
+func NewDebugger(deps appdeps.Runtime, cleaner movieidcleaner.Cleaner, handlers []string, configs map[string]DebugHandlerOption) *Debugger {
 	items := make([]DebugHandlerInstance, 0, len(handlers))
 	cfgMap := make(map[string]DebugHandlerOption, len(handlers))
 	for _, name := range handlers {
@@ -236,7 +236,7 @@ func (d *Debugger) parseNumber(rawInput string) (*number.Number, error) {
 				return num, nil
 			}
 		}
-		var cleanErr *numbercleaner.CleanError
+		var cleanErr *movieidcleaner.CleanError
 		if err != nil && !errors.As(err, &cleanErr) {
 			return nil, err
 		}

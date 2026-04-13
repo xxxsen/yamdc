@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/jobdef"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
@@ -23,13 +23,13 @@ type Service struct {
 	scanDir string
 	repo    *repository.JobRepository
 	extMap  map[string]struct{}
-	cleaner numbercleaner.Cleaner
+	cleaner movieidcleaner.Cleaner
 
 	mu      sync.Mutex
 	scaning bool
 }
 
-func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository, cleaner numbercleaner.Cleaner) *Service {
+func New(scanDir string, extraMediaExts []string, repo *repository.JobRepository, cleaner movieidcleaner.Cleaner) *Service {
 	extMap := make(map[string]struct{}, len(defaultMediaSuffix)+len(extraMediaExts))
 	for _, item := range defaultMediaSuffix {
 		extMap[strings.ToLower(item)] = struct{}{}

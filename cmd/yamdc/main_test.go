@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -35,7 +35,7 @@ func TestPrecheckServerDirRequiresLibraryDir(t *testing.T) {
 	require.EqualError(t, precheckServerDir(c), "no library dir")
 }
 
-func TestBuildNumberCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
+func TestBuildMovieIDCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
 	dataDir := t.TempDir()
 	ruleDir := filepath.Join(t.TempDir(), "rules")
 	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0o755))
@@ -50,22 +50,22 @@ options:
 
 	c := &config.Config{
 		DataDir: dataDir,
-		NumberCleanerConfig: config.NumberCleanerConfig{
-			SourceType: numbercleaner.SourceTypeLocal,
+		MovieIDRulesetConfig: config.MovieIDRulesetConfig{
+			SourceType: movieidcleaner.SourceTypeLocal,
 			Location:   ruleDir,
 		},
 	}
-	cleaner, manager, err := buildNumberCleaner(context.Background(), client.MustNewClient(), c)
+	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
 	require.NoError(t, err)
 	require.NotNil(t, cleaner)
 	require.NotNil(t, manager)
 }
 
-func TestBuildNumberCleanerAllowsMissingSource(t *testing.T) {
+func TestBuildMovieIDCleanerAllowsMissingSource(t *testing.T) {
 	c := &config.Config{
 		DataDir: t.TempDir(),
 	}
-	cleaner, manager, err := buildNumberCleaner(context.Background(), client.MustNewClient(), c)
+	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
 	require.NoError(t, err)
 	require.NotNil(t, cleaner)
 	require.Nil(t, manager)

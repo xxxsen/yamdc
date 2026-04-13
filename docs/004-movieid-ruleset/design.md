@@ -38,14 +38,14 @@
 
 ```text
 raw filename
-  -> numbercleaner.Clean / Explain
+  -> movieidcleaner.Clean / Explain
   -> number.Parse
   -> Searcher.Search
 ```
 
 其中：
 
-1. `numbercleaner` 负责清洗、匹配和衍生属性推导
+1. `movieidcleaner` 负责清洗、匹配和衍生属性推导
 2. `number.Parse` 负责最终结构化语义解析
 
 ## 五、核心结果模型
@@ -53,7 +53,7 @@ raw filename
 位置：
 
 ```text
-internal/numbercleaner/model.go
+internal/movieidcleaner/model.go
 ```
 
 当前 `Result` 已包含：
@@ -78,7 +78,7 @@ internal/numbercleaner/model.go
 位置：
 
 ```text
-internal/numbercleaner/model.go
+internal/movieidcleaner/model.go
 ```
 
 当前 `RuleSet` 包含：
@@ -231,7 +231,7 @@ internal/numbercleaner/model.go
 当前目录加载逻辑位于：
 
 ```text
-internal/numbercleaner/loader.go
+internal/movieidcleaner/loader.go
 ```
 
 行为如下：
@@ -476,7 +476,7 @@ Explain(input string) (*ExplainResult, error)
 当前远程规则包模型已经落地，位置：
 
 ```text
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 internal/bundle/manager.go
 ```
 
@@ -515,7 +515,7 @@ entry: ruleset
 1. 首次 `Start(ctx)` 会完成初始化加载
 2. 远程 source 会在后台继续同步
 3. 新数据只有在 callback 成功后才算激活成功
-4. `numbercleaner` callback 中会重建 cleaner 并替换运行时实例
+4. `movieidcleaner` callback 中会重建 cleaner 并替换运行时实例
 
 因此规则集当前已经支持真正的 runtime 重建。
 
@@ -524,16 +524,16 @@ entry: ruleset
 ### 16.1 数据模型与执行器
 
 ```text
-internal/numbercleaner/model.go
-internal/numbercleaner/cleaner.go
-internal/numbercleaner/loader.go
-internal/numbercleaner/runtime.go
+internal/movieidcleaner/model.go
+internal/movieidcleaner/cleaner.go
+internal/movieidcleaner/loader.go
+internal/movieidcleaner/runtime.go
 ```
 
 ### 16.2 规则包与远程加载
 
 ```text
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 internal/bundle/manager.go
 ```
 
@@ -546,7 +546,7 @@ internal/bundle/manager.go
 当前原则是：
 
 1. `internal/config` 只在 `cmd` 层使用
-2. `numbercleaner` 包不直接依赖 `internal/config`
+2. `movieidcleaner` 包不直接依赖 `internal/config`
 3. `cmd` 层负责把配置转换为 cleaner/bundle 所需的内部参数
 
 ## 十八、结论

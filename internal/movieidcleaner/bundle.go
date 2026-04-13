@@ -1,4 +1,4 @@
-package numbercleaner
+package movieidcleaner
 
 import (
 	"archive/zip"
@@ -33,7 +33,7 @@ type BundleManifest struct {
 
 func NewManager(dataDir string, cli client.IHTTPClient, sourceType string, location string, cb OnDataReadyFunc) (*Manager, error) {
 	if cb == nil {
-		return nil, fmt.Errorf("number cleaner bundle callback is required")
+		return nil, fmt.Errorf("movieid cleaner bundle callback is required")
 	}
 	manager, err := basebundle.NewManager("number_cleaner", dataDir, cli, sourceType, location, "remote-rules", func(ctx context.Context, data *basebundle.BundleData) error {
 		rs, files, err := LoadRuleSetFromBundleData(data)

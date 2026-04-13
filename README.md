@@ -86,7 +86,7 @@ services:
   "save_dir": "/savedir",
   "library_dir": "/librarydir",
   "data_dir": "/datadir",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
@@ -143,7 +143,7 @@ WebUI 主流程：
   "scan_dir": "/dir/to/scan",
   "save_dir": "/dir/to/save/scraped/data",
   "data_dir": "/dir/to/save/models/and/cache",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
@@ -155,7 +155,7 @@ WebUI 主流程：
   "save_dir": "/dir/to/save/scraped/data",
   "library_dir": "/dir/to/library",
   "data_dir": "/dir/to/save/models/and/cache",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
@@ -165,9 +165,9 @@ WebUI 主流程：
 | save_dir | 保存目录，抓取成功后按 `naming` 规则命名 |
 | library_dir | 媒体库目录（仅 `server` 模式必填） |
 | data_dir | 数据目录，存储中间文件、缓存、模型 |
-| naming | 命名规则，可用标签：`{DATE}`, `{YEAR}`, `{MONTH}`, `{NUMBER}`, `{ACTOR}`, `{TITLE}`, `{TITLE_TRANSLATED}` |
+| naming | 命名规则，可用标签：`{DATE}`, `{YEAR}`, `{MONTH}`, `{MOVIEID}`, `{NUMBER}`, `{ACTOR}`, `{TITLE}`, `{TITLE_TRANSLATED}` |
 
-> NOTE: `ACTOR/TITLE/TITLE_TRANSLATED` 可能包含特殊字符或长度超限，不推荐直接用于目录名。
+> NOTE: `MOVIEID` 是文档主推写法，`NUMBER` 作为兼容别名保留，两者值相同。`ACTOR/TITLE/TITLE_TRANSLATED` 可能包含特殊字符或长度超限，不推荐直接用于目录名。
 
 ## 可选 Repo 配置
 
@@ -177,7 +177,7 @@ WebUI 主流程：
   - 服务会正常启动
   - 不会加载插件 bundle
   - 启动日志会提醒你配置自己的 plugin repo
-- 未配置 `number_cleaner_config`：
+- 未配置 `movieid_ruleset_config`：
   - 服务会正常启动
   - 会退化为 `PassthroughCleaner`
   - 启动日志会提醒你配置自己的 script repo
@@ -195,7 +195,7 @@ WebUI 主流程：
 
 ```json
 {
-  "number_cleaner_config": {
+  "movieid_ruleset_config": {
     "source_type": "local",
     "location": "/path/to/your-script-repo"
   }
@@ -206,7 +206,7 @@ WebUI 主流程：
 
 ```json
 {
-  "number_cleaner_config": {
+  "movieid_ruleset_config": {
     "source_type": "remote",
     "location": "https://github.com/yourname/your-yamdc-script-repo"
   }
@@ -310,9 +310,7 @@ chains:
 | `-C` | `-` | 添加“字幕”分类并为封面添加水印 |
 | `-4K` | `-` | 添加“4K”分类并为封面添加水印 |
 | `-8K` | `-` | 添加 8K 水印 |
-| `-LEAK` | `-` | 为封面添加特定水印 |
 | `-VR` | `-` | 添加 VR 水印 |
-| `-UC`, `-U` | `-` | 添加特别版水印 |
 
 ## 其他配置
 

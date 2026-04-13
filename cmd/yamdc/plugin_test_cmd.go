@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xxxsen/yamdc/internal/client"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
@@ -94,7 +94,7 @@ func verifyPluginBundle(pluginDir string, casefile string) bundleVerifyResult {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
 	creators := pluginyaml.BuildRegisterContext(resolved.Plugins).Snapshot()
-	debugger := searcher.NewDebugger(cli, store.NewMemStorage(), numbercleaner.NewPassthroughCleaner(), nil, nil)
+	debugger := searcher.NewDebugger(cli, store.NewMemStorage(), movieidcleaner.NewPassthroughCleaner(), nil, nil)
 	debugger.SwapState(nil, nil, creators)
 	out := bundleVerifyResult{
 		Pass:  true,

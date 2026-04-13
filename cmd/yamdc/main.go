@@ -24,7 +24,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
 	"github.com/xxxsen/yamdc/internal/flarerr"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -171,7 +171,7 @@ func runCapture(c *config.Config) error {
 	if err != nil {
 		return err
 	}
-	cleaner, _, err := buildNumberCleaner(ctx, cli, c)
+	cleaner, _, err := buildMovieIDCleaner(ctx, cli, c)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func loggerInit(c *config.Config) *zap.Logger {
 	return logger.Init(c.LogConfig.File, c.LogConfig.Level, int(c.LogConfig.FileCount), int(c.LogConfig.FileSize), int(c.LogConfig.KeepDays), c.LogConfig.Console)
 }
 
-func buildCapture(c *config.Config, storage store.IStorage, sr searcher.ISearcher, ps []processor.IProcessor, numCleaner numbercleaner.Cleaner) (*capture.Capture, error) {
+func buildCapture(c *config.Config, storage store.IStorage, sr searcher.ISearcher, ps []processor.IProcessor, movieIDCleaner movieidcleaner.Cleaner) (*capture.Capture, error) {
 	opts := make([]capture.Option, 0, 10)
 	opts = append(opts,
 		capture.WithNamingRule(c.Naming),
@@ -200,7 +200,7 @@ func buildCapture(c *config.Config, storage store.IStorage, sr searcher.ISearche
 		capture.WithProcessor(processor.NewGroup(ps)),
 		capture.WithStorage(storage),
 		capture.WithExtraMediaExtList(c.ExtraMediaExts),
-		capture.WithNumberCleaner(numCleaner),
+		capture.WithMovieIDCleaner(movieIDCleaner),
 		capture.WithTransalteTitleDiscard(c.TranslateConfig.DiscardTranslatedTitle),
 		capture.WithTranslatedPlotDiscard(c.TranslateConfig.DiscardTranslatedPlot),
 		capture.WithLinkMode(c.SwitchConfig.EnableLinkMode),
@@ -223,19 +223,19 @@ func configuredSearcherPluginSources(raw []config.SearcherPluginSource) []config
 	return out
 }
 
-func hasNumberCleanerSource(c *config.Config) bool {
+func hasMovieIDRulesetSource(c *config.Config) bool {
 	if c == nil {
 		return false
 	}
-	return strings.TrimSpace(c.NumberCleanerConfig.Location) != ""
+	return strings.TrimSpace(c.MovieIDRulesetConfig.Location) != ""
 }
 
 func logSearcherPluginConfigMissing(ctx context.Context) {
 	logutil.GetLogger(ctx).Warn("searcher plugin repo is not configured, skip bundle loading; configure searcher_plugin_config.sources to use your own plugin repo")
 }
 
-func logNumberCleanerConfigMissing(ctx context.Context) {
-	logutil.GetLogger(ctx).Warn("number cleaner repo is not configured, fallback to passthrough cleaner; configure number_cleaner_config to use your own script repo")
+func logMovieIDRulesetConfigMissing(ctx context.Context) {
+	logutil.GetLogger(ctx).Warn("movieid ruleset repo is not configured, fallback to passthrough cleaner; configure movieid_ruleset_config to use your own script repo")
 }
 
 func buildCatSearcherWithCreators(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig, creators map[string]factory.CreatorFunc) (map[string][]searcher.ISearcher, error) {
@@ -315,7 +315,7 @@ func buildProcessor(ctx context.Context, deps appdeps.Runtime, hs []string, m ma
 	return rs, nil
 }
 
-func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, c *config.Config) *searcher.Debugger {
+func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner movieidcleaner.Cleaner, c *config.Config) *searcher.Debugger {
 	categoryPlugins := make(map[string][]string, len(c.CategoryPlugins))
 	for _, item := range c.CategoryPlugins {
 		categoryPlugins[item.Name] = append([]string(nil), item.Plugins...)
@@ -570,12 +570,12 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 	return translator.NewGroup(useEngines...), nil
 }
 
-func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, *numbercleaner.Manager, error) {
-	if !hasNumberCleanerSource(c) {
-		logNumberCleanerConfigMissing(ctx)
-		return numbercleaner.NewPassthroughCleaner(), nil, nil
+func buildMovieIDCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (movieidcleaner.Cleaner, *movieidcleaner.Manager, error) {
+	if !hasMovieIDRulesetSource(c) {
+		logMovieIDRulesetConfigMissing(ctx)
+		return movieidcleaner.NewPassthroughCleaner(), nil, nil
 	}
-	cc := c.NumberCleanerConfig
+	cc := c.MovieIDRulesetConfig
 	sourceType := strings.ToLower(strings.TrimSpace(cc.SourceType))
 	if sourceType == "" {
 		sourceType = basebundle.SourceTypeLocal
@@ -588,10 +588,10 @@ func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.C
 		}
 		location = resolved
 	}
-	runtimeCleaner := numbercleaner.NewRuntimeCleaner(nil)
-	manager, err := numbercleaner.NewManager(c.DataDir, cli, sourceType, location, func(ctx context.Context, rs *numbercleaner.RuleSet, files []string) error {
-		logutil.GetLogger(ctx).Debug("load number cleaner rules", zap.Strings("files", files))
-		inner, err := numbercleaner.NewCleaner(rs)
+	runtimeCleaner := movieidcleaner.NewRuntimeCleaner(nil)
+	manager, err := movieidcleaner.NewManager(c.DataDir, cli, sourceType, location, func(ctx context.Context, rs *movieidcleaner.RuleSet, files []string) error {
+		logutil.GetLogger(ctx).Debug("load movieid rules", zap.Strings("files", files))
+		inner, err := movieidcleaner.NewCleaner(rs)
 		if err != nil {
 			return err
 		}

@@ -3,7 +3,7 @@ package capture
 import (
 	"fmt"
 
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -15,12 +15,13 @@ const (
 	NamingReleaseMonth    = "MONTH"
 	NamingActor           = "ACTOR"
 	NamingNumber          = "NUMBER"
+	NamingMovieID         = "MOVIEID"
 	NamingTitle           = "TITLE"
 	NamingTitleTranslated = "TITLE_TRANSLATED"
 )
 
 var (
-	defaultNamingRule = fmt.Sprintf("{%s}/{%s}", NamingReleaseYear, NamingNumber)
+	defaultNamingRule = fmt.Sprintf("{%s}/{%s}", NamingReleaseYear, NamingMovieID)
 )
 
 type config struct {
@@ -31,7 +32,7 @@ type config struct {
 	SaveDir                string
 	Naming                 string
 	ExtraMediaExtList      []string
-	NumberCleaner          numbercleaner.Cleaner
+	MovieIDCleaner         movieidcleaner.Cleaner
 	DiscardTranslatedTitle bool
 	DiscardTranslatedPlot  bool
 	LinkMode               bool
@@ -81,9 +82,9 @@ func WithExtraMediaExtList(lst []string) Option {
 	}
 }
 
-func WithNumberCleaner(cl numbercleaner.Cleaner) Option {
+func WithMovieIDCleaner(cl movieidcleaner.Cleaner) Option {
 	return func(c *config) {
-		c.NumberCleaner = cl
+		c.MovieIDCleaner = cl
 	}
 }
 

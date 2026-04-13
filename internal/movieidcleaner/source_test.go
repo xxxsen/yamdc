@@ -1,4 +1,4 @@
-package numbercleaner
+package movieidcleaner
 
 import (
 	"archive/zip"

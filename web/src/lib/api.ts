@@ -180,7 +180,7 @@ export interface ReviewMeta {
   sample_images?: MediaFileRef[];
 }
 
-export interface NumberCleanerCandidate {
+export interface MovieIDCleanerCandidate {
   number_id: string;
   score: number;
   rule_hits: string[];
@@ -193,7 +193,7 @@ export interface NumberCleanerCandidate {
   uncensor_matched: boolean;
 }
 
-export interface NumberCleanerExplainStep {
+export interface MovieIDCleanerExplainStep {
   stage: string;
   rule: string;
   input: string;
@@ -202,10 +202,10 @@ export interface NumberCleanerExplainStep {
   selected: boolean;
   summary: string;
   values: string[];
-  candidate?: NumberCleanerCandidate | null;
+  candidate?: MovieIDCleanerCandidate | null;
 }
 
-export interface NumberCleanerResult {
+export interface MovieIDCleanerResult {
   raw_input: string;
   input_no_ext: string;
   normalized: string;
@@ -219,14 +219,14 @@ export interface NumberCleanerResult {
   status: string;
   rule_hits: string[];
   warnings: string[];
-  candidates: NumberCleanerCandidate[];
+  candidates: MovieIDCleanerCandidate[];
 }
 
-export interface NumberCleanerExplainResult {
+export interface MovieIDCleanerExplainResult {
   input: string;
   input_no_ext: string;
-  steps: NumberCleanerExplainStep[];
-  final: NumberCleanerResult;
+  steps: MovieIDCleanerExplainStep[];
+  final: MovieIDCleanerResult;
 }
 
 export interface SearcherDebugPluginCollection {
@@ -290,7 +290,7 @@ export interface SearcherDebugResult {
   found: boolean;
   category: string;
   uncensor: boolean;
-  cleaner_result?: NumberCleanerResult | null;
+  cleaner_result?: MovieIDCleanerResult | null;
   meta?: SearcherDebugMovieMeta | null;
   plugin_results: SearcherDebugPluginResult[];
   available_tools: SearcherDebugPluginCollection;
@@ -871,15 +871,15 @@ export async function triggerScan() {
   return await readAPIResponse<unknown>(resp, "scan failed");
 }
 
-export async function explainNumberCleaner(input: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/number-cleaner/explain`, {
+export async function explainMovieIDCleaner(input: string) {
+  const resp = await fetch(`${getBaseURL()}/api/debug/movieid-cleaner/explain`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ input }),
   });
-  const data = await readAPIResponse<NumberCleanerExplainResult>(resp, "explain number cleaner failed");
+  const data = await readAPIResponse<MovieIDCleanerExplainResult>(resp, "explain movieid cleaner failed");
   return data.data;
 }
 

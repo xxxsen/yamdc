@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
@@ -19,16 +19,16 @@ type blockingCleaner struct {
 	release   chan struct{}
 }
 
-func (c *blockingCleaner) Clean(input string) (*numbercleaner.Result, error) {
+func (c *blockingCleaner) Clean(input string) (*movieidcleaner.Result, error) {
 	c.startOnce.Do(func() {
 		close(c.started)
 	})
 	<-c.release
-	return numbercleaner.NewPassthroughCleaner().Clean(input)
+	return movieidcleaner.NewPassthroughCleaner().Clean(input)
 }
 
-func (c *blockingCleaner) Explain(input string) (*numbercleaner.ExplainResult, error) {
-	return numbercleaner.NewPassthroughCleaner().Explain(input)
+func (c *blockingCleaner) Explain(input string) (*movieidcleaner.ExplainResult, error) {
+	return movieidcleaner.NewPassthroughCleaner().Explain(input)
 }
 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {
@@ -41,7 +41,7 @@ func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T
 	})
 
 	repo := repository.NewJobRepository(sqlite.DB())
-	svc := New(scanDir, nil, repo, numbercleaner.NewPassthroughCleaner())
+	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
 
 	liveFile := filepath.Join(scanDir, "LIVE-001.mp4")
 	require.NoError(t, os.WriteFile(liveFile, []byte("x"), 0644))

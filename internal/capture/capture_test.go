@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/number"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
@@ -34,38 +34,38 @@ type staticCleaner struct {
 	uncensorMatched bool
 }
 
-func (c *staticCleaner) Clean(input string) (*numbercleaner.Result, error) {
-	return &numbercleaner.Result{
+func (c *staticCleaner) Clean(input string) (*movieidcleaner.Result, error) {
+	return &movieidcleaner.Result{
 		RawInput:        input,
 		Normalized:      c.normalized,
 		Category:        c.category,
 		CategoryMatched: c.categoryMatched,
 		Uncensor:        c.uncensor,
 		UncensorMatched: c.uncensorMatched,
-		Status:          numbercleaner.StatusSuccess,
-		Confidence:      numbercleaner.ConfidenceHigh,
+		Status:          movieidcleaner.StatusSuccess,
+		Confidence:      movieidcleaner.ConfidenceHigh,
 	}, nil
 }
 
-func (c *staticCleaner) Explain(input string) (*numbercleaner.ExplainResult, error) {
+func (c *staticCleaner) Explain(input string) (*movieidcleaner.ExplainResult, error) {
 	final, err := c.Clean(input)
 	if err != nil {
 		return nil, err
 	}
-	return &numbercleaner.ExplainResult{
+	return &movieidcleaner.ExplainResult{
 		Input: input,
 		Final: final,
 	}, nil
 }
 
-func newTestCapture(t *testing.T, cleaner numbercleaner.Cleaner) *Capture {
+func newTestCapture(t *testing.T, cleaner movieidcleaner.Cleaner) *Capture {
 	t.Helper()
 	cap, err := New(
 		WithScanDir(t.TempDir()),
 		WithSaveDir(t.TempDir()),
 		WithSeacher(&testSearcher{}),
 		WithStorage(store.NewMemStorage()),
-		WithNumberCleaner(cleaner),
+		WithMovieIDCleaner(cleaner),
 	)
 	require.NoError(t, err)
 	return cap

@@ -72,8 +72,8 @@ const (
 	errCodeMediaLibraryStatusFailed       = 130014
 
 	// Debug errors.
-	errCodeNumberCleanerUnavailable    = 140001
-	errCodeNumberCleanerExplainFailed  = 140002
+	errCodeMovieIDCleanerUnavailable   = 140001
+	errCodeMovieIDCleanerExplainFailed = 140002
 	errCodeSearcherDebuggerUnavailable = 140101
 	errCodeSearcherDebugSearchFailed   = 140102
 	errCodePluginEditorUnavailable     = 140103

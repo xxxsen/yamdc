@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/nfo"
 	"github.com/xxxsen/yamdc/internal/number"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 
 	"github.com/samber/lo"
@@ -54,8 +54,8 @@ func New(opts ...Option) (*Capture, error) {
 	if c.Storage == nil {
 		return nil, fmt.Errorf("no storage found")
 	}
-	if c.NumberCleaner == nil {
-		c.NumberCleaner = numbercleaner.NewPassthroughCleaner()
+	if c.MovieIDCleaner == nil {
+		c.MovieIDCleaner = movieidcleaner.NewPassthroughCleaner()
 	}
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
@@ -71,15 +71,15 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 	fc.FileExt = filepath.Ext(file)
 	fileNoExt := strings.TrimSpace(preferredNumber)
 	useCleanerNormalizedValue := len(fileNoExt) == 0
-	var cleaned *numbercleaner.Result
+	var cleaned *movieidcleaner.Result
 	if len(fileNoExt) == 0 {
 		fileNoExt = fc.FileName[:len(fc.FileName)-len(fc.FileExt)]
 	}
-	if c.c.NumberCleaner != nil {
+	if c.c.MovieIDCleaner != nil {
 		var err error
-		cleaned, err = c.c.NumberCleaner.Clean(fileNoExt)
+		cleaned, err = c.c.MovieIDCleaner.Clean(fileNoExt)
 		if err != nil {
-			return fmt.Errorf("clean number before rewrite failed, err:%w", err)
+			return fmt.Errorf("clean movie id before rewrite failed, err:%w", err)
 		}
 		if useCleanerNormalizedValue && cleaned != nil && len(cleaned.Normalized) != 0 {
 			fileNoExt = cleaned.Normalized
@@ -253,6 +253,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 		NamingReleaseMonth:    month,
 		NamingActor:           actor,
 		NamingNumber:          fc.Number.GetNumberID(),
+		NamingMovieID:         fc.Number.GetNumberID(),
 		NamingTitle:           title,
 		NamingTitleTranslated: titleTranslated,
 	}

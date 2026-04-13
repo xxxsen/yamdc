@@ -1,4 +1,4 @@
-package numbercleaner
+package movieidcleaner
 
 import (
 	"path/filepath"
@@ -141,7 +141,7 @@ func (p *passthroughCleaner) Clean(input string) (*Result, error) {
 		NumberID:        "",
 		Status:          StatusLowQuality,
 		Confidence:      ConfidenceLow,
-		Warnings:        []string{"number cleaner disabled"},
+		Warnings:        []string{"movieid cleaner disabled"},
 		CategoryMatched: false,
 		UncensorMatched: false,
 	}, nil
@@ -163,7 +163,7 @@ func (p *passthroughCleaner) Explain(input string) (*ExplainResult, error) {
 				Input:   input,
 				Output:  final.Normalized,
 				Matched: false,
-				Summary: "number cleaner disabled",
+				Summary: "movieid cleaner disabled",
 			},
 		},
 	}, nil

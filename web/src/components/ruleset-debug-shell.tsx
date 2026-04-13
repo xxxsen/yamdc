@@ -3,7 +3,7 @@
 import { Bug, LoaderCircle, Play } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
-import { explainNumberCleaner, type NumberCleanerExplainResult } from "@/lib/api";
+import { explainMovieIDCleaner, type MovieIDCleanerExplainResult } from "@/lib/api";
 
 const DEFAULT_INPUT = "MOVIE12345 SUBTITLE.mp4";
 const RULESET_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.ruleset.input";
@@ -16,7 +16,7 @@ export function RulesetDebugShell() {
     const stored = window.localStorage.getItem(RULESET_DEBUG_INPUT_STORAGE_KEY);
     return stored && stored.trim() ? stored : DEFAULT_INPUT;
   });
-  const [result, setResult] = useState<NumberCleanerExplainResult | null>(null);
+  const [result, setResult] = useState<MovieIDCleanerExplainResult | null>(null);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const steps = result?.steps ?? [];
@@ -38,7 +38,7 @@ export function RulesetDebugShell() {
     startTransition(() => {
       void (async () => {
         try {
-          const next = await explainNumberCleaner(nextInput);
+          const next = await explainMovieIDCleaner(nextInput);
           setResult(next);
           setError("");
         } catch (nextError) {
@@ -58,7 +58,7 @@ export function RulesetDebugShell() {
             调试工具
           </span>
           <h2>规则集测试</h2>
-          <p>输入一个文件名或影片 ID，直接查看 `numbercleaner` 每一步规则的入参、出参和最终结果。</p>
+          <p>输入一个文件名或影片 ID，直接查看 `movieidcleaner` 每一步规则的入参、出参和最终结果。</p>
         </div>
         <div className="ruleset-debug-runner">
           <label className="ruleset-debug-label" htmlFor="ruleset-debug-input">

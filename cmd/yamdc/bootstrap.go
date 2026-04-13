@@ -19,7 +19,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
@@ -48,7 +48,7 @@ type YamdcStartContext struct {
 	Searchers         []searcher.ISearcher
 	CategorySearchers map[string][]searcher.ISearcher
 	Processors        []processor.IProcessor
-	NumberCleaner     numbercleaner.Cleaner
+	MovieIDCleaner    movieidcleaner.Cleaner
 	SearcherDebugger  *searcher.Debugger
 	RuntimeSearcher   *searcher.RuntimeCategorySearcher
 	HandlerDebugger   *handler.Debugger
@@ -112,7 +112,7 @@ func newYamdcInitActions() []YamdcInitAction {
 		{Name: "build_face_recognizer", Fn: buildFaceRecognizerAction},
 		{Name: "build_searchers", Fn: buildSearchersAction},
 		{Name: "build_processors", Fn: buildProcessorsAction},
-		{Name: "build_number_cleaner", Fn: buildNumberCleanerAction},
+		{Name: "build_movieid_cleaner", Fn: buildMovieIDCleanerAction},
 		{Name: "build_searcher_debugger", Fn: buildSearcherDebuggerAction},
 		{Name: "build_handler_debugger", Fn: buildHandlerDebuggerAction},
 		{Name: "build_capture", Fn: buildCaptureAction},
@@ -310,17 +310,17 @@ func buildProcessorsAction(ctx context.Context, ysctx *YamdcStartContext) error 
 	return nil
 }
 
-func buildNumberCleanerAction(ctx context.Context, ysctx *YamdcStartContext) error {
-	cleaner, _, err := buildNumberCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
+func buildMovieIDCleanerAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	cleaner, _, err := buildMovieIDCleaner(ctx, ysctx.HTTPClient, ysctx.Config)
 	if err != nil {
 		return err
 	}
-	ysctx.NumberCleaner = cleaner
+	ysctx.MovieIDCleaner = cleaner
 	return nil
 }
 
 func buildSearcherDebuggerAction(_ context.Context, ysctx *YamdcStartContext) error {
-	ysctx.SearcherDebugger = buildSearcherDebugger(ysctx.HTTPClient, ysctx.CacheStore, ysctx.NumberCleaner, ysctx.Config)
+	ysctx.SearcherDebugger = buildSearcherDebugger(ysctx.HTTPClient, ysctx.CacheStore, ysctx.MovieIDCleaner, ysctx.Config)
 	return nil
 }
 
@@ -338,7 +338,7 @@ func buildHandlerDebuggerAction(_ context.Context, ysctx *YamdcStartContext) err
 		Translator: ysctx.Translator,
 		AIEngine:   ysctx.AIEngine,
 		FaceRec:    ysctx.FaceRec,
-	}, ysctx.NumberCleaner, ysctx.Config.Handlers, handlerOptions)
+	}, ysctx.MovieIDCleaner, ysctx.Config.Handlers, handlerOptions)
 	return nil
 }
 
@@ -349,7 +349,7 @@ func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
 	} else {
 		useSearcher = searcher.NewCategorySearcher(ysctx.Searchers, ysctx.CategorySearchers)
 	}
-	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.NumberCleaner)
+	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.MovieIDCleaner)
 	if err != nil {
 		return err
 	}
@@ -373,7 +373,7 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 	ysctx.JobRepo = repository.NewJobRepository(ysctx.AppDB.DB())
 	ysctx.LogRepo = repository.NewLogRepository(ysctx.AppDB.DB())
 	ysctx.ScrapeRepo = repository.NewScrapeDataRepository(ysctx.AppDB.DB())
-	ysctx.ScanSvc = scanner.New(ysctx.Config.ScanDir, ysctx.Config.ExtraMediaExts, ysctx.JobRepo, ysctx.NumberCleaner)
+	ysctx.ScanSvc = scanner.New(ysctx.Config.ScanDir, ysctx.Config.ExtraMediaExts, ysctx.JobRepo, ysctx.MovieIDCleaner)
 	ysctx.JobSvc = job.NewService(ysctx.JobRepo, ysctx.LogRepo, ysctx.ScrapeRepo, ysctx.Capture, ysctx.CacheStore)
 	ysctx.MediaSvc = medialib.NewService(ysctx.AppDB.DB(), ysctx.Config.LibraryDir, ysctx.Config.SaveDir)
 	ysctx.JobSvc.SetImportGuard(func(ctx context.Context) error {
@@ -393,7 +393,7 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 		ysctx.Config.SaveDir,
 		ysctx.MediaSvc,
 		ysctx.CacheStore,
-		ysctx.NumberCleaner,
+		ysctx.MovieIDCleaner,
 		ysctx.SearcherDebugger,
 		ysctx.HandlerDebugger,
 		editorSvc,

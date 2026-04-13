@@ -22,7 +22,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/model"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
 	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
@@ -87,7 +87,7 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 }
 
 func TestHandleHandlerDebugRun(t *testing.T) {
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
 	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
 		"mode":"single",
 		"handler_id":"number_title",
@@ -120,7 +120,7 @@ func TestHandleHandlerDebugRunChain(t *testing.T) {
 		}), nil
 	})
 
-	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), numbercleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
+	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
 	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
 		"mode":"chain",
 		"handler_ids":["test_chain_fail","test_chain_ok"],

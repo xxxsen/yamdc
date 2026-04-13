@@ -12,7 +12,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
@@ -35,7 +35,7 @@ type DebugSearchResult struct {
 	Found          bool                          `json:"found"`
 	Category       string                        `json:"category"`
 	Uncensor       bool                          `json:"uncensor"`
-	CleanerResult  *numbercleaner.Result         `json:"cleaner_result,omitempty"`
+	CleanerResult  *movieidcleaner.Result         `json:"cleaner_result,omitempty"`
 	Meta           *model.MovieMeta              `json:"meta,omitempty"`
 	PluginResults  []PluginDebugResult           `json:"plugin_results"`
 	AvailableTools SearcherDebugPluginCollection `json:"available_tools"`
@@ -67,14 +67,14 @@ type PluginDebugStep struct {
 type Debugger struct {
 	cli             client.IHTTPClient
 	storage         store.IStorage
-	cleaner         numbercleaner.Cleaner
+	cleaner         movieidcleaner.Cleaner
 	mu              sync.RWMutex
 	defaultPlugins  []string
 	categoryPlugins map[string][]string
 	creators        map[string]factory.CreatorFunc
 }
 
-func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner numbercleaner.Cleaner, defaultPlugins []string, categoryPlugins map[string][]string) *Debugger {
+func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner movieidcleaner.Cleaner, defaultPlugins []string, categoryPlugins map[string][]string) *Debugger {
 	d := &Debugger{
 		cli:     cli,
 		storage: storage,

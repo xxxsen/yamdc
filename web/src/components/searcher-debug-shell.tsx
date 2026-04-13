@@ -140,7 +140,7 @@ export function SearcherDebugShell() {
             Searcher 调试
           </span>
           <h2>插件检索测试</h2>
-          <p>输入一个影片 ID，查看它经过 `numbercleaner` 后使用了哪些插件，以及每个插件在哪个阶段返回结果或失败。</p>
+          <p>输入一个影片 ID，查看它经过 `movieidcleaner` 后使用了哪些插件，以及每个插件在哪个阶段返回结果或失败。</p>
         </div>
 
         <div className="searcher-debug-controls">
