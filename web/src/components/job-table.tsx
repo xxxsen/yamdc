@@ -339,11 +339,12 @@ export function JobTable({ initialData }: Props) {
   };
 
   const handleCommitEditNumber = (job: JobItem) => {
-    if (!editingNumber.trim()) {
+    const nextNumber = editingNumber.trim();
+    if (!nextNumber) {
       handleCancelEditNumber();
       return;
     }
-    if (editingNumber.trim() === job.number.trim()) {
+    if (nextNumber === job.number.trim() && !requiresManualNumberReview(job)) {
       handleCancelEditNumber();
       return;
     }
