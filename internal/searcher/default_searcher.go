@@ -251,7 +251,7 @@ func (p *DefaultSearcher) verifyMeta(meta *model.MovieMeta) error {
 
 func (p *DefaultSearcher) fixMeta(ctx context.Context, req *http.Request, mvmeta *model.MovieMeta) {
 	if !mvmeta.SwithConfig.DisableNumberReplace {
-		mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的番号
+		mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的影片 ID
 	}
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	if mvmeta.Cover != nil {

@@ -1,5 +1,5 @@
 post_processors:
-  # 将提取到的字幕/CD/清晰度后缀按系统顺序重排
+  # 将提取到的字幕/多段/清晰度后缀按系统顺序重排
   - name: reorder_suffix
     type: builtin
     builtin: reorder_suffix

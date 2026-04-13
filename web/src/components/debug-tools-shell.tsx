@@ -9,12 +9,12 @@ const TOOL_ITEMS = [
   {
     href: "/debug/ruleset",
     title: "规则集测试",
-    description: "查看番号清洗规则的逐步执行链路。",
+    description: "查看影片 ID 清洗规则的逐步执行链路。",
   },
   {
     href: "/debug/searcher",
     title: "插件检索测试",
-    description: "输入番号后，直接验证 searcher 插件链的检索结果。",
+    description: "输入影片 ID 后，直接验证 searcher 插件链的检索结果。",
   },
   {
     href: "/debug/plugin-editor",

@@ -1,9 +1,8 @@
 matchers:
-  - name: fc2
-    category: FC2
+  - name: source_a
+    category: SOURCE_A
     uncensor: true
-    pattern: '(?i)FC2[-_\s]?(?:PPV)?[-_\s]?([0-9]{3,})'
-    normalize_template: 'FC2-PPV-$1'
+    pattern: '(?i)SRCA[-_\s]?([0-9]{3,})'
+    normalize_template: 'SRCA-$1'
     score: 100
     require_boundary: false
-

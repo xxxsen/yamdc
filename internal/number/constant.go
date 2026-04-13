@@ -13,11 +13,11 @@ const (
 )
 
 const (
-	defaultTagUncensored      = "无码"
-	defaultTagChineseSubtitle = "中文字幕"
+	defaultTagUncensored      = "附加标记"
+	defaultTagChineseSubtitle = "字幕版"
 	defaultTag4K              = "4K"
-	defaultTagLeak            = "无码流出"
-	defaultTagHack            = "破解"
+	defaultTagLeak            = "特别版"
+	defaultTagHack            = "修复版"
 	defaultTag8K              = "8K"
 	defaultTagVR              = "VR"
 )

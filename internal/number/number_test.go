@@ -77,7 +77,7 @@ func TestNumber(t *testing.T) {
 }
 
 func TestAlnumber(t *testing.T) {
-	assert.Equal(t, "fc2ppv12345", GetCleanID("fc2-ppv_12345"))
+	assert.Equal(t, "movie12345", GetCleanID("movie-12345"))
 }
 
 func TestSetFiledByExternal(t *testing.T) {

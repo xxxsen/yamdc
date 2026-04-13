@@ -109,7 +109,7 @@ chains:
   all:
     - name: alpha
       priority: 100
-  fc2:
+  source_a:
     - name: alpha
       priority: 200
 ```

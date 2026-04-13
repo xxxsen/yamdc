@@ -274,7 +274,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                     <Search size={16} />
                     <input
                       className="media-library-search-input"
-                      placeholder="搜索标题 / 番号"
+                      placeholder="搜索标题 / 影片 ID"
                       value={keyword}
                       onChange={(e) => {
                         setKeyword(e.target.value);
@@ -457,7 +457,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                       <div className="media-library-card-copy">
                         <div className="media-library-card-title media-library-card-title-only">{item.title || item.name}</div>
                         <div className="media-library-card-meta">
-                          <div className="library-item-number">{item.number || "未命名番号"}</div>
+                          <div className="library-item-number">{item.number || "未命名影片"}</div>
                           <div className="media-library-card-year">{getReleaseYear(item.release_date) || "----"}</div>
                         </div>
                       </div>

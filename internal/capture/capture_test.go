@@ -105,8 +105,8 @@ func TestResolveFileContextUsesCleanerDerivedFieldsForPreferredNumber(t *testing
 
 func TestResolveFileContextUsesCleanerDerivedFields(t *testing.T) {
 	cap := newTestCapture(t, &staticCleaner{
-		normalized:      "FC2-PPV-12345",
-		category:        "FC2",
+		normalized:      "SOURCE-A-12345",
+		category:        "SOURCE_A",
 		categoryMatched: true,
 		uncensor:        true,
 		uncensorMatched: true,
@@ -114,6 +114,6 @@ func TestResolveFileContextUsesCleanerDerivedFields(t *testing.T) {
 
 	fc, err := cap.ResolveFileContext(filepath.Join(t.TempDir(), "ignored.mp4"))
 	require.NoError(t, err)
-	require.Equal(t, "FC2", fc.Number.GetExternalFieldCategory())
+	require.Equal(t, "SOURCE_A", fc.Number.GetExternalFieldCategory())
 	require.True(t, fc.Number.GetExternalFieldUncensor())
 }

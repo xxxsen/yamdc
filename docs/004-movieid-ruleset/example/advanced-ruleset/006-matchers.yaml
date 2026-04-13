@@ -1,14 +1,14 @@
 matchers:
-  # 示例一：FC2 家族，直接推导 category 和 uncensor
-  - name: fc2
-    category: FC2
+  # 示例一：来源 A 影片族，直接推导 category 和附加标记
+  - name: source_a
+    category: SOURCE_A
     uncensor: true
-    pattern: '(?i)FC2[-_\s]?(?:PPV)?[-_\s]?([0-9]{3,})'
-    normalize_template: 'FC2-PPV-$1'
+    pattern: '(?i)SRCA[-_\s]?([0-9]{3,})'
+    normalize_template: 'SRCA-$1'
     score: 120
     require_boundary: false
 
-  # 示例二：通用有码番号，更保守，要求边界
+  # 示例二：通用影片 ID，更保守，要求边界
   - name: generic_code
     category: ALL
     pattern: '(?i)([A-Z]{2,6})[-_\s]?([0-9]{2,6})'
@@ -17,11 +17,11 @@ matchers:
     require_boundary: true
 
   # 示例三：按前缀限制适用范围，避免宽泛规则误中
-  - name: caribbean_like
-    category: CARIB
+  - name: source_b_archive
+    category: SOURCE_B
     uncensor: true
     pattern: '(?i)([0-9]{6})[-_\s]?([0-9]{3})'
     normalize_template: '$1-$2'
     score: 90
-    prefixes: ["CARIB", "CARIBBEAN"]
+    prefixes: ["SRCB", "ARCHIVE"]
     require_boundary: false

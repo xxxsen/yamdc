@@ -192,7 +192,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
     draftMeta.title_translated.trim();
   const detailDisplayTitleSecondary =
     draftMeta.title_translated.trim() && draftMeta.title_translated.trim() !== detailDisplayTitle ? draftMeta.title_translated.trim() : "";
-  const detailDisplayNumber = draftMeta.number || detail.item.number || "未命名番号";
+  const detailDisplayNumber = draftMeta.number || detail.item.number || "未命名影片";
   const detailDisplayPlot = draftMeta.plot.trim() || draftMeta.plot_translated.trim();
   const detailDisplayPlotSecondary =
     draftMeta.plot.trim() && draftMeta.plot_translated.trim() && draftMeta.plot_translated.trim() !== draftMeta.plot.trim()
@@ -393,7 +393,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
                       <input className="input" value={draftMeta.title_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, title_translated: e.target.value }))} />
                     </div>
                     <div className="review-field">
-                      <span className="review-label review-label-side">番号</span>
+                      <span className="review-label review-label-side">影片 ID</span>
                       <input className="input" value={draftMeta.number} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, number: e.target.value }))} />
                     </div>
                     <div className="review-field">
@@ -449,7 +449,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
                     </div>
 
                     <div className="media-library-hero-facts">
-                      <div className="media-library-hero-fact"><span>番号</span><strong>{detailDisplayNumber}</strong></div>
+                      <div className="media-library-hero-fact"><span>影片 ID</span><strong>{detailDisplayNumber}</strong></div>
                       <div className="media-library-hero-fact"><span>发行日期</span><strong>{draftMeta.release_date || "-"}</strong></div>
                       <div className="media-library-hero-fact"><span>时长</span><strong>{draftMeta.runtime ? `${draftMeta.runtime} 分钟` : "-"}</strong></div>
                       <div className="media-library-hero-fact"><span>来源</span><strong>{draftMeta.source || "-"}</strong></div>

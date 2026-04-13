@@ -74,7 +74,7 @@ export function JobTable({ initialData }: Props) {
     {
       label: "待提交",
       value: initCount,
-      hint: readyToRunCount > 0 ? `其中 ${readyToRunCount} 条已满足提交条件` : "等待番号确认后可提交",
+      hint: readyToRunCount > 0 ? `其中 ${readyToRunCount} 条已满足提交条件` : "等待影片 ID 确认后可提交",
       tone: "default",
       filter: "init",
     },
@@ -291,7 +291,7 @@ export function JobTable({ initialData }: Props) {
         handleCancelEditNumber();
         await refreshJobs();
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "更新番号失败");
+        setMessage(error instanceof Error ? error.message : "更新影片 ID 失败");
       }
     });
   };
@@ -348,7 +348,7 @@ export function JobTable({ initialData }: Props) {
       return {
         tone: "var(--info)",
         kind: "manual",
-        warning: "用户已手动编辑番号",
+        warning: "用户已手动编辑影片 ID",
       };
     }
     if (job.number_clean_status === "success" && job.number_clean_confidence === "high") {
@@ -402,7 +402,7 @@ export function JobTable({ initialData }: Props) {
     if (job.number_clean_status === "success" && job.number_clean_confidence === "medium") {
       return job.number_clean_warnings || "中等置信度，建议检查";
     }
-    return job.number_clean_warnings || "需先手动修正番号";
+    return job.number_clean_warnings || "需先手动修正影片 ID";
   };
 
   const getPathSegments = (job: JobItem) => {
@@ -481,7 +481,7 @@ export function JobTable({ initialData }: Props) {
             <div className="file-list-eyebrow">Processing Queue</div>
             <h2 className="file-list-title">文件列表</h2>
             <p className="file-list-subtitle">
-              当前展示 {jobs.length} 条记录，共 {total} 条任务。优先处理低置信度番号，运行中的状态会自动刷新。
+              当前展示 {jobs.length} 条记录，共 {total} 条任务。优先处理低置信度影片 ID，运行中的状态会自动刷新。
             </p>
           </div>
           <div className="file-list-stats">
@@ -507,7 +507,7 @@ export function JobTable({ initialData }: Props) {
             <Search size={16} />
             <input
               className="input file-list-search-input"
-              placeholder="按文件名 / 路径 / 番号搜索"
+              placeholder="按文件名 / 路径 / 影片 ID 搜索"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
@@ -585,7 +585,7 @@ export function JobTable({ initialData }: Props) {
                 const runTitle = hasConflict
                   ? `${job.conflict_reason}${job.conflict_target ? `: ${job.conflict_target}` : ""}`
                   : needsManualNumberReview
-                    ? "清洗失败或低置信度，需先手动编辑番号后才能刮削"
+                    ? "清洗失败或低置信度，需先手动编辑影片 ID 后才能抓取"
                     : undefined;
                 const { folder, name } = getPathSegments(job);
                 return (
@@ -596,7 +596,7 @@ export function JobTable({ initialData }: Props) {
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
                           disabled={!canSelectJob(job) || isPending}
-                          title={!canSelectJob(job) ? "中高置信度或手动编辑后的番号可加入批量提交" : "选择任务"}
+                          title={!canSelectJob(job) ? "中高置信度或手动编辑后的影片 ID 可加入批量提交" : "选择任务"}
                           onChange={() => handleToggleSelectJob(job.id)}
                         />
                         <div className="file-path-copy">
@@ -605,7 +605,7 @@ export function JobTable({ initialData }: Props) {
                               {name}
                             </span>
                             {hasConflict ? <span className="file-path-flag">目标冲突</span> : null}
-                            {needsManualNumberReview ? <span className="file-path-flag">需校正番号</span> : null}
+                            {needsManualNumberReview ? <span className="file-path-flag">需校正影片 ID</span> : null}
                           </div>
                           <div className="file-path-folder" title={job.rel_path}>
                             {folder}
@@ -613,7 +613,7 @@ export function JobTable({ initialData }: Props) {
                         </div>
                       </div>
                     </td>
-                    <td data-label="番号" style={{ width: 340 }}>
+                    <td data-label="影片 ID" style={{ width: 340 }}>
                       <div className="file-number-cell">
                         <div style={{ minWidth: 0, flex: 1 }}>
                           {editingJobId === job.id ? (
@@ -623,7 +623,7 @@ export function JobTable({ initialData }: Props) {
                                 className="input"
                                 style={{ width: "100%", minWidth: 0, height: 40, boxSizing: "border-box", padding: "0 12px" }}
                                 value={editingNumber}
-                                placeholder="请输入确认后的番号"
+                                placeholder="请输入确认后的影片 ID"
                                 autoFocus
                                 onChange={(e) => setEditingNumber(e.target.value)}
                                 onBlur={() => handleCommitEditNumber(job)}

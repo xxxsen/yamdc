@@ -134,7 +134,7 @@ chains:
       priority: 100
     - name: beta
       priority: 150
-  fc2:
+  source_a:
     - name: alpha
       priority: 120
 `,
@@ -157,7 +157,7 @@ chains:
 	require.NoError(t, manager.Start(context.Background()))
 	require.NotNil(t, latest)
 	require.Equal(t, []string{"alpha", "beta"}, latest.DefaultPlugins)
-	require.Equal(t, []string{"__bundle__FC2__alpha"}, latest.CategoryChains["FC2"])
+	require.Equal(t, []string{"__bundle__SOURCE_A__alpha"}, latest.CategoryChains["SOURCE_A"])
 
 	registerCtx := pluginyaml.BuildRegisterContext(latest.Plugins)
 	creators := registerCtx.Snapshot()
@@ -172,12 +172,12 @@ chains:
 
 	categorySearchers, err := buildCatSearcherWithCreators(context.Background(), client.MustNewClient(), store.NewMemStorage(), cfg, []config.CategoryPlugin{
 		{
-			Name:    "FC2",
-			Plugins: latest.CategoryChains["FC2"],
+			Name:    "SOURCE_A",
+			Plugins: latest.CategoryChains["SOURCE_A"],
 		},
 	}, nil, creators)
 	require.NoError(t, err)
-	require.Len(t, categorySearchers["FC2"], 1)
+	require.Len(t, categorySearchers["SOURCE_A"], 1)
 }
 
 func writePluginBundleDir(t *testing.T, dir string, files map[string]string) {

@@ -85,7 +85,7 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 			fileNoExt = cleaned.Normalized
 		}
 	}
-	//番号解析
+	//影片 ID 解析
 	info, err := number.Parse(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("parse number failed, err:%w", err)

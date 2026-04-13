@@ -28,7 +28,7 @@ type Movie struct {
 	Poster          string     `xml:"poster,omitempty"`          //海报
 	Thumb           string     `xml:"thumb,omitempty"`           //缩略图
 	Label           string     `xml:"label,omitempty"`           //发行商
-	ID              string     `xml:"id,omitempty"`              //番号
+	ID              string     `xml:"id,omitempty"`              //影片 ID
 	Cover           string     `xml:"cover,omitempty"`           //封面
 	Fanart          string     `xml:"fanart,omitempty"`          //跟封面一致就好了
 	PlotTranslated  string     `xml:"plottranslated,omitempty"`  //翻译简介

@@ -12,7 +12,7 @@ import (
 type tagPadderHandler struct{}
 
 func (h *tagPadderHandler) generateNumberPrefixTag(fc *model.FileContext) (string, bool) {
-	//将番号的前版本部分提取, 作为分类的一部分, 方便从一个影片看到这个系列相关的全部影片
+	//将影片 ID 的前缀部分提取为分类标签, 方便查看同系列影片
 	sb := strings.Builder{}
 	isPureNumber := true
 	for _, c := range fc.Number.GetNumberID() {
@@ -45,9 +45,9 @@ func (h *tagPadderHandler) rewriteOrAppendTag(fc *model.MovieMeta, tagname strin
 }
 
 func (h *tagPadderHandler) Handle(ctx context.Context, fc *model.FileContext) error {
-	//提取番号特有的tag
+	//提取影片 ID 派生标签
 	fc.Meta.Genres = append(fc.Meta.Genres, fc.Number.GenerateTags()...)
-	//提取番号前缀作为tag
+	//提取影片 ID 前缀作为标签
 	if tag, ok := h.generateNumberPrefixTag(fc); ok {
 		h.rewriteOrAppendTag(fc.Meta, tag)
 	}
