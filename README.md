@@ -171,6 +171,135 @@ WebUI 主流程：
 
 > NOTE: `ACTOR/TITLE/TITLE_TRANSLATED` 可能包含特殊字符或长度超限，不推荐直接用于目录名。
 
+## 可选 Repo 配置
+
+`plugin repo` 和 `script repo` 现在都是可选项。
+
+- 未配置 `searcher_plugin_config.sources`：
+  - 服务会正常启动
+  - 不会加载插件 bundle
+  - 启动日志会提醒你配置自己的 plugin repo
+- 未配置 `number_cleaner_config`：
+  - 服务会正常启动
+  - 会退化为 `PassthroughCleaner`
+  - 启动日志会提醒你配置自己的 script repo
+
+如果你希望启用自定义搜索插件和番号清洗规则，需要在 `config.json` 中显式配置它们。
+
+### 配置自己的 Script Repo
+
+`script repo` 用来提供番号清洗规则。支持：
+
+- 本地目录
+- 远程 GitHub 仓库（按 tag 下载 bundle）
+
+本地目录示例：
+
+```json
+{
+  "number_cleaner_config": {
+    "source_type": "local",
+    "location": "/path/to/your-script-repo"
+  }
+}
+```
+
+远程仓库示例：
+
+```json
+{
+  "number_cleaner_config": {
+    "source_type": "remote",
+    "location": "https://github.com/yourname/your-yamdc-script-repo"
+  }
+}
+```
+
+最小目录结构：
+
+```text
+your-yamdc-script-repo/
+  manifest.yaml
+  ruleset/
+    001-base.yaml
+    002-matchers.yaml
+```
+
+`manifest.yaml` 示例：
+
+```yaml
+entry: ruleset
+```
+
+规则文件格式可参考仓库内：
+
+- [docs/004-movieid-ruleset/design.md](/home/sen/work/yamdc/docs/004-movieid-ruleset/design.md)
+- [docs/004-movieid-ruleset/example/README.md](/home/sen/work/yamdc/docs/004-movieid-ruleset/example/README.md)
+
+### 配置自己的 Plugin Repo
+
+`plugin repo` 用来提供搜索插件 bundle。支持：
+
+- 本地目录
+- 远程 GitHub 仓库（按 tag 下载 bundle）
+
+本地目录示例：
+
+```json
+{
+  "searcher_plugin_config": {
+    "sources": [
+      {
+        "source_type": "local",
+        "location": "/path/to/your-plugin-repo"
+      }
+    ]
+  }
+}
+```
+
+远程仓库示例：
+
+```json
+{
+  "searcher_plugin_config": {
+    "sources": [
+      {
+        "source_type": "remote",
+        "location": "https://github.com/yourname/your-yamdc-plugin-repo"
+      }
+    ]
+  }
+}
+```
+
+最小目录结构：
+
+```text
+your-yamdc-plugin-repo/
+  manifest.yaml
+  plugins/
+    alpha.yaml
+```
+
+`manifest.yaml` 示例：
+
+```yaml
+version: 1
+name: my-plugin-bundle
+entry: plugins
+chains:
+  all:
+    - name: alpha
+      priority: 100
+```
+
+插件 YAML 格式和 bundle 规则可参考：
+
+- [docs/003-searcher-plugin-bundle/design.md](/home/sen/work/yamdc/docs/003-searcher-plugin-bundle/design.md)
+- [docs/002-searcher-yaml-plugin-system/design.md](/home/sen/work/yamdc/docs/002-searcher-yaml-plugin-system/design.md)
+- [docs/002-searcher-yaml-plugin-system/example/README.md](/home/sen/work/yamdc/docs/002-searcher-yaml-plugin-system/example/README.md)
+
 ## 文件名后缀扩展能力
 
 工具不会强制清洗番号（不同下载站命名差异大），建议用户按需重命名。

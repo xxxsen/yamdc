@@ -212,6 +212,32 @@ func buildCatSearcher(ctx context.Context, cli client.IHTTPClient, storage store
 	return buildCatSearcherWithCreators(ctx, cli, storage, c, cplgs, m, factory.Snapshot())
 }
 
+func configuredSearcherPluginSources(raw []config.SearcherPluginSource) []config.SearcherPluginSource {
+	out := make([]config.SearcherPluginSource, 0, len(raw))
+	for _, item := range raw {
+		if strings.TrimSpace(item.Location) == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func hasNumberCleanerSource(c *config.Config) bool {
+	if c == nil {
+		return false
+	}
+	return strings.TrimSpace(c.NumberCleanerConfig.Location) != ""
+}
+
+func logSearcherPluginConfigMissing(ctx context.Context) {
+	logutil.GetLogger(ctx).Warn("searcher plugin repo is not configured, skip bundle loading; configure searcher_plugin_config.sources to use your own plugin repo")
+}
+
+func logNumberCleanerConfigMissing(ctx context.Context) {
+	logutil.GetLogger(ctx).Warn("number cleaner repo is not configured, fallback to passthrough cleaner; configure number_cleaner_config to use your own script repo")
+}
+
 func buildCatSearcherWithCreators(ctx context.Context, cli client.IHTTPClient, storage store.IStorage, c *config.Config, cplgs []config.CategoryPlugin, m map[string]config.PluginConfig, creators map[string]factory.CreatorFunc) (map[string][]searcher.ISearcher, error) {
 	rs := make(map[string][]searcher.ISearcher, len(cplgs))
 	for _, plg := range cplgs {
@@ -298,11 +324,13 @@ func buildSearcherDebugger(cli client.IHTTPClient, storage store.IStorage, clean
 }
 
 func prepareSearcherPlugins(ctx context.Context, cli client.IHTTPClient, c *config.Config) (*pluginbundle.Manager, error) {
-	if len(c.SearcherPluginConfig.Sources) == 0 {
+	sourcesCfg := configuredSearcherPluginSources(c.SearcherPluginConfig.Sources)
+	if len(sourcesCfg) == 0 {
+		logSearcherPluginConfigMissing(ctx)
 		return nil, nil
 	}
-	sources := make([]pluginbundle.Source, 0, len(c.SearcherPluginConfig.Sources))
-	for _, source := range c.SearcherPluginConfig.Sources {
+	sources := make([]pluginbundle.Source, 0, len(sourcesCfg))
+	for _, source := range sourcesCfg {
 		item := pluginbundle.Source{
 			SourceType: source.SourceType,
 			Location:   source.Location,
@@ -543,6 +571,10 @@ func buildTranslator(ctx context.Context, c *config.Config, engine aiengine.IAIE
 }
 
 func buildNumberCleaner(ctx context.Context, cli client.IHTTPClient, c *config.Config) (numbercleaner.Cleaner, *numbercleaner.Manager, error) {
+	if !hasNumberCleanerSource(c) {
+		logNumberCleanerConfigMissing(ctx)
+		return numbercleaner.NewPassthroughCleaner(), nil, nil
+	}
 	cc := c.NumberCleanerConfig
 	sourceType := strings.ToLower(strings.TrimSpace(cc.SourceType))
 	if sourceType == "" {

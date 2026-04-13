@@ -163,17 +163,9 @@ func defaultConfig() *Config {
 			Enable:   false, //默认不启用, 毕竟还要额外配置
 			FilePath: "",    // 如果启用,需要指定配置文件路径
 		},
-		NumberCleanerConfig: NumberCleanerConfig{
-			SourceType: "remote",
-			Location:   "https://github.com/xxxsen/yamdc-script",
-		},
+		NumberCleanerConfig: NumberCleanerConfig{},
 		SearcherPluginConfig: SearcherPluginConfig{
-			Sources: []SearcherPluginSource{
-				{
-					SourceType: "remote",
-					Location:   "https://github.com/xxxsen/yamdc-plugin",
-				},
-			},
+			Sources: []SearcherPluginSource{},
 		},
 	}
 }

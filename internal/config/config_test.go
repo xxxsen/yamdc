@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tailscale/hujson"
 )
 
@@ -38,4 +39,11 @@ func TestJsonWithComments(t *testing.T) {
 	assert.Equal(t, 1, st.A)
 	assert.Equal(t, 3.14, st.B)
 	assert.Equal(t, true, st.C)
+}
+
+func TestDefaultConfigDoesNotPinRemoteBundleURLs(t *testing.T) {
+	c := defaultConfig()
+	require.Empty(t, c.NumberCleanerConfig.SourceType)
+	require.Empty(t, c.NumberCleanerConfig.Location)
+	require.Empty(t, c.SearcherPluginConfig.Sources)
 }

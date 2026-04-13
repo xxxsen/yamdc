@@ -61,6 +61,34 @@ options:
 	require.NotNil(t, manager)
 }
 
+func TestBuildNumberCleanerAllowsMissingSource(t *testing.T) {
+	c := &config.Config{
+		DataDir: t.TempDir(),
+	}
+	cleaner, manager, err := buildNumberCleaner(context.Background(), client.MustNewClient(), c)
+	require.NoError(t, err)
+	require.NotNil(t, cleaner)
+	require.Nil(t, manager)
+
+	result, err := cleaner.Clean("abc-123")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+}
+
+func TestPrepareSearcherPluginsAllowsBlankRemoteLocation(t *testing.T) {
+	c := &config.Config{
+		DataDir: t.TempDir(),
+		SearcherPluginConfig: config.SearcherPluginConfig{
+			Sources: []config.SearcherPluginSource{
+				{SourceType: "remote", Location: ""},
+			},
+		},
+	}
+	manager, err := prepareSearcherPlugins(context.Background(), client.MustNewClient(), c)
+	require.NoError(t, err)
+	require.Nil(t, manager)
+}
+
 func TestBuildTranslatorSelectsConfiguredOrderAndDedupes(t *testing.T) {
 	c := &config.Config{
 		TranslateConfig: config.TranslateConfig{

@@ -300,7 +300,7 @@ cmd/yamdc/bootstrap.go
     "sources": [
       {
         "source_type": "remote",
-        "location": "https://github.com/xxxsen/yamdc-plugins"
+        "location": "https://github.com/yourname/your-yamdc-plugin-repo"
       }
     ]
   }
