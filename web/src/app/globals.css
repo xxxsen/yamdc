@@ -5409,6 +5409,34 @@ textarea.input {
   margin-top: 12px;
 }
 
+.plugin-editor-browser-detail summary {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.plugin-editor-browser-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  user-select: none;
+}
+
+.plugin-editor-browser-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.plugin-editor-browser-fields {
+  margin-top: 12px;
+}
+
+.plugin-editor-advanced > .plugin-editor-browser-detail {
+  margin-top: 12px;
+}
+
 .plugin-editor-kv-list {
   display: flex;
   flex-direction: column;

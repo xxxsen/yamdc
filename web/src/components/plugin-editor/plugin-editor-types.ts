@@ -63,6 +63,9 @@ export type RequestFormState = {
   acceptStatusText: string;
   notFoundStatusText: string;
   decodeCharset: string;
+  browserEnable: boolean;
+  browserWaitSelector: string;
+  browserWaitTimeout: string;
 };
 
 export type EditorState = {

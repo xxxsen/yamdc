@@ -332,6 +332,12 @@ export interface PluginEditorParser {
   layout?: string;
 }
 
+export interface PluginEditorBrowserSpec {
+  enable?: boolean;
+  wait_selector?: string;
+  wait_timeout?: number;
+}
+
 export interface PluginEditorSelector {
   kind: string;
   expr: string;
@@ -381,6 +387,7 @@ export interface PluginEditorDraft {
     response?: {
       decode_charset?: string;
     } | null;
+    browser?: PluginEditorBrowserSpec | null;
   } | null;
   multi_request?: {
     candidates?: string[];

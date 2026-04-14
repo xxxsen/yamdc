@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/antchfx/htmlquery"
+	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -51,6 +52,11 @@ type compiledPrecheck struct {
 	variables      map[string]*template
 }
 
+type compiledBrowser struct {
+	waitSelector string
+	waitTimeout  time.Duration
+}
+
 type compiledRequest struct {
 	method              string
 	path                *template
@@ -62,6 +68,7 @@ type compiledRequest struct {
 	acceptStatusCodes   []int
 	notFoundStatusCodes []int
 	decodeCharset       string
+	browser             *compiledBrowser
 }
 
 type compiledRequestBody struct {
@@ -279,6 +286,12 @@ func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 	}
 	if raw.Response != nil {
 		out.decodeCharset = strings.ToLower(strings.TrimSpace(raw.Response.DecodeCharset))
+	}
+	if raw.Browser != nil && raw.Browser.Enable {
+		out.browser = &compiledBrowser{
+			waitSelector: raw.Browser.WaitSelector,
+			waitTimeout:  time.Duration(raw.Browser.WaitTimeout) * time.Second,
+		}
 	}
 	return out, nil
 }
@@ -852,6 +865,13 @@ func (p *YAMLSearchPlugin) buildRequest(ctx context.Context, spec *compiledReque
 				req.Header.Set("Content-Type", "application/json")
 			}
 		}
+	}
+	if spec.browser != nil {
+		bctx := browser.WithParams(req.Context(), &browser.Params{
+			WaitSelector: spec.browser.waitSelector,
+			WaitTimeout:  spec.browser.waitTimeout,
+		})
+		req = req.WithContext(bctx)
 	}
 	return req, nil
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/browser"
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
@@ -105,6 +106,7 @@ func newYamdcInitActions() []YamdcInitAction {
 		{Name: "init_logger", Fn: initLoggerAction},
 		{Name: "precheck_dirs", Fn: precheckDirsAction},
 		{Name: "build_http_client", Fn: buildHTTPClientAction},
+		{Name: "build_browser_client", Fn: buildBrowserClientAction},
 		{Name: "init_dependencies", Fn: initDependenciesAction},
 		{Name: "build_ai_engine", Fn: buildAIEngineAction},
 		{Name: "build_cache_store", Fn: buildCacheStoreAction},
@@ -157,6 +159,18 @@ func buildHTTPClientAction(ctx context.Context, ysctx *YamdcStartContext) error 
 		return err
 	}
 	ysctx.HTTPClient = cli
+	return nil
+}
+
+func buildBrowserClientAction(_ context.Context, ysctx *YamdcStartContext) error {
+	nav := browser.NewRodNavigator(
+		ysctx.Config.DataDir,
+		ysctx.Config.NetworkConfig.Proxy,
+	)
+	ysctx.AddCleanup(func(context.Context) error {
+		return nav.Close()
+	})
+	ysctx.HTTPClient = browser.NewHTTPClient(ysctx.HTTPClient, nav)
 	return nil
 }
 

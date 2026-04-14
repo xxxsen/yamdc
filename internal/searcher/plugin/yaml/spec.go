@@ -48,6 +48,13 @@ type RequestSpec struct {
 	AcceptStatusCodes   []int             `yaml:"accept_status_codes" json:"accept_status_codes"`
 	NotFoundStatusCodes []int             `yaml:"not_found_status_codes" json:"not_found_status_codes"`
 	Response            *ResponseSpec     `yaml:"response" json:"response"`
+	Browser             *BrowserSpec      `yaml:"browser" json:"browser"`
+}
+
+type BrowserSpec struct {
+	Enable       bool   `yaml:"enable" json:"enable"`
+	WaitSelector string `yaml:"wait_selector" json:"wait_selector"`
+	WaitTimeout  int    `yaml:"wait_timeout" json:"wait_timeout"`
 }
 
 type RequestBodySpec struct {

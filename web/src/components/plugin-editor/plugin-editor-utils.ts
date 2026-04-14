@@ -378,6 +378,13 @@ export function buildRequestFromFormState(req: RequestFormState, label = "reques
     accept_status_codes: parseIntegerList(req.acceptStatusText),
     not_found_status_codes: parseIntegerList(req.notFoundStatusText),
     response: req.decodeCharset.trim() ? { decode_charset: req.decodeCharset.trim() } : undefined,
+    browser: req.browserEnable
+      ? {
+          enable: true,
+          wait_selector: req.browserWaitSelector.trim() || undefined,
+          wait_timeout: parseInt(req.browserWaitTimeout) || undefined,
+        }
+      : undefined,
   };
 }
 
@@ -500,6 +507,9 @@ function requestFormStateFromDraft(req: PluginEditorDraft["request"]): RequestFo
     acceptStatusText: (req?.accept_status_codes ?? []).join(","),
     notFoundStatusText: (req?.not_found_status_codes ?? []).join(","),
     decodeCharset: req?.response?.decode_charset ?? "",
+    browserEnable: req?.browser?.enable ?? false,
+    browserWaitSelector: req?.browser?.wait_selector ?? "",
+    browserWaitTimeout: req?.browser?.wait_timeout ? String(req.browser.wait_timeout) : "",
   };
 }
 
@@ -619,6 +629,9 @@ function normalizeLegacyRequestForm(
       acceptStatusText: nested.acceptStatusText || "200",
       notFoundStatusText: nested.notFoundStatusText || "404",
       decodeCharset: nested.decodeCharset || "",
+      browserEnable: nested.browserEnable ?? false,
+      browserWaitSelector: nested.browserWaitSelector ?? "",
+      browserWaitTimeout: nested.browserWaitTimeout ?? "",
     };
   }
   // Fall back to legacy flat fields
@@ -646,6 +659,9 @@ function normalizeLegacyRequestForm(
     acceptStatusText: acceptStatusText || "200",
     notFoundStatusText: notFoundStatusText || "404",
     decodeCharset: decodeCharset || "",
+    browserEnable: false,
+    browserWaitSelector: "",
+    browserWaitTimeout: "",
   };
 }
 
