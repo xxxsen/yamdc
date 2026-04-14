@@ -361,7 +361,6 @@ describe("buildRequestFromFormState", () => {
       acceptStatusText: "200,302",
       notFoundStatusText: "404",
       decodeCharset: "",
-      browserEnable: false,
       browserWaitSelector: "",
       browserWaitTimeout: "",
     });
@@ -387,7 +386,6 @@ describe("buildRequestFromFormState", () => {
       acceptStatusText: "200",
       notFoundStatusText: "404",
       decodeCharset: "euc-jp",
-      browserEnable: false,
       browserWaitSelector: "",
       browserWaitTimeout: "",
     });

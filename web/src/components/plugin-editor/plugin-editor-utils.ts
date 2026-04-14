@@ -28,6 +28,7 @@ export function defaultState(): EditorState {
   return {
     name: "fixture",
     type: "one-step",
+    fetchType: "go-http",
     hostsText: "https://example.com",
     number: "ABC-123",
     precheckPatternsText: "",
@@ -367,6 +368,7 @@ function parseStringRecord(value: string, label: string): Record<string, string>
 // ---------------------------------------------------------------------------
 
 export function buildRequestFromFormState(req: RequestFormState, label = "request"): NonNullable<PluginEditorDraft["request"]> {
+  const hasWaitParams = req.browserWaitSelector.trim() || req.browserWaitTimeout.trim();
   return {
     method: req.method.trim() || "GET",
     path: req.path.trim() || undefined,
@@ -378,9 +380,8 @@ export function buildRequestFromFormState(req: RequestFormState, label = "reques
     accept_status_codes: parseIntegerList(req.acceptStatusText),
     not_found_status_codes: parseIntegerList(req.notFoundStatusText),
     response: req.decodeCharset.trim() ? { decode_charset: req.decodeCharset.trim() } : undefined,
-    browser: req.browserEnable
+    browser: hasWaitParams
       ? {
-          enable: true,
           wait_selector: req.browserWaitSelector.trim() || undefined,
           wait_timeout: parseInt(req.browserWaitTimeout) || undefined,
         }
@@ -428,6 +429,7 @@ export function buildDraft(state: EditorState): PluginEditorDraft {
     version: 1,
     name: state.name.trim(),
     type: state.type,
+    fetch_type: state.fetchType === "browser" ? "browser" : undefined,
     hosts,
     request: buildRequestFromFormState(state.request, "request"),
     scrape: {
@@ -507,7 +509,6 @@ function requestFormStateFromDraft(req: PluginEditorDraft["request"]): RequestFo
     acceptStatusText: (req?.accept_status_codes ?? []).join(","),
     notFoundStatusText: (req?.not_found_status_codes ?? []).join(","),
     decodeCharset: req?.response?.decode_charset ?? "",
-    browserEnable: req?.browser?.enable ?? false,
     browserWaitSelector: req?.browser?.wait_selector ?? "",
     browserWaitTimeout: req?.browser?.wait_timeout ? String(req.browser.wait_timeout) : "",
   };
@@ -517,6 +518,7 @@ export function stateFromDraft(draft: PluginEditorDraft): EditorState {
   const next = defaultState();
   next.name = draft.name ?? next.name;
   next.type = draft.type ?? next.type;
+  next.fetchType = draft.fetch_type === "browser" ? "browser" : "go-http";
   next.hostsText = (draft.hosts ?? []).join("\n");
   next.precheckPatternsText = (draft.precheck?.number_patterns ?? []).join("\n");
   next.precheckVariables = recordToPairs(draft.precheck?.variables);
@@ -629,7 +631,6 @@ function normalizeLegacyRequestForm(
       acceptStatusText: nested.acceptStatusText || "200",
       notFoundStatusText: nested.notFoundStatusText || "404",
       decodeCharset: nested.decodeCharset || "",
-      browserEnable: nested.browserEnable ?? false,
       browserWaitSelector: nested.browserWaitSelector ?? "",
       browserWaitTimeout: nested.browserWaitTimeout ?? "",
     };
@@ -659,7 +660,6 @@ function normalizeLegacyRequestForm(
     acceptStatusText: acceptStatusText || "200",
     notFoundStatusText: notFoundStatusText || "404",
     decodeCharset: decodeCharset || "",
-    browserEnable: false,
     browserWaitSelector: "",
     browserWaitTimeout: "",
   };
@@ -717,6 +717,7 @@ export function normalizeEditorState(state: EditorState): EditorState {
 
   return {
     ...state,
+    fetchType: state.fetchType || "go-http",
     request: normalizeLegacyRequestForm(legacyState, "request"),
     multiRequest: normalizeLegacyRequestForm(legacyState, "multiRequest"),
     workflowNextRequest: normalizeLegacyRequestForm(legacyState, "workflowNext"),

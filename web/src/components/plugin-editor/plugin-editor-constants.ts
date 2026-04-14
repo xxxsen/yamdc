@@ -63,7 +63,6 @@ export const DEFAULT_REQUEST_FORM_STATE: RequestFormState = {
   acceptStatusText: "200",
   notFoundStatusText: "404",
   decodeCharset: "",
-  browserEnable: false,
   browserWaitSelector: "",
   browserWaitTimeout: "",
 };

@@ -2,12 +2,15 @@ package browser
 
 import (
 	"context"
+	"net/http"
 	"time"
 )
 
 type Params struct {
 	WaitSelector string
 	WaitTimeout  time.Duration
+	Cookies      []*http.Cookie
+	Headers      http.Header
 }
 
 type ctxKey struct{}

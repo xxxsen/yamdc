@@ -333,7 +333,6 @@ export interface PluginEditorParser {
 }
 
 export interface PluginEditorBrowserSpec {
-  enable?: boolean;
   wait_selector?: string;
   wait_timeout?: number;
 }
@@ -365,6 +364,7 @@ export interface PluginEditorDraft {
   version: number;
   name: string;
   type: string;
+  fetch_type?: string;
   hosts: string[];
   precheck?: {
     number_patterns?: string[];

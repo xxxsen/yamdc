@@ -9,6 +9,7 @@ export function RequestForm(props: {
   expandAdvanced?: boolean;
   compactJSONBlocks?: boolean;
   nextRequestLayout?: boolean;
+  fetchType?: string;
 }) {
   const { state } = props;
   const targetMode = state.rawURL ? "url" : "path";
@@ -35,28 +36,25 @@ export function RequestForm(props: {
     props.onChange((prev) => ({ ...prev, [key]: value }));
   }
 
-  const browserRenderingBlock = (
-    <details className="plugin-editor-request-json-detail plugin-editor-browser-detail" open={state.browserEnable || undefined}>
+  const isBrowserMode = props.fetchType === "browser";
+
+  const browserRenderingBlock = isBrowserMode ? (
+    <details className="plugin-editor-request-json-detail plugin-editor-browser-detail" open>
       <summary>
-        <label className="plugin-editor-browser-toggle" onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" checked={state.browserEnable} onChange={(event) => patchField("browserEnable", event.target.checked)} />
-          <span>Browser Rendering</span>
-        </label>
+        <span>Browser Rendering</span>
       </summary>
-      {state.browserEnable && (
-        <div className="plugin-editor-request-inline-row plugin-editor-advanced-grid plugin-editor-browser-fields">
-          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
-            <span>Wait XPath</span>
-            <input className="input" value={state.browserWaitSelector} onChange={(event) => patchField("browserWaitSelector", event.target.value)} placeholder='例如 //div[@class="result-list"]' />
-          </label>
-          <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
-            <span>Wait Timeout (s)</span>
-            <input className="input" type="number" value={state.browserWaitTimeout} onChange={(event) => patchField("browserWaitTimeout", event.target.value)} placeholder="默认 60" />
-          </label>
-        </div>
-      )}
+      <div className="plugin-editor-request-inline-row plugin-editor-advanced-grid plugin-editor-browser-fields">
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+          <span>Wait XPath</span>
+          <input className="input" value={state.browserWaitSelector} onChange={(event) => patchField("browserWaitSelector", event.target.value)} placeholder='例如 //div[@class="result-list"]' />
+        </label>
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+          <span>Wait Timeout (s)</span>
+          <input className="input" type="number" value={state.browserWaitTimeout} onChange={(event) => patchField("browserWaitTimeout", event.target.value)} placeholder="默认 60" />
+        </label>
+      </div>
     </details>
-  );
+  ) : null;
 
   return (
     <>

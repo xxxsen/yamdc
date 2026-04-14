@@ -23,6 +23,7 @@ type PluginSpec struct {
 	Version      int               `yaml:"version" json:"version"`
 	Name         string            `yaml:"name" json:"name"`
 	Type         string            `yaml:"type" json:"type"`
+	FetchType    string            `yaml:"fetch_type" json:"fetch_type"`
 	Hosts        []string          `yaml:"hosts" json:"hosts"`
 	Precheck     *PrecheckSpec     `yaml:"precheck" json:"precheck"`
 	Request      *RequestSpec      `yaml:"request" json:"request"`
@@ -52,7 +53,6 @@ type RequestSpec struct {
 }
 
 type BrowserSpec struct {
-	Enable       bool   `yaml:"enable" json:"enable"`
 	WaitSelector string `yaml:"wait_selector" json:"wait_selector"`
 	WaitTimeout  int    `yaml:"wait_timeout" json:"wait_timeout"`
 }
