@@ -127,7 +127,11 @@ func runCapture(c *config.Config) error {
 	if err != nil {
 		return err
 	}
-	nav := browser.NewRodNavigator(c.DataDir, c.NetworkConfig.Proxy)
+	nav := browser.NewNavigator(&browser.Config{
+		RemoteURL: c.BrowserConfig.RemoteURL,
+		DataDir:   c.DataDir,
+		Proxy:     c.NetworkConfig.Proxy,
+	})
 	defer func() { _ = nav.Close() }()
 	cli = browser.NewHTTPClient(cli, nav)
 	if err := initDependencies(ctx, cli, c.DataDir, c.Dependencies); err != nil {

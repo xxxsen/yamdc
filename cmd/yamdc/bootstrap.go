@@ -163,10 +163,11 @@ func buildHTTPClientAction(ctx context.Context, ysctx *YamdcStartContext) error 
 }
 
 func buildBrowserClientAction(_ context.Context, ysctx *YamdcStartContext) error {
-	nav := browser.NewRodNavigator(
-		ysctx.Config.DataDir,
-		ysctx.Config.NetworkConfig.Proxy,
-	)
+	nav := browser.NewNavigator(&browser.Config{
+		RemoteURL: ysctx.Config.BrowserConfig.RemoteURL,
+		DataDir:   ysctx.Config.DataDir,
+		Proxy:     ysctx.Config.NetworkConfig.Proxy,
+	})
 	ysctx.AddCleanup(func(context.Context) error {
 		return nav.Close()
 	})
