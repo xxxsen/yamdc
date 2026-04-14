@@ -13,6 +13,8 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
+	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
 )
 
 func NewNavigator(cfg *Config) INavigator {
@@ -28,13 +30,14 @@ const (
 )
 
 type rodBrowser struct {
-	mu        sync.Mutex
-	browser   *rod.Browser
-	remote    bool
-	remoteURL string
-	proxy     string
-	dataDir   string
-	idleTimer *time.Timer
+	mu          sync.Mutex
+	browser     *rod.Browser
+	remote      bool
+	remoteURL   string
+	proxy       string
+	dataDir     string
+	activeCount int
+	idleTimer   *time.Timer
 }
 
 func NewRodNavigator(dataDir string, proxy string) INavigator {
@@ -60,13 +63,11 @@ func (rb *rodBrowser) ensureBrowser() (*rod.Browser, error) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 	if rb.browser != nil {
-		if !rb.remote {
-			rb.resetIdleTimerLocked()
-		}
 		return rb.browser, nil
 	}
 
 	var controlURL string
+	rollback := func() {}
 	if rb.remote {
 		wsURL, err := launcher.ResolveURL(rb.remoteURL)
 		if err != nil {
@@ -89,17 +90,37 @@ func (rb *rodBrowser) ensureBrowser() (*rod.Browser, error) {
 		if err != nil {
 			return nil, fmt.Errorf("launch browser failed: %w", err)
 		}
+		rollback = func() { l.Kill() }
 	}
 
 	b := rod.New().ControlURL(controlURL)
 	if err := b.Connect(); err != nil {
+		rollback()
 		return nil, fmt.Errorf("connect browser failed: %w", err)
 	}
 	rb.browser = b
-	if !rb.remote {
+	return rb.browser, nil
+}
+
+func (rb *rodBrowser) acquireNavigate() {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	rb.activeCount++
+	if rb.idleTimer != nil {
+		rb.idleTimer.Stop()
+		rb.idleTimer = nil
+	}
+}
+
+func (rb *rodBrowser) releaseNavigate(ctx context.Context) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	rb.activeCount--
+	logutil.GetLogger(ctx).Debug("browser navigate released",
+		zap.Int("active_count", rb.activeCount))
+	if rb.activeCount == 0 && rb.browser != nil && !rb.remote {
 		rb.startIdleTimerLocked()
 	}
-	return rb.browser, nil
 }
 
 func (rb *rodBrowser) Navigate(ctx context.Context, rawURL string, params *Params) (*NavigateResult, error) {
@@ -109,8 +130,8 @@ func (rb *rodBrowser) Navigate(ctx context.Context, rawURL string, params *Param
 	}
 
 	if !rb.remote {
-		rb.pauseIdleTimer()
-		defer rb.resumeIdleTimer()
+		rb.acquireNavigate()
+		defer rb.releaseNavigate(ctx)
 	}
 
 	page, err := stealth.Page(b)
@@ -252,35 +273,17 @@ func (rb *rodBrowser) Close() error {
 	return nil
 }
 
-func (rb *rodBrowser) pauseIdleTimer() {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
+func (rb *rodBrowser) startIdleTimerLocked() {
 	if rb.idleTimer != nil {
 		rb.idleTimer.Stop()
 	}
-}
-
-func (rb *rodBrowser) resumeIdleTimer() {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-	rb.startIdleTimerLocked()
-}
-
-func (rb *rodBrowser) startIdleTimerLocked() {
 	rb.idleTimer = time.AfterFunc(browserIdleTimeout, func() {
 		rb.mu.Lock()
 		defer rb.mu.Unlock()
-		if rb.browser != nil {
+		if rb.browser != nil && rb.activeCount == 0 {
 			_ = rb.browser.Close()
 			rb.browser = nil
 		}
 		rb.idleTimer = nil
 	})
-}
-
-func (rb *rodBrowser) resetIdleTimerLocked() {
-	if rb.idleTimer != nil {
-		rb.idleTimer.Stop()
-	}
-	rb.startIdleTimerLocked()
 }

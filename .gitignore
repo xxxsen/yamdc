@@ -13,3 +13,4 @@ config.json
 /bin
 /tmp
 /.cursor
+/issues
