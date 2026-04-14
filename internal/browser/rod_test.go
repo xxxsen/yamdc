@@ -143,7 +143,7 @@ func TestBrowserInjectHeadersAndCookies(t *testing.T) {
 		capturedCookies = r.Cookies()
 		mu.Unlock()
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, `<html><body><div id="ok">done</div></body></html>`)
+		_, _ = fmt.Fprint(w, `<html><body><div id="ok">done</div></body></html>`)
 	}))
 	defer srv.Close()
 

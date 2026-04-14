@@ -37,7 +37,7 @@ func fetchRemoteYAML(t *testing.T, url string) []byte {
 	t.Helper()
 	resp, err := http.Get(url)
 	require.NoError(t, err, "fetch remote YAML")
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "remote YAML HTTP status")
 	data, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
