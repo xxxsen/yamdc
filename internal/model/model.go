@@ -3,7 +3,7 @@ package model
 import "github.com/xxxsen/yamdc/internal/number"
 
 type MovieMeta struct {
-	Number           string   `json:"number"`            //番号
+	Number           string   `json:"number"`            //影片 ID
 	Title            string   `json:"title"`             //标题
 	TitleLang        string   `json:"title_lang"`        //标题语言
 	TitleTranslated  string   `json:"title_translated"`  //翻译后的title

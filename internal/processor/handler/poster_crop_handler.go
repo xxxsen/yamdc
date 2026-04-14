@@ -26,7 +26,7 @@ func (c *posterCropHandler) Name() string {
 }
 
 func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
-	//如果没有开启人脸识别, 那么直接使用原始的骑兵裁剪方案
+	//如果没有开启人脸识别, 那么直接使用基础裁剪方案
 	if c.faceRec == nil {
 		return image.CutCensoredImageFromBytes
 	}
@@ -41,7 +41,7 @@ func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
 			return raw, nil
 		}
 		//在原始图中, 存在人脸, 那么尝试从原始图中进行人脸识别并裁剪
-		//主要优化 SIRO 之类的番号无法截取正常带人脸poster的问题
+		//主要优化部分影片 ID 无法截取正常带人脸 poster 的问题
 		rects, err = c.faceRec.SearchFaces(ctx, data)
 		if err != nil || len(rects) != 1 { //仅有一个人脸的场景下才执行人脸识别, 避免截到奇奇怪怪的地方
 			return raw, nil
@@ -79,8 +79,8 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	var cutter imageCutter = c.censorCutter(ctx) //默认情况下, 都按骑兵进行封面处理
-	if fc.Number.GetExternalFieldUncensor() {    //如果为步兵, 则使用人脸识别(当然, 只有该特性能用的情况下才启用)
+	var cutter imageCutter = c.censorCutter(ctx) //默认情况下使用基础封面裁剪
+	if fc.Number.GetExternalFieldUncensor() {    //带有附加标记时优先尝试人脸识别方案
 		cutter = c.uncensorCutter(ctx)
 	}
 	raw, err := c.storage.GetData(ctx, fc.Meta.Cover.Key)

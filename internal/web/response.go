@@ -30,10 +30,6 @@ func writeFail(w http.ResponseWriter, code int, message string) {
 	})
 }
 
-func writeMethodNotAllowed(w http.ResponseWriter) {
-	writeFail(w, errCodeMethodNotAllowed, "method not allowed")
-}
-
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

@@ -12,6 +12,6 @@ chains:
     - name: gamma
       priority: 300
 
-  fc2:
+  source_a:
     - name: alpha
       priority: 200

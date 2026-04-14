@@ -28,7 +28,6 @@ func TestReadWrite(t *testing.T) {
 		Maker:         "hello_maker",
 		Genres:        []string{"t_x", "t_y", "t_z"},
 		Art:           Art{Poster: "art_poster.jpg", Fanart: []string{"art_fanart_1", "art_fanart_2", "art_fanart_3"}},
-		Mpaa:          "JP-18+",
 		Director:      "hello_director",
 		Actors:        []Actor{{Name: "act_a", Role: "main", Thumb: "act_a.jpg"}},
 		Poster:        "poster.jpg",

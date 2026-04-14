@@ -22,13 +22,13 @@ type Movie struct {
 	Maker           string     `xml:"maker,omitempty"`           //与Studio一致即可
 	Genres          []string   `xml:"genre,omitempty"`           //与标签保持一致即可
 	Art             Art        `xml:"art,omitempty"`             //图片列表
-	Mpaa            string     `xml:"mpaa,omitempty"`            //分级信息, 例如JP-18+
+	Mpaa            string     `xml:"mpaa,omitempty"`            // MPAA rating
 	Director        string     `xml:"director,omitempty"`        //导演
 	Actors          []Actor    `xml:"actor,omitempty"`           //演员
 	Poster          string     `xml:"poster,omitempty"`          //海报
 	Thumb           string     `xml:"thumb,omitempty"`           //缩略图
 	Label           string     `xml:"label,omitempty"`           //发行商
-	ID              string     `xml:"id,omitempty"`              //番号
+	ID              string     `xml:"id,omitempty"`              //影片 ID
 	Cover           string     `xml:"cover,omitempty"`           //封面
 	Fanart          string     `xml:"fanart,omitempty"`          //跟封面一致就好了
 	PlotTranslated  string     `xml:"plottranslated,omitempty"`  //翻译简介

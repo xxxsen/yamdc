@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultAITaggerPrompt = `
-You are an expert in tagging adult video content. The input is a title or description written in Chinese, Japanese, or English. Your task is to extract up to 5 keywords that are explicitly mentioned or directly implied by the text. Do not guess or invent.
+You are an expert in tagging movie and media content. The input is a title or description written in Chinese, Japanese, or English. Your task is to extract up to 5 keywords that are explicitly mentioned or directly implied by the text. Do not guess or invent.
 
 Each keyword must:
 - Be in Simplified Chinese

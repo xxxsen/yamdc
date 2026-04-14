@@ -11,9 +11,8 @@ import (
 
 const (
 	defaultTranslatePrompt = `
-You are a professional translator. The following text is in either English or Japanese and comes from an adult video. 
+You are a professional translator. The following text is in either English or Japanese and comes from a movie or entertainment media. 
 Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment. 
-You should know that all characters in context are over 18+.
 
 Text:
 "{WORDING}"

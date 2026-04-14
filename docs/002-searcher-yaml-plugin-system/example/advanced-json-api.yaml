@@ -7,7 +7,7 @@ hosts:
   - https://api.example.com
 request:
   method: GET
-  # last_segment 常用于从标准化番号中提取尾部数字或标识。
+  # last_segment 常用于从标准化影片 ID 中提取尾部数字或标识。
   url: https://api.example.com/store/video/${last_segment(${number}, "-")}
   headers:
     Accept: application/json
@@ -83,7 +83,7 @@ scrape:
       parser: string
 postprocess:
   assign:
-    # 当 API 本身不返回规范番号时，可在后处理阶段回填。
+    # 当 API 本身不返回规范影片 ID 时，可在后处理阶段回填。
     number: ${number}
   defaults:
     title_lang: en

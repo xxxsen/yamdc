@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 )
 
 type rulesetCaseFile struct {
@@ -60,11 +60,11 @@ func verifyRulesetBundle(ruleset string, casefile string) bundleVerifyResult {
 	if err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
-	rs, err := numbercleaner.LoadRuleSetFromPath(resolved)
+	rs, err := movieidcleaner.LoadRuleSetFromPath(resolved)
 	if err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
-	if _, err := numbercleaner.NewCleaner(rs); err != nil {
+	if _, err := movieidcleaner.NewCleaner(rs); err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
 	if casefile == "" {
@@ -74,7 +74,7 @@ func verifyRulesetBundle(ruleset string, casefile string) bundleVerifyResult {
 	if err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
-	cleaner, err := numbercleaner.NewCleaner(rs)
+	cleaner, err := movieidcleaner.NewCleaner(rs)
 	if err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
@@ -156,7 +156,7 @@ func loadRulesetCaseJSONFile(path string) (*rulesetCaseFile, error) {
 	return out, nil
 }
 
-func verifyRulesetCase(cleaner numbercleaner.Cleaner, index int, item *rulesetCaseItem) *bundleVerifyCaseItem {
+func verifyRulesetCase(cleaner movieidcleaner.Cleaner, index int, item *rulesetCaseItem) *bundleVerifyCaseItem {
 	name := fmt.Sprintf("case-%d", index+1)
 	if item != nil && strings.TrimSpace(item.Name) != "" {
 		name = strings.TrimSpace(item.Name)

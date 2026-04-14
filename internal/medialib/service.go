@@ -388,6 +388,12 @@ func (s *Service) runMove(ctx context.Context) error {
 	state := newRunningTaskState(TaskMove, len(itemDirs), "移动到媒体库中")
 	_ = s.saveTaskState(ctx, state)
 	for index, absPath := range itemDirs {
+		logger.Info("move to media library item started",
+			zap.Int("index", index+1),
+			zap.Int("total", len(itemDirs)),
+			zap.String("abs_path", absPath),
+		)
+		itemStartedAt := time.Now()
 		result := s.moveOneItem(logger, absPath)
 		state.Processed = index + 1
 		state.Current = result.RelPath
@@ -400,9 +406,19 @@ func (s *Service) runMove(ctx context.Context) error {
 		if result.Failed {
 			state.ErrorCount++
 		}
+		logger.Info("move to media library item finished",
+			zap.Int("index", index+1),
+			zap.Int("total", len(itemDirs)),
+			zap.String("rel_path", result.RelPath),
+			zap.Bool("success", result.Success),
+			zap.Bool("conflict", result.Conflict),
+			zap.Bool("failed", result.Failed),
+			zap.Duration("duration", time.Since(itemStartedAt)),
+		)
 		s.persistTaskProgress(ctx, &state)
 	}
-	_ = s.runFullSync(ctx, "move")
+	//移动电影, 但是不执行全量sync, 这个太慢了, 用户手动触发即可
+	//_ = s.runFullSync(ctx, "move")
 	s.finishTask(ctx, &state, "移动到媒体库完成")
 	logger.Info("move to media library completed",
 		zap.Int("total", state.Total),
@@ -492,6 +508,9 @@ func (s *Service) syncOneItem(ctx context.Context, logger *zap.Logger, keep map[
 	keep[relPath] = struct{}{}
 	logger.Info("media library detail synced",
 		zap.String("rel_path", relPath),
+		zap.String("title", detail.Item.Title),
+		zap.String("number", detail.Item.Number),
+		zap.String("release_date", detail.Item.ReleaseDate),
 		zap.Int("variant_count", len(detail.Variants)),
 		zap.Int("file_count", len(detail.Files)),
 	)
@@ -507,6 +526,11 @@ func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult
 	relPath = filepath.ToSlash(relPath)
 	targetAbs := filepath.Join(s.libraryDir, filepath.FromSlash(relPath))
 	if _, err := os.Stat(targetAbs); err == nil {
+		logger.Warn("move to media library skipped because target already exists",
+			zap.String("rel_path", relPath),
+			zap.String("src_path", absPath),
+			zap.String("dst_path", targetAbs),
+		)
 		return itemTaskResult{RelPath: relPath, Conflict: true}
 	} else if !os.IsNotExist(err) {
 		logger.Warn("check target media library path failed", zap.String("rel_path", relPath), zap.Error(err))
@@ -520,6 +544,11 @@ func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult
 		logger.Warn("move directory to media library failed", zap.String("rel_path", relPath), zap.Error(err))
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
+	logger.Info("move directory to media library succeeded",
+		zap.String("rel_path", relPath),
+		zap.String("src_path", absPath),
+		zap.String("dst_path", targetAbs),
+	)
 	return itemTaskResult{RelPath: relPath, Success: true}
 }
 

@@ -13,7 +13,7 @@ import (
 
 type MultiLinkContext struct {
 	ReqBuilder      MultiLinkBuildRequestFunc //用于重建请求的函数
-	Numbers         []string                  //用户传入的多个番号, 基于这些番号, 逐个调用ReqBuilder构建链接并请求
+	Numbers         []string                  //用户传入的多个影片 ID, 基于这些影片 ID 逐个调用 ReqBuilder 构建链接并请求
 	ValidStatusCode []int                     //哪些http状态码是有效的
 	ResultTester    OnMultiLinkResultTest     //回调用户函数，确认哪些结果是符合预期的
 }

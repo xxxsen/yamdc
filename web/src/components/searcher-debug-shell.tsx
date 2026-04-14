@@ -11,7 +11,7 @@ import {
   type SearcherDebugResult,
 } from "@/lib/api";
 
-const DEFAULT_INPUT = "FC2-PPV-12345";
+const DEFAULT_INPUT = "MOVIE-12345";
 const SEARCHER_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.searcher.input";
 const SEARCHER_DEBUG_PLUGIN_STORAGE_KEY = "yamdc.debug.searcher.plugin";
 const SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY = "yamdc.debug.searcher.use_cleaner";
@@ -90,7 +90,7 @@ export function SearcherDebugShell() {
   const handleRun = () => {
     const nextInput = input.trim();
     if (!nextInput) {
-      setError("请输入待检索的番号。");
+      setError("请输入待检索的影片 ID。");
       setResult(null);
       return;
     }
@@ -140,12 +140,12 @@ export function SearcherDebugShell() {
             Searcher 调试
           </span>
           <h2>插件检索测试</h2>
-          <p>输入一个番号，查看它经过 `numbercleaner` 后使用了哪些插件，以及每个插件在哪个阶段返回结果或失败。</p>
+          <p>输入一个影片 ID，查看它经过 `movieidcleaner` 后使用了哪些插件，以及每个插件在哪个阶段返回结果或失败。</p>
         </div>
 
         <div className="searcher-debug-controls">
           <label className="ruleset-debug-label" htmlFor="searcher-debug-input">
-            待检索番号
+            待检索影片 ID
           </label>
           <div className="ruleset-debug-input-row">
             <input
@@ -153,7 +153,7 @@ export function SearcherDebugShell() {
               className="input ruleset-debug-input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="例如：FC2-PPV-12345"
+              placeholder="例如：MOVIE-12345"
             />
             <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isRunning}>
               {isRunning ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Search size={16} />}
@@ -180,7 +180,7 @@ export function SearcherDebugShell() {
 
           <label className="searcher-debug-switch">
             <input type="checkbox" checked={useCleaner} onChange={(event) => setUseCleaner(event.target.checked)} />
-            <span>启用番号清洗</span>
+            <span>启用影片 ID 清洗</span>
           </label>
 
           {error ? <div className="ruleset-debug-error">{error}</div> : null}
@@ -197,7 +197,7 @@ export function SearcherDebugShell() {
             <div className="ruleset-debug-summary">
               <div className="searcher-debug-summary-body">
                 <div className="ruleset-debug-summary-row">
-                  <span>最终番号</span>
+                  <span>最终影片 ID</span>
                   <strong>{result.number_id || "-"}</strong>
                 </div>
                 <div className="ruleset-debug-summary-row">
@@ -213,7 +213,7 @@ export function SearcherDebugShell() {
                   <strong>{result.matched_plugin || "-"}</strong>
                 </div>
                 <div className="ruleset-debug-summary-row">
-                  <span>分类 / 无码</span>
+                  <span>分类 / 附加标记</span>
                   <strong>
                     {result.category || "-"} / {result.uncensor ? "true" : "false"}
                   </strong>
@@ -275,7 +275,7 @@ export function SearcherDebugShell() {
                           <strong>{pluginResult.meta.title || "-"}</strong>
                         </div>
                         <div className="searcher-debug-meta-row">
-                          <span>番号</span>
+                          <span>影片 ID</span>
                           <strong>{pluginResult.meta.number || "-"}</strong>
                         </div>
                       </div>

@@ -1,9 +1,7 @@
 yamdc
 ===
 
-由于原先的 MovieDataCapture 作者把工具闭源了，只能自己写一个。
-
-**默默用着就行，不需要宣传/推广，甚至也不需要 star。**
+一个面向影片资料整理、元数据补全与媒体库管理的抓取工具。
 
 ## 当前实现概览
 
@@ -14,8 +12,8 @@ yamdc
 
 其中：
 
-- `run`：执行一次完整扫描与刮削流程（单次任务）
-- `server`：启动 HTTP API 服务，供 WebUI 操作扫描、刮削、Review、入库、媒体库管理
+- `run`：执行一次完整扫描与抓取流程（单次任务）
+- `server`：启动 HTTP API 服务，供 WebUI 操作扫描、抓取、Review、入库、媒体库管理
 
 ## 使用方式
 
@@ -32,7 +30,7 @@ go install github.com/xxxsen/yamdc/cmd/yamdc@latest
 安装后可直接运行：
 
 ```bash
-# 单次刮削模式
+# 单次抓取模式
 yamdc run --config=./config.json
 
 # 服务端模式（WebUI 需要）
@@ -88,7 +86,7 @@ services:
   "save_dir": "/savedir",
   "library_dir": "/librarydir",
   "data_dir": "/datadir",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
@@ -131,7 +129,7 @@ WebUI 主流程：
 
 1. 扫描 `scan_dir`
 2. 生成待处理任务
-3. 手动触发单任务刮削
+3. 手动触发单任务抓取
 4. 在 Review 页面修正元数据
 5. 点击入库，写入 `save_dir`
 6. 通过媒体库页面管理入库结果
@@ -145,7 +143,7 @@ WebUI 主流程：
   "scan_dir": "/dir/to/scan",
   "save_dir": "/dir/to/save/scraped/data",
   "data_dir": "/dir/to/save/models/and/cache",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
@@ -157,25 +155,154 @@ WebUI 主流程：
   "save_dir": "/dir/to/save/scraped/data",
   "library_dir": "/dir/to/library",
   "data_dir": "/dir/to/save/models/and/cache",
-  "naming": "{YEAR}/{NUMBER}"
+  "naming": "{YEAR}/{MOVIEID}"
 }
 ```
 
 | 配置项 | 说明 |
 |---|---|
-| scan_dir | 扫描目录，程序会扫描该目录并对其中影片进行刮削 |
-| save_dir | 保存目录，刮削成功后按 `naming` 规则命名 |
+| scan_dir | 扫描目录，程序会扫描该目录并对其中影片进行抓取 |
+| save_dir | 保存目录，抓取成功后按 `naming` 规则命名 |
 | library_dir | 媒体库目录（仅 `server` 模式必填） |
 | data_dir | 数据目录，存储中间文件、缓存、模型 |
-| naming | 命名规则，可用标签：`{DATE}`, `{YEAR}`, `{MONTH}`, `{NUMBER}`, `{ACTOR}`, `{TITLE}`, `{TITLE_TRANSLATED}` |
+| naming | 命名规则，可用标签：`{DATE}`, `{YEAR}`, `{MONTH}`, `{MOVIEID}`, `{NUMBER}`, `{ACTOR}`, `{TITLE}`, `{TITLE_TRANSLATED}` |
 
-> NOTE: `ACTOR/TITLE/TITLE_TRANSLATED` 可能包含特殊字符或长度超限，不推荐直接用于目录名。
+> NOTE: `MOVIEID` 是文档主推写法，`NUMBER` 作为兼容别名保留，两者值相同。`ACTOR/TITLE/TITLE_TRANSLATED` 可能包含特殊字符或长度超限，不推荐直接用于目录名。
+
+## 可选 Repo 配置
+
+`plugin repo` 和 `script repo` 现在都是可选项。
+
+- 未配置 `searcher_plugin_config.sources`：
+  - 服务会正常启动
+  - 不会加载插件 bundle
+  - 启动日志会提醒你配置自己的 plugin repo
+- 未配置 `movieid_ruleset_config`：
+  - 服务会正常启动
+  - 会退化为 `PassthroughCleaner`
+  - 启动日志会提醒你配置自己的 script repo
+
+如果你希望启用自定义搜索插件和影片 ID 清洗规则，需要在 `config.json` 中显式配置它们。
+
+### 配置自己的 Script Repo
+
+`script repo` 用来提供影片 ID 清洗规则。支持：
+
+- 本地目录
+- 远程 GitHub 仓库（按 tag 下载 bundle）
+
+本地目录示例：
+
+```json
+{
+  "movieid_ruleset_config": {
+    "source_type": "local",
+    "location": "/path/to/your-script-repo"
+  }
+}
+```
+
+远程仓库示例：
+
+```json
+{
+  "movieid_ruleset_config": {
+    "source_type": "remote",
+    "location": "https://github.com/yourname/your-yamdc-script-repo"
+  }
+}
+```
+
+最小目录结构：
+
+```text
+your-yamdc-script-repo/
+  manifest.yaml
+  ruleset/
+    001-base.yaml
+    002-matchers.yaml
+```
+
+`manifest.yaml` 示例：
+
+```yaml
+entry: ruleset
+```
+
+规则文件格式可参考仓库内：
+
+- [docs/004-movieid-ruleset/design.md](/home/sen/work/yamdc/docs/004-movieid-ruleset/design.md)
+- [docs/004-movieid-ruleset/example/README.md](/home/sen/work/yamdc/docs/004-movieid-ruleset/example/README.md)
+
+### 配置自己的 Plugin Repo
+
+`plugin repo` 用来提供搜索插件 bundle。支持：
+
+- 本地目录
+- 远程 GitHub 仓库（按 tag 下载 bundle）
+
+本地目录示例：
+
+```json
+{
+  "searcher_plugin_config": {
+    "sources": [
+      {
+        "source_type": "local",
+        "location": "/path/to/your-plugin-repo"
+      }
+    ]
+  }
+}
+```
+
+远程仓库示例：
+
+```json
+{
+  "searcher_plugin_config": {
+    "sources": [
+      {
+        "source_type": "remote",
+        "location": "https://github.com/yourname/your-yamdc-plugin-repo"
+      }
+    ]
+  }
+}
+```
+
+最小目录结构：
+
+```text
+your-yamdc-plugin-repo/
+  manifest.yaml
+  plugins/
+    alpha.yaml
+```
+
+`manifest.yaml` 示例：
+
+```yaml
+version: 1
+name: my-plugin-bundle
+entry: plugins
+chains:
+  all:
+    - name: alpha
+      priority: 100
+```
+
+插件 YAML 格式和 bundle 规则可参考：
+
+- [docs/003-searcher-plugin-bundle/design.md](/home/sen/work/yamdc/docs/003-searcher-plugin-bundle/design.md)
+- [docs/002-searcher-yaml-plugin-system/design.md](/home/sen/work/yamdc/docs/002-searcher-yaml-plugin-system/design.md)
+- [docs/002-searcher-yaml-plugin-system/example/README.md](/home/sen/work/yamdc/docs/002-searcher-yaml-plugin-system/example/README.md)
 
 ## 文件名后缀扩展能力
 
-工具不会强制清洗番号（不同下载站命名差异大），建议用户按需重命名。
+工具不会强制清洗影片 ID（不同来源命名差异较大），建议用户按需重命名。
 
-支持通过番号后缀实现“额外分类/封面水印”等能力（后缀可组合，顺序不限）：
+支持通过影片 ID 后缀实现“额外分类/封面水印”等能力（后缀可组合，顺序不限）：
 
 | 后缀 | 举例 | 说明 |
 |---|---|---|
@@ -183,9 +310,7 @@ WebUI 主流程：
 | `-C` | `-` | 添加“字幕”分类并为封面添加水印 |
 | `-4K` | `-` | 添加“4K”分类并为封面添加水印 |
 | `-8K` | `-` | 添加 8K 水印 |
-| `-LEAK` | `-` | 为封面添加特定水印 |
 | `-VR` | `-` | 添加 VR 水印 |
-| `-UC`, `-U` | `-` | 添加破解水印 |
 
 ## 其他配置
 

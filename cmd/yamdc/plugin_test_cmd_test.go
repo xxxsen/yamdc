@@ -11,7 +11,7 @@ import (
 
 func TestLoadPluginCaseJSONFileInfersPluginFromFileName(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "javbus.json")
+	path := filepath.Join(dir, "alpha.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{
   "cases": [
     {"name":"a","input":"ABC-123","output":{"status":"success"}}
@@ -20,18 +20,18 @@ func TestLoadPluginCaseJSONFileInfersPluginFromFileName(t *testing.T) {
 
 	out, err := loadPluginCaseJSONFile(path)
 	require.NoError(t, err)
-	require.Equal(t, "javbus", out.Plugin)
+	require.Equal(t, "alpha", out.Plugin)
 	require.Len(t, out.Cases, 1)
 }
 
 func TestLoadPluginCaseFileFromDirScansJSON(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "javbus.json"), []byte(`{
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "alpha.json"), []byte(`{
   "cases": [
     {"name":"a","input":"ABC-123","output":{"status":"success"}}
   ]
 }`), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "missav.json"), []byte(`{
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "beta.json"), []byte(`{
   "cases": [
     {"name":"b","input":"XYZ-456","output":{"status":"not_found"}}
   ]
@@ -48,21 +48,21 @@ func TestLoadPluginCaseFileFromDirScansJSON(t *testing.T) {
 func TestResolvePluginRuntimeName(t *testing.T) {
 	resolved := &pluginbundle.ResolvedBundle{
 		Plugins: map[string][]byte{
-			"javbus":                     []byte("a"),
-			"__bundle__FC2__fc2":         []byte("b"),
-			"__bundle__COSPURI__cospuri": []byte("c"),
+			"alpha":                         []byte("a"),
+			"__bundle__SOURCE_A__bundle_a":  []byte("b"),
+			"__bundle__COLLECTION__special": []byte("c"),
 		},
 	}
 
-	name, err := resolvePluginRuntimeName(resolved, "javbus")
+	name, err := resolvePluginRuntimeName(resolved, "alpha")
 	require.NoError(t, err)
-	require.Equal(t, "javbus", name)
+	require.Equal(t, "alpha", name)
 
-	name, err = resolvePluginRuntimeName(resolved, "fc2")
+	name, err = resolvePluginRuntimeName(resolved, "bundle_a")
 	require.NoError(t, err)
-	require.Equal(t, "__bundle__FC2__fc2", name)
+	require.Equal(t, "__bundle__SOURCE_A__bundle_a", name)
 
-	name, err = resolvePluginRuntimeName(resolved, "cospuri")
+	name, err = resolvePluginRuntimeName(resolved, "special")
 	require.NoError(t, err)
-	require.Equal(t, "__bundle__COSPURI__cospuri", name)
+	require.Equal(t, "__bundle__COLLECTION__special", name)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"go.uber.org/zap"
@@ -94,143 +95,157 @@ func (a *API) saveLibrary() *medialib.Service {
 	return medialib.NewService(nil, "", a.saveDir)
 }
 
-func (a *API) handleListLibrary(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
+func (a *API) handleListLibrary(c *gin.Context) {
 	items, err := a.saveLibrary().ListSaveItems()
 	if err != nil {
-		writeFail(w, errCodeListLibraryFailed, err.Error())
+		writeFail(c.Writer, errCodeListLibraryFailed, err.Error())
 		return
 	}
-	writeSuccess(w, http.StatusOK, "ok", a.toLibraryListItems(items))
+	writeSuccess(c.Writer, http.StatusOK, "ok", a.toLibraryListItems(items))
 }
 
-func (a *API) handleLibraryItem(w http.ResponseWriter, r *http.Request) {
-	pathValue := strings.TrimSpace(r.URL.Query().Get("path"))
+func (a *API) handleLibraryItemGet(c *gin.Context) {
+	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
-		writeFail(w, errCodeMissingLibraryPath, "missing library path")
+		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	svc := a.saveLibrary()
-	switch r.Method {
-	case http.MethodGet:
-		detail, err := svc.GetSaveDetail(pathValue)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeFail(w, errCodeLibraryItemNotFound, err.Error())
-				return
-			}
-			writeFail(w, errCodeLibraryItemReadFailed, err.Error())
-			return
-		}
-		writeSuccess(w, http.StatusOK, "ok", a.toLibraryDetail(detail))
-	case http.MethodPatch:
-		var req struct {
-			Meta libraryMeta `json:"meta"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeFail(w, errCodeInvalidJSONBody, "invalid json body")
-			return
-		}
-		detail, err := svc.UpdateSaveItem(pathValue, fromLibraryMeta(req.Meta))
-		if err != nil {
-			logutil.GetLogger(r.Context()).Warn("library item update failed", zap.String("path", pathValue), zap.Error(err))
-			writeFail(w, errCodeLibraryUpdateFailed, err.Error())
-			return
-		}
-		logutil.GetLogger(r.Context()).Info("library item updated", zap.String("path", detail.Item.RelPath))
-		writeSuccess(w, http.StatusOK, "library item updated", a.toLibraryDetail(detail))
-	case http.MethodDelete:
-		if err := svc.DeleteSaveItem(pathValue); err != nil {
-			if os.IsNotExist(err) {
-				writeFail(w, errCodeLibraryItemNotFound, err.Error())
-				return
-			}
-			logutil.GetLogger(r.Context()).Warn("library item delete failed", zap.String("path", pathValue), zap.Error(err))
-			writeFail(w, errCodeLibraryItemDeleteFailed, err.Error())
-			return
-		}
-		logutil.GetLogger(r.Context()).Info("library item deleted", zap.String("path", pathValue))
-		writeSuccess(w, http.StatusOK, "library item deleted", nil)
-	default:
-		writeMethodNotAllowed(w)
-	}
-}
-
-func (a *API) handleLibraryFile(w http.ResponseWriter, r *http.Request) {
-	pathValue := strings.TrimSpace(r.URL.Query().Get("path"))
-	if pathValue == "" {
-		writeFail(w, errCodeMissingFilePath, "missing file path")
-		return
-	}
-	svc := a.saveLibrary()
-	relPath, absPath, err := svc.ResolveSavePath(pathValue)
+	detail, err := svc.GetSaveDetail(pathValue)
 	if err != nil {
-		writeFail(w, errCodeResolveLibraryPathFailed, err.Error())
+		if os.IsNotExist(err) {
+			writeFail(c.Writer, errCodeLibraryItemNotFound, err.Error())
+			return
+		}
+		writeFail(c.Writer, errCodeLibraryItemReadFailed, err.Error())
 		return
 	}
-	switch r.Method {
-	case http.MethodGet:
-		info, err := os.Stat(absPath)
-		if err != nil || info.IsDir() {
-			writeFail(w, errCodeLibraryFileNotFound, "library file not found")
-			return
-		}
-		file, err := os.Open(absPath)
-		if err != nil {
-			writeFail(w, errCodeLibraryFileOpenFailed, "open library file failed")
-			return
-		}
-		defer func() {
-			_ = file.Close()
-		}()
-		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
-		http.ServeContent(w, r, info.Name(), time.Time{}, file)
-	case http.MethodDelete:
-		detail, err := svc.DeleteSaveFile(pathValue)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeFail(w, errCodeLibraryFileNotFound, "library file not found")
-				return
-			}
-			if err.Error() == "only extrafanart files can be deleted" {
-				writeFail(w, errCodeLibraryFileDeleteDenied, err.Error())
-				return
-			}
-			logutil.GetLogger(r.Context()).Error("library file delete failed", zap.String("path", relPath), zap.Error(err))
-			writeFail(w, errCodeLibraryFileDeleteFailed, "delete library file failed")
-			return
-		}
-		logutil.GetLogger(r.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", detail.Item.RelPath))
-		writeSuccess(w, http.StatusOK, "library file deleted", a.toLibraryDetail(detail))
-	default:
-		writeMethodNotAllowed(w)
-	}
+	writeSuccess(c.Writer, http.StatusOK, "ok", a.toLibraryDetail(detail))
 }
 
-func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
+func (a *API) handleLibraryItemPatch(c *gin.Context) {
+	pathValue := strings.TrimSpace(c.Query("path"))
+	if pathValue == "" {
+		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
-	itemPath := strings.TrimSpace(r.URL.Query().Get("path"))
-	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
-	variantKey := strings.TrimSpace(r.URL.Query().Get("variant"))
+	var req struct {
+		Meta libraryMeta `json:"meta"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
+		return
+	}
+	detail, err := a.saveLibrary().UpdateSaveItem(pathValue, fromLibraryMeta(req.Meta))
+	if err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("library item update failed", zap.String("path", pathValue), zap.Error(err))
+		writeFail(c.Writer, errCodeLibraryUpdateFailed, err.Error())
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info("library item updated", zap.String("path", detail.Item.RelPath))
+	writeSuccess(c.Writer, http.StatusOK, "library item updated", a.toLibraryDetail(detail))
+}
+
+func (a *API) handleLibraryItemDelete(c *gin.Context) {
+	pathValue := strings.TrimSpace(c.Query("path"))
+	if pathValue == "" {
+		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
+		return
+	}
+	if err := a.saveLibrary().DeleteSaveItem(pathValue); err != nil {
+		if os.IsNotExist(err) {
+			writeFail(c.Writer, errCodeLibraryItemNotFound, err.Error())
+			return
+		}
+		logutil.GetLogger(c.Request.Context()).Warn("library item delete failed", zap.String("path", pathValue), zap.Error(err))
+		writeFail(c.Writer, errCodeLibraryItemDeleteFailed, err.Error())
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info("library item deleted", zap.String("path", pathValue))
+	writeSuccess(c.Writer, http.StatusOK, "library item deleted", nil)
+}
+
+func (a *API) handleLibraryFileGet(c *gin.Context) {
+	pathValue := strings.TrimSpace(c.Query("path"))
+	if pathValue == "" {
+		writeFail(c.Writer, errCodeMissingFilePath, "missing file path")
+		return
+	}
+	svc := a.saveLibrary()
+	_, absPath, err := svc.ResolveSavePath(pathValue)
+	if err != nil {
+		writeFail(c.Writer, errCodeResolveLibraryPathFailed, err.Error())
+		return
+	}
+	info, err := os.Stat(absPath)
+	if err != nil || info.IsDir() {
+		writeFail(c.Writer, errCodeLibraryFileNotFound, "library file not found")
+		return
+	}
+	file, err := os.Open(absPath)
+	if err != nil {
+		writeFail(c.Writer, errCodeLibraryFileOpenFailed, "open library file failed")
+		return
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	c.Writer.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	c.Writer.Header().Set("Pragma", "no-cache")
+	c.Writer.Header().Set("Expires", "0")
+	http.ServeContent(c.Writer, c.Request, info.Name(), time.Time{}, file)
+}
+
+func (a *API) handleLibraryFileDelete(c *gin.Context) {
+	pathValue := strings.TrimSpace(c.Query("path"))
+	if pathValue == "" {
+		writeFail(c.Writer, errCodeMissingFilePath, "missing file path")
+		return
+	}
+	svc := a.saveLibrary()
+	relPath, _, err := svc.ResolveSavePath(pathValue)
+	if err != nil {
+		writeFail(c.Writer, errCodeResolveLibraryPathFailed, err.Error())
+		return
+	}
+	detail, err := svc.DeleteSaveFile(pathValue)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeFail(c.Writer, errCodeLibraryFileNotFound, "library file not found")
+			return
+		}
+		if err.Error() == "only extrafanart files can be deleted" {
+			writeFail(c.Writer, errCodeLibraryFileDeleteDenied, err.Error())
+			return
+		}
+		logutil.GetLogger(c.Request.Context()).Error("library file delete failed", zap.String("path", relPath), zap.Error(err))
+		writeFail(c.Writer, errCodeLibraryFileDeleteFailed, "delete library file failed")
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", detail.Item.RelPath))
+	writeSuccess(c.Writer, http.StatusOK, "library file deleted", a.toLibraryDetail(detail))
+}
+
+func (a *API) handleLibraryAsset(c *gin.Context) {
+	itemPath := strings.TrimSpace(c.Query("path"))
+	kind := strings.TrimSpace(c.Query("kind"))
+	variantKey := strings.TrimSpace(c.Query("variant"))
 	if itemPath == "" {
-		writeFail(w, errCodeMissingLibraryPath, "missing library path")
+		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	if kind != "poster" && kind != "cover" && kind != "fanart" {
-		writeFail(w, errCodeInvalidAssetKind, "invalid asset kind")
+		writeFail(c.Writer, errCodeInvalidAssetKind, "invalid asset kind")
 		return
 	}
-	file, header, err := r.FormFile("file")
+	header, err := c.FormFile("file")
 	if err != nil {
-		writeFail(w, errCodeInvalidUploadFile, "invalid upload file")
+		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
+		return
+	}
+	file, err := header.Open()
+	if err != nil {
+		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
 		return
 	}
 	defer func() {
@@ -238,43 +253,39 @@ func (a *API) handleLibraryAsset(w http.ResponseWriter, r *http.Request) {
 	}()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		writeFail(w, errCodeReadUploadFileFailed, "read upload file failed")
+		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")
 		return
 	}
 	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
-		writeFail(w, errCodeUploadFileNotImage, "upload file is not an image")
+		writeFail(c.Writer, errCodeUploadFileNotImage, "upload file is not an image")
 		return
 	}
 	detail, err := a.saveLibrary().ReplaceSaveAsset(itemPath, variantKey, kind, header.Filename, data)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("library asset replace failed",
+		logutil.GetLogger(c.Request.Context()).Warn("library asset replace failed",
 			zap.String("path", itemPath),
 			zap.String("variant", variantKey),
 			zap.String("kind", kind),
 			zap.String("file_name", header.Filename),
 			zap.Error(err),
 		)
-		writeFail(w, errCodeLibraryAssetReplaceFailed, err.Error())
+		writeFail(c.Writer, errCodeLibraryAssetReplaceFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("library asset replaced",
+	logutil.GetLogger(c.Request.Context()).Info("library asset replaced",
 		zap.String("path", detail.Item.RelPath),
 		zap.String("variant", variantKey),
 		zap.String("kind", kind),
 		zap.String("file_name", header.Filename),
 	)
-	writeSuccess(w, http.StatusOK, "library asset replaced", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, http.StatusOK, "library asset replaced", a.toLibraryDetail(detail))
 }
 
-func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
-	itemPath := strings.TrimSpace(r.URL.Query().Get("path"))
-	variantKey := strings.TrimSpace(r.URL.Query().Get("variant"))
+func (a *API) handleLibraryPosterCrop(c *gin.Context) {
+	itemPath := strings.TrimSpace(c.Query("path"))
+	variantKey := strings.TrimSpace(c.Query("variant"))
 	if itemPath == "" {
-		writeFail(w, errCodeMissingLibraryPath, "missing library path")
+		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
 		return
 	}
 	var req struct {
@@ -283,17 +294,17 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 		Width  int `json:"width"`
 		Height int `json:"height"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeFail(w, errCodeInvalidJSONBody, "invalid json body")
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
 	if req.Width <= 0 || req.Height <= 0 {
-		writeFail(w, errCodeInvalidCropRectangle, "invalid crop rectangle")
+		writeFail(c.Writer, errCodeInvalidCropRectangle, "invalid crop rectangle")
 		return
 	}
 	detail, err := a.saveLibrary().CropSavePoster(itemPath, variantKey, req.X, req.Y, req.Width, req.Height)
 	if err != nil {
-		logutil.GetLogger(r.Context()).Warn("library poster crop failed",
+		logutil.GetLogger(c.Request.Context()).Warn("library poster crop failed",
 			zap.String("path", itemPath),
 			zap.String("variant", variantKey),
 			zap.Int("x", req.X),
@@ -302,10 +313,10 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 			zap.Int("height", req.Height),
 			zap.Error(err),
 		)
-		writeFail(w, errCodeLibraryPosterCropFailed, err.Error())
+		writeFail(c.Writer, errCodeLibraryPosterCropFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(r.Context()).Info("library poster cropped",
+	logutil.GetLogger(c.Request.Context()).Info("library poster cropped",
 		zap.String("path", detail.Item.RelPath),
 		zap.String("variant", variantKey),
 		zap.Int("x", req.X),
@@ -313,7 +324,7 @@ func (a *API) handleLibraryPosterCrop(w http.ResponseWriter, r *http.Request) {
 		zap.Int("width", req.Width),
 		zap.Int("height", req.Height),
 	)
-	writeSuccess(w, http.StatusOK, "library poster cropped", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, http.StatusOK, "library poster cropped", a.toLibraryDetail(detail))
 }
 
 func (a *API) toLibraryListItems(items []medialib.Item) []libraryListItem {

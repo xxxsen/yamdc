@@ -65,7 +65,7 @@ internal/bundle/manager.go
 
 ```text
 internal/searcher/plugin/bundle/
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 ```
 
 职责：
@@ -109,7 +109,7 @@ chains:
   all:
     - name: alpha
       priority: 100
-  fc2:
+  source_a:
     - name: alpha
       priority: 200
 ```
@@ -257,7 +257,7 @@ internal/searcher/plugin/bundle/
 ### 11.3 Number Cleaner 层
 
 ```text
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 ```
 
 负责：
@@ -300,7 +300,7 @@ cmd/yamdc/bootstrap.go
     "sources": [
       {
         "source_type": "remote",
-        "location": "https://github.com/xxxsen/yamdc-plugins"
+        "location": "https://github.com/yourname/your-yamdc-plugin-repo"
       }
     ]
   }

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
-	"github.com/xxxsen/yamdc/internal/numbercleaner"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -35,7 +35,7 @@ func TestPrecheckServerDirRequiresLibraryDir(t *testing.T) {
 	require.EqualError(t, precheckServerDir(c), "no library dir")
 }
 
-func TestBuildNumberCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
+func TestBuildMovieIDCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
 	dataDir := t.TempDir()
 	ruleDir := filepath.Join(t.TempDir(), "rules")
 	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0o755))
@@ -50,15 +50,43 @@ options:
 
 	c := &config.Config{
 		DataDir: dataDir,
-		NumberCleanerConfig: config.NumberCleanerConfig{
-			SourceType: numbercleaner.SourceTypeLocal,
+		MovieIDRulesetConfig: config.MovieIDRulesetConfig{
+			SourceType: movieidcleaner.SourceTypeLocal,
 			Location:   ruleDir,
 		},
 	}
-	cleaner, manager, err := buildNumberCleaner(context.Background(), client.MustNewClient(), c)
+	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
 	require.NoError(t, err)
 	require.NotNil(t, cleaner)
 	require.NotNil(t, manager)
+}
+
+func TestBuildMovieIDCleanerAllowsMissingSource(t *testing.T) {
+	c := &config.Config{
+		DataDir: t.TempDir(),
+	}
+	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
+	require.NoError(t, err)
+	require.NotNil(t, cleaner)
+	require.Nil(t, manager)
+
+	result, err := cleaner.Clean("abc-123")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+}
+
+func TestPrepareSearcherPluginsAllowsBlankRemoteLocation(t *testing.T) {
+	c := &config.Config{
+		DataDir: t.TempDir(),
+		SearcherPluginConfig: config.SearcherPluginConfig{
+			Sources: []config.SearcherPluginSource{
+				{SourceType: "remote", Location: ""},
+			},
+		},
+	}
+	manager, err := prepareSearcherPlugins(context.Background(), client.MustNewClient(), c)
+	require.NoError(t, err)
+	require.Nil(t, manager)
 }
 
 func TestBuildTranslatorSelectsConfiguredOrderAndDedupes(t *testing.T) {
@@ -106,7 +134,7 @@ chains:
       priority: 100
     - name: beta
       priority: 150
-  fc2:
+  source_a:
     - name: alpha
       priority: 120
 `,
@@ -129,7 +157,7 @@ chains:
 	require.NoError(t, manager.Start(context.Background()))
 	require.NotNil(t, latest)
 	require.Equal(t, []string{"alpha", "beta"}, latest.DefaultPlugins)
-	require.Equal(t, []string{"__bundle__FC2__alpha"}, latest.CategoryChains["FC2"])
+	require.Equal(t, []string{"__bundle__SOURCE_A__alpha"}, latest.CategoryChains["SOURCE_A"])
 
 	registerCtx := pluginyaml.BuildRegisterContext(latest.Plugins)
 	creators := registerCtx.Snapshot()
@@ -144,12 +172,12 @@ chains:
 
 	categorySearchers, err := buildCatSearcherWithCreators(context.Background(), client.MustNewClient(), store.NewMemStorage(), cfg, []config.CategoryPlugin{
 		{
-			Name:    "FC2",
-			Plugins: latest.CategoryChains["FC2"],
+			Name:    "SOURCE_A",
+			Plugins: latest.CategoryChains["SOURCE_A"],
 		},
 	}, nil, creators)
 	require.NoError(t, err)
-	require.Len(t, categorySearchers["FC2"], 1)
+	require.Len(t, categorySearchers["SOURCE_A"], 1)
 }
 
 func writePluginBundleDir(t *testing.T, dir string, files map[string]string) {

@@ -1,4 +1,4 @@
-package numbercleaner
+package movieidcleaner
 
 type Status string
 

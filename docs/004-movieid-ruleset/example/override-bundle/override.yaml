@@ -1,11 +1,10 @@
 version: v1
 matchers:
   # override 层按规则名覆盖系统规则，提高优先级并收紧 pattern
-  - name: fc2
-    category: FC2
+  - name: source_a
+    category: SOURCE_A
     uncensor: true
-    pattern: '(?i)FC2[-_\s]?([0-9]{5,})'
-    normalize_template: 'FC2-PPV-$1'
+    pattern: '(?i)SRCA[-_\s]?([0-9]{5,})'
+    normalize_template: 'SRCA-$1'
     score: 140
     require_boundary: false
-

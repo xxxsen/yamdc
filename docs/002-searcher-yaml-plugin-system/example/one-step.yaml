@@ -1,5 +1,5 @@
 # 最基础的单步抓取示例：
-# 直接由番号构造详情页请求，然后从 HTML 中抽字段。
+# 直接由影片 ID 构造详情页请求，然后从 HTML 中抽字段。
 version: 1
 name: example_one_step
 type: one-step
@@ -29,5 +29,5 @@ scrape:
       required: true
 postprocess:
   assign:
-    # 未从页面中单独抓 number 时，可在后处理阶段回填原始番号。
+    # 未从页面中单独抓 number 时，可在后处理阶段回填原始影片 ID。
     number: ${number}

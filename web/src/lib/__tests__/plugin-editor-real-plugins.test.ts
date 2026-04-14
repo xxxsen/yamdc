@@ -26,12 +26,12 @@ function roundtripDraft(draft: PluginEditorDraft) {
 // one-step plugins
 // ---------------------------------------------------------------------------
 
-describe("real plugin: javbus (one-step, headers, cookies, postprocess.defaults)", () => {
+describe("real plugin: alpha_site (one-step, headers, cookies, postprocess.defaults)", () => {
   const draft: PluginEditorDraft = {
     version: 1,
-    name: "javbus",
+    name: "alpha_site",
     type: "one-step",
-    hosts: ["https://www.javbus.com"],
+    hosts: ["https://alpha.example.com"],
     request: {
       method: "GET",
       path: "/${number}",
@@ -59,9 +59,9 @@ describe("real plugin: javbus (one-step, headers, cookies, postprocess.defaults)
 
   it("imports correctly", () => {
     const { state } = roundtripDraft(draft);
-    expect(state.name).toBe("javbus");
+    expect(state.name).toBe("alpha_site");
     expect(state.type).toBe("one-step");
-    expect(state.hostsText).toBe("https://www.javbus.com");
+    expect(state.hostsText).toBe("https://alpha.example.com");
     expect(state.request.method).toBe("GET");
     expect(state.request.path).toBe("/${number}");
     expect(JSON.parse(state.request.headersJSON)).toHaveProperty("Accept");
@@ -74,9 +74,9 @@ describe("real plugin: javbus (one-step, headers, cookies, postprocess.defaults)
 
   it("roundtrips preserving structure", () => {
     const { rebuilt } = roundtripDraft(draft);
-    expect(rebuilt.name).toBe("javbus");
+    expect(rebuilt.name).toBe("alpha_site");
     expect(rebuilt.type).toBe("one-step");
-    expect(rebuilt.hosts).toEqual(["https://www.javbus.com"]);
+    expect(rebuilt.hosts).toEqual(["https://alpha.example.com"]);
     expect(rebuilt.request?.method).toBe("GET");
     expect(rebuilt.request?.path).toBe("/${number}");
     expect(rebuilt.request?.headers).toHaveProperty("Accept");
@@ -88,12 +88,12 @@ describe("real plugin: javbus (one-step, headers, cookies, postprocess.defaults)
   });
 });
 
-describe("real plugin: caribpr (one-step, decode_charset, parser with layout, postprocess.assign)", () => {
+describe("real plugin: archive_press (one-step, decode_charset, parser with layout, postprocess.assign)", () => {
   const draft: PluginEditorDraft = {
     version: 1,
-    name: "caribpr",
+    name: "archive_press",
     type: "one-step",
-    hosts: ["https://www.caribbeancompr.com"],
+    hosts: ["https://archive.example.com"],
     request: {
       method: "GET",
       path: "/moviepages/${number}/index.html",
@@ -209,12 +209,12 @@ describe("real plugin: cospuri (one-step, switch_config, regex_extract, precheck
 // two-step (workflow) plugins
 // ---------------------------------------------------------------------------
 
-describe("real plugin: javdb (two-step, precheck.variables, workflow, postprocess.defaults)", () => {
+describe("real plugin: movie_hub (two-step, precheck.variables, workflow, postprocess.defaults)", () => {
   const draft: PluginEditorDraft = {
     version: 1,
-    name: "javdb",
+    name: "movie_hub",
     type: "two-step",
-    hosts: ["https://javdb.com"],
+    hosts: ["https://movies.example.com"],
     precheck: {
       variables: { clean_number: "${clean_number(${number})}" },
     },
@@ -434,17 +434,17 @@ describe("real plugin: avsox (multi_request, workflow, expect_count, next_reques
 });
 
 // ---------------------------------------------------------------------------
-// fc2: split_index transform + parser with layout + postprocess assign
+// source_a: split_index transform + parser with layout + postprocess assign
 // ---------------------------------------------------------------------------
 
-describe("real plugin: fc2 (precheck patterns, split_index, date_layout_soft, postprocess.assign)", () => {
+describe("real plugin: source_a (precheck patterns, split_index, date_layout_soft, postprocess.assign)", () => {
   const draft: PluginEditorDraft = {
     version: 1,
-    name: "fc2",
+    name: "source_a",
     type: "one-step",
-    hosts: ["https://adult.contents.fc2.com"],
+    hosts: ["https://source-a.example.com"],
     precheck: {
-      number_patterns: ["^(?i)fc2[-_]?.+$"],
+      number_patterns: ["^(?i)source_a[-_]?.+$"],
     },
     request: {
       method: "GET",

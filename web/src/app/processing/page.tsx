@@ -1,4 +1,4 @@
-import { JobTable } from "@/components/job-table";
+import { ProcessingShell } from "@/components/processing-shell";
 import { listJobs } from "@/lib/api";
 
 export default async function ProcessingPage() {
@@ -9,7 +9,7 @@ export default async function ProcessingPage() {
 
   return (
     <div style={{ height: "100%" }}>
-      <JobTable initialData={result} />
+      <ProcessingShell initialData={result} />
     </div>
   );
 }

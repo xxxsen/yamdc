@@ -845,7 +845,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
           <Search size={16} />
           <input
             className="input file-list-search-input"
-            placeholder="按标题 / 番号 / 演员搜索"
+            placeholder="按标题 / 影片 ID / 演员搜索"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -871,7 +871,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                 </div>
                 <div className="library-item-copy">
                   <div className="library-item-topline">
-                    <span className="library-item-number">{item.number || "未命名番号"}</span>
+                    <span className="library-item-number">{item.number || "未命名影片"}</span>
                     <span className="library-item-time">{formatUnixMillis(item.updated_at)}</span>
                   </div>
                   {item.conflict ? (
@@ -1028,7 +1028,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                     </div>
                     <div className="review-meta-row review-meta-row-2 library-meta-grid">
                       <div className="review-field">
-                        <span className="review-label review-label-side">番号</span>
+                        <span className="review-label review-label-side">影片 ID</span>
                         <input
                           className="input"
                           value={draftMeta.number}

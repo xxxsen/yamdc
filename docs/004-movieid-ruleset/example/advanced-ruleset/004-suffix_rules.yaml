@@ -1,0 +1,20 @@
+suffix_rules:
+  - name: subtitle_track
+    type: alias
+    aliases: ["SUB", "SUBTITLE"]
+    canonical: SUB
+
+  - name: multi_disc
+    type: regexp
+    pattern: '(?i)\bDISC\s*([0-9]+)\b'
+    canonical_template: 'DISC$1'
+
+  - name: quality_uhd
+    type: alias
+    aliases: ["UHD", "2160P"]
+    canonical: UHD
+
+  - name: panoramic
+    type: alias
+    aliases: ["PANORAMIC"]
+    canonical: PAN

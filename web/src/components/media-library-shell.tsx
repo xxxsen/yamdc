@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCw, Search } from "lucide-react";
-import { useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
 import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
@@ -72,7 +72,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [activeDetailID, setActiveDetailID] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
-  const [isPending, startTransition] = useTransition();
+
   const browserRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const yearPickerRef = useRef<HTMLDivElement | null>(null);
@@ -274,7 +274,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                     <Search size={16} />
                     <input
                       className="media-library-search-input"
-                      placeholder="搜索标题 / 番号"
+                      placeholder="搜索标题 / 影片 ID"
                       value={keyword}
                       onChange={(e) => {
                         setKeyword(e.target.value);
@@ -395,23 +395,18 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                   <button
                     type="button"
                     className="btn btn-primary media-library-sync-btn"
-                    disabled={isPending || syncBusy}
+                    disabled={syncBusy}
                     onClick={() => {
-                      startTransition(async () => {
-                        setSyncCompletedFlash(false);
-                        setSyncMessage("媒体库同步已启动");
-                        setSyncStarting(true);
+                      setSyncCompletedFlash(false);
+                      setSyncMessage("媒体库同步已启动");
+                      setSyncStarting(true);
+                      void (async () => {
                         try {
                           await triggerMediaLibrarySync();
-                          const nextStatus = await getMediaLibraryStatus();
-                          setConfigured(Boolean(nextStatus.configured));
-                          const nextSyncRunning = nextStatus.sync.status === "running";
-                          setSyncRunning(nextSyncRunning);
+                          setSyncRunning(true);
                           setSyncStarting(false);
-                          if (nextSyncRunning) {
-                            observedSyncRunningRef.current = true;
-                          }
-                          prevSyncRunningRef.current = nextSyncRunning;
+                          observedSyncRunningRef.current = true;
+                          prevSyncRunningRef.current = true;
                         } catch (error) {
                           const message = toMediaLibrarySyncMessage(error);
                           setSyncMessage(message);
@@ -426,7 +421,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                           setSyncRunning(false);
                           prevSyncRunningRef.current = false;
                         }
-                      });
+                      })();
                     }}
                   >
                     <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
@@ -457,7 +452,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                       <div className="media-library-card-copy">
                         <div className="media-library-card-title media-library-card-title-only">{item.title || item.name}</div>
                         <div className="media-library-card-meta">
-                          <div className="library-item-number">{item.number || "未命名番号"}</div>
+                          <div className="library-item-number">{item.number || "未命名影片"}</div>
                           <div className="media-library-card-year">{getReleaseYear(item.release_date) || "----"}</div>
                         </div>
                       </div>

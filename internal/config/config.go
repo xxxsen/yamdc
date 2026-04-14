@@ -79,7 +79,7 @@ type TagMappingConfig struct {
 	FilePath string `json:"file_path"` //配置文件路径
 }
 
-type NumberCleanerConfig struct {
+type MovieIDRulesetConfig struct {
 	SourceType string `json:"source_type"`
 	Location   string `json:"location"`
 }
@@ -113,7 +113,7 @@ type Config struct {
 	SwitchConfig         SwitchConfig             `json:"switch_config"`
 	FlareSolverrConfig   FlareSolverrConfig       `json:"flare_solverr_config"`
 	TagMappingConfig     TagMappingConfig         `json:"tag_mapping_config"`
-	NumberCleanerConfig  NumberCleanerConfig      `json:"number_cleaner_config"`
+	MovieIDRulesetConfig MovieIDRulesetConfig     `json:"movieid_ruleset_config"`
 	SearcherPluginConfig SearcherPluginConfig     `json:"searcher_plugin_config"`
 }
 
@@ -163,17 +163,9 @@ func defaultConfig() *Config {
 			Enable:   false, //默认不启用, 毕竟还要额外配置
 			FilePath: "",    // 如果启用,需要指定配置文件路径
 		},
-		NumberCleanerConfig: NumberCleanerConfig{
-			SourceType: "remote",
-			Location:   "https://github.com/xxxsen/yamdc-script",
-		},
+		MovieIDRulesetConfig: MovieIDRulesetConfig{},
 		SearcherPluginConfig: SearcherPluginConfig{
-			Sources: []SearcherPluginSource{
-				{
-					SourceType: "remote",
-					Location:   "https://github.com/xxxsen/yamdc-plugin",
-				},
-			},
+			Sources: []SearcherPluginSource{},
 		},
 	}
 }

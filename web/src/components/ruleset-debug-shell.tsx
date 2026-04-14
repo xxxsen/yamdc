@@ -3,9 +3,9 @@
 import { Bug, LoaderCircle, Play } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
-import { explainNumberCleaner, type NumberCleanerExplainResult } from "@/lib/api";
+import { explainMovieIDCleaner, type MovieIDCleanerExplainResult } from "@/lib/api";
 
-const DEFAULT_INPUT = "FC2PPV12345 中文字幕.mp4";
+const DEFAULT_INPUT = "MOVIE12345 SUBTITLE.mp4";
 const RULESET_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.ruleset.input";
 
 export function RulesetDebugShell() {
@@ -16,7 +16,7 @@ export function RulesetDebugShell() {
     const stored = window.localStorage.getItem(RULESET_DEBUG_INPUT_STORAGE_KEY);
     return stored && stored.trim() ? stored : DEFAULT_INPUT;
   });
-  const [result, setResult] = useState<NumberCleanerExplainResult | null>(null);
+  const [result, setResult] = useState<MovieIDCleanerExplainResult | null>(null);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const steps = result?.steps ?? [];
@@ -31,14 +31,14 @@ export function RulesetDebugShell() {
   const handleRun = () => {
     const nextInput = input.trim();
     if (!nextInput) {
-      setError("请输入待测试的番号或文件名。");
+      setError("请输入待测试的影片 ID 或文件名。");
       setResult(null);
       return;
     }
     startTransition(() => {
       void (async () => {
         try {
-          const next = await explainNumberCleaner(nextInput);
+          const next = await explainMovieIDCleaner(nextInput);
           setResult(next);
           setError("");
         } catch (nextError) {
@@ -58,7 +58,7 @@ export function RulesetDebugShell() {
             调试工具
           </span>
           <h2>规则集测试</h2>
-          <p>输入一个文件名或番号，直接查看 `numbercleaner` 每一步规则的入参、出参和最终结果。</p>
+          <p>输入一个文件名或影片 ID，直接查看 `movieidcleaner` 每一步规则的入参、出参和最终结果。</p>
         </div>
         <div className="ruleset-debug-runner">
           <label className="ruleset-debug-label" htmlFor="ruleset-debug-input">
@@ -70,7 +70,7 @@ export function RulesetDebugShell() {
               className="input ruleset-debug-input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="例如：FC2PPV12345 中文字幕.mp4"
+              placeholder="例如：MOVIE12345 SUBTITLE.mp4"
             />
             <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isPending}>
               {isPending ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Play size={16} />}
@@ -102,7 +102,7 @@ export function RulesetDebugShell() {
                 <strong>{result.final.normalized || "-"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
-                <span>主番号</span>
+                <span>主影片 ID</span>
                 <strong>{result.final.number_id || "-"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
@@ -114,7 +114,7 @@ export function RulesetDebugShell() {
                 <strong>{result.final.category || "-"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
-                <span>无码判断</span>
+                <span>附加标记</span>
                 <strong>{result.final.uncensor ? "true" : "false"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
@@ -127,7 +127,7 @@ export function RulesetDebugShell() {
               </div>
             </div>
           ) : (
-            <div className="ruleset-debug-empty">运行一次规则测试后，这里会显示最终番号、状态和命中规则。</div>
+            <div className="ruleset-debug-empty">运行一次规则测试后，这里会显示最终影片 ID、状态和命中规则。</div>
           )}
         </section>
 

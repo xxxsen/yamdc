@@ -1,12 +1,12 @@
-# 番号规则集系统设计
+# movieid-ruleset 系统设计
 
 ## 一、文档目的
 
-本文档描述番号规则集系统的正式设计与当前实现边界。
+本文档描述 `movieid-ruleset` 系统的正式设计与当前实现边界。
 
 本设计用于解决以下问题：
 
-1. 将脏文件名清洗为可解析的规范番号
+1. 将脏文件名清洗为可解析的规范影片 ID
 2. 将规则从代码中剥离为声明式 YAML
 3. 支持目录化规则集与远程规则包
 4. 支持在运行时重建 cleaner
@@ -15,9 +15,9 @@
 
 本方案的目标是：
 
-1. 使用一套声明式规则统一处理番号清洗
+1. 使用一套声明式规则统一处理影片 ID 清洗
 2. 输出可直接交给 `number.Parse` 使用的规范字符串
-3. 提供结构化结果，包括分类、无码标记、候选与命中路径
+3. 提供结构化结果，包括分类、附加标记、候选与命中路径
 4. 支持规则目录化拆分
 5. 支持本地目录规则集与远程 zip 规则包
 6. 支持规则运行时重建
@@ -38,14 +38,14 @@
 
 ```text
 raw filename
-  -> numbercleaner.Clean / Explain
+  -> movieidcleaner.Clean / Explain
   -> number.Parse
   -> Searcher.Search
 ```
 
 其中：
 
-1. `numbercleaner` 负责清洗、匹配和衍生属性推导
+1. `movieidcleaner` 负责清洗、匹配和衍生属性推导
 2. `number.Parse` 负责最终结构化语义解析
 
 ## 五、核心结果模型
@@ -53,7 +53,7 @@ raw filename
 位置：
 
 ```text
-internal/numbercleaner/model.go
+internal/movieidcleaner/model.go
 ```
 
 当前 `Result` 已包含：
@@ -71,14 +71,14 @@ internal/numbercleaner/model.go
 11. `Warnings`
 12. `Candidates`
 
-这意味着规则集不仅负责“洗字符串”，还负责产生可复用的结构化番号结果。
+这意味着规则集不仅负责“洗字符串”，还负责产生可复用的结构化影片 ID 结果。
 
 ## 六、规则集结构
 
 位置：
 
 ```text
-internal/numbercleaner/model.go
+internal/movieidcleaner/model.go
 ```
 
 当前 `RuleSet` 包含：
@@ -118,14 +118,14 @@ internal/numbercleaner/model.go
 
       ```yaml
       rewrite_rules:
-        - name: fc2_compact
-          pattern: '(?i)FC2PPV([0-9]+)'
-          replace: 'FC2-PPV-$1'
+        - name: source_a_compact
+          pattern: '(?i)SRCA([0-9]+)'
+          replace: 'SRCA-$1'
       ```
 
-      对输入 `FC2PPV123456`，改写后会得到 `FC2-PPV-123456`。
+      对输入 `SRCA123456`，改写后会得到 `SRCA-123456`。
 4. `SuffixRules`
-   1. 负责识别字幕、CD、4K、VR、破解等后缀语义。
+   1. 负责识别字幕、多段、高清、全景、特别版等后缀语义。
    2. 这些后缀会被提取、归一化并在后续重新排序。
    3. 示例：
 
@@ -133,13 +133,13 @@ internal/numbercleaner/model.go
       suffix_rules:
         - name: subtitle
           type: alias
-          aliases: ["中字", "中文字幕"]
+          aliases: ["SUB", "SUBTITLE"]
           canonical: C
       ```
 
-      对输入 `ABC-123 中文字幕`，后缀规则会提取出 `C`，而不是把这段文本留给 matcher。
+      对输入 `FILM-123 SUB`，后缀规则会提取出 `SUB`，而不是把这段文本留给 matcher。
 5. `NoiseRules`
-   1. 负责移除与番号无关但会干扰匹配的噪声片段。
+   1. 负责移除与影片 ID 无关但会干扰匹配的噪声片段。
    2. 适合处理下载站附加标记、说明文字、无关标签。
    3. 示例：
 
@@ -152,24 +152,24 @@ internal/numbercleaner/model.go
 
       对输入 `SAMPLE ABC-123`，噪声移除后再进入 matcher，会减少误判。
 6. `Matchers`
-   1. 负责匹配主番号并生成 `Normalized` 与 `NumberID`。
-   2. 同时承担 `category` 和 `uncensor` 等衍生属性推导。
+   1. 负责匹配主影片 ID 并生成 `Normalized` 与 `NumberID`。
+   2. 同时承担 `category` 和 `flagged` 等衍生属性推导。
    3. 示例：
 
       ```yaml
       matchers:
-        - name: fc2
-          category: FC2
+        - name: source_a
+          category: SOURCE_A
           uncensor: true
-          pattern: '(?i)FC2[-_\\s]?(?:PPV)?[-_\\s]?([0-9]{3,})'
-          normalize_template: 'FC2-PPV-$1'
+          pattern: '(?i)SRCA[-_\\s]?([0-9]{3,})'
+          normalize_template: 'SRCA-$1'
           score: 100
       ```
 
-      对输入 `fc2ppv123456`，matcher 会生成：
-      `Normalized = FC2-PPV-123456`
-      `NumberID = FC2-PPV-123456`
-      `Category = FC2`
+      对输入 `srca123456`，matcher 会生成：
+      `Normalized = SRCA-123456`
+      `NumberID = SRCA-123456`
+      `Category = SOURCE_A`
       `Uncensor = true`
 7. `PostProcessors`
    1. 负责在主匹配完成后做统一后处理。
@@ -203,7 +203,7 @@ internal/numbercleaner/model.go
 2. `rewrite_rules` 负责正则改写
 3. `suffix_rules` 负责提取与归一化业务后缀
 4. `noise_rules` 负责去除噪声
-5. `matchers` 负责主番号匹配、归一化、分类和无码属性推导
+5. `matchers` 负责主影片 ID 匹配、归一化、分类和附加标记属性推导
 6. `post_processors` 负责后置统一处理
 
 ## 八、规则片段目录
@@ -231,7 +231,7 @@ internal/numbercleaner/model.go
 当前目录加载逻辑位于：
 
 ```text
-internal/numbercleaner/loader.go
+internal/movieidcleaner/loader.go
 ```
 
 行为如下：
@@ -326,15 +326,15 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
    3. 示例：
 
       ```text
-      "ABC   123" -> "ABC 123"
+      "FILM   123" -> "FILM 123"
       ```
 6. `to_upper`
    1. 将输入统一转为大写。
-   2. 适用于让番号匹配大小写无关且输出稳定。
+   2. 适用于让影片 ID 匹配大小写无关且输出稳定。
    3. 示例：
 
       ```text
-      abc-123 -> ABC-123
+      film-123 -> FILM-123
       ```
 7. `replace_pairs`
    1. 按配置表批量替换字符或片段。
@@ -351,13 +351,13 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
             "—": "-"
       ```
 
-      对输入 `ABC_123`，会先归一为 `ABC-123`。
+      对输入 `FILM_123`，会先归一为 `FILM-123`。
 
 ### 11.2 Rewrite Rules
 
 `RewriteRule` 的作用是：
 
-1. 用正则把稳定的输入变体改写成更接近标准番号的形式。
+1. 用正则把稳定的输入变体改写成更接近标准影片 ID 的形式。
 2. 它介于基础清洗和正式匹配之间。
 3. 适合处理“可以安全重写”的模式，不适合做含糊猜测。
 
@@ -365,15 +365,15 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
 
 `SuffixRule` 的作用是：
 
-1. 从输入中提取后缀语义，而不是把它们留在主番号里参与匹配。
-2. 将不同写法归一成统一后缀，例如字幕、CD、清晰度、VR、破解等。
+1. 从输入中提取后缀语义，而不是把它们留在主影片 ID 里参与匹配。
+2. 将不同写法归一成统一后缀，例如字幕、多段版本、清晰度、全景版、特别版等。
 3. 为最终 `Suffixes` 和 `Normalized` 输出提供稳定来源。
 
 ### 11.4 Noise Rules
 
 `NoiseRule` 的作用是：
 
-1. 移除无助于主番号识别的噪声片段。
+1. 移除无助于主影片 ID 识别的噪声片段。
 2. 减少 matcher 被无关信息干扰的概率。
 3. 它不负责生成语义，只负责删噪。
 
@@ -392,7 +392,7 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
    3. 示例：
 
       ```text
-      ABC-123-4K-C-CD2 -> ABC-123-C-CD2-4K
+      FILM-123-UHD-SUB-DISC2 -> FILM-123-SUB-DISC2-UHD
       ```
 2. `normalize_hyphen`
    1. 统一连接符写法。
@@ -407,11 +407,11 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
 
 `MatcherRule` 是整个规则集的核心，作用是：
 
-1. 在清洗后的输入中识别主番号。
+1. 在清洗后的输入中识别主影片 ID。
 2. 通过 `normalize_template` 生成规范化输出。
 3. 通过 `score` 控制候选优先级。
 4. 通过 `category` 生成分类信息。
-5. 通过 `uncensor` 生成无码标记。
+5. 通过 `uncensor` 生成附加布尔标记。
 6. 通过 `require_boundary` 与 `prefixes` 控制匹配边界和适用前缀。
 
 示例：
@@ -428,18 +428,18 @@ matchers:
 对输入：
 
 ```text
-ABC-123 sample
+FILM-123 sample
 ```
 
-该 matcher 可以稳定命中 `ABC-123`。
+该 matcher 可以稳定命中 `FILM-123`。
 
 但对于：
 
 ```text
-XABC123Y
+XFILM123Y
 ```
 
-当 `require_boundary: true` 时，系统会更保守，不会轻易把中间这段连续子串识别成独立番号；如果改成 `false`，则允许更激进地从长字符串内部抽取候选。
+当 `require_boundary: true` 时，系统会更保守，不会轻易把中间这段连续子串识别成独立影片 ID；如果改成 `false`，则允许更激进地从长字符串内部抽取候选。
 
 `MatcherRule` 当前已支持：
 
@@ -451,7 +451,7 @@ XABC123Y
 6. `require_boundary`
 7. `prefixes`
 
-这使得分类与无码判断已内聚到规则集本身，不再依赖额外脚本系统。
+这使得分类与附加标记判断已内聚到规则集本身，不再依赖额外脚本系统。
 
 ## 十二、Explain 与可观察性
 
@@ -476,7 +476,7 @@ Explain(input string) (*ExplainResult, error)
 当前远程规则包模型已经落地，位置：
 
 ```text
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 internal/bundle/manager.go
 ```
 
@@ -515,7 +515,7 @@ entry: ruleset
 1. 首次 `Start(ctx)` 会完成初始化加载
 2. 远程 source 会在后台继续同步
 3. 新数据只有在 callback 成功后才算激活成功
-4. `numbercleaner` callback 中会重建 cleaner 并替换运行时实例
+4. `movieidcleaner` callback 中会重建 cleaner 并替换运行时实例
 
 因此规则集当前已经支持真正的 runtime 重建。
 
@@ -524,16 +524,16 @@ entry: ruleset
 ### 16.1 数据模型与执行器
 
 ```text
-internal/numbercleaner/model.go
-internal/numbercleaner/cleaner.go
-internal/numbercleaner/loader.go
-internal/numbercleaner/runtime.go
+internal/movieidcleaner/model.go
+internal/movieidcleaner/cleaner.go
+internal/movieidcleaner/loader.go
+internal/movieidcleaner/runtime.go
 ```
 
 ### 16.2 规则包与远程加载
 
 ```text
-internal/numbercleaner/bundle.go
+internal/movieidcleaner/bundle.go
 internal/bundle/manager.go
 ```
 
@@ -546,12 +546,12 @@ internal/bundle/manager.go
 当前原则是：
 
 1. `internal/config` 只在 `cmd` 层使用
-2. `numbercleaner` 包不直接依赖 `internal/config`
+2. `movieidcleaner` 包不直接依赖 `internal/config`
 3. `cmd` 层负责把配置转换为 cleaner/bundle 所需的内部参数
 
 ## 十八、结论
 
-当前番号规则集系统已经具备完整实现，包含：
+当前 `movieid-ruleset` 系统已经具备完整实现，包含：
 
 1. 结构化规则模型
 2. 目录化规则片段

@@ -28,7 +28,7 @@ chains:
   all:
     - name: beta
       priority: 200
-  fc2:
+  source_a:
     - name: alpha
       priority: 200
 `,
@@ -53,7 +53,7 @@ func TestResolveBundles(t *testing.T) {
 					{Name: "beta", Priority: 200},
 					{Name: "alpha", Priority: 200},
 				},
-				"FC2": {
+				"SOURCE_A": {
 					{Name: "cat-only", Priority: 150},
 				},
 			},
@@ -74,7 +74,7 @@ func TestResolveBundles(t *testing.T) {
 				"all": {
 					{Name: "alpha", Priority: 200},
 				},
-				"FC2": {
+				"SOURCE_A": {
 					{Name: "alpha", Priority: 100},
 					{Name: "beta", Priority: 100},
 				},
@@ -89,10 +89,10 @@ func TestResolveBundles(t *testing.T) {
 	resolved, err := resolveBundles([]*Bundle{left, right})
 	require.NoError(t, err)
 	require.Equal(t, []string{"alpha", "beta"}, resolved.DefaultPlugins)
-	require.Equal(t, []string{"__bundle__FC2__alpha", "__bundle__FC2__beta", "__bundle__FC2__cat-only"}, resolved.CategoryChains["FC2"])
+	require.Equal(t, []string{"__bundle__SOURCE_A__alpha", "__bundle__SOURCE_A__beta", "__bundle__SOURCE_A__cat-only"}, resolved.CategoryChains["SOURCE_A"])
 	require.Equal(t, samplePluginYAML("alpha-left"), string(resolved.Plugins["alpha"]))
-	require.Equal(t, samplePluginYAML("alpha-right"), string(resolved.Plugins["__bundle__FC2__alpha"]))
-	require.Equal(t, samplePluginYAML("beta"), string(resolved.Plugins["__bundle__FC2__beta"]))
+	require.Equal(t, samplePluginYAML("alpha-right"), string(resolved.Plugins["__bundle__SOURCE_A__alpha"]))
+	require.Equal(t, samplePluginYAML("beta"), string(resolved.Plugins["__bundle__SOURCE_A__beta"]))
 	require.NotEmpty(t, resolved.Warnings)
 }
 

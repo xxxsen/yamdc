@@ -2,8 +2,10 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -262,6 +264,22 @@ type sequentialTestSearcher struct {
 	max     atomic.Int32
 }
 
+type loggingTestSearcher struct {
+	meta *model.MovieMeta
+	err  error
+}
+
+func (s *loggingTestSearcher) Name() string                    { return "logging-test" }
+func (s *loggingTestSearcher) Check(ctx context.Context) error { return nil }
+func (s *loggingTestSearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
+	if s.err != nil {
+		return nil, false, s.err
+	}
+	meta := *s.meta
+	meta.Number = n.GetNumberID()
+	return &meta, true, nil
+}
+
 func (s *sequentialTestSearcher) Name() string                    { return "sequential-test" }
 func (s *sequentialTestSearcher) Check(ctx context.Context) error { return nil }
 
@@ -300,6 +318,121 @@ func newSequentialTestCapture(t *testing.T) (*capture.Capture, *atomic.Int32) {
 	)
 	require.NoError(t, err)
 	return cap, &searcher.max
+}
+
+func newLoggingTestCapture(t *testing.T, searcher *loggingTestSearcher) *capture.Capture {
+	t.Helper()
+	cap, err := capture.New(
+		capture.WithScanDir(t.TempDir()),
+		capture.WithSaveDir(t.TempDir()),
+		capture.WithSeacher(searcher),
+		capture.WithProcessor(processor.IProcessor(&noopProcessor{})),
+		capture.WithStorage(store.NewMemStorage()),
+	)
+	require.NoError(t, err)
+	return cap
+}
+
+func findLogByMessage(logs []repository.LogItem, message string) *repository.LogItem {
+	for idx := range logs {
+		if logs[idx].Message == message {
+			return &logs[idx]
+		}
+	}
+	return nil
+}
+
+func TestServiceRunOneWritesDetailedScrapeLogs(t *testing.T) {
+	svc, repo, _ := newTestServiceWithSQLite(t)
+	file := filepath.Join(t.TempDir(), "LOG-001.mp4")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file),
+		FileExt:               filepath.Ext(file),
+		RelPath:               filepath.Base(file),
+		AbsPath:               file,
+		Number:                "LOG-001",
+		RawNumber:             "LOG-001",
+		CleanedNumber:         "LOG-001",
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusProcessing)
+	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
+		meta: &model.MovieMeta{
+			Title:           "Detailed Title",
+			TitleTranslated: "详细标题",
+			Actors:          []string{"Alice", "Beth"},
+			SampleImages:    []*model.File{{Name: "sample-1.jpg", Key: "sample-1"}},
+			Cover:           &model.File{Name: "cover.jpg", Key: "cover-key"},
+			Poster:          &model.File{Name: "poster.jpg", Key: "poster-key"},
+			ExtInfo: model.ExtInfo{
+				ScrapeInfo: model.ScrapeInfo{Source: "test-plugin"},
+			},
+		},
+	})
+
+	svc.runOne(context.Background(), jobID)
+
+	logs, err := svc.ListLogs(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, findLogByMessage(logs, "file context resolved"))
+
+	scrapeResult := findLogByMessage(logs, "scrape meta result")
+	require.NotNil(t, scrapeResult)
+	require.Contains(t, scrapeResult.Detail, "title=Detailed Title")
+	require.Contains(t, scrapeResult.Detail, "title_translated=详细标题")
+	require.Contains(t, scrapeResult.Detail, "actors=2")
+	require.Contains(t, scrapeResult.Detail, "source=test-plugin")
+
+	saved := findLogByMessage(logs, "scrape data saved")
+	require.NotNil(t, saved)
+	require.Contains(t, saved.Detail, "source=test-plugin")
+	require.Contains(t, saved.Detail, "bytes=")
+
+	moved := findLogByMessage(logs, "job moved to reviewing")
+	require.NotNil(t, moved)
+	require.Contains(t, moved.Detail, "title=Detailed Title")
+}
+
+func TestServiceRunOneWritesDetailedFailureLogs(t *testing.T) {
+	svc, repo, _ := newTestServiceWithSQLite(t)
+	file := filepath.Join(t.TempDir(), "LOG-ERR-001.mp4")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file),
+		FileExt:               filepath.Ext(file),
+		RelPath:               filepath.Base(file),
+		AbsPath:               file,
+		Number:                "LOG-ERR-001",
+		RawNumber:             "LOG-ERR-001",
+		CleanedNumber:         "LOG-ERR-001",
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusProcessing)
+	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
+		err: fmt.Errorf("search backend timeout: upstream 504"),
+	})
+
+	svc.runOne(context.Background(), jobID)
+
+	logs, err := svc.ListLogs(context.Background(), jobID)
+	require.NoError(t, err)
+	failure := findLogByMessage(logs, "scrape meta failed: search number failed, number:LOG-ERR-001, err:search backend timeout: upstream 504")
+	require.NotNil(t, failure)
+	require.Equal(t, "scrape", failure.Stage)
+	require.True(t, strings.Contains(failure.Detail, "job_number=LOG-ERR-001"))
+	require.True(t, strings.Contains(failure.Detail, "resolved_source="))
+	require.True(t, strings.Contains(failure.Detail, "parsed_number=LOG-ERR-001"))
+	require.True(t, strings.Contains(failure.Detail, "error=search number failed, number:LOG-ERR-001, err:search backend timeout: upstream 504"))
+
+	got, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, jobdef.StatusFailed, got.Status)
 }
 
 func TestServiceGetJobConflictDetectsDuplicateTargetFileName(t *testing.T) {

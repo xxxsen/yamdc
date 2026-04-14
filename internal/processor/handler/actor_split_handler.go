@@ -39,7 +39,7 @@ func (h *actorSplitHandler) tryExtractActor(actor string) ([]string, bool) {
 }
 
 func (h *actorSplitHandler) Handle(ctx context.Context, fc *model.FileContext) error {
-	//如果女优有括号, 尝试将其从括号中提取出来, example: 永野司 (永野つかさ)
+	//如果演员名包含括号别名, 尝试将其拆分出来, example: Actor A (Alias B)
 	actorlist := make([]string, 0, len(fc.Meta.Actors))
 	for _, actor := range fc.Meta.Actors {
 		actor = h.cleanActor(actor)
