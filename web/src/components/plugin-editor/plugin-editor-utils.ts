@@ -861,6 +861,7 @@ function runXPathExpr(body: string, expr: string): string {
         if ("textContent" in node) {
           values.push(node.textContent ?? "");
         } else {
+          /* v8 ignore next -- all standard DOM nodes have textContent */
           values.push(String(node));
         }
         node = result.iterateNext();

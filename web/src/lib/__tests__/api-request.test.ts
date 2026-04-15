@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deleteJob,
   explainMovieIDCleaner,
+  getAPIBaseURL,
   getSearcherDebugPlugins,
   listJobs,
   listLibraryItems,
@@ -89,6 +90,15 @@ describe("readAPIResponse via public API", () => {
   it("throws on HTTP error with fallback when JSON message is empty", async () => {
     mockHTTPErrorJSON(404, "");
     await expect(listJobs()).rejects.toThrow(/HTTP 404/);
+  });
+
+  it("throws on HTTP error with JSON body missing message field", async () => {
+    mockFetch({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: "validation" }),
+    });
+    await expect(listJobs()).rejects.toThrow(/HTTP 422/);
   });
 
   it("throws on HTTP error with non-JSON response body (HTML 502)", async () => {
@@ -237,6 +247,12 @@ describe("upload functions with debug logging", () => {
     await expect(uploadAsset(file)).rejects.toThrow(/HTTP 500/);
   });
 
+  it("uploadAsset propagates non-Error rejections from fetch", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue("offline"));
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    await expect(uploadAsset(file)).rejects.toBe("offline");
+  });
+
   it("uploadAsset throws on business error", async () => {
     mockBusinessError("file too large");
     const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
@@ -256,6 +272,12 @@ describe("upload functions with debug logging", () => {
     await expect(uploadReviewAsset(1, "cover", file)).rejects.toThrow("forbidden");
   });
 
+  it("uploadReviewAsset propagates non-Error rejections from fetch", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(503));
+    const file = new File(["data"], "cover.jpg", { type: "image/jpeg" });
+    await expect(uploadReviewAsset(2, "poster", file)).rejects.toBe(503);
+  });
+
   it("replaceLibraryAsset returns normalized detail on success", async () => {
     mockSuccess({
       item: { rel_path: "a", name: "a", title: "A", number: "X-1", release_date: "", actors: null, updated_at: 1, has_nfo: true, poster_path: "", cover_path: "", file_count: 1, video_count: 1, variant_count: 1, conflict: false },
@@ -272,10 +294,31 @@ describe("upload functions with debug logging", () => {
     expect(result.files).toEqual([]);
   });
 
+  it("replaceLibraryAsset includes variant in query when variant is non-empty", async () => {
+    const fn = mockSuccess({
+      item: { rel_path: "a", name: "a", title: "A", number: "X-1", release_date: "", actors: null, updated_at: 1, has_nfo: true, poster_path: "", cover_path: "", file_count: 1, video_count: 1, variant_count: 1, conflict: false },
+      meta: { title: "A", title_translated: "", original_title: "", plot: "", plot_translated: "", number: "X-1", release_date: "", runtime: 0, studio: "", label: "", series: "", director: "", actors: null, genres: null, poster_path: "", cover_path: "", fanart_path: "", thumb_path: "", source: "", scraped_at: "" },
+      variants: [],
+      primary_variant_key: "",
+      files: null,
+    });
+    const file = new File(["data"], "poster.jpg", { type: "image/jpeg" });
+    await replaceLibraryAsset("movies/a", "disc1", "poster", file);
+    const [url] = fn.mock.calls[0];
+    expect(String(url)).toContain("variant=disc1");
+  });
+
   it("replaceLibraryAsset throws on HTTP error", async () => {
     mockHTTPErrorHTML(502);
     const file = new File(["data"], "poster.jpg", { type: "image/jpeg" });
     await expect(replaceLibraryAsset("a", "", "poster", file)).rejects.toThrow(/HTTP 502/);
+  });
+
+  it("replaceLibraryAsset propagates non-Error rejections from fetch", async () => {
+    const boom = Symbol("boom");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(boom));
+    const file = new File(["data"], "poster.jpg", { type: "image/jpeg" });
+    await expect(replaceLibraryAsset("b", "v", "cover", file)).rejects.toBe(boom);
   });
 
   it("upload functions pass signal through", async () => {
@@ -285,5 +328,120 @@ describe("upload functions with debug logging", () => {
     await uploadAsset(file, controller.signal);
     const [, init] = fn.mock.calls[0];
     expect(init.signal).toBe(controller.signal);
+  });
+});
+
+describe("upload functions with performance unavailable (Date.now fallback)", () => {
+  const origPerf = globalThis.performance;
+
+  afterEach(() => {
+    globalThis.performance = origPerf;
+    vi.unstubAllGlobals();
+  });
+
+  function stubNoPerformance() {
+    // @ts-expect-error - intentionally removing performance to exercise Date.now fallback
+    delete globalThis.performance;
+  }
+
+  it("uploadAsset succeeds with Date.now fallback", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    mockSuccess({ name: "test.jpg", key: "abc" });
+    stubNoPerformance();
+    const result = await uploadAsset(file);
+    expect(result).toEqual({ name: "test.jpg", key: "abc" });
+  });
+
+  it("uploadAsset catch path uses Date.now fallback", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("fail")));
+    stubNoPerformance();
+    await expect(uploadAsset(file)).rejects.toThrow("fail");
+  });
+
+  it("uploadReviewAsset succeeds with Date.now fallback", async () => {
+    const file = new File(["data"], "c.jpg", { type: "image/jpeg" });
+    mockSuccess({ name: "c.jpg", key: "k1" });
+    stubNoPerformance();
+    const result = await uploadReviewAsset(1, "cover", file);
+    expect(result).toEqual({ name: "c.jpg", key: "k1" });
+  });
+
+  it("uploadReviewAsset catch path uses Date.now fallback", async () => {
+    const file = new File(["data"], "c.jpg", { type: "image/jpeg" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("net")));
+    stubNoPerformance();
+    await expect(uploadReviewAsset(1, "cover", file)).rejects.toThrow("net");
+  });
+
+  it("replaceLibraryAsset succeeds with Date.now fallback", async () => {
+    const file = new File(["data"], "p.jpg", { type: "image/jpeg" });
+    mockSuccess({
+      item: { rel_path: "a", name: "a", title: "A", number: "X-1", release_date: "", actors: [], updated_at: 1, has_nfo: true, poster_path: "", cover_path: "", file_count: 1, video_count: 1, variant_count: 1, conflict: false },
+      meta: { title: "A", title_translated: "", original_title: "", plot: "", plot_translated: "", number: "X-1", release_date: "", runtime: 0, studio: "", label: "", series: "", director: "", actors: [], genres: [], poster_path: "", cover_path: "", fanart_path: "", thumb_path: "", source: "", scraped_at: "" },
+      variants: [], primary_variant_key: "", files: [],
+    });
+    stubNoPerformance();
+    const result = await replaceLibraryAsset("a", "", "poster", file);
+    expect(result.item.actors).toEqual([]);
+  });
+
+  it("replaceLibraryAsset catch path uses Date.now fallback", async () => {
+    const file = new File(["data"], "p.jpg", { type: "image/jpeg" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("err")));
+    stubNoPerformance();
+    await expect(replaceLibraryAsset("a", "", "poster", file)).rejects.toThrow("err");
+  });
+});
+
+describe("getBaseURL SSR path", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns empty string when window is defined (browser)", () => {
+    vi.stubGlobal("window", {});
+    expect(getAPIBaseURL()).toBe("");
+  });
+
+  it("returns YAMDC_API_BASE_URL when window is undefined (SSR)", () => {
+    const origEnv = process.env.YAMDC_API_BASE_URL;
+    process.env.YAMDC_API_BASE_URL = "http://custom:9090";
+    try {
+      expect(getAPIBaseURL()).toBe("http://custom:9090");
+    } finally {
+      if (origEnv === undefined) {
+        delete process.env.YAMDC_API_BASE_URL;
+      } else {
+        process.env.YAMDC_API_BASE_URL = origEnv;
+      }
+    }
+  });
+
+  it("falls back to NEXT_PUBLIC_API_BASE_URL when YAMDC_API_BASE_URL is unset", () => {
+    const origPrimary = process.env.YAMDC_API_BASE_URL;
+    const origFallback = process.env.NEXT_PUBLIC_API_BASE_URL;
+    delete process.env.YAMDC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://fallback:8080";
+    try {
+      expect(getAPIBaseURL()).toBe("http://fallback:8080");
+    } finally {
+      if (origPrimary !== undefined) process.env.YAMDC_API_BASE_URL = origPrimary;
+      if (origFallback === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = origFallback;
+    }
+  });
+
+  it("falls back to default localhost when both env vars unset", () => {
+    const origPrimary = process.env.YAMDC_API_BASE_URL;
+    const origFallback = process.env.NEXT_PUBLIC_API_BASE_URL;
+    delete process.env.YAMDC_API_BASE_URL;
+    delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    try {
+      expect(getAPIBaseURL()).toBe("http://127.0.0.1:8080");
+    } finally {
+      if (origPrimary !== undefined) process.env.YAMDC_API_BASE_URL = origPrimary;
+      if (origFallback !== undefined) process.env.NEXT_PUBLIC_API_BASE_URL = origFallback;
+    }
   });
 });

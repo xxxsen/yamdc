@@ -10,6 +10,7 @@ type DebugWindow = Window & {
 };
 
 function getDebugStore() {
+  /* v8 ignore next 3 -- only called after logUploadDebug's own window guard */
   if (typeof window === "undefined") {
     return null;
   }
@@ -47,6 +48,7 @@ export function logUploadDebug(scope: string, event: string, data?: unknown) {
     data,
   };
   const store = getDebugStore();
+  /* v8 ignore next -- getDebugStore always returns non-null after the window guard above */
   if (store) {
     store.push(entry);
     if (store.length > 400) {
