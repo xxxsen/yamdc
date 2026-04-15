@@ -1,4 +1,4 @@
-.PHONY: build test install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
+.PHONY: build test install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-test web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
 
 BIN ?= yamdc
 BACKEND_IMAGE ?= xxxsen/yamdc:latest
@@ -34,10 +34,13 @@ web-install:
 web-lint:
 	cd web && npm run lint
 
+web-test:
+	cd web && npm run test:coverage
+
 web-build:
 	cd web && npm run build
 
-web-check: web-install web-lint web-build
+web-check: web-install web-lint web-test web-build
 
 ci-check: backend-check web-check
 

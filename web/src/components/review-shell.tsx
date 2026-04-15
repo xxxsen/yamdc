@@ -148,6 +148,207 @@ function TokenEditor({
   );
 }
 
+function CropOverlay({
+  coverKey,
+  onClose,
+  onCrop,
+}: {
+  coverKey: string;
+  onClose: () => void;
+  onCrop: (rect: { x: number; y: number; width: number; height: number }) => void;
+}) {
+  const [rect, setRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [imgSize, setImgSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+
+  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    const dw = img.clientWidth;
+    const dh = img.clientHeight;
+    let w = 0;
+    let h = 0;
+    let x = 0;
+    let y = 0;
+    if (nw >= nh) {
+      h = dh;
+      w = h * POSTER_ASPECT;
+      x = Math.max(0, (dw - w) / 2);
+    } else {
+      w = dw;
+      h = w / POSTER_ASPECT;
+      y = Math.max(0, (dh - h) / 2);
+    }
+    setImgSize({ displayWidth: dw, displayHeight: dh, naturalWidth: nw, naturalHeight: nh });
+    setRect({ x, y, width: w, height: h });
+  };
+
+  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { startX: event.clientX, startY: event.clientY, originX: rect.x, originY: rect.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const ds = dragRef.current;
+    if (!ds) return;
+    const dx = event.clientX - ds.startX;
+    const dy = event.clientY - ds.startY;
+    setRect((prev) => {
+      const next = { ...prev };
+      if (imgSize.naturalWidth >= imgSize.naturalHeight) {
+        next.x = Math.min(Math.max(0, ds.originX + dx), imgSize.displayWidth - prev.width);
+      } else {
+        next.y = Math.min(Math.max(0, ds.originY + dy), imgSize.displayHeight - prev.height);
+      }
+      return next;
+    });
+  };
+
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current) {
+      dragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    }
+  };
+
+  const handleConfirm = () => {
+    if (imgSize.displayWidth === 0 || imgSize.displayHeight === 0) return;
+    const sx = imgSize.naturalWidth / imgSize.displayWidth;
+    const sy = imgSize.naturalHeight / imgSize.displayHeight;
+    onCrop({
+      x: Math.round(rect.x * sx),
+      y: Math.round(rect.y * sy),
+      width: Math.round(rect.width * sx),
+      height: Math.round(rect.height * sy),
+    });
+  };
+
+  const showSelection = rect.width > 0 && rect.height > 0;
+
+  return (
+    <div className="review-preview-overlay" onClick={onClose}>
+      <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="review-crop-head">
+          <div className="review-preview-title">从封面截取海报</div>
+        </div>
+        <div className="review-crop-stage">
+          <div className="review-crop-canvas">
+            <img
+              src={getAssetURL(coverKey)}
+              alt="cover crop preview"
+              className="review-crop-image"
+              onLoad={handleImageLoad}
+            />
+            {showSelection ? (
+              <div
+                className="review-crop-selection"
+                style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+                onPointerDown={beginDrag}
+                onPointerMove={moveDrag}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+              />
+            ) : null}
+            {showSelection ? (
+              <button
+                type="button"
+                className="btn review-crop-confirm"
+                style={{ left: rect.x + rect.width - 54, top: rect.y + 8 }}
+                onClick={handleConfirm}
+              >
+                截取
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmOverlay({
+  targetIds,
+  selectedRelPath,
+  onCancel,
+  onConfirm,
+  isPending,
+}: {
+  targetIds: number[] | null;
+  selectedRelPath: string | undefined;
+  onCancel: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  if (!targetIds || targetIds.length === 0) return null;
+  return (
+    <div className="review-preview-overlay" onClick={onCancel}>
+      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="review-confirm-title">确认删除</div>
+        <div className="review-confirm-body">
+          {targetIds.length > 1 ? (
+            <>
+              这会删除已选中的 {targetIds.length} 个任务以及各自对应的源文件。
+            </>
+          ) : (
+            <>
+              这会删除当前任务以及对应的源文件。
+              <br />
+              <span className="review-confirm-path">{selectedRelPath}</span>
+            </>
+          )}
+        </div>
+        <div className="review-confirm-actions">
+          <button type="button" className="btn" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RestoreConfirmOverlay({
+  open,
+  selectedRelPath,
+  onCancel,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  selectedRelPath: string | undefined;
+  onCancel: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="review-preview-overlay" onClick={onCancel}>
+      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="review-confirm-title">恢复原始内容</div>
+        <div className="review-confirm-body">
+          这会用最初刮削得到的原始内容覆盖当前修改。
+          <br />
+          <span className="review-confirm-path">{selectedRelPath}</span>
+        </div>
+        <div className="review-confirm-actions">
+          <button type="button" className="btn" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
+            恢复
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
   const initialRawMeta = initialScrapeData?.raw_data ? (() => {
@@ -168,8 +369,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const [cropOpen, setCropOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<number[] | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
-  const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const lastSavedPayloadRef = useRef(buildPayload(initialMeta));
   const lastSavedJobIDRef = useRef<number | null>(jobs[0]?.id ?? null);
@@ -177,7 +376,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
-  const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const uploadActiveRef = useRef(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
@@ -270,7 +468,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     if (currentSelected && next.some((item) => item.id === currentSelected.id)) {
       return;
     }
-    const nextSelected = next[0] ?? null;
+    const nextSelected = next.at(0) ?? null;
     if (!nextSelected) {
       setSelected(null);
       selectedRef.current = null;
@@ -513,84 +711,12 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     setCropOpen(true);
   };
 
-  const handleCropImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const img = event.currentTarget;
-    const naturalWidth = img.naturalWidth;
-    const naturalHeight = img.naturalHeight;
-    const displayWidth = img.clientWidth;
-    const displayHeight = img.clientHeight;
-    let width = 0;
-    let height = 0;
-    let x = 0;
-    let y = 0;
-    if (naturalWidth >= naturalHeight) {
-      height = displayHeight;
-      width = height * POSTER_ASPECT;
-      x = Math.max(0, (displayWidth - width) / 2);
-      y = 0;
-    } else {
-      width = displayWidth;
-      height = width / POSTER_ASPECT;
-      x = 0;
-      y = Math.max(0, (displayHeight - height) / 2);
-    }
-    setCropImageSize({ displayWidth, displayHeight, naturalWidth, naturalHeight });
-    setCropRect({ x, y, width, height });
-  };
-
-  const beginCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    cropDragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: cropRect.x,
-      originY: cropRect.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handleCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const dragState = cropDragRef.current;
-    if (!dragState) {
-      return;
-    }
-    const deltaX = event.clientX - dragState.startX;
-    const deltaY = event.clientY - dragState.startY;
-    setCropRect((prev) => {
-      const next = { ...prev };
-      if (cropImageSize.naturalWidth >= cropImageSize.naturalHeight) {
-        next.x = Math.min(Math.max(0, dragState.originX + deltaX), cropImageSize.displayWidth - prev.width);
-      } else {
-        next.y = Math.min(Math.max(0, dragState.originY + deltaY), cropImageSize.displayHeight - prev.height);
-      }
-      return next;
-    });
-  };
-
-  const endCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (cropDragRef.current) {
-      cropDragRef.current = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    }
-  };
-
-  const handleConfirmCrop = () => {
-    if (!selected || !meta?.cover || cropImageSize.displayWidth === 0 || cropImageSize.displayHeight === 0) {
-      return;
-    }
-    const scaleX = cropImageSize.naturalWidth / cropImageSize.displayWidth;
-    const scaleY = cropImageSize.naturalHeight / cropImageSize.displayHeight;
-    const payload = {
-      x: Math.round(cropRect.x * scaleX),
-      y: Math.round(cropRect.y * scaleY),
-      width: Math.round(cropRect.width * scaleX),
-      height: Math.round(cropRect.height * scaleY),
-    };
+  const handleCropResult = (rect: { x: number; y: number; width: number; height: number }) => {
+    if (!selected) return;
     startTransition(async () => {
       try {
         setMessage("从封面截取海报...");
-        const poster = await cropPosterFromCover(selected.id, payload);
+        const poster = await cropPosterFromCover(selected.id, rect);
         updateMeta({ poster });
         metaRef.current = { ...(metaRef.current ?? {}), poster };
         lastSavedPayloadRef.current = buildPayload(metaRef.current);
@@ -631,23 +757,25 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
-  const doUpload = async (file: File, target: "cover" | "poster" | "fanart") => {
+  const doUpload = (file: File, target: "cover" | "poster" | "fanart") => {
     if (!meta || !selected) {
       return;
     }
     startTransition(async () => {
+      const currentMeta = metaRef.current;
+      if (!currentMeta) return;
       try {
         setMessage("上传图片...");
         const asset = await uploadAsset(file);
         let nextMeta: ReviewMeta;
         if (target === "cover") {
-          nextMeta = { ...metaRef.current!, cover: asset };
+          nextMeta = { ...currentMeta, cover: asset };
         } else if (target === "poster") {
-          nextMeta = { ...metaRef.current!, poster: asset };
+          nextMeta = { ...currentMeta, poster: asset };
         } else {
           nextMeta = {
-            ...metaRef.current!,
-            sample_images: [...(metaRef.current?.sample_images ?? []).filter((s) => s.key !== asset.key), asset],
+            ...currentMeta,
+            sample_images: [...(currentMeta.sample_images ?? []).filter((s) => s.key !== asset.key), asset],
           };
         }
         persistMetaPatch(nextMeta, "图片已更新");
@@ -669,7 +797,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
       const file = input.files?.[0];
       unlock();
       if (file) {
-        void doUpload(file, target);
+        doUpload(file, target);
       }
     }, { once: true });
     input.addEventListener("cancel", () => {
@@ -877,7 +1005,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                         <Crop size={14} />
                       </button>
                       <div className="review-image-box review-image-box-poster">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("poster"), item: meta.poster! }); }}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.poster) setPreview({ title: imageTitle("poster"), item: meta.poster }); }}>
                           <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </button>
                         <button
@@ -926,7 +1054,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                     <div className="panel review-image-card review-image-card-cover">
                       <span className="review-image-title">封面</span>
                       <div className="review-image-box review-image-box-cover">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("cover"), item: meta.cover! }); }}>
+                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.cover) setPreview({ title: imageTitle("cover"), item: meta.cover }); }}>
                           <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
                         </button>
                         <button
@@ -1017,101 +1145,22 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
       ) : null}
 
       {cropOpen && meta?.cover ? (
-        <div className="review-preview-overlay" onClick={() => setCropOpen(false)}>
-          <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="review-crop-head">
-              <div className="review-preview-title">从封面截取海报</div>
-            </div>
-            <div className="review-crop-stage">
-              <div className="review-crop-canvas">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={getAssetURL(meta.cover.key)}
-                  alt="cover crop preview"
-                  className="review-crop-image"
-                  onLoad={handleCropImageLoad}
-                />
-                {cropRect.width > 0 && cropRect.height > 0 ? (
-                  <div
-                    className="review-crop-selection"
-                    style={{
-                      left: cropRect.x,
-                      top: cropRect.y,
-                      width: cropRect.width,
-                      height: cropRect.height,
-                    }}
-                    onPointerDown={beginCropDrag}
-                    onPointerMove={handleCropDrag}
-                    onPointerUp={endCropDrag}
-                    onPointerCancel={endCropDrag}
-                  />
-                ) : null}
-                {cropRect.width > 0 && cropRect.height > 0 ? (
-                  <button
-                    type="button"
-                    className="btn review-crop-confirm"
-                    style={{
-                      left: cropRect.x + cropRect.width - 54,
-                      top: cropRect.y + 8,
-                    }}
-                    onClick={handleConfirmCrop}
-                  >
-                    截取
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
+        <CropOverlay coverKey={meta.cover.key} onClose={() => setCropOpen(false)} onCrop={handleCropResult} />
       ) : null}
-      {deleteTargetIds && deleteTargetIds.length > 0 ? (
-        <div className="review-preview-overlay" onClick={() => setDeleteTargetIds(null)}>
-          <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="review-confirm-title">确认删除</div>
-            <div className="review-confirm-body">
-              {deleteTargetIds.length > 1 ? (
-                <>
-                  这会删除已选中的 {deleteTargetIds.length} 个任务以及各自对应的源文件。
-                </>
-              ) : (
-                <>
-                  这会删除当前任务以及对应的源文件。
-                  <br />
-                  <span className="review-confirm-path">{selected?.rel_path}</span>
-                </>
-              )}
-            </div>
-            <div className="review-confirm-actions">
-              <button type="button" className="btn" onClick={() => setDeleteTargetIds(null)}>
-                取消
-              </button>
-              <button type="button" className="btn btn-primary" onClick={confirmDelete} disabled={isPending}>
-                删除
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {restoreConfirmOpen && selected ? (
-        <div className="review-preview-overlay" onClick={() => setRestoreConfirmOpen(false)}>
-          <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="review-confirm-title">恢复原始内容</div>
-            <div className="review-confirm-body">
-              这会用最初刮削得到的原始内容覆盖当前修改。
-              <br />
-              <span className="review-confirm-path">{selected.rel_path}</span>
-            </div>
-            <div className="review-confirm-actions">
-              <button type="button" className="btn" onClick={() => setRestoreConfirmOpen(false)}>
-                取消
-              </button>
-              <button type="button" className="btn btn-primary" onClick={confirmRestoreRaw} disabled={isPending}>
-                恢复
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <DeleteConfirmOverlay
+        targetIds={deleteTargetIds}
+        selectedRelPath={selected?.rel_path}
+        onCancel={() => setDeleteTargetIds(null)}
+        onConfirm={confirmDelete}
+        isPending={isPending}
+      />
+      <RestoreConfirmOverlay
+        open={restoreConfirmOpen}
+        selectedRelPath={selected?.rel_path}
+        onCancel={() => setRestoreConfirmOpen(false)}
+        onConfirm={confirmRestoreRaw}
+        isPending={isPending}
+      />
     </>
   );
 }

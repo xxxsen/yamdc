@@ -73,6 +73,25 @@ jobs:
       - name: Run web lint
         run: make web-lint
 
+  web-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: make web-install
+
+      - name: Run web tests with coverage
+        run: make web-test
+
   web-build:
     runs-on: ubuntu-latest
     steps:

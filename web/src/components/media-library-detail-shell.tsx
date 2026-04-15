@@ -42,7 +42,7 @@ function pickVariant(detail: MediaLibraryDetail | null, key: string) {
   if (!detail) {
     return null;
   }
-  return detail.variants.find((item) => item.key === key) ?? detail.variants[0] ?? null;
+  return detail.variants.find((item) => item.key === key) ?? detail.variants.at(0) ?? null;
 }
 
 function serializeMeta(meta: LibraryMeta) {
@@ -513,23 +513,34 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
         </div>
       )}
 
-      {preview ? (
-        <div className="review-preview-overlay" onClick={() => setPreview(null)}>
-          <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={() => setPreview(null)}>
-            <X size={18} />
-          </button>
-          <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
-            <div className="review-preview-title">{preview.title}</div>
-            <div className="review-preview-frame">
-              <img
-                src={resolveImageSrc(preview.path)}
-                alt={preview.name}
-                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ImagePreviewOverlay preview={preview} resolveImageSrc={resolveImageSrc} onClose={() => setPreview(null)} />
     </>
+  );
+}
+
+function ImagePreviewOverlay({ preview, resolveImageSrc, onClose }: {
+  preview: { title: string; path: string; name: string } | null;
+  resolveImageSrc: (path: string) => string;
+  onClose: () => void;
+}) {
+  if (!preview) {
+    return null;
+  }
+  return (
+    <div className="review-preview-overlay" onClick={onClose}>
+      <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={onClose}>
+        <X size={18} />
+      </button>
+      <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
+        <div className="review-preview-title">{preview.title}</div>
+        <div className="review-preview-frame">
+          <img
+            src={resolveImageSrc(preview.path)}
+            alt={preview.name}
+            style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

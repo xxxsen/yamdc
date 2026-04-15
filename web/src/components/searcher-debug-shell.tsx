@@ -79,7 +79,7 @@ export function SearcherDebugShell() {
   const resultMetaJSON = useMemo(() => (result?.meta ? JSON.stringify(result.meta, null, 2) : ""), [result]);
 
   useEffect(() => {
-    if (!pluginCatalog?.available?.length) {
+    if (!pluginCatalog?.available.length) {
       return;
     }
     if (selectedPlugin && !pluginCatalog.available.includes(selectedPlugin)) {
@@ -171,7 +171,7 @@ export function SearcherDebugShell() {
             onChange={(event) => setSelectedPlugin(event.target.value)}
           >
             <option value="">使用当前配置链</option>
-            {pluginCatalog?.available?.map((plugin) => (
+            {pluginCatalog?.available.map((plugin) => (
               <option key={plugin} value={plugin}>
                 {plugin}
               </option>
@@ -224,7 +224,7 @@ export function SearcherDebugShell() {
                 </div>
                 <div className="ruleset-debug-summary-row">
                   <span>来源</span>
-                  <strong>{result.meta?.ext_info?.scrape_info?.source || "-"}</strong>
+                  <strong>{result.meta?.ext_info?.scrape_info.source || "-"}</strong>
                 </div>
               </div>
               {result.meta ? (

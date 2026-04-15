@@ -161,7 +161,7 @@ export function RulesetDebugShell() {
                     </div>
                   </div>
                   {step.summary ? <p className="ruleset-debug-step-summary">{step.summary}</p> : null}
-                  {step.values?.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
+                  {step.values.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
                   {step.candidate ? (
                     <div className="ruleset-debug-step-candidate">
                       <span>candidate</span>
