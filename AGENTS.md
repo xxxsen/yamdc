@@ -60,9 +60,11 @@ make ci-check             # backend-check + web-check（与 CI 一致）
 - 框架：标准 `testing` + `github.com/stretchr/testify`
 - 测试文件与源码同目录，命名 `*_test.go`
 - 运行单个包测试示例：`go test ./internal/number/...`
+- 测试用例要求: 覆盖至少 `正常case`, `异常case`, `边缘case` 3种路径
 
 ### 前端测试
 
 - 框架：vitest
 - 测试文件在 `web/src/lib/__tests__/`
 - 运行：`cd web && npm run test`（即 `vitest run`）
+- 测试用例要求: 覆盖至少 `正常case`, `异常case`, `边缘case` 3种路径
