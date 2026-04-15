@@ -558,6 +558,16 @@ interface APIResponse<T> {
 }
 
 async function readAPIResponse<T>(resp: Response, fallbackMessage: string): Promise<APIResponse<T>> {
+  if (!resp.ok) {
+    let serverMessage = "";
+    try {
+      const body = (await resp.json()) as { message?: string };
+      serverMessage = body?.message ?? "";
+    } catch {
+      // non-JSON error response (e.g. HTML 502 page)
+    }
+    throw new Error(serverMessage || `${fallbackMessage} (HTTP ${resp.status})`);
+  }
   const data = (await resp.json()) as APIResponse<T>;
   if (data.code !== 0) {
     throw new Error(data.message || fallbackMessage);
@@ -583,13 +593,42 @@ export function getAPIBaseURL() {
   return getBaseURL();
 }
 
+interface ApiRequestInit {
+  method?: string;
+  body?: unknown;
+  formData?: FormData;
+  cache?: RequestCache;
+  signal?: AbortSignal;
+}
+
+function buildPath(base: string, query?: URLSearchParams): string {
+  const qs = query?.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+async function apiRequest<T>(path: string, init?: ApiRequestInit): Promise<APIResponse<T>> {
+  const { method, body, formData, cache, signal } = init ?? {};
+  const fetchInit: RequestInit = {};
+  if (method) fetchInit.method = method;
+  if (cache) fetchInit.cache = cache;
+  if (signal) fetchInit.signal = signal;
+  if (formData) {
+    fetchInit.body = formData;
+  } else if (body !== undefined) {
+    fetchInit.headers = { "Content-Type": "application/json" };
+    fetchInit.body = JSON.stringify(body);
+  }
+  const resp = await fetch(`${getBaseURL()}${path}`, fetchInit);
+  return readAPIResponse<T>(resp, `request ${path} failed`);
+}
+
 export async function listJobs(params?: {
   status?: string;
   keyword?: string;
   page?: number;
   pageSize?: number;
   all?: boolean;
-}) {
+}, signal?: AbortSignal) {
   const query = new URLSearchParams();
   if (params?.status) {
     query.set("status", params.status);
@@ -606,19 +645,15 @@ export async function listJobs(params?: {
   if (params?.all) {
     query.set("all", "true");
   }
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  const resp = await fetch(`${getBaseURL()}/api/jobs${suffix}`, {
+  const data = await apiRequest<JobListResponse>(buildPath("/api/jobs", query), {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<JobListResponse>(resp, "list jobs failed");
   return data.data;
 }
 
-export async function listLibraryItems() {
-  const resp = await fetch(`${getBaseURL()}/api/library`, {
-    cache: "no-store",
-  });
-  const data = await readAPIResponse<LibraryListItem[]>(resp, "list library failed");
+export async function listLibraryItems(signal?: AbortSignal) {
+  const data = await apiRequest<LibraryListItem[]>("/api/library", { cache: "no-store", signal });
   return data.data.map(normalizeLibraryListItem);
 }
 
@@ -628,7 +663,7 @@ export async function listMediaLibraryItems(params?: {
   size?: string;
   sort?: string;
   order?: string;
-}) {
+}, signal?: AbortSignal) {
   const query = new URLSearchParams();
   if (params?.keyword?.trim()) {
     query.set("keyword", params.keyword.trim());
@@ -645,116 +680,103 @@ export async function listMediaLibraryItems(params?: {
   if (params?.order?.trim() && params.order !== "desc") {
     query.set("order", params.order.trim());
   }
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  const resp = await fetch(`${getBaseURL()}/api/media-library${suffix}`, {
+  const data = await apiRequest<MediaLibraryItem[]>(buildPath("/api/media-library", query), {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryItem[]>(resp, "list media library failed");
   return data.data.map(normalizeMediaLibraryItem);
 }
 
-export async function getMediaLibraryItem(id: number) {
+export async function getMediaLibraryItem(id: number, signal?: AbortSignal) {
   const query = new URLSearchParams({ id: String(id) });
-  const resp = await fetch(`${getBaseURL()}/api/media-library/item?${query.toString()}`, {
+  const data = await apiRequest<MediaLibraryDetail>(buildPath("/api/media-library/item", query), {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryDetail>(resp, "get media library item failed");
   return normalizeMediaLibraryDetail(data.data);
 }
 
-export async function updateMediaLibraryItem(id: number, meta: LibraryMeta) {
+export async function updateMediaLibraryItem(id: number, meta: LibraryMeta, signal?: AbortSignal) {
   const query = new URLSearchParams({ id: String(id) });
-  const resp = await fetch(`${getBaseURL()}/api/media-library/item?${query.toString()}`, {
+  const data = await apiRequest<MediaLibraryDetail>(buildPath("/api/media-library/item", query), {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ meta }),
+    body: { meta },
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryDetail>(resp, "update media library item failed");
   return normalizeMediaLibraryDetail(data.data);
 }
 
-export async function replaceMediaLibraryAsset(id: number, variant: string, kind: "poster" | "cover" | "fanart", file: File) {
+export async function replaceMediaLibraryAsset(id: number, variant: string, kind: "poster" | "cover" | "fanart", file: File, signal?: AbortSignal) {
   const query = new URLSearchParams({ id: String(id), kind });
   if (variant) {
     query.set("variant", variant);
   }
   const form = new FormData();
   form.append("file", file);
-  const resp = await fetch(`${getBaseURL()}/api/media-library/asset?${query.toString()}`, {
+  const data = await apiRequest<MediaLibraryDetail>(buildPath("/api/media-library/asset", query), {
     method: "POST",
-    body: form,
+    formData: form,
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryDetail>(resp, "replace media library asset failed");
   return normalizeMediaLibraryDetail(data.data);
 }
 
-export async function deleteMediaLibraryFile(id: number, path: string) {
+export async function deleteMediaLibraryFile(id: number, path: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ id: String(id), path });
-  const resp = await fetch(`${getBaseURL()}/api/media-library/file?${query.toString()}`, {
+  const data = await apiRequest<MediaLibraryDetail>(buildPath("/api/media-library/file", query), {
     method: "DELETE",
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryDetail>(resp, "delete media library file failed");
   return normalizeMediaLibraryDetail(data.data);
 }
 
-export async function getMediaLibraryStatus() {
-  const resp = await fetch(`${getBaseURL()}/api/media-library/status`, {
+export async function getMediaLibraryStatus(signal?: AbortSignal) {
+  const data = await apiRequest<MediaLibraryStatus>("/api/media-library/status", {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<MediaLibraryStatus>(resp, "get media library status failed");
   return data.data;
 }
 
-export async function triggerMediaLibrarySync() {
-  const resp = await fetch(`${getBaseURL()}/api/media-library/sync`, {
-    method: "POST",
-  });
-  const data = await readAPIResponse<unknown>(resp, "trigger media library sync failed");
+export async function triggerMediaLibrarySync(signal?: AbortSignal) {
+  const data = await apiRequest<unknown>("/api/media-library/sync", { method: "POST", signal });
   return data;
 }
 
-export async function triggerMoveToMediaLibrary() {
-  const resp = await fetch(`${getBaseURL()}/api/media-library/move`, {
-    method: "POST",
-  });
-  const data = await readAPIResponse<unknown>(resp, "trigger move to media library failed");
+export async function triggerMoveToMediaLibrary(signal?: AbortSignal) {
+  const data = await apiRequest<unknown>("/api/media-library/move", { method: "POST", signal });
   return data;
 }
 
-export async function getLibraryItem(path: string) {
+export async function getLibraryItem(path: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ path });
-  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+  const data = await apiRequest<LibraryDetail>(buildPath("/api/library/item", query), {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<LibraryDetail>(resp, "get library item failed");
   return normalizeLibraryDetail(data.data);
 }
 
-export async function updateLibraryItem(path: string, meta: LibraryMeta) {
+export async function updateLibraryItem(path: string, meta: LibraryMeta, signal?: AbortSignal) {
   const query = new URLSearchParams({ path });
-  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+  const data = await apiRequest<LibraryDetail>(buildPath("/api/library/item", query), {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ meta }),
+    body: { meta },
+    signal,
   });
-  const data = await readAPIResponse<LibraryDetail>(resp, "update library item failed");
   return normalizeLibraryDetail(data.data);
 }
 
-export async function deleteLibraryItem(path: string) {
+export async function deleteLibraryItem(path: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ path });
-  const resp = await fetch(`${getBaseURL()}/api/library/item?${query.toString()}`, {
+  const data = await apiRequest<unknown>(buildPath("/api/library/item", query), {
     method: "DELETE",
+    signal,
   });
-  const data = await readAPIResponse<unknown>(resp, "delete library item failed");
   return data;
 }
 
-export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover" | "fanart", file: File) {
+export async function replaceLibraryAsset(path: string, variant: string, kind: "poster" | "cover" | "fanart", file: File, signal?: AbortSignal) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   logUploadDebug("api", "replace-library-asset-start", {
     path,
@@ -770,54 +792,49 @@ export async function replaceLibraryAsset(path: string, variant: string, kind: "
   }
   const form = new FormData();
   form.append("file", file);
-  const resp = await fetch(`${getBaseURL()}/api/library/asset?${query.toString()}`, {
-    method: "POST",
-    body: form,
-  });
-  const data = (await resp.json()) as APIResponse<LibraryDetail>;
-  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
-  logUploadDebug("api", "replace-library-asset-response", {
-    path,
-    variant,
-    kind,
-    ok: resp.ok,
-    status: resp.status,
-    code: data.code,
-    durationMs,
-    message: data.message,
-  });
-  if (data.code !== 0) {
-    throw new Error(data.message || "replace library asset failed");
+  try {
+    const data = await apiRequest<LibraryDetail>(buildPath("/api/library/asset", query), {
+      method: "POST",
+      formData: form,
+      signal,
+    });
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "replace-library-asset-response", { path, variant, kind, ok: true, durationMs });
+    return normalizeLibraryDetail(data.data);
+  } catch (error) {
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "replace-library-asset-response", {
+      path, variant, kind, ok: false, durationMs,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return normalizeLibraryDetail(data.data);
 }
 
 export async function cropLibraryPosterFromCover(
   path: string,
   variant: string,
   rect: { x: number; y: number; width: number; height: number },
+  signal?: AbortSignal,
 ) {
   const query = new URLSearchParams({ path });
   if (variant) {
     query.set("variant", variant);
   }
-  const resp = await fetch(`${getBaseURL()}/api/library/poster-crop?${query.toString()}`, {
+  const data = await apiRequest<LibraryDetail>(buildPath("/api/library/poster-crop", query), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(rect),
+    body: rect,
+    signal,
   });
-  const data = await readAPIResponse<LibraryDetail>(resp, "crop library poster failed");
   return normalizeLibraryDetail(data.data);
 }
 
-export async function deleteLibraryFile(path: string) {
+export async function deleteLibraryFile(path: string, signal?: AbortSignal) {
   const query = new URLSearchParams({ path });
-  const resp = await fetch(`${getBaseURL()}/api/library/file?${query.toString()}`, {
+  const data = await apiRequest<LibraryDetail>(buildPath("/api/library/file", query), {
     method: "DELETE",
+    signal,
   });
-  const data = await readAPIResponse<LibraryDetail>(resp, "delete library file failed");
   return normalizeLibraryDetail(data.data);
 }
 
@@ -871,226 +888,170 @@ function normalizeMediaLibraryDetail(detail: MediaLibraryDetail): MediaLibraryDe
   };
 }
 
-export async function triggerScan() {
-  const resp = await fetch(`${getBaseURL()}/api/scan`, {
-    method: "POST",
-  });
-  return await readAPIResponse<unknown>(resp, "scan failed");
+export async function triggerScan(signal?: AbortSignal) {
+  return await apiRequest<unknown>("/api/scan", { method: "POST", signal });
 }
 
-export async function explainMovieIDCleaner(input: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/movieid-cleaner/explain`, {
+export async function explainMovieIDCleaner(input: string, signal?: AbortSignal) {
+  const data = await apiRequest<MovieIDCleanerExplainResult>("/api/debug/movieid-cleaner/explain", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ input }),
+    body: { input },
+    signal,
   });
-  const data = await readAPIResponse<MovieIDCleanerExplainResult>(resp, "explain movieid cleaner failed");
   return data.data;
 }
 
-export async function getSearcherDebugPlugins() {
-  const resp = await fetch(`${getBaseURL()}/api/debug/searcher/plugins`, {
+export async function getSearcherDebugPlugins(signal?: AbortSignal) {
+  const data = await apiRequest<SearcherDebugPluginCollection>("/api/debug/searcher/plugins", {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<SearcherDebugPluginCollection>(resp, "get searcher debug plugins failed");
   return data.data;
 }
 
-export async function debugSearcher(input: string, plugin: string, useCleaner: boolean) {
+export async function debugSearcher(input: string, plugin: string, useCleaner: boolean, signal?: AbortSignal) {
   const plugins = plugin ? [plugin] : [];
-  const resp = await fetch(`${getBaseURL()}/api/debug/searcher/search`, {
+  const data = await apiRequest<SearcherDebugResult>("/api/debug/searcher/search", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ input, plugins, use_cleaner: useCleaner }),
+    body: { input, plugins, use_cleaner: useCleaner },
+    signal,
   });
-  const data = await readAPIResponse<SearcherDebugResult>(resp, "debug searcher failed");
   return data.data;
 }
 
-export async function getHandlerDebugHandlers() {
-  const resp = await fetch(`${getBaseURL()}/api/debug/handlers`, {
+export async function getHandlerDebugHandlers(signal?: AbortSignal) {
+  const data = await apiRequest<HandlerDebugInstance[]>("/api/debug/handlers", {
     cache: "no-store",
+    signal,
   });
-  const data = await readAPIResponse<HandlerDebugInstance[]>(resp, "get handler debug handlers failed");
   return data.data;
 }
 
-export async function debugHandler(payload: HandlerDebugRequest) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/handler/run`, {
+export async function debugHandler(payload: HandlerDebugRequest, signal?: AbortSignal) {
+  const data = await apiRequest<HandlerDebugResult>("/api/debug/handler/run", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+    body: payload,
+    signal,
   });
-  const data = await readAPIResponse<HandlerDebugResult>(resp, "debug handler failed");
   return data.data;
 }
 
-export async function compilePluginDraft(draft: PluginEditorDraft) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/compile`, {
+export async function compilePluginDraft(draft: PluginEditorDraft, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<PluginEditorCompileResult>>("/api/debug/plugin-editor/compile", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ draft }),
+    body: { draft },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorCompileResult>>(resp, "compile plugin draft failed");
   return data.data;
 }
 
-export async function importPluginDraftYAML(yaml: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/import`, {
+export async function importPluginDraftYAML(yaml: string, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<PluginEditorImportResult>>("/api/debug/plugin-editor/import", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ yaml }),
+    body: { yaml },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorImportResult>>(resp, "import plugin yaml failed");
   return data.data;
 }
 
-export async function debugPluginDraftRequest(draft: PluginEditorDraft, number: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/request`, {
+export async function debugPluginDraftRequest(draft: PluginEditorDraft, number: string, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<PluginEditorRequestDebugResult>>("/api/debug/plugin-editor/request", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ draft, number }),
+    body: { draft, number },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorRequestDebugResult>>(resp, "plugin request debug failed");
   return data.data;
 }
 
-export async function debugPluginDraftWorkflow(draft: PluginEditorDraft, number: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/workflow`, {
+export async function debugPluginDraftWorkflow(draft: PluginEditorDraft, number: string, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<PluginEditorWorkflowDebugResult>>("/api/debug/plugin-editor/workflow", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ draft, number }),
+    body: { draft, number },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorWorkflowDebugResult>>(resp, "plugin workflow debug failed");
   return data.data;
 }
 
-export async function debugPluginDraftScrape(draft: PluginEditorDraft, number: string) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/scrape`, {
+export async function debugPluginDraftScrape(draft: PluginEditorDraft, number: string, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<PluginEditorScrapeDebugResult>>("/api/debug/plugin-editor/scrape", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ draft, number }),
+    body: { draft, number },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<PluginEditorScrapeDebugResult>>(resp, "plugin scrape debug failed");
   return data.data;
 }
 
-export async function debugPluginDraftCase(draft: PluginEditorDraft, caseSpec: PluginEditorCaseSpec) {
-  const resp = await fetch(`${getBaseURL()}/api/debug/plugin-editor/case`, {
+export async function debugPluginDraftCase(draft: PluginEditorDraft, caseSpec: PluginEditorCaseSpec, signal?: AbortSignal) {
+  const data = await apiRequest<PluginEditorEnvelope<{ result: PluginEditorCaseDebugResult }>>("/api/debug/plugin-editor/case", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ draft, case: caseSpec }),
+    body: { draft, case: caseSpec },
+    signal,
   });
-  const data = await readAPIResponse<PluginEditorEnvelope<{ result: PluginEditorCaseDebugResult }>>(resp, "plugin case debug failed");
   return data.data;
 }
 
-export async function runJob(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/run`, {
-    method: "POST",
-  });
-  const data = await readAPIResponse<unknown>(resp, "run job failed");
+export async function runJob(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<unknown>(`/api/jobs/${id}/run`, { method: "POST", signal });
   return data;
 }
 
-export async function rerunJob(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/rerun`, {
-    method: "POST",
-  });
-  const data = await readAPIResponse<unknown>(resp, "rerun job failed");
+export async function rerunJob(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<unknown>(`/api/jobs/${id}/rerun`, { method: "POST", signal });
   return data;
 }
 
-export async function deleteJob(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}`, {
-    method: "DELETE",
-  });
-  const data = await readAPIResponse<unknown>(resp, "delete job failed");
+export async function deleteJob(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<unknown>(`/api/jobs/${id}`, { method: "DELETE", signal });
   return data;
 }
 
-export async function updateJobNumber(id: number, number: string) {
-  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/number`, {
+export async function updateJobNumber(id: number, number: string, signal?: AbortSignal) {
+  const data = await apiRequest<JobItem>(`/api/jobs/${id}/number`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ number }),
+    body: { number },
+    signal,
   });
-  const data = await readAPIResponse<JobItem>(resp, "update job number failed");
   return data.data;
 }
 
-export async function listJobLogs(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/jobs/${id}/logs`, {
-    cache: "no-store",
-  });
-  const data = await readAPIResponse<JobLogItem[]>(resp, "list logs failed");
+export async function listJobLogs(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<JobLogItem[]>(`/api/jobs/${id}/logs`, { cache: "no-store", signal });
   return data.data;
 }
 
-export async function getReviewJob(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}`, {
-    cache: "no-store",
-  });
-  const data = await readAPIResponse<ScrapeDataItem | null>(resp, "get review job failed");
+export async function getReviewJob(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<ScrapeDataItem | null>(`/api/review/jobs/${id}`, { cache: "no-store", signal });
   return data.data;
 }
 
-export async function saveReviewJob(id: number, reviewData: string) {
-  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}`, {
+export async function saveReviewJob(id: number, reviewData: string, signal?: AbortSignal) {
+  const data = await apiRequest<unknown>(`/api/review/jobs/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ review_data: reviewData }),
+    body: { review_data: reviewData },
+    signal,
   });
-  const data = await readAPIResponse<unknown>(resp, "save review job failed");
   return data;
 }
 
-export async function importReviewJob(id: number) {
-  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/import`, {
-    method: "POST",
-  });
-  const data = await readAPIResponse<unknown>(resp, "import review job failed");
+export async function importReviewJob(id: number, signal?: AbortSignal) {
+  const data = await apiRequest<unknown>(`/api/review/jobs/${id}/import`, { method: "POST", signal });
   return data;
 }
 
 export async function cropPosterFromCover(
   id: number,
   rect: { x: number; y: number; width: number; height: number },
+  signal?: AbortSignal,
 ) {
-  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/poster-crop`, {
+  const data = await apiRequest<MediaFileRef>(`/api/review/jobs/${id}/poster-crop`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(rect),
+    body: rect,
+    signal,
   });
-  const data = await readAPIResponse<MediaFileRef>(resp, "crop poster failed");
   return data.data;
 }
 
-export async function uploadAsset(file: File) {
+export async function uploadAsset(file: File, signal?: AbortSignal) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   logUploadDebug("api", "upload-asset-start", {
     fileName: file.name,
@@ -1099,26 +1060,26 @@ export async function uploadAsset(file: File) {
   });
   const form = new FormData();
   form.append("file", file);
-  const resp = await fetch(`${getBaseURL()}/api/assets/upload`, {
-    method: "POST",
-    body: form,
-  });
-  const data = (await resp.json()) as APIResponse<MediaFileRef>;
-  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
-  logUploadDebug("api", "upload-asset-response", {
-    ok: resp.ok,
-    status: resp.status,
-    code: data.code,
-    durationMs,
-    message: data.message,
-  });
-  if (data.code !== 0) {
-    throw new Error(data.message || "upload asset failed");
+  try {
+    const data = await apiRequest<MediaFileRef>("/api/assets/upload", {
+      method: "POST",
+      formData: form,
+      signal,
+    });
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "upload-asset-response", { ok: true, durationMs });
+    return data.data;
+  } catch (error) {
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "upload-asset-response", {
+      ok: false, durationMs,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return data.data;
 }
 
-export async function uploadReviewAsset(id: number, target: "cover" | "poster" | "fanart", file: File) {
+export async function uploadReviewAsset(id: number, target: "cover" | "poster" | "fanart", file: File, signal?: AbortSignal) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   logUploadDebug("api", "upload-review-asset-start", {
     id,
@@ -1130,26 +1091,25 @@ export async function uploadReviewAsset(id: number, target: "cover" | "poster" |
   const form = new FormData();
   form.append("file", file);
   const query = new URLSearchParams({ target });
-  const resp = await fetch(`${getBaseURL()}/api/review/jobs/${id}/asset?${query.toString()}`, {
-    method: "POST",
-    body: form,
-  });
-  const data = (await resp.json()) as APIResponse<MediaFileRef>;
-  const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
-  logUploadDebug("api", "upload-review-asset-response", {
-    id,
-    target,
-    ok: resp.ok,
-    status: resp.status,
-    code: data.code,
-    durationMs,
-    message: data.message,
-    key: data.data?.key ?? null,
-  });
-  if (data.code !== 0) {
-    throw new Error(data.message || "upload review asset failed");
+  try {
+    const data = await apiRequest<MediaFileRef>(buildPath(`/api/review/jobs/${id}/asset`, query), {
+      method: "POST",
+      formData: form,
+      signal,
+    });
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "upload-review-asset-response", {
+      id, target, ok: true, durationMs, key: data.data?.key ?? null,
+    });
+    return data.data;
+  } catch (error) {
+    const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+    logUploadDebug("api", "upload-review-asset-response", {
+      id, target, ok: false, durationMs,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
-  return data.data;
 }
 
 export function getAssetURL(key: string) {

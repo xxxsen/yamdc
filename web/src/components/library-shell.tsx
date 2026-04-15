@@ -231,6 +231,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
   const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const detailAbortRef = useRef<AbortController | null>(null);
   const detailRef = useRef<LibraryDetail | null>(initialDetail);
   const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
   const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
@@ -306,9 +307,9 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  const refreshMediaStatus = useEffectEvent(async () => {
+  const refreshMediaStatus = useEffectEvent(async (signal?: AbortSignal) => {
     try {
-      const next = await getMediaLibraryStatus();
+      const next = await getMediaLibraryStatus(signal);
       setMediaStatus(next);
     } catch {
       // ignore polling errors
@@ -319,11 +320,15 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     if (!shouldPollMediaStatus) {
       return;
     }
-    void refreshMediaStatus();
+    const controller = new AbortController();
+    void refreshMediaStatus(controller.signal);
     const timer = window.setInterval(() => {
-      void refreshMediaStatus();
+      void refreshMediaStatus(controller.signal);
     }, 3000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
   }, [shouldPollMediaStatus]);
 
   useEffect(() => {
@@ -458,26 +463,34 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   };
 
   const loadDetail = (path: string) => {
+    detailAbortRef.current?.abort();
+    const controller = new AbortController();
+    detailAbortRef.current = controller;
     setSelectedPath(path);
     startTransition(async () => {
       try {
         setMessage("加载已入库详情...");
-        const next = await getLibraryItem(path);
+        const next = await getLibraryItem(path, controller.signal);
         syncDetail(next);
         setMessage("");
       } catch (error) {
+        if (controller.signal.aborted) return;
         setMessage(error instanceof Error ? error.message : "加载已入库详情失败");
       }
     });
   };
 
   const loadInitialDetail = useEffectEvent(async (path: string) => {
+    detailAbortRef.current?.abort();
+    const controller = new AbortController();
+    detailAbortRef.current = controller;
     try {
       setMessage("加载已入库详情...");
-      const next = await getLibraryItem(path);
+      const next = await getLibraryItem(path, controller.signal);
       syncDetail(next);
       setMessage("");
     } catch (error) {
+      if (controller.signal.aborted) return;
       setMessage(error instanceof Error ? error.message : "加载已入库详情失败");
     }
   });

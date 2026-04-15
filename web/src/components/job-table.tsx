@@ -164,19 +164,21 @@ export function JobTable({ initialData }: Props) {
   };
 
   useEffect(() => {
+    let controller: AbortController | null = null;
     const timer = window.setInterval(() => {
-      void listJobs({
-        status: STATUS_FILTER,
-        all: true,
-        keyword,
-      })
+      controller?.abort();
+      controller = new AbortController();
+      void listJobs({ status: STATUS_FILTER, all: true, keyword }, controller.signal)
         .then((data) => {
           setAllJobs(data.items);
           setTotal(data.total);
         })
         .catch(() => undefined);
     }, 8000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      controller?.abort();
+    };
   }, [keyword, resolvedStatusFilter]);
 
   const handleScan = () => {
@@ -195,6 +197,7 @@ export function JobTable({ initialData }: Props) {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
       startTransition(async () => {
         try {
@@ -202,15 +205,19 @@ export function JobTable({ initialData }: Props) {
             status: STATUS_FILTER,
             all: true,
             keyword,
-          });
+          }, controller.signal);
           setAllJobs(data.items);
           setTotal(data.total);
         } catch (error) {
+          if (controller.signal.aborted) return;
           setMessage(error instanceof Error ? error.message : "查询失败");
         }
       });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [keyword, resolvedStatusFilter]);
 
   const handleRun = (job: JobItem) => {

@@ -11,6 +11,8 @@ function mockAPIResponse(data: unknown) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       json: async () => ({
         code: 0,
         message: "ok",
