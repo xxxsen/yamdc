@@ -14,3 +14,4 @@ config.json
 /tmp
 /.cursor
 /issues
+/coverage.out

@@ -51,7 +51,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run backend tests
+      - name: Run backend tests with coverage
         run: make backend-test
 
   web-lint:
