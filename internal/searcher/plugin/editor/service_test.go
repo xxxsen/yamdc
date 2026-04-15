@@ -293,6 +293,66 @@ func TestServiceCompilePreservesPrecheckVariablesAndURLRequests(t *testing.T) {
 	require.Contains(t, result.YAML, "url: ${build_url(${host}, ${value})}")
 }
 
+func TestNewService_NilClient(t *testing.T) {
+	_, err := NewService(nil)
+	require.Error(t, err)
+}
+
+func TestServiceCompile_Error(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.Compile(context.Background(), &plugyaml.PluginSpec{})
+	require.Error(t, err)
+}
+
+func TestServiceRequestDebug_Error(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.RequestDebug(context.Background(), &plugyaml.PluginSpec{}, "ABC-123")
+	require.Error(t, err)
+}
+
+func TestServiceScrapeDebug_Error(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.ScrapeDebug(context.Background(), &plugyaml.PluginSpec{}, "ABC-123")
+	require.Error(t, err)
+}
+
+func TestServiceWorkflowDebug_Error(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.WorkflowDebug(context.Background(), &plugyaml.PluginSpec{}, "ABC-123")
+	require.Error(t, err)
+}
+
+func TestServiceCaseDebug_Error(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	result, err := svc.CaseDebug(context.Background(), &plugyaml.PluginSpec{}, plugyaml.CaseSpec{})
+	require.NoError(t, err)
+	require.False(t, result.Pass)
+	require.NotEmpty(t, result.Errmsg)
+}
+
+func TestServiceImportYAML_InvalidYAML(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.ImportYAML(context.Background(), `invalid: {yaml`)
+	require.Error(t, err)
+}
+
+func TestServiceImportYAML_CompileError(t *testing.T) {
+	svc, err := NewService(client.MustNewClient())
+	require.NoError(t, err)
+	_, err = svc.ImportYAML(context.Background(), `
+version: 1
+name: bad
+type: one-step
+`)
+	require.Error(t, err)
+}
+
 func oneStepDraft(host string) *plugyaml.PluginSpec {
 	return &plugyaml.PluginSpec{
 		Version: 1,

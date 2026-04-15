@@ -2,10 +2,12 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
@@ -29,6 +31,60 @@ func (c *blockingCleaner) Clean(input string) (*movieidcleaner.Result, error) {
 
 func (c *blockingCleaner) Explain(input string) (*movieidcleaner.ExplainResult, error) {
 	return movieidcleaner.NewPassthroughCleaner().Explain(input)
+}
+
+type erroringCleaner struct {
+	err error
+}
+
+func (c *erroringCleaner) Clean(string) (*movieidcleaner.Result, error) {
+	return nil, c.err
+}
+
+func (c *erroringCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
+	return nil, nil //nolint:nilnil
+}
+
+type nilResultCleaner struct{}
+
+func (nilResultCleaner) Clean(string) (*movieidcleaner.Result, error) {
+	return nil, nil //nolint:nilnil
+}
+
+func (nilResultCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
+	return nil, nil //nolint:nilnil
+}
+
+type emptyNormalizedCleaner struct{}
+
+func (emptyNormalizedCleaner) Clean(input string) (*movieidcleaner.Result, error) {
+	return &movieidcleaner.Result{
+		RawInput:   input,
+		Normalized: "",
+		Status:     movieidcleaner.StatusSuccess,
+		Confidence: movieidcleaner.ConfidenceHigh,
+		Warnings:   []string{"w1", "w2"},
+	}, nil
+}
+
+func (emptyNormalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
+	return nil, nil //nolint:nilnil
+}
+
+type normalizedCleaner struct {
+	out string
+}
+
+func (c normalizedCleaner) Clean(string) (*movieidcleaner.Result, error) {
+	return &movieidcleaner.Result{
+		Normalized: c.out,
+		Status:     movieidcleaner.StatusSuccess,
+		Confidence: movieidcleaner.ConfidenceMedium,
+	}, nil
+}
+
+func (normalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
+	return nil, nil //nolint:nilnil
 }
 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {
@@ -133,4 +189,301 @@ func TestScanRejectsReentryWhileRunning(t *testing.T) {
 
 	close(cleaner.release)
 	require.NoError(t, <-firstDone)
+}
+
+func TestStartHonorsNonPositiveIntervalAndExitsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "IMM-001.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
+
+	pollCtx := context.Background()
+	svc.Start(ctx, 0)
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileName == "IMM-001.mp4"
+	}, 2*time.Second, 5*time.Millisecond, "first background scan should upsert the media file")
+
+	cancel()
+	// Start runs in a goroutine; allow time for it to observe ctx cancellation after any in-flight Scan.
+	time.Sleep(500 * time.Millisecond)
+}
+
+func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	scanDir := t.TempDir()
+	mediaPath := filepath.Join(scanDir, "TICK-001.mp4")
+	require.NoError(t, os.WriteFile(mediaPath, []byte("a"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
+
+	pollCtx := context.Background()
+	svc.Start(ctx, 5*time.Millisecond)
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 1
+	}, 2*time.Second, 5*time.Millisecond, "initial scan should record file_size=1")
+
+	require.NoError(t, os.WriteFile(mediaPath, []byte("bb"), 0o600))
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 2
+	}, 2*time.Second, 5*time.Millisecond, "periodic scan should pick up new file size")
+
+	cancel()
+}
+
+func TestNewRegistersExtraMediaExtensionsCaseInsensitive(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, []string{".iso", ".ISO"}, repo, movieidcleaner.NewPassthroughCleaner())
+
+	lower := filepath.Join(scanDir, "disc.iso")
+	upper := filepath.Join(scanDir, "DISC.ISO")
+	require.NoError(t, os.WriteFile(lower, []byte("a"), 0o600))
+	require.NoError(t, os.WriteFile(upper, []byte("b"), 0o600))
+
+	require.NoError(t, svc.Scan(ctx))
+
+	jobs, err := repo.ListJobs(ctx, nil, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 2)
+}
+
+func TestScanSkipsNonMediaFiles(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "notes.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "movie.mp4"), []byte("x"), 0o600))
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nil)
+
+	require.NoError(t, svc.Scan(ctx))
+
+	jobs, err := repo.ListJobs(ctx, nil, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "movie.mp4", jobs.Items[0].FileName)
+}
+
+func TestScanNonexistentScanDir(t *testing.T) {
+	ctx := context.Background()
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	missing := filepath.Join(t.TempDir(), "missing-scan-root-404")
+	svc := New(missing, nil, repo, nil)
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "walk scan dir")
+}
+
+func TestScanUpsertCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nil)
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestScanUpsertFailsWhenDBClosed(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nil)
+
+	require.NoError(t, sqlite.Close())
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "upsert scanned job")
+}
+
+func TestScanCleanupListJobsFailsWhenDBClosed(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nil)
+
+	require.NoError(t, sqlite.Close())
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list jobs")
+}
+
+func TestScanCleanerErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "BAD.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, &erroringCleaner{err: errors.New("clean failed")})
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "clean scan number")
+}
+
+func TestScanRecordsNilCleanerAndNilCleanerResultPaths(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "RAW-001.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nilResultCleaner{})
+
+	require.NoError(t, svc.Scan(ctx))
+
+	jobs, err := repo.ListJobs(ctx, nil, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "RAW-001", jobs.Items[0].Number)
+	require.Equal(t, "raw", jobs.Items[0].NumberSource)
+}
+
+func TestScanEmptyNormalizedCleanerKeepsRawNumberAndJoinsWarnings(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "TAGGED-001.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, emptyNormalizedCleaner{})
+
+	require.NoError(t, svc.Scan(ctx))
+
+	jobs, err := repo.ListJobs(ctx, nil, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "TAGGED-001", jobs.Items[0].Number)
+	require.Equal(t, "raw", jobs.Items[0].NumberSource)
+	require.Equal(t, "w1; w2", jobs.Items[0].NumberCleanWarnings)
+}
+
+func TestScanNormalizedCleanerOverridesNumber(t *testing.T) {
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "messy.mp4"), []byte("x"), 0o600))
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, normalizedCleaner{out: "SSIS-001"})
+
+	require.NoError(t, svc.Scan(ctx))
+
+	jobs, err := repo.ListJobs(ctx, nil, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	require.Equal(t, "SSIS-001", jobs.Items[0].Number)
+	require.Equal(t, "cleaner", jobs.Items[0].NumberSource)
+}
+
+func TestScanWalkReadErrorOnUnreadableSubdir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("chmod-based permission tests are not meaningful as root")
+	}
+
+	ctx := context.Background()
+	scanDir := t.TempDir()
+	sub := filepath.Join(scanDir, "locked")
+	require.NoError(t, os.Mkdir(sub, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "hidden.mp4"), []byte("x"), 0o600))
+	require.NoError(t, os.Chmod(sub, 0))
+	t.Cleanup(func() {
+		_ = os.Chmod(sub, 0o755)
+	})
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, sqlite.Close())
+	})
+
+	repo := repository.NewJobRepository(sqlite.DB())
+	svc := New(scanDir, nil, repo, nil)
+
+	err = svc.Scan(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "walk scan dir")
 }

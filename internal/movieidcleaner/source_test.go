@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -333,4 +334,254 @@ func buildTestBundleZip(t *testing.T, files map[string]string) []byte {
 	}
 	require.NoError(t, zw.Close())
 	return buf.Bytes()
+}
+
+func TestCleanBundleEntry(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{name: "normal", raw: "ruleset", want: "ruleset"},
+		{name: "with_leading_slash", raw: "/ruleset", want: "ruleset"},
+		{name: "with_spaces", raw: "  ruleset  ", want: "ruleset"},
+		{name: "empty", raw: "", wantErr: true},
+		{name: "dot", raw: ".", wantErr: true},
+		{name: "dotdot", raw: "..", wantErr: true},
+		{name: "parent_traversal", raw: "../evil", wantErr: true},
+		{name: "nested_path", raw: "a/b/c", want: "a/b/c"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := cleanBundleEntry(tc.raw)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestDetectZipRoot(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    []*zip.File
+		expected string
+	}{
+		{
+			name:     "empty_zip",
+			files:    nil,
+			expected: "",
+		},
+		{
+			name: "single_root",
+			files: func() []*zip.File {
+				buf := &bytes.Buffer{}
+				zw := zip.NewWriter(buf)
+				for _, n := range []string{"root/a.yaml", "root/b.yaml"} {
+					w, _ := zw.Create(n)
+					_, _ = w.Write([]byte(""))
+				}
+				_ = zw.Close()
+				r, _ := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+				return r.File
+			}(),
+			expected: "root",
+		},
+		{
+			name: "multiple_roots",
+			files: func() []*zip.File {
+				buf := &bytes.Buffer{}
+				zw := zip.NewWriter(buf)
+				for _, n := range []string{"root1/a.yaml", "root2/b.yaml"} {
+					w, _ := zw.Create(n)
+					_, _ = w.Write([]byte(""))
+				}
+				_ = zw.Close()
+				r, _ := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+				return r.File
+			}(),
+			expected: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, detectZipRoot(tc.files))
+		})
+	}
+}
+
+func TestResolveBundleEntry(t *testing.T) {
+	t.Run("no_manifest_uses_default", func(t *testing.T) {
+		dir := t.TempDir()
+		fsys := os.DirFS(dir)
+		entry, err := resolveBundleEntry(fsys, ".", "default_entry")
+		require.NoError(t, err)
+		assert.Equal(t, "default_entry", entry)
+	})
+
+	t.Run("manifest_with_entry", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("entry: custom\n"), 0o600))
+		fsys := os.DirFS(dir)
+		entry, err := resolveBundleEntry(fsys, ".", "default_entry")
+		require.NoError(t, err)
+		assert.Equal(t, "custom", entry)
+	})
+
+	t.Run("manifest_empty_entry", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("entry: \"\"\n"), 0o600))
+		fsys := os.DirFS(dir)
+		_, err := resolveBundleEntry(fsys, ".", "default_entry")
+		require.Error(t, err)
+	})
+
+	t.Run("with_base_path", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "manifest.yaml"), []byte("entry: rules\n"), 0o600))
+		fsys := os.DirFS(dir)
+		entry, err := resolveBundleEntry(fsys, "sub", "default_entry")
+		require.NoError(t, err)
+		assert.Equal(t, "sub/rules", entry)
+	})
+}
+
+func TestLoadRuleSetFromBundleDataNil(t *testing.T) {
+	_, _, err := LoadRuleSetFromBundleData(nil)
+	require.Error(t, err)
+	assert.Equal(t, errBundleDataRequired, err)
+}
+
+func TestNewManagerNilCallback(t *testing.T) {
+	_, err := NewManager(t.TempDir(), stubHTTPClient{}, SourceTypeLocal, "/tmp", nil)
+	require.Error(t, err)
+	assert.Equal(t, errCleanerCallbackRequired, err)
+}
+
+func TestManagerStartNil(t *testing.T) {
+	var m *Manager
+	err := m.Start(context.Background())
+	require.Error(t, err)
+	assert.Equal(t, errBundleManagerNil, err)
+
+	m = &Manager{}
+	err = m.Start(context.Background())
+	require.Error(t, err)
+	assert.Equal(t, errBundleManagerNil, err)
+}
+
+func TestLoadRuleSetFromZipBadFile(t *testing.T) {
+	_, _, err := LoadRuleSetFromZip("/nonexistent/file.zip")
+	require.Error(t, err)
+}
+
+func TestReadManifestYml(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yml"), []byte("entry: my_rules\n"), 0o600))
+	fsys := os.DirFS(dir)
+	manifest, ok, err := readManifest(fsys, ".")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "my_rules", manifest.Entry)
+}
+
+func TestReadManifestNoFile(t *testing.T) {
+	dir := t.TempDir()
+	fsys := os.DirFS(dir)
+	_, ok, err := readManifest(fsys, ".")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestReadManifestInvalidYaml(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("{{invalid"), 0o600))
+	fsys := os.DirFS(dir)
+	_, _, err := readManifest(fsys, ".")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal manifest")
+}
+
+func TestReadManifestWithBase(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "manifest.yml"), []byte("entry: rules\n"), 0o600))
+	fsys := os.DirFS(dir)
+	manifest, ok, err := readManifest(fsys, "sub")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "rules", manifest.Entry)
+}
+
+func TestResolveBundleEntryInvalidCleanEntry(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("entry: ..\n"), 0o600))
+	fsys := os.DirFS(dir)
+	_, err := resolveBundleEntry(fsys, ".", "default")
+	require.Error(t, err)
+}
+
+func TestResolveBundleEntryEmptyBase(t *testing.T) {
+	dir := t.TempDir()
+	fsys := os.DirFS(dir)
+	entry, err := resolveBundleEntry(fsys, "", "default_entry")
+	require.NoError(t, err)
+	assert.Equal(t, "default_entry", entry)
+}
+
+func TestDetectZipRootWithSlashAndEmptyNames(t *testing.T) {
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+	w, _ := zw.Create("/")
+	_, _ = w.Write([]byte(""))
+	w, _ = zw.Create("root/a.yaml")
+	_, _ = w.Write([]byte(""))
+	_ = zw.Close()
+	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	require.NoError(t, err)
+	result := detectZipRoot(r.File)
+	assert.Equal(t, "root", result)
+}
+
+func TestLoadRuleSetFromZipNoSingleRoot(t *testing.T) {
+	zipPath := filepath.Join(t.TempDir(), "rules.zip")
+	require.NoError(t, os.WriteFile(zipPath, buildTestBundleZip(t, map[string]string{
+		"manifest.yaml": `entry: ruleset`,
+		"ruleset/001-base.yaml": `
+version: v1
+options:
+  case_mode: upper
+`,
+		"ruleset/002-matchers.yaml": `
+version: v1
+matchers:
+  - name: generic
+    pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
+    normalize_template: '$1-$2'
+    score: 80
+`,
+	}), 0o600))
+
+	rs, _, err := LoadRuleSetFromZip(zipPath)
+	require.NoError(t, err)
+	assert.Equal(t, "v1", rs.Version)
+}
+
+func TestListRuleSetFilesFromDirDirect(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "001-base.yaml"), []byte("version: v1\n"), 0o600))
+
+	files, err := ListRuleSetFilesFromDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+}
+
+func TestListRuleSetFilesFromFSError(t *testing.T) {
+	_, err := ListRuleSetFilesFromFS(os.DirFS("/nonexistent"), ".")
+	require.Error(t, err)
 }

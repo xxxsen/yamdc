@@ -37,10 +37,11 @@ web/                    Next.js 前端
 ```bash
 # ── 后端 ──
 make build                # go build -o yamdc ./cmd/yamdc
-make test                 # go test ./cmd/... ./internal/...
+make test                 # go test ./cmd/... ./internal/...（快速测试，不收集覆盖率）
+make test-coverage        # go test ./internal/... 并检查覆盖率 ≥ 95%
 make install-golangci-lint  # 安装 golangci-lint 到 ./bin/
 make lint-go              # golangci-lint run（需先 install）
-make backend-check        # build + test + lint-go（后端完整检查）
+make backend-check        # build + test-coverage + lint-go（后端完整检查）
 
 # ── 前端 ──
 make web-install          # cd web && npm ci
@@ -60,6 +61,10 @@ make ci-check             # backend-check + web-check（与 CI 一致）
 - 框架：标准 `testing` + `github.com/stretchr/testify`
 - 测试文件与源码同目录，命名 `*_test.go`
 - 运行单个包测试示例：`go test ./internal/number/...`
+- 覆盖率要求：`internal/` 目录整体覆盖率 ≥ 95%，低于阈值 CI 将失败
+- 覆盖率排除：`internal/browser` 包不计入覆盖率阈值（需要真实浏览器，CI 环境无浏览器）
+- 覆盖率检查：`make test-coverage`（阈值可通过 `GO_COVERAGE_THRESHOLD` 变量调整）
+- 浏览器测试：设置 `YAMDC_BROWSER_TEST=1` 环境变量可启用依赖真实浏览器的测试
 - 测试用例要求: 覆盖至少 `正常case`, `异常case`, `边缘case` 3种路径
 
 ### 前端测试

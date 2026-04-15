@@ -14,3 +14,5 @@ config.json
 /tmp
 /.cursor
 /issues
+/testdata/
+/web.test

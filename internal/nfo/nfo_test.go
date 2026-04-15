@@ -3,10 +3,21 @@ package nfo
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+type failingWriter struct{}
+
+func (failingWriter) Write(p []byte) (int, error) {
+	_ = p
+	return 0, errors.New("write failed")
+}
 
 func TestReadWrite(t *testing.T) {
 	m := &Movie{
@@ -48,4 +59,62 @@ func TestReadWrite(t *testing.T) {
 	assert.NoError(t, err)
 	newM.XMLName = m.XMLName
 	assert.Equal(t, m, newM)
+}
+
+func TestParseMovieWithDataInvalidXML(t *testing.T) {
+	t.Parallel()
+	_, err := ParseMovieWithData([]byte("not valid xml"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal nfo xml failed")
+}
+
+func TestWriteMovieWriterError(t *testing.T) {
+	t.Parallel()
+	m := &Movie{Title: "t"}
+	err := WriteMovie(failingWriter{}, m)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "write nfo xml failed")
+}
+
+func TestParseMovieFromFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "movie.nfo")
+	m := &Movie{Title: "from disk", ID: "id-1"}
+	buf := bytes.NewBuffer(nil)
+	require.NoError(t, WriteMovie(buf, m))
+	require.NoError(t, os.WriteFile(path, buf.Bytes(), 0o600))
+
+	got, err := ParseMovie(path)
+	require.NoError(t, err)
+	got.XMLName = m.XMLName
+	assert.Equal(t, m, got)
+}
+
+func TestParseMovieReadError(t *testing.T) {
+	t.Parallel()
+	_, err := ParseMovie(filepath.Join(t.TempDir(), "does-not-exist.nfo"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read nfo file")
+}
+
+func TestWriteMovieToFileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.nfo")
+	m := &Movie{Title: "round", Plot: "p", ID: "x"}
+	require.NoError(t, WriteMovieToFile(path, m))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	got, err := ParseMovieWithData(raw)
+	require.NoError(t, err)
+	got.XMLName = m.XMLName
+	assert.Equal(t, m, got)
+}
+
+func TestWriteMovieToFileOpenError(t *testing.T) {
+	t.Parallel()
+	// Opening a directory for truncate+write-only should fail on common Unix setups.
+	err := WriteMovieToFile(t.TempDir(), &Movie{Title: "nope"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "open nfo file")
 }

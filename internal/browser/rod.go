@@ -13,10 +13,9 @@ import (
 	"github.com/xxxsen/common/logutil"
 )
 
-const (
-	defaultPageTimeout = 60 * time.Second
-	browserIdleTimeout = 30 * time.Second
-)
+const defaultPageTimeout = 60 * time.Second
+
+var browserIdleTimeout = 30 * time.Second
 
 type rodBrowser struct {
 	provider browserProvider
@@ -131,34 +130,46 @@ func navigateWithIdle(page *rod.Page, rawURL string) error {
 	return nil
 }
 
-func injectCookies(page *rod.Page, rawURL string, cookies []*http.Cookie) error {
+func buildCookieSetParams(rawURL string, cookies []*http.Cookie) ([]proto.NetworkSetCookie, error) {
 	if len(cookies) == 0 {
-		return nil
+		return nil, nil
 	}
 	parsed, err := neturl.Parse(rawURL)
 	if err != nil {
-		return fmt.Errorf("parse url %q: %w", rawURL, err)
+		return nil, fmt.Errorf("parse url %q: %w", rawURL, err)
 	}
 	domain := parsed.Hostname()
 	seen := make(map[string]struct{}, len(cookies))
+	var params []proto.NetworkSetCookie
 	for _, c := range cookies {
 		if _, dup := seen[c.Name]; dup {
 			continue
 		}
 		seen[c.Name] = struct{}{}
-		if _, setErr := (proto.NetworkSetCookie{
+		params = append(params, proto.NetworkSetCookie{
 			Name:   c.Name,
 			Value:  c.Value,
 			Domain: domain,
 			Path:   "/",
-		}).Call(page); setErr != nil {
-			return fmt.Errorf("set cookie %q: %w", c.Name, setErr)
+		})
+	}
+	return params, nil
+}
+
+func injectCookies(page *rod.Page, rawURL string, cookies []*http.Cookie) error {
+	params, err := buildCookieSetParams(rawURL, cookies)
+	if err != nil {
+		return err
+	}
+	for _, p := range params {
+		if _, setErr := p.Call(page); setErr != nil {
+			return fmt.Errorf("set cookie %q: %w", p.Name, setErr)
 		}
 	}
 	return nil
 }
 
-func injectHeaders(page *rod.Page, headers http.Header) error {
+func buildExtraHeaders(headers http.Header) []string {
 	if len(headers) == 0 {
 		return nil
 	}
@@ -168,6 +179,14 @@ func injectHeaders(page *rod.Page, headers http.Header) error {
 			dict = append(dict, k, vs[0])
 		}
 	}
+	return dict
+}
+
+func injectHeaders(page *rod.Page, headers http.Header) error {
+	dict := buildExtraHeaders(headers)
+	if dict == nil {
+		return nil
+	}
 	_, err := page.SetExtraHeaders(dict)
 	if err != nil {
 		return fmt.Errorf("set extra headers failed: %w", err)
@@ -175,9 +194,8 @@ func injectHeaders(page *rod.Page, headers http.Header) error {
 	return nil
 }
 
-func extractCookies(page *rod.Page) []*http.Cookie {
-	rodCookies, err := page.Cookies(nil)
-	if err != nil || len(rodCookies) == 0 {
+func convertRodCookies(rodCookies []*proto.NetworkCookie) []*http.Cookie {
+	if len(rodCookies) == 0 {
 		return nil
 	}
 	result := make([]*http.Cookie, 0, len(rodCookies))
@@ -204,4 +222,12 @@ func extractCookies(page *rod.Page) []*http.Cookie {
 		result = append(result, hc)
 	}
 	return result
+}
+
+func extractCookies(page *rod.Page) []*http.Cookie {
+	rodCookies, err := page.Cookies(nil)
+	if err != nil {
+		return nil
+	}
+	return convertRodCookies(rodCookies)
 }

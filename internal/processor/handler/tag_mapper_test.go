@@ -544,6 +544,83 @@ func TestValidateUniqueness_ComplexValidConfiguration(t *testing.T) {
 	assert.NotNil(t, mapper)
 }
 
+func TestNewTagMapper_ReadFileError(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "unreadable.json")
+	require.NoError(t, os.WriteFile(filePath, []byte("[]"), 0o600))
+	require.NoError(t, os.Chmod(filePath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0o600) })
+
+	mapper, err := NewTagMapper(filePath)
+	if err != nil {
+		assert.Nil(t, mapper)
+	}
+}
+
+func TestGetOrBuildPathCacheHit(t *testing.T) {
+	config := getTestConfig()
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	require.NoError(t, err)
+
+	path1 := mapper.getOrBuildPath("cosplay")
+	path2 := mapper.getOrBuildPath("cosplay")
+	assert.Equal(t, path1, path2)
+}
+
+func TestNewTagMapper_EmptyNodeName(t *testing.T) {
+	config := []*TagNode{
+		{Name: ""},
+		{Name: "ValidTag"},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	require.NoError(t, err)
+	assert.NotNil(t, mapper)
+	assert.Len(t, mapper.tagToParent, 1)
+}
+
+func TestNewTagMapper_EmptyAlias(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name:  "Tag1",
+			Alias: []string{"alias1", "", "alias2"},
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	require.NoError(t, err)
+	assert.NotNil(t, mapper)
+	assert.Len(t, mapper.aliasToStandard, 2)
+}
+
+func TestNewTagMapper_ChildrenParseError(t *testing.T) {
+	config := []*TagNode{
+		{
+			Name: "Parent",
+			Children: []*TagNode{
+				{Name: "Child"},
+				{Name: "Child"},
+			},
+		},
+	}
+	filePath := createTestConfigFile(t, config)
+	_, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate tag: Child")
+}
+
+func TestNewTagMapper_TagConflictsWithAlias(t *testing.T) {
+	config := []*TagNode{
+		{Name: "Tag1", Alias: []string{"alias1"}},
+		{Name: "alias1"},
+	}
+	filePath := createTestConfigFile(t, config)
+	mapper, err := NewTagMapper(filePath)
+	assert.Error(t, err)
+	assert.Nil(t, mapper)
+}
+
 // TestRealTagsJsonFile 测试实际的 tags.json 文件
 func TestRealTagsJsonFile(t *testing.T) {
 	// 尝试加载项目中的 tags.json 文件
