@@ -29,8 +29,14 @@ type FFMpeg struct {
 	cmd string
 }
 
+// lookPath resolves the ffmpeg/ffprobe binary (overridable in tests).
+var lookPath = exec.LookPath
+
+// commandContext builds exec.Cmd instances (overridable in tests).
+var commandContext = exec.CommandContext
+
 func NewFFMpeg() (*FFMpeg, error) {
-	location, err := exec.LookPath("ffmpeg")
+	location, err := lookPath("ffmpeg")
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg not found in PATH: %w", err)
 	}
@@ -43,7 +49,7 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 		_ = os.Remove(dstFile)
 	}()
 	//nolint:gosec // ffmpeg path is from exec.LookPath, args are controlled
-	cmd := exec.CommandContext(ctx,
+	cmd := commandContext(ctx,
 		p.cmd,
 		"-i",
 		"pipe:0",
@@ -66,5 +72,8 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 }
 
 func ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte) ([]byte, error) {
+	if defaultFFMpeg == nil {
+		return nil, fmt.Errorf("ffmpeg is not enabled")
+	}
 	return defaultFFMpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
 }

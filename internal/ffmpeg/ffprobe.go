@@ -3,7 +3,6 @@ package ffmpeg
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -27,7 +26,7 @@ type FFProbe struct {
 }
 
 func NewFFProbe() (*FFProbe, error) {
-	location, err := exec.LookPath("ffprobe")
+	location, err := lookPath("ffprobe")
 	if err != nil {
 		return nil, fmt.Errorf("search ffprobe command failed, err:%w", err)
 	}
@@ -35,7 +34,7 @@ func NewFFProbe() (*FFProbe, error) {
 }
 
 func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error) {
-	cmd := exec.CommandContext( //nolint:gosec // ffprobe path is from exec.LookPath, args are controlled
+	cmd := commandContext( //nolint:gosec // ffprobe path is from exec.LookPath, args are controlled
 		ctx,
 		p.cmd,
 		[]string{"-i", file, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"}...,
@@ -53,5 +52,8 @@ func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error
 }
 
 func ReadDuration(ctx context.Context, file string) (float64, error) {
+	if defaultFFProbe == nil {
+		return 0, fmt.Errorf("ffprobe is not enabled")
+	}
 	return defaultFFProbe.ReadDuration(ctx, file)
 }

@@ -60,6 +60,10 @@ func (w *pigoWrap) SearchFaces(_ context.Context, data []byte) ([]image.Rectangl
 	angle := 0.0
 	dets := w.inst.RunCascade(cParams, angle)
 	dets = w.inst.ClusterDetections(dets, 0.2)
+	return filterDetections(dets), nil
+}
+
+func filterDetections(dets []pigo.Detection) []image.Rectangle {
 	rs := make([]image.Rectangle, 0, len(dets))
 	for _, det := range dets {
 		if det.Q < 0.5 {
@@ -71,5 +75,5 @@ func (w *pigoWrap) SearchFaces(_ context.Context, data []byte) ([]image.Rectangl
 		y2 := det.Row + det.Scale/2
 		rs = append(rs, image.Rect(x1, y1, x2, y2))
 	}
-	return rs, nil
+	return rs
 }

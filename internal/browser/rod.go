@@ -13,10 +13,9 @@ import (
 	"github.com/xxxsen/common/logutil"
 )
 
-const (
-	defaultPageTimeout = 60 * time.Second
-	browserIdleTimeout = 30 * time.Second
-)
+const defaultPageTimeout = 60 * time.Second
+
+var browserIdleTimeout = 30 * time.Second
 
 type rodBrowser struct {
 	provider browserProvider

@@ -17,9 +17,13 @@ func New(opts ...Option) translator.ITranslator {
 	for _, opt := range opts {
 		opt(c)
 	}
-	t := gt.New(gt.Config{
+	gcfg := gt.Config{
 		Proxy: c.proxy,
-	})
+	}
+	if len(c.serviceURLs) > 0 {
+		gcfg.ServiceUrls = c.serviceURLs
+	}
+	t := gt.New(gcfg)
 	return &googleTranslator{
 		t: t,
 	}

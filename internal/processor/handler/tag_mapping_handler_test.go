@@ -205,6 +205,22 @@ func TestTagMappingHandler_FileNotFound(t *testing.T) {
 	assert.Equal(t, []string{"cos"}, fc.Meta.Genres)
 }
 
+func TestTagMappingHandler_InvalidConfig(t *testing.T) {
+	_, err := createTagMappingHandler("not a map", appdeps.Runtime{})
+	assert.Error(t, err)
+}
+
+func TestTagMappingHandler_InvalidFileContent(t *testing.T) {
+	tmpDir := t.TempDir()
+	badFile := filepath.Join(tmpDir, "bad-mappings.json")
+	require.NoError(t, os.WriteFile(badFile, []byte("not valid json"), 0o600))
+
+	_, err := createTagMappingHandler(map[string]interface{}{
+		"file_path": badFile,
+	}, appdeps.Runtime{})
+	assert.Error(t, err)
+}
+
 func TestTagMappingHandler_NoConfig(t *testing.T) {
 	// 测试没有配置参数时的行为
 	handler, err := createTagMappingHandler(map[string]interface{}{}, appdeps.Runtime{})
