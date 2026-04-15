@@ -17,7 +17,7 @@ type cachedCreator struct {
 	err    error
 }
 
-func (c *cachedCreator) create(args interface{}) (api.IPlugin, error) {
+func (c *cachedCreator) create(_ interface{}) (api.IPlugin, error) {
 	c.once.Do(func() {
 		c.plugin, c.err = NewFromBytes(c.data)
 	})

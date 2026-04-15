@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/xxxsen/yamdc/internal/appdeps"
@@ -53,13 +54,13 @@ func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 // createTagMappingHandler 创建标签映射处理器
-func createTagMappingHandler(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+func createTagMappingHandler(args interface{}, _ appdeps.Runtime) (IHandler, error) {
 	c := &tagMappingConfig{}
 
 	handler := &tagMappingHandler{}
 
 	if err := utils.ConvStructJson(args, c); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse tag mapping config failed: %w", err)
 	}
 	// 如果映射器未启用，直接返回
 	if c.FilePath == "" {

@@ -3,6 +3,7 @@ package pigo
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"os"
 	"path/filepath"
@@ -22,12 +23,12 @@ type pigoWrap struct {
 func NewPigo(models string) (face.IFaceRec, error) {
 	csFileData, err := os.ReadFile(filepath.Join(models, defaultFaceFinderCascade))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read face cascade model failed: %w", err)
 	}
 	pigo := pigo.NewPigo()
 	classifier, err := pigo.Unpack(csFileData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unpack face cascade model failed: %w", err)
 	}
 	return &pigoWrap{inst: classifier}, nil
 }
@@ -36,10 +37,10 @@ func (w *pigoWrap) Name() string {
 	return face.NamePigo
 }
 
-func (w *pigoWrap) SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error) {
+func (w *pigoWrap) SearchFaces(_ context.Context, data []byte) ([]image.Rectangle, error) {
 	img, err := pigo.DecodeImage(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode image for face detection failed: %w", err)
 	}
 	pixels := pigo.RgbToGrayscale(img)
 	cols, rows := img.Bounds().Max.X, img.Bounds().Max.Y

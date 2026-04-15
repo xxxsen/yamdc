@@ -11,8 +11,8 @@ type responseBody struct {
 	Data    interface{} `json:"data"`
 }
 
-func writeSuccess(w http.ResponseWriter, status int, message string, data interface{}) {
-	writeJSON(w, status, responseBody{
+func writeSuccess(w http.ResponseWriter, message string, data interface{}) {
+	writeJSON(w, http.StatusOK, responseBody{
 		Code:    0,
 		Message: message,
 		Data:    data,

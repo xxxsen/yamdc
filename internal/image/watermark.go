@@ -2,11 +2,19 @@ package image
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/draw"
 
 	"github.com/xxxsen/yamdc/internal/resource"
+)
+
+var (
+	errWatermarkCountLimit = errors.New("water mark count out of limit")
+	errNoWatermarkFound    = errors.New("no watermark found")
+	errImageHeightTooSmall = errors.New("image height too small to contain all watermark")
+	errWatermarkNotFound   = errors.New("watermark not found")
 )
 
 type Watermark int
@@ -38,18 +46,18 @@ func init() {
 }
 
 const (
-	defaultMaxWaterMarkCount               = 6                    //最大的水印个数
-	defaultWaterMarkWidthToImageWidthRatio = float64(31.58) / 100 //水印与整张图片的宽度比, W(watermark)/W(image) = 0.3158
-	defaultWaterMarkWithToHeightRatio      = 2                    //水印本身的宽高比, W(watermark)/H(watermark) = 2
-	defaultWatermarkGapSize                = 10                   //2个水印之间的间隔
+	defaultMaxWaterMarkCount               = 6                    // 最大的水印个数
+	defaultWaterMarkWidthToImageWidthRatio = float64(31.58) / 100 // 水印与整张图片的宽度比, W(watermark)/W(image) = 0.3158
+	defaultWaterMarkWithToHeightRatio      = 2                    // 水印本身的宽高比, W(watermark)/H(watermark) = 2
+	defaultWatermarkGapSize                = 10                   // 2个水印之间的间隔
 )
 
 func addWatermarkToImage(img image.Image, wms []image.Image) (image.Image, error) {
 	if len(wms) > defaultMaxWaterMarkCount {
-		return nil, fmt.Errorf("water mark count out of limit, size:%d", len(wms))
+		return nil, fmt.Errorf("water mark count out of limit, size:%d: %w", len(wms), errWatermarkCountLimit)
 	}
 	if len(wms) == 0 {
-		return nil, fmt.Errorf("no watermark found")
+		return nil, errNoWatermarkFound
 	}
 	mainBounds := img.Bounds()
 	newImg := image.NewRGBA(mainBounds)
@@ -69,7 +77,7 @@ func addWatermarkToImage(img image.Image, wms []image.Image) (image.Image, error
 			},
 		}
 		if rect.Min.Y < 0 || rect.Max.Y < 0 {
-			return nil, fmt.Errorf("image height too smart to contains all watermark")
+			return nil, errImageHeightTooSmall
 		}
 		draw.Draw(newImg, rect, wm, image.Point{0, 0}, draw.Over)
 	}
@@ -91,11 +99,11 @@ func AddWatermark(img image.Image, wmTags []Watermark) (image.Image, error) {
 	for _, tag := range wmTags {
 		res, ok := selectWatermarkResource(tag)
 		if !ok {
-			return nil, fmt.Errorf("watermark:%d not found", tag)
+			return nil, fmt.Errorf("watermark:%d: %w", tag, errWatermarkNotFound)
 		}
 		wm, _, err := image.Decode(bytes.NewReader(res))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode watermark image failed: %w", err)
 		}
 		wms = append(wms, wm)
 	}

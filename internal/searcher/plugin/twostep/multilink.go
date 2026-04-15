@@ -3,6 +3,7 @@ package twostep
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,17 +12,25 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
+var errNoValidResult = errors.New("no valid result found")
+
 type MultiLinkContext struct {
-	ReqBuilder      MultiLinkBuildRequestFunc //用于重建请求的函数
-	Numbers         []string                  //用户传入的多个影片 ID, 基于这些影片 ID 逐个调用 ReqBuilder 构建链接并请求
-	ValidStatusCode []int                     //哪些http状态码是有效的
-	ResultTester    OnMultiLinkResultTest     //回调用户函数，确认哪些结果是符合预期的
+	ReqBuilder      MultiLinkBuildRequestFunc // 用于重建请求的函数
+	Numbers         []string                  // 用户传入的多个影片 ID, 基于这些影片 ID 逐个调用 ReqBuilder 构建链接并请求
+	ValidStatusCode []int                     // 哪些http状态码是有效的
+	ResultTester    OnMultiLinkResultTest     // 回调用户函数，确认哪些结果是符合预期的
 }
 
-type MultiLinkBuildRequestFunc func(nid string) (*http.Request, error)
-type OnMultiLinkResultTest func(raw []byte) (bool, error)
+type (
+	MultiLinkBuildRequestFunc func(nid string) (*http.Request, error)
+	OnMultiLinkResultTest     func(raw []byte) (bool, error)
+)
 
-func HandleMultiLinkSearch(ctx context.Context, invoker api.HTTPInvoker, xctx *MultiLinkContext) (*http.Response, error) {
+func HandleMultiLinkSearch(
+	ctx context.Context,
+	invoker api.HTTPInvoker,
+	xctx *MultiLinkContext,
+) (*http.Response, error) {
 	for _, number := range xctx.Numbers {
 		req, err := xctx.ReqBuilder(number)
 		if err != nil {
@@ -46,9 +55,9 @@ func HandleMultiLinkSearch(ctx context.Context, invoker api.HTTPInvoker, xctx *M
 		if !ok {
 			continue
 		}
-		//将body重新设置回去
+		// 将body重新设置回去
 		rsp.Body = io.NopCloser(bytes.NewReader(raw))
 		return rsp, nil
 	}
-	return nil, fmt.Errorf("no valid result found")
+	return nil, errNoValidResult
 }

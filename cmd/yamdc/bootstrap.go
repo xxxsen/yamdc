@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -133,7 +134,10 @@ func executeYamdcInitActions(ctx context.Context, ysctx *YamdcStartContext, acti
 			return fmt.Errorf("%s failed: %w", action.Name, err)
 		}
 		if ysctx.Logger != nil {
-			ysctx.Logger.Debug("yamdc init action done", zap.String("action", action.Name), zap.Duration("cost", time.Since(start)))
+			ysctx.Logger.Debug("yamdc init action done",
+				zap.String("action", action.Name),
+				zap.Duration("cost", time.Since(start)),
+			)
 		}
 	}
 	return nil
@@ -181,17 +185,17 @@ func initDependenciesAction(ctx context.Context, ysctx *YamdcStartContext) error
 
 func buildAIEngineAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	engine, err := buildAIEngine(ctx, ysctx.HTTPClient, ysctx.Config)
-	if err != nil {
+	if err != nil && !errors.Is(err, errAIEngineNotConfigured) {
 		return err
 	}
 	ysctx.AIEngine = engine
 	return nil
 }
 
-func buildCacheStoreAction(_ context.Context, ysctx *YamdcStartContext) error {
-	cacheStore, err := store.NewSqliteStorage(filepath.Join(ysctx.Config.DataDir, "cache", "cache.db"))
+func buildCacheStoreAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	cacheStore, err := store.NewSqliteStorage(ctx, filepath.Join(ysctx.Config.DataDir, "cache", "cache.db"))
 	if err != nil {
-		return err
+		return fmt.Errorf("init cache store failed: %w", err)
 	}
 	ysctx.CacheStore = cacheStore
 	if closer, ok := cacheStore.(io.Closer); ok {
@@ -204,7 +208,7 @@ func buildCacheStoreAction(_ context.Context, ysctx *YamdcStartContext) error {
 
 func buildTranslatorAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	tr, err := buildTranslator(ctx, ysctx.Config, ysctx.AIEngine)
-	if err != nil {
+	if err != nil && !errors.Is(err, errTranslatorNotConfigured) {
 		logOptionalSetupFailure(ctx, ysctx, "setup translator failed", err)
 		return nil
 	}
@@ -242,11 +246,25 @@ func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 		return nil
 	}
 	logSearcherPluginConfigMissing(ctx)
-	ss, err := buildSearcher(ctx, ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.Plugins, ysctx.Config.PluginConfig)
+	ss, err := buildSearcher(
+		ctx,
+		ysctx.HTTPClient,
+		ysctx.CacheStore,
+		ysctx.Config,
+		ysctx.Config.Plugins,
+		ysctx.Config.PluginConfig,
+	)
 	if err != nil {
 		return err
 	}
-	catSs, err := buildCatSearcher(ctx, ysctx.HTTPClient, ysctx.CacheStore, ysctx.Config, ysctx.Config.CategoryPlugins, ysctx.Config.PluginConfig)
+	catSs, err := buildCatSearcher(
+		ctx,
+		ysctx.HTTPClient,
+		ysctx.CacheStore,
+		ysctx.Config,
+		ysctx.Config.CategoryPlugins,
+		ysctx.Config.PluginConfig,
+	)
 	if err != nil {
 		return err
 	}
@@ -256,18 +274,55 @@ func buildSearchersAction(ctx context.Context, ysctx *YamdcStartContext) error {
 	return nil
 }
 
-func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartContext, runtimeSearcher *searcher.RuntimeCategorySearcher) (*pluginbundle.Manager, error) {
+func reloadSearcherPluginBundle(
+	cbCtx context.Context,
+	ysctx *YamdcStartContext,
+	c *config.Config,
+	runtimeSearcher *searcher.RuntimeCategorySearcher,
+	resolved *pluginbundle.ResolvedBundle,
+) error {
+	nextDefaultPlugins, nextCategoryPlugins := resolvedPluginConfig(resolved)
+	registerCtx := pluginyaml.BuildRegisterContext(resolved.Plugins)
+	creatorSnapshot := registerCtx.Snapshot()
+	ss, err := buildSearcherWithCreators(
+		cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextDefaultPlugins, c.PluginConfig, creatorSnapshot,
+	)
+	if err != nil {
+		return err
+	}
+	catSs, err := buildCatSearcherWithCreators(
+		cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextCategoryPlugins, c.PluginConfig, creatorSnapshot,
+	)
+	if err != nil {
+		return err
+	}
+	factory.Swap(registerCtx)
+	applyResolvedSearcherPluginBundle(cbCtx, c, resolved)
+	ysctx.Searchers = ss
+	ysctx.CategorySearchers = catSs
+	runtimeSearcher.Swap(ss, catSs)
+	if ysctx.SearcherDebugger != nil {
+		ysctx.SearcherDebugger.SwapState(nextDefaultPlugins, categoryPluginMap(nextCategoryPlugins), creatorSnapshot)
+	}
+	logutil.GetLogger(cbCtx).Info("reload searcher plugin runtime",
+		zap.Int("default_plugins", len(c.Plugins)), zap.Int("category_chains", len(c.CategoryPlugins)),
+	)
+	return nil
+}
+
+func prepareSearcherPluginsForServer(
+	ctx context.Context,
+	ysctx *YamdcStartContext,
+	runtimeSearcher *searcher.RuntimeCategorySearcher,
+) (*pluginbundle.Manager, error) {
 	c := ysctx.Config
 	sourceCfgs := configuredSearcherPluginSources(c.SearcherPluginConfig.Sources)
 	if len(sourceCfgs) == 0 {
-		return nil, nil
+		return nil, errNoPluginSources
 	}
 	sources := make([]pluginbundle.Source, 0, len(sourceCfgs))
 	for _, source := range sourceCfgs {
-		item := pluginbundle.Source{
-			SourceType: source.SourceType,
-			Location:   source.Location,
-		}
+		item := pluginbundle.Source{SourceType: source.SourceType, Location: source.Location}
 		if strings.TrimSpace(item.SourceType) == "" || strings.EqualFold(item.SourceType, basebundle.SourceTypeLocal) {
 			resolved, err := resolveBundleSourcePath(c.DataDir, item.Location)
 			if err != nil {
@@ -278,34 +333,15 @@ func prepareSearcherPluginsForServer(ctx context.Context, ysctx *YamdcStartConte
 		}
 		sources = append(sources, item)
 	}
-	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, ysctx.HTTPClient, sources, func(cbCtx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
-		nextDefaultPlugins, nextCategoryPlugins := resolvedPluginConfig(resolved)
-		registerCtx := pluginyaml.BuildRegisterContext(resolved.Plugins)
-		creatorSnapshot := registerCtx.Snapshot()
-		ss, err := buildSearcherWithCreators(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextDefaultPlugins, c.PluginConfig, creatorSnapshot)
-		if err != nil {
-			return err
-		}
-		catSs, err := buildCatSearcherWithCreators(cbCtx, ysctx.HTTPClient, ysctx.CacheStore, c, nextCategoryPlugins, c.PluginConfig, creatorSnapshot)
-		if err != nil {
-			return err
-		}
-		factory.Swap(registerCtx)
-		applyResolvedSearcherPluginBundle(cbCtx, c, resolved)
-		ysctx.Searchers = ss
-		ysctx.CategorySearchers = catSs
-		runtimeSearcher.Swap(ss, catSs)
-		if ysctx.SearcherDebugger != nil {
-			ysctx.SearcherDebugger.SwapState(nextDefaultPlugins, categoryPluginMap(nextCategoryPlugins), creatorSnapshot)
-		}
-		logutil.GetLogger(cbCtx).Info("reload searcher plugin runtime", zap.Int("default_plugins", len(c.Plugins)), zap.Int("category_chains", len(c.CategoryPlugins)))
-		return nil
-	})
+	manager, err := pluginbundle.NewManager("searcher_plugin", c.DataDir, ysctx.HTTPClient, sources,
+		func(cbCtx context.Context, resolved *pluginbundle.ResolvedBundle, _ []string) error {
+			return reloadSearcherPluginBundle(cbCtx, ysctx, c, runtimeSearcher, resolved)
+		})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create plugin bundle manager failed: %w", err)
 	}
 	if err := manager.Start(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start plugin bundle manager failed: %w", err)
 	}
 	return manager, nil
 }
@@ -364,16 +400,16 @@ func buildCaptureAction(_ context.Context, ysctx *YamdcStartContext) error {
 	} else {
 		useSearcher = searcher.NewCategorySearcher(ysctx.Searchers, ysctx.CategorySearchers)
 	}
-	cap, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.MovieIDCleaner)
+	capt, err := buildCapture(ysctx.Config, ysctx.CacheStore, useSearcher, ysctx.Processors, ysctx.MovieIDCleaner)
 	if err != nil {
 		return err
 	}
-	ysctx.Capture = cap
+	ysctx.Capture = capt
 	return nil
 }
 
-func openAppDBAction(_ context.Context, ysctx *YamdcStartContext) error {
-	appDB, err := repository.NewSQLite(filepath.Join(ysctx.Config.DataDir, "app", "app.db"))
+func openAppDBAction(ctx context.Context, ysctx *YamdcStartContext) error {
+	appDB, err := repository.NewSQLite(ctx, filepath.Join(ysctx.Config.DataDir, "app", "app.db"))
 	if err != nil {
 		return fmt.Errorf("init app db failed, err:%w", err)
 	}
@@ -391,9 +427,9 @@ func assembleServicesAction(_ context.Context, ysctx *YamdcStartContext) error {
 	ysctx.ScanSvc = scanner.New(ysctx.Config.ScanDir, ysctx.Config.ExtraMediaExts, ysctx.JobRepo, ysctx.MovieIDCleaner)
 	ysctx.JobSvc = job.NewService(ysctx.JobRepo, ysctx.LogRepo, ysctx.ScrapeRepo, ysctx.Capture, ysctx.CacheStore)
 	ysctx.MediaSvc = medialib.NewService(ysctx.AppDB.DB(), ysctx.Config.LibraryDir, ysctx.Config.SaveDir)
-	ysctx.JobSvc.SetImportGuard(func(ctx context.Context) error {
+	ysctx.JobSvc.SetImportGuard(func(_ context.Context) error {
 		if ysctx.MediaSvc.IsMoveRunning() {
-			return fmt.Errorf("move to media library is running")
+			return errMoveToMediaLibRunning
 		}
 		return nil
 	})
@@ -434,7 +470,11 @@ func serveHTTPAction(_ context.Context, ysctx *YamdcStartContext) error {
 		addr = ":8080"
 	}
 	if ysctx.Logger != nil {
-		ysctx.Logger.Info("yamdc server start", zap.String("addr", addr), zap.String("scan_dir", ysctx.Config.ScanDir), zap.String("data_dir", ysctx.Config.DataDir))
+		ysctx.Logger.Info("yamdc server start",
+			zap.String("addr", addr),
+			zap.String("scan_dir", ysctx.Config.ScanDir),
+			zap.String("data_dir", ysctx.Config.DataDir),
+		)
 	}
 	engine, err := ysctx.API.Engine(addr)
 	if err != nil {

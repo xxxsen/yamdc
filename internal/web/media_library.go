@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -17,7 +18,7 @@ import (
 
 func (a *API) handleMediaLibraryList(c *gin.Context) {
 	if a.media == nil || !a.media.IsConfigured() {
-		writeSuccess(c.Writer, http.StatusOK, "ok", []medialib.Item{})
+		writeSuccess(c.Writer, "ok", []medialib.Item{})
 		return
 	}
 	keyword := strings.TrimSpace(c.Query("keyword"))
@@ -36,7 +37,7 @@ func (a *API) handleMediaLibraryList(c *gin.Context) {
 		writeFail(c.Writer, errCodeListMediaLibraryFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", items)
+	writeSuccess(c.Writer, "ok", items)
 }
 
 func (a *API) handleMediaLibraryItemGet(c *gin.Context) {
@@ -44,7 +45,7 @@ func (a *API) handleMediaLibraryItemGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeLibraryNotConfigured, "library dir is not configured")
 		return
 	}
-	id, ok := parseInt64Query(c, "id")
+	id, ok := parseInt64Query(c)
 	if !ok {
 		writeFail(c.Writer, errCodeMissingMediaLibraryID, "missing media library id")
 		return
@@ -58,7 +59,7 @@ func (a *API) handleMediaLibraryItemGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeMediaLibraryDetailReadFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", detail)
+	writeSuccess(c.Writer, "ok", detail)
 }
 
 func (a *API) handleMediaLibraryItemPatch(c *gin.Context) {
@@ -66,7 +67,7 @@ func (a *API) handleMediaLibraryItemPatch(c *gin.Context) {
 		writeFail(c.Writer, errCodeLibraryNotConfigured, "library dir is not configured")
 		return
 	}
-	id, ok := parseInt64Query(c, "id")
+	id, ok := parseInt64Query(c)
 	if !ok {
 		writeFail(c.Writer, errCodeMissingMediaLibraryID, "missing media library id")
 		return
@@ -80,12 +81,18 @@ func (a *API) handleMediaLibraryItemPatch(c *gin.Context) {
 	}
 	detail, err := a.media.UpdateItem(c.Request.Context(), id, req.Meta)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("media library item update failed", zap.Int64("media_library_id", id), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("media library item update failed",
+			zap.Int64("media_library_id", id),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeMediaLibraryUpdateFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("media library item updated", zap.Int64("media_library_id", id), zap.String("rel_path", detail.Item.RelPath))
-	writeSuccess(c.Writer, http.StatusOK, "media library item updated", detail)
+	logutil.GetLogger(c.Request.Context()).Info("media library item updated",
+		zap.Int64("media_library_id", id),
+		zap.String("rel_path", detail.Item.RelPath),
+	)
+	writeSuccess(c.Writer, "media library item updated", detail)
 }
 
 func (a *API) handleMediaLibraryFileGet(c *gin.Context) {
@@ -132,19 +139,27 @@ func (a *API) handleMediaLibraryFileDelete(c *gin.Context) {
 		writeFail(c.Writer, errCodeMissingFilePath, "missing file path")
 		return
 	}
-	id, ok := parseInt64Query(c, "id")
+	id, ok := parseInt64Query(c)
 	if !ok {
 		writeFail(c.Writer, errCodeMissingMediaLibraryID, "missing media library id")
 		return
 	}
 	detail, err := a.media.DeleteFile(c.Request.Context(), id, pathValue)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("media library file delete failed", zap.Int64("media_library_id", id), zap.String("path", pathValue), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("media library file delete failed",
+			zap.Int64("media_library_id", id),
+			zap.String("path", pathValue),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeMediaLibraryFileDeleteFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("media library file deleted", zap.Int64("media_library_id", id), zap.String("path", pathValue), zap.String("rel_path", detail.Item.RelPath))
-	writeSuccess(c.Writer, http.StatusOK, "media library file deleted", detail)
+	logutil.GetLogger(c.Request.Context()).Info("media library file deleted",
+		zap.Int64("media_library_id", id),
+		zap.String("path", pathValue),
+		zap.String("rel_path", detail.Item.RelPath),
+	)
+	writeSuccess(c.Writer, "media library file deleted", detail)
 }
 
 func (a *API) handleMediaLibraryAsset(c *gin.Context) {
@@ -152,7 +167,7 @@ func (a *API) handleMediaLibraryAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeLibraryNotConfigured, "library dir is not configured")
 		return
 	}
-	id, ok := parseInt64Query(c, "id")
+	id, ok := parseInt64Query(c)
 	if !ok {
 		writeFail(c.Writer, errCodeMissingMediaLibraryID, "missing media library id")
 		return
@@ -204,7 +219,7 @@ func (a *API) handleMediaLibraryAsset(c *gin.Context) {
 		zap.String("file_name", header.Filename),
 		zap.String("rel_path", detail.Item.RelPath),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "media library asset replaced", detail)
+	writeSuccess(c.Writer, "media library asset replaced", detail)
 }
 
 func (a *API) handleMediaLibrarySyncGet(c *gin.Context) {
@@ -217,7 +232,7 @@ func (a *API) handleMediaLibrarySyncGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeMediaLibrarySyncStatusFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", state.Sync)
+	writeSuccess(c.Writer, "ok", state.Sync)
 }
 
 func (a *API) handleMediaLibrarySyncPost(c *gin.Context) {
@@ -231,7 +246,7 @@ func (a *API) handleMediaLibrarySyncPost(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("media library sync triggered")
-	writeSuccess(c.Writer, http.StatusOK, "media library sync started", nil)
+	writeSuccess(c.Writer, "media library sync started", nil)
 }
 
 func (a *API) handleMediaLibraryMoveGet(c *gin.Context) {
@@ -244,7 +259,7 @@ func (a *API) handleMediaLibraryMoveGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeMediaLibraryMoveStatusFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", state.Move)
+	writeSuccess(c.Writer, "ok", state.Move)
 }
 
 func (a *API) handleMediaLibraryMovePost(c *gin.Context) {
@@ -258,12 +273,12 @@ func (a *API) handleMediaLibraryMovePost(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("move to media library triggered")
-	writeSuccess(c.Writer, http.StatusOK, "move to media library started", nil)
+	writeSuccess(c.Writer, "move to media library started", nil)
 }
 
 func (a *API) handleMediaLibraryStatus(c *gin.Context) {
 	if a.media == nil {
-		writeSuccess(c.Writer, http.StatusOK, "ok", medialib.StatusSnapshot{Configured: false})
+		writeSuccess(c.Writer, "ok", medialib.StatusSnapshot{Configured: false})
 		return
 	}
 	status, err := a.media.GetStatusSnapshot(c.Request.Context())
@@ -271,11 +286,11 @@ func (a *API) handleMediaLibraryStatus(c *gin.Context) {
 		writeFail(c.Writer, errCodeMediaLibraryStatusFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", status)
+	writeSuccess(c.Writer, "ok", status)
 }
 
-func parseInt64Query(c *gin.Context, key string) (int64, bool) {
-	raw := strings.TrimSpace(c.Query(key))
+func parseInt64Query(c *gin.Context) (int64, bool) {
+	raw := strings.TrimSpace(c.Query("id"))
 	if raw == "" {
 		return 0, false
 	}
@@ -287,5 +302,8 @@ func parseInt64Query(c *gin.Context, key string) (int64, bool) {
 }
 
 func readJSON(r *http.Request, v interface{}) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		return fmt.Errorf("decode json body failed: %w", err)
+	}
+	return nil
 }

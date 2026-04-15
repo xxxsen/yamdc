@@ -3,6 +3,7 @@ package searcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,6 +18,19 @@ import (
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
+)
+
+var (
+	errHTTPClientNil     = errors.New("http client is nil")
+	errStorageNil        = errors.New("storage is nil")
+	errNoDataFound       = errors.New("no data found")
+	errInvalidHTTPStatus = errors.New("invalid http status code")
+	errNoCover           = errors.New("no cover")
+	errNoNumber          = errors.New("no number")
+	errNoTitle           = errors.New("no title")
+	errNoReleaseDate     = errors.New("no release_date")
+	errHTTPCodeNotOK     = errors.New("http code not ok")
+	errCheckStatusFailed = errors.New("check request status failed")
 )
 
 const (
@@ -50,15 +64,20 @@ func NewDefaultSearcher(name string, plg api.IPlugin, opts ...Option) (ISearcher
 		plg:  plg,
 	}
 	if ss.cc.cli == nil {
-		return nil, fmt.Errorf("http client is nil")
+		return nil, errHTTPClientNil
 	}
 	if ss.cc.storage == nil {
-		return nil, fmt.Errorf("storage is nil")
+		return nil, errStorageNil
 	}
 	return ss, nil
 }
 
-func (p *DefaultSearcher) loadCacheData(ctx context.Context, key string, expire time.Duration, loader func() ([]byte, error)) ([]byte, error) {
+func (p *DefaultSearcher) loadCacheData(
+	ctx context.Context,
+	key string,
+	expire time.Duration,
+	loader func() ([]byte, error),
+) ([]byte, error) {
 	if raw, err := p.cc.storage.GetData(ctx, key); err == nil {
 		return raw, nil
 	}
@@ -67,7 +86,7 @@ func (p *DefaultSearcher) loadCacheData(ctx context.Context, key string, expire 
 		return nil, err
 	}
 	if err := p.cc.storage.PutData(ctx, key, raw, expire); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("put cache data: %w", err)
 	}
 	return raw, nil
 }
@@ -86,7 +105,7 @@ func (p *DefaultSearcher) Check(ctx context.Context) error {
 }
 
 func (p *DefaultSearcher) checkOneRequest(ctx context.Context, host string) error {
-	req, err := http.NewRequest(http.MethodGet, host, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, host, nil)
 	if err != nil {
 		return fmt.Errorf("create request failed, err:%w", err)
 	}
@@ -101,7 +120,7 @@ func (p *DefaultSearcher) checkOneRequest(ctx context.Context, host string) erro
 		_ = rsp.Body.Close()
 	}()
 	if rsp.StatusCode != http.StatusOK {
-		return fmt.Errorf("do check request status failed, status code:%d, status:%s", rsp.StatusCode, rsp.Status)
+		return fmt.Errorf("status code %d, status %s: %w", rsp.StatusCode, rsp.Status, errCheckStatusFailed)
 	}
 	return nil
 }
@@ -110,7 +129,7 @@ func (p *DefaultSearcher) Name() string {
 	return p.name
 }
 
-func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
+func (p *DefaultSearcher) setDefaultHTTPOptions(req *http.Request) error {
 	if len(req.Referer()) == 0 {
 		req.Header.Set("Referer", fmt.Sprintf("%s://%s/", req.URL.Scheme, req.URL.Host))
 	}
@@ -119,9 +138,9 @@ func (p *DefaultSearcher) setDefaultHttpOptions(req *http.Request) error {
 
 func (p *DefaultSearcher) decorateRequest(ctx context.Context, req *http.Request) error {
 	if err := p.plg.OnDecorateRequest(ctx, req); err != nil {
-		return err
+		return fmt.Errorf("decorate request: %w", err)
 	}
-	if err := p.setDefaultHttpOptions(req); err != nil {
+	if err := p.setDefaultHTTPOptions(req); err != nil {
 		return err
 	}
 	return nil
@@ -129,9 +148,9 @@ func (p *DefaultSearcher) decorateRequest(ctx context.Context, req *http.Request
 
 func (p *DefaultSearcher) decorateImageRequest(ctx context.Context, req *http.Request) error {
 	if err := p.plg.OnDecorateMediaRequest(ctx, req); err != nil {
-		return err
+		return fmt.Errorf("decorate media request: %w", err)
 	}
-	if err := p.setDefaultHttpOptions(req); err != nil {
+	if err := p.setDefaultHTTPOptions(req); err != nil {
 		return err
 	}
 	return nil
@@ -141,7 +160,11 @@ func (p *DefaultSearcher) invokeHTTPRequest(ctx context.Context, req *http.Reque
 	if err := p.decorateRequest(ctx, req); err != nil {
 		return nil, fmt.Errorf("decorate request failed, err:%w", err)
 	}
-	return p.cc.cli.Do(req)
+	rsp, err := p.cc.cli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("invoke http request: %w", err)
+	}
+	return rsp, nil
 }
 
 func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, number *number.Number) ([]byte, error) {
@@ -156,10 +179,10 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 			return nil, fmt.Errorf("precheck responnse failed, err:%w", err)
 		}
 		if !isSearchSucc {
-			return nil, fmt.Errorf("no data found")
+			return nil, errNoDataFound
 		}
 		if rsp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("invalid http status code:%d", rsp.StatusCode)
+			return nil, fmt.Errorf("%w: %d", errInvalidHTTPStatus, rsp.StatusCode)
 		}
 		defer func() {
 			_ = rsp.Body.Close()
@@ -197,7 +220,7 @@ func (p *DefaultSearcher) onRetriveData(ctx context.Context, req *http.Request, 
 
 func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*model.MovieMeta, bool, error) {
 	ctx = api.InitContainer(ctx)
-	ctx = meta.SetNumberId(ctx, number.GetNumberID())
+	ctx = meta.SetNumberID(ctx, number.GetNumberID())
 	ok, err := p.plg.OnPrecheckRequest(ctx, number.GetNumberID())
 	if err != nil {
 		return nil, false, fmt.Errorf("precheck failed, err:%w", err)
@@ -220,9 +243,9 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	if !decodeSucc {
 		return nil, false, nil
 	}
-	//重建不规范的元数据
+	// 重建不规范的元数据
 	p.fixMeta(ctx, req, meta)
-	//将远程数据保存到本地, 并替换文件key
+	// 将远程数据保存到本地, 并替换文件key
 	p.storeImageData(ctx, meta)
 	if err := p.verifyMeta(meta); err != nil {
 		logutil.GetLogger(ctx).Error("verify meta not pass, treat as not found", zap.Error(err), zap.String("plugin", p.name))
@@ -235,23 +258,23 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 
 func (p *DefaultSearcher) verifyMeta(meta *model.MovieMeta) error {
 	if meta.Cover == nil || len(meta.Cover.Name) == 0 {
-		return fmt.Errorf("no cover")
+		return errNoCover
 	}
 	if len(meta.Number) == 0 {
-		return fmt.Errorf("no number")
+		return errNoNumber
 	}
 	if len(meta.Title) == 0 {
-		return fmt.Errorf("no title")
+		return errNoTitle
 	}
 	if !meta.SwithConfig.DisableReleaseDateCheck && meta.ReleaseDate == 0 {
-		return fmt.Errorf("no release_date")
+		return errNoReleaseDate
 	}
 	return nil
 }
 
 func (p *DefaultSearcher) fixMeta(ctx context.Context, req *http.Request, mvmeta *model.MovieMeta) {
 	if !mvmeta.SwithConfig.DisableNumberReplace {
-		mvmeta.Number = meta.GetNumberId(ctx) //直接替换为已经解析到的影片 ID
+		mvmeta.Number = meta.GetNumberID(ctx) // 直接替换为已经解析到的影片 ID
 	}
 	prefix := req.URL.Scheme + "://" + req.URL.Host
 	if mvmeta.Cover != nil {
@@ -290,7 +313,7 @@ func (p *DefaultSearcher) storeImageData(ctx context.Context, in *model.MovieMet
 	imageDataMap := p.saveRemoteURLData(ctx, images)
 	if in.Cover != nil {
 		in.Cover.Key = imageDataMap[in.Cover.Name]
-		//如果没有成功下载到数据, 那么直接置空
+		// 如果没有成功下载到数据, 那么直接置空
 		if len(in.Cover.Key) == 0 {
 			in.Cover = nil
 		}
@@ -336,7 +359,7 @@ func (p *DefaultSearcher) saveRemoteURLData(ctx context.Context, urls []string) 
 }
 
 func (p *DefaultSearcher) fetchImageData(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("make request for url:%s failed, err:%w", url, err)
 	}
@@ -352,7 +375,7 @@ func (p *DefaultSearcher) fetchImageData(ctx context.Context, url string) ([]byt
 		_ = rsp.Body.Close()
 	}()
 	if rsp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("get url data http code not ok, code:%d", rsp.StatusCode)
+		return nil, fmt.Errorf("code %d: %w", rsp.StatusCode, errHTTPCodeNotOK)
 	}
 	data, err := client.ReadHTTPData(rsp)
 	if err != nil {

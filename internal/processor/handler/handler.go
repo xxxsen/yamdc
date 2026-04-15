@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -12,6 +13,8 @@ import (
 type IHandler interface {
 	Handle(ctx context.Context, fc *model.FileContext) error
 }
+
+var errHandlerNotFound = errors.New("handler not found")
 
 var mp = make(map[string]CreatorFunc)
 
@@ -24,13 +27,13 @@ func Register(name string, fn CreatorFunc) {
 func CreateHandler(name string, args interface{}, deps appdeps.Runtime) (IHandler, error) {
 	cr, ok := mp[name]
 	if !ok {
-		return nil, fmt.Errorf("handler:%s not found", name)
+		return nil, fmt.Errorf("handler:%s: %w", name, errHandlerNotFound)
 	}
 	return cr(args, deps)
 }
 
-func HandlerToCreator(h IHandler) CreatorFunc {
-	return func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+func ToCreator(h IHandler) CreatorFunc {
+	return func(_ interface{}, _ appdeps.Runtime) (IHandler, error) {
 		return h, nil
 	}
 }

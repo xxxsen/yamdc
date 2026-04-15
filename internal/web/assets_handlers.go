@@ -37,12 +37,18 @@ func (a *API) handleAssetPost(c *gin.Context) {
 	}
 	key, err := store.AnonymousPutDataTo(c.Request.Context(), a.store, data)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Error("debug asset upload failed", zap.String("file_name", header.Filename), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Error("debug asset upload failed",
+			zap.String("file_name", header.Filename),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeDebugAssetStoreFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("debug asset uploaded", zap.String("file_name", header.Filename), zap.String("asset_key", key))
-	writeSuccess(c.Writer, http.StatusOK, "asset uploaded", map[string]string{
+	logutil.GetLogger(c.Request.Context()).Info("debug asset uploaded",
+		zap.String("file_name", header.Filename),
+		zap.String("asset_key", key),
+	)
+	writeSuccess(c.Writer, "asset uploaded", map[string]string{
 		"name": filepath.Base(header.Filename),
 		"key":  key,
 	})

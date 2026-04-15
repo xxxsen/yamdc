@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
+
+var errFactoryPluginNotFound = errors.New("plugin not found")
 
 type CreatorFunc func(args interface{}) (api.IPlugin, error)
 
@@ -44,7 +47,7 @@ func Swap(ctx *RegisterContext) {
 func CreatePlugin(name string, args interface{}) (api.IPlugin, error) {
 	cr, ok := Lookup(name)
 	if !ok {
-		return nil, fmt.Errorf("plugin:%s not found", name)
+		return nil, fmt.Errorf("plugin:%s: %w", name, errFactoryPluginNotFound)
 	}
 	return cr(args)
 }
@@ -55,7 +58,7 @@ func Lookup(name string) (CreatorFunc, bool) {
 }
 
 func PluginToCreator(plg api.IPlugin) CreatorFunc {
-	return func(args interface{}) (api.IPlugin, error) {
+	return func(_ interface{}) (api.IPlugin, error) {
 		return plg, nil
 	}
 }

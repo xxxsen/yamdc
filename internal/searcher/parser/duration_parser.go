@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 var (
 	defaultDurationRegexp = regexp.MustCompile(`\s*(\d+)\s*.+`)
+	errInvalidTimeFormat  = errors.New("invalid time format")
 )
 
 func cleanTimeSequence(res string) []string {
@@ -26,7 +28,7 @@ func cleanTimeSequence(res string) []string {
 	return rs
 }
 
-func DefaultMMDurationParser(ctx context.Context) decoder.NumberParseFunc {
+func DefaultMMDurationParser(_ context.Context) decoder.NumberParseFunc {
 	return func(v string) int64 {
 		res, _ := strconv.ParseInt(v, 10, 64)
 		return res * 60 // convert minutes to seconds
@@ -80,12 +82,12 @@ func toDuration(timeStr string) (int64, error) {
 	re := defaultDurationRegexp
 	matches := re.FindStringSubmatch(timeStr)
 	if len(matches) <= 1 {
-		return 0, errors.New("invalid time format")
+		return 0, errInvalidTimeFormat
 	}
 
 	number, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parse duration number: %w", err)
 	}
 	seconds := number * 60
 

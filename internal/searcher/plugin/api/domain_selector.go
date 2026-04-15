@@ -9,7 +9,7 @@ func SelectDomain(in []string) (string, bool) {
 	if len(in) == 1 {
 		return in[0], true
 	}
-	return in[rand.Int()%len(in)], true
+	return in[rand.Int()%len(in)], true //nolint:gosec // used for domain selection, not security
 }
 
 func MustSelectDomain(in []string) string {

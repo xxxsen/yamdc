@@ -2,10 +2,13 @@ package yaml
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
+
+var errInvalidParserNodeKind = errors.New("invalid parser node kind")
 
 const (
 	typeOneStep = "one-step"
@@ -134,11 +137,11 @@ type ParserSpec struct {
 }
 
 func (p *ParserSpec) UnmarshalYAML(node *yaml.Node) error {
-	switch node.Kind {
+	switch node.Kind { //nolint:exhaustive // only scalar and mapping are valid parser nodes
 	case yaml.ScalarNode:
 		var s string
 		if err := node.Decode(&s); err != nil {
-			return err
+			return fmt.Errorf("decode scalar parser: %w", err)
 		}
 		p.Kind = s
 		return nil
@@ -146,12 +149,12 @@ func (p *ParserSpec) UnmarshalYAML(node *yaml.Node) error {
 		type alias ParserSpec
 		var tmp alias
 		if err := node.Decode(&tmp); err != nil {
-			return err
+			return fmt.Errorf("decode mapping parser: %w", err)
 		}
 		*p = ParserSpec(tmp)
 		return nil
 	default:
-		return fmt.Errorf("invalid parser node kind:%d", node.Kind)
+		return fmt.Errorf("invalid parser node kind: %d: %w", node.Kind, errInvalidParserNodeKind)
 	}
 }
 
@@ -162,7 +165,7 @@ func (p *ParserSpec) UnmarshalJSON(data []byte) error {
 	if data[0] == '"' {
 		var s string
 		if err := json.Unmarshal(data, &s); err != nil {
-			return err
+			return fmt.Errorf("unmarshal json string parser: %w", err)
 		}
 		p.Kind = s
 		p.Layout = ""
@@ -171,7 +174,7 @@ func (p *ParserSpec) UnmarshalJSON(data []byte) error {
 	type alias ParserSpec
 	var tmp alias
 	if err := json.Unmarshal(data, &tmp); err != nil {
-		return err
+		return fmt.Errorf("unmarshal json parser: %w", err)
 	}
 	*p = ParserSpec(tmp)
 	return nil

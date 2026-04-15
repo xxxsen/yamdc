@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/glebarez/go-sqlite"
+	_ "github.com/glebarez/go-sqlite" // register sqlite driver
 )
 
 const (
-	defaultExpireTime      = 90 * 24 * time.Hour //默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
+	defaultExpireTime      = 90 * 24 * time.Hour // 默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
 	defaultCleanupInterval = 24 * time.Hour
 )
 
@@ -53,7 +53,7 @@ func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
 	}
 	loopCtx, cancel := context.WithCancel(ctx)
 	s.cleanupCancel = cancel
-	go func() {
+	go func() { //nolint:gosec // background cleanup goroutine
 		ticker := time.NewTicker(s.cleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -61,7 +61,7 @@ func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
 			case <-loopCtx.Done():
 				return
 			case <-ticker.C:
-				_ = s.cleanupExpired(context.Background())
+				_ = s.cleanupExpired(context.Background()) //nolint:contextcheck // background cleanup goroutine
 			}
 		}
 	}()
@@ -103,22 +103,28 @@ func (s *sqliteStore) GetData(ctx context.Context, key string) ([]byte, error) {
 	now := time.Now().Unix()
 	err := s.db.QueryRowContext(ctx, "SELECT value FROM cache_tab WHERE key = ? and expire_at > ?", key, now).Scan(&val)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query cache key %s failed: %w", key, err)
 	}
 	return val, nil
 }
 
 func (s *sqliteStore) PutData(ctx context.Context, key string, value []byte, expire time.Duration) error {
-	var expireAt int64 = 0
+	var expireAt int64
 	if expire == 0 {
-		expire = defaultExpireTime //use default expire time
+		expire = defaultExpireTime // use default expire time
 	}
 	if expire > 0 {
 		expireAt = time.Now().Add(expire).Unix()
 	}
-	_, err := s.db.ExecContext(ctx, "INSERT OR REPLACE INTO cache_tab (key, value, expire_at) VALUES (?, ?, ?)", key, value, expireAt)
+	_, err := s.db.ExecContext(
+		ctx,
+		"INSERT OR REPLACE INTO cache_tab (key, value, expire_at) VALUES (?, ?, ?)",
+		key,
+		value,
+		expireAt,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("put cache key %s failed: %w", key, err)
 	}
 	return nil
 }
@@ -131,7 +137,7 @@ func (s *sqliteStore) IsDataExist(ctx context.Context, key string) (bool, error)
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("check cache key %s existence failed: %w", key, err)
 	}
 	if cnt == 0 {
 		return false, nil
@@ -139,47 +145,47 @@ func (s *sqliteStore) IsDataExist(ctx context.Context, key string) (bool, error)
 	return true, nil
 }
 
-func newSqliteStorage(path string, cleanupInterval time.Duration) (*sqliteStore, error) {
+func newSqliteStorage(ctx context.Context, path string, cleanupInterval time.Duration) (*sqliteStore, error) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create cache dir %s failed: %w", dir, err)
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open sqlite db %s failed: %w", path, err)
 	}
-	configureSqliteStoreDB(db)
+	configureSqliteStoreDB(ctx, db)
 	s := &sqliteStore{
 		db:              db,
 		cleanupInterval: cleanupInterval,
 	}
-	if err := s.init(context.Background()); err != nil {
+	if err := s.init(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	s.startCleanupLoop(context.Background())
+	s.startCleanupLoop(ctx)
 	return s, nil
 }
 
-func NewSqliteStorage(path string) (IStorage, error) {
-	return newSqliteStorage(path, defaultCleanupInterval)
+func NewSqliteStorage(ctx context.Context, path string) (IStorage, error) {
+	return newSqliteStorage(ctx, path, defaultCleanupInterval)
 }
 
-func MustNewSqliteStorage(path string) IStorage {
-	s, err := NewSqliteStorage(path)
+func MustNewSqliteStorage(ctx context.Context, path string) IStorage {
+	s, err := NewSqliteStorage(ctx, path)
 	if err != nil {
 		panic(err)
 	}
 	return s
 }
 
-func configureSqliteStoreDB(db *sql.DB) {
+func configureSqliteStoreDB(ctx context.Context, db *sql.DB) {
 	if db == nil {
 		return
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	_, _ = db.Exec(`PRAGMA busy_timeout = 5000`)
+	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`)
 }
 
 func (s *sqliteStore) Close() error {
@@ -193,5 +199,8 @@ func (s *sqliteStore) Close() error {
 	if s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close sqlite db failed: %w", err)
+	}
+	return nil
 }

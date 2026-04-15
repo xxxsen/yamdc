@@ -2,9 +2,19 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+)
+
+var (
+	errTagMappingFileEmpty    = errors.New("tag mapping file path is empty")
+	errTagMappingFileNotFound = errors.New("tag mapping file not found")
+	errDuplicateTag           = errors.New("duplicate tag")
+	errTagConflictsAlias      = errors.New("tag conflicts with existing alias")
+	errDuplicateAlias         = errors.New("duplicate alias")
+	errAliasConflictsTag      = errors.New("alias conflicts with existing tag")
 )
 
 // TagNode 标签节点结构
@@ -30,12 +40,12 @@ func NewTagMapper(filePath string) (*TagMapper, error) {
 	}
 
 	if filePath == "" {
-		return nil, fmt.Errorf("tag mapping file path is empty")
+		return nil, errTagMappingFileEmpty
 	}
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("tag mapping file not found: %s", filePath)
+		return nil, fmt.Errorf("tag mapping file not found: %s: %w", filePath, errTagMappingFileNotFound)
 	}
 
 	// 读取配置文件
@@ -70,12 +80,12 @@ func (tm *TagMapper) parseTagNodes(nodes []*TagNode, parent string) error {
 
 		// 检查标签是否已存在(重复检测)
 		if _, exists := tm.tagToParent[node.Name]; exists {
-			return fmt.Errorf("duplicate tag: %s", node.Name)
+			return fmt.Errorf("duplicate tag: %s: %w", node.Name, errDuplicateTag)
 		}
 
 		// 检查标签名是否与已有别名冲突
 		if _, exists := tm.aliasToStandard[node.Name]; exists {
-			return fmt.Errorf("tag conflicts with existing alias: %s", node.Name)
+			return fmt.Errorf("tag conflicts with existing alias: %s: %w", node.Name, errTagConflictsAlias)
 		}
 
 		// 记录父子关系
@@ -88,11 +98,11 @@ func (tm *TagMapper) parseTagNodes(nodes []*TagNode, parent string) error {
 			}
 			// 检查别名是否已存在
 			if _, exists := tm.aliasToStandard[alias]; exists {
-				return fmt.Errorf("duplicate alias: %s", alias)
+				return fmt.Errorf("duplicate alias: %s: %w", alias, errDuplicateAlias)
 			}
 			// 检查别名是否与已有标签名冲突
 			if _, exists := tm.tagToParent[alias]; exists {
-				return fmt.Errorf("alias conflicts with existing tag: %s", alias)
+				return fmt.Errorf("alias conflicts with existing tag: %s: %w", alias, errAliasConflictsTag)
 			}
 			tm.aliasToStandard[alias] = node.Name
 		}

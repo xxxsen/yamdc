@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	_ "image/gif"
+	_ "image/gif" // register GIF decoder
 	"image/jpeg"
-	_ "image/png"
+	_ "image/png" // register PNG decoder
 	"os"
 
-	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/bmp" // register BMP decoder
 	"golang.org/x/image/draw"
-	_ "golang.org/x/image/webp"
+	_ "golang.org/x/image/webp" // register WebP decoder
 )
 
 func TranscodeToJpeg(data []byte) ([]byte, error) {
@@ -26,7 +26,7 @@ func TranscodeToJpeg(data []byte) ([]byte, error) {
 func LoadImage(data []byte) (image.Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode image failed: %w", err)
 	}
 	return img, nil
 }
@@ -65,7 +65,7 @@ func MakeColorImageData(rect image.Rectangle, rgb color.RGBA) ([]byte, error) {
 	buf := bytes.Buffer{}
 	err := jpeg.Encode(&buf, img, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encode jpeg failed: %w", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -81,5 +81,8 @@ func WriteImageToFile(dst string, img image.Image) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, raw, 0644)
+	if err := os.WriteFile(dst, raw, 0o600); err != nil {
+		return fmt.Errorf("write image file: %w", err)
+	}
+	return nil
 }

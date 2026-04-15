@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
 )
+
+var errPluginBundleCallbackRequired = errors.New("plugin bundle callback is required")
 
 type OnDataReadyFunc func(context.Context, *ResolvedBundle, []string) error
 
@@ -28,9 +31,9 @@ type Manager struct {
 	emitMu      sync.Mutex
 }
 
-func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []Source, cb OnDataReadyFunc) (*Manager, error) {
+func NewManager(name, dataDir string, cli client.IHTTPClient, sources []Source, cb OnDataReadyFunc) (*Manager, error) {
 	if cb == nil {
-		return nil, fmt.Errorf("plugin bundle callback is required")
+		return nil, errPluginBundleCallbackRequired
 	}
 	out := &Manager{
 		name:    name,
@@ -40,22 +43,23 @@ func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []S
 	managers := make([]*basebundle.Manager, 0, len(sources))
 	for index, source := range sources {
 		sourceIndex := index
-		manager, err := basebundle.NewManager(name, dataDir, cli, source.SourceType, source.Location, "remote-plugins", func(ctx context.Context, data *basebundle.BundleData) error {
-			bundle, err := LoadBundleFromData(data, sourceIndex)
-			if err != nil {
-				return err
-			}
-			out.mu.Lock()
-			out.bundles[sourceIndex] = bundle
-			initialized := out.initialized
-			out.mu.Unlock()
-			if !initialized {
-				return nil
-			}
-			return out.emit(ctx)
-		})
+		manager, err := basebundle.NewManager(name, dataDir, cli, source.SourceType, source.Location, "remote-plugins",
+			func(ctx context.Context, data *basebundle.Data) error {
+				bundle, err := LoadBundleFromData(data, sourceIndex)
+				if err != nil {
+					return err
+				}
+				out.mu.Lock()
+				out.bundles[sourceIndex] = bundle
+				initialized := out.initialized
+				out.mu.Unlock()
+				if !initialized {
+					return nil
+				}
+				return out.emit(ctx)
+			})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create bundle manager for source %d: %w", index, err)
 		}
 		managers = append(managers, manager)
 	}
@@ -66,7 +70,7 @@ func NewManager(name string, dataDir string, cli client.IHTTPClient, sources []S
 func (m *Manager) Start(ctx context.Context) error {
 	for _, manager := range m.managers {
 		if err := manager.Start(ctx); err != nil {
-			return err
+			return fmt.Errorf("start bundle manager: %w", err)
 		}
 	}
 	m.mu.Lock()
@@ -94,7 +98,7 @@ func (m *Manager) emit(ctx context.Context) error {
 	return m.cb(ctx, resolved, append([]string(nil), resolved.Files...))
 }
 
-func LoadResolvedBundleFromData(data *basebundle.BundleData) (*ResolvedBundle, []string, error) {
+func LoadResolvedBundleFromData(data *basebundle.Data) (*ResolvedBundle, []string, error) {
 	bundle, err := LoadBundleFromData(data, 0)
 	if err != nil {
 		return nil, nil, err
@@ -118,23 +122,23 @@ func LoadResolvedBundleFromDir(dir string) (*ResolvedBundle, []string, error) {
 	return resolved, files, nil
 }
 
-func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
-	out := &ResolvedBundle{
-		Plugins:        make(map[string][]byte),
-		CategoryChains: make(map[string][]string),
-	}
-	type pluginCandidate struct {
-		name       string
-		category   string
-		runtimeKey string
-		priority   int
-		bundleName string
-		source     string
-		order      int
-		data       []byte
-	}
+type pluginCandidate struct {
+	name       string
+	category   string
+	runtimeKey string
+	priority   int
+	bundleName string
+	source     string
+	order      int
+	data       []byte
+}
+
+func collectBundleCandidates(bundles []*Bundle) (
+	map[string][]pluginCandidate, map[string][]ChainItem, []string,
+) {
 	pluginCandidates := make(map[string][]pluginCandidate)
 	chainGroups := make(map[string][]ChainItem)
+	var files []string
 	for _, bundle := range bundles {
 		if bundle == nil || bundle.Manifest == nil {
 			continue
@@ -158,52 +162,50 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 				plugin := bundle.Plugins[name]
 				runtimeKey := runtimePluginKey(cat, name)
 				pluginCandidates[key] = append(pluginCandidates[key], pluginCandidate{
-					name:       name,
-					category:   cat,
-					runtimeKey: runtimeKey,
-					priority:   item.Priority,
-					bundleName: bundle.Manifest.Name,
-					source:     bundle.Source,
-					order:      bundle.Order,
-					data:       plugin.Data,
+					name: name, category: cat, runtimeKey: runtimeKey,
+					priority: item.Priority, bundleName: bundle.Manifest.Name,
+					source: bundle.Source, order: bundle.Order, data: plugin.Data,
 				})
 			}
 		}
-		out.Files = append(out.Files, bundle.Files...)
+		files = append(files, bundle.Files...)
 	}
-	for _, candidates := range pluginCandidates {
-		sort.SliceStable(candidates, func(i, j int) bool {
-			if candidates[i].priority != candidates[j].priority {
-				return candidates[i].priority < candidates[j].priority
+	return pluginCandidates, chainGroups, files
+}
+
+func resolvePluginWinners(candidates map[string][]pluginCandidate) (map[string][]byte, []string) {
+	plugins := make(map[string][]byte)
+	var warnings []string
+	for _, group := range candidates {
+		sort.SliceStable(group, func(i, j int) bool {
+			if group[i].priority != group[j].priority {
+				return group[i].priority < group[j].priority
 			}
-			if candidates[i].name != candidates[j].name {
-				return candidates[i].name < candidates[j].name
+			if group[i].name != group[j].name {
+				return group[i].name < group[j].name
 			}
-			return candidates[i].order < candidates[j].order
+			return group[i].order < group[j].order
 		})
-		winner := candidates[0]
-		out.Plugins[winner.runtimeKey] = winner.data
-		for i := 1; i < len(candidates); i++ {
-			if candidates[i].priority == winner.priority {
-				out.Warnings = append(out.Warnings, fmt.Sprintf(
+		winner := group[0]
+		plugins[winner.runtimeKey] = winner.data
+		for i := 1; i < len(group); i++ {
+			if group[i].priority == winner.priority {
+				warnings = append(warnings, fmt.Sprintf(
 					"plugin %s in category %s from bundle %s ignored because bundle %s already wins at priority %d",
-					winner.name, winner.category, candidates[i].bundleName, winner.bundleName, winner.priority,
+					winner.name, winner.category, group[i].bundleName, winner.bundleName, winner.priority,
 				))
 			}
 		}
 	}
+	return plugins, warnings
+}
+
+func resolveChainWinners(chainGroups map[string][]ChainItem) ([]ChainItem, map[string][]ChainItem, []string) {
 	allItems := make([]ChainItem, 0, len(chainGroups))
 	categoryItems := make(map[string][]ChainItem)
+	var warnings []string
 	for _, items := range chainGroups {
-		sort.SliceStable(items, func(i, j int) bool {
-			if items[i].Priority != items[j].Priority {
-				return items[i].Priority < items[j].Priority
-			}
-			if items[i].Name != items[j].Name {
-				return items[i].Name < items[j].Name
-			}
-			return items[i].Order < items[j].Order
-		})
+		sortChainItems(items)
 		winner := items[0]
 		if winner.Category == allCategory {
 			allItems = append(allItems, winner)
@@ -212,13 +214,26 @@ func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) {
 		}
 		for i := 1; i < len(items); i++ {
 			if items[i].Priority == winner.Priority {
-				out.Warnings = append(out.Warnings, fmt.Sprintf(
+				warnings = append(warnings, fmt.Sprintf(
 					"plugin %s in category %s from bundle %s ignored because bundle %s already wins at priority %d",
 					items[i].Name, items[i].Category, items[i].BundleName, winner.BundleName, winner.Priority,
 				))
 			}
 		}
 	}
+	return allItems, categoryItems, warnings
+}
+
+func resolveBundles(bundles []*Bundle) (*ResolvedBundle, error) { //nolint:unparam // error kept for future use
+	out := &ResolvedBundle{
+		Plugins:        make(map[string][]byte),
+		CategoryChains: make(map[string][]string),
+	}
+	pluginCandidates, chainGroups, files := collectBundleCandidates(bundles)
+	out.Files = files
+	out.Plugins, out.Warnings = resolvePluginWinners(pluginCandidates)
+	allItems, categoryItems, chainWarnings := resolveChainWinners(chainGroups)
+	out.Warnings = append(out.Warnings, chainWarnings...)
 	sortChainItems(allItems)
 	out.DefaultPlugins = chainItemRuntimeNames(allItems)
 	if len(out.DefaultPlugins) == 0 {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/xxxsen/yamdc/internal/ffmpeg"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -10,8 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type durationFixerHandler struct {
-}
+type durationFixerHandler struct{}
 
 func (h *durationFixerHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Meta.Duration > 0 {
@@ -22,7 +22,7 @@ func (h *durationFixerHandler) Handle(ctx context.Context, fc *model.FileContext
 	}
 	duration, err := ffmpeg.ReadDuration(ctx, fc.FullFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read video duration failed: %w", err)
 	}
 	fc.Meta.Duration = int64(duration)
 	logutil.GetLogger(ctx).Debug("rewrite video duration succ", zap.Float64("duration", duration))
@@ -30,5 +30,5 @@ func (h *durationFixerHandler) Handle(ctx context.Context, fc *model.FileContext
 }
 
 func init() {
-	Register(HDurationFixer, HandlerToCreator(&durationFixerHandler{}))
+	Register(HDurationFixer, ToCreator(&durationFixerHandler{}))
 }

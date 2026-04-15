@@ -98,7 +98,7 @@ func TestYAML_Jav321_OneStep(t *testing.T) {
 		}
 		require.Equal(t, http.MethodPost, r.Method)
 		require.Equal(t, "/search", r.URL.Path)
-		require.NoError(t, r.ParseForm())
+		require.NoError(t, r.ParseForm()) //nolint:gosec // test server handler
 		require.Equal(t, "ABC-123", r.Form.Get("sn"))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(strings.ReplaceAll(`
@@ -157,8 +157,8 @@ func TestYAML_JavDB_TwoStep(t *testing.T) {
 			_, _ = w.Write([]byte("ok"))
 			return
 		}
-		switch {
-		case r.URL.Path == "/search":
+		switch r.URL.Path {
+		case "/search":
 			require.Equal(t, "ABC-123", r.URL.Query().Get("q"))
 			_, _ = w.Write([]byte(`
 <html><body>
@@ -175,7 +175,7 @@ func TestYAML_JavDB_TwoStep(t *testing.T) {
     </div>
   </div>
 </body></html>`))
-		case r.URL.Path == "/v/target":
+		case "/v/target":
 			_, _ = w.Write([]byte(strings.ReplaceAll(`
 <html><body>
   <a class="button is-white copy-to-clipboard" data-clipboard-text="ABC-123"></a>
@@ -255,16 +255,16 @@ func TestYAML_Airav_JSON(t *testing.T) {
 	require.NotZero(t, meta.ReleaseDate)
 }
 
-func mustPluginFromYAML(t *testing.T, data string) *YAMLSearchPlugin {
+func mustPluginFromYAML(t *testing.T, data string) *SearchPlugin {
 	t.Helper()
 	plg, err := NewFromBytes([]byte(data))
 	require.NoError(t, err)
-	out, ok := plg.(*YAMLSearchPlugin)
+	out, ok := plg.(*SearchPlugin)
 	require.True(t, ok)
 	return out
 }
 
-func mustSearch(t *testing.T, name string, plg *YAMLSearchPlugin, cli *http.Client, numberID string) *model.MovieMeta {
+func mustSearch(t *testing.T, name string, plg *SearchPlugin, cli *http.Client, numberID string) *model.MovieMeta {
 	t.Helper()
 	s, err := searcher.NewDefaultSearcher(name, plg, searcher.WithHTTPClient(cli), searcher.WithStorage(store.NewMemStorage()), searcher.WithSearchCache(false))
 	require.NoError(t, err)

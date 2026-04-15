@@ -26,30 +26,30 @@ func (c *posterCropHandler) Name() string {
 }
 
 func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
-	//如果没有开启人脸识别, 那么直接使用基础裁剪方案
+	// 如果没有开启人脸识别, 那么直接使用基础裁剪方案
 	if c.faceRec == nil {
 		return image.CutCensoredImageFromBytes
 	}
 	return func(data []byte) ([]byte, error) {
 		raw, err := image.CutCensoredImageFromBytes(data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cut censored image failed: %w", err)
 		}
-		//出错或者已经存在人脸, 直接返回
+		// 出错或者已经存在人脸, 直接返回
 		rects, err := c.faceRec.SearchFaces(ctx, raw)
 		if err != nil || len(rects) > 0 {
-			return raw, nil
+			return raw, nil //nolint:nilerr // fallback to basic crop when face search fails
 		}
-		//在原始图中, 存在人脸, 那么尝试从原始图中进行人脸识别并裁剪
-		//主要优化部分影片 ID 无法截取正常带人脸 poster 的问题
+		// 在原始图中, 存在人脸, 那么尝试从原始图中进行人脸识别并裁剪
+		// 主要优化部分影片 ID 无法截取正常带人脸 poster 的问题
 		rects, err = c.faceRec.SearchFaces(ctx, data)
-		if err != nil || len(rects) != 1 { //仅有一个人脸的场景下才执行人脸识别, 避免截到奇奇怪怪的地方
-			return raw, nil
+		if err != nil || len(rects) != 1 {
+			return raw, nil //nolint:nilerr // fallback to basic crop when face search fails or multiple faces
 		}
 		logutil.GetLogger(ctx).Info("enhance poster crop with face rec for censored number")
 		rec, err := image.CutImageWithFaceRecFromBytesWithFaceRec(ctx, c.faceRec, data)
 		if err != nil {
-			return raw, nil
+			return raw, nil //nolint:nilerr // fallback to basic crop when face-rec crop fails
 		}
 		return rec, nil
 	}
@@ -71,16 +71,16 @@ func (c *posterCropHandler) uncensorCutter(ctx context.Context) imageCutter {
 
 func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("number", fc.Meta.Number))
-	if fc.Meta.Poster != nil { //仅处理没有海报的元数据
+	if fc.Meta.Poster != nil { // 仅处理没有海报的元数据
 		logger.Debug("poster exist, skip generate")
 		return nil
 	}
-	if fc.Meta.Cover == nil { //无封面, 处理无意义
+	if fc.Meta.Cover == nil { // 无封面, 处理无意义
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	var cutter imageCutter = c.censorCutter(ctx) //默认情况下使用基础封面裁剪
-	if fc.Number.GetExternalFieldUncensor() {    //带有附加标记时优先尝试人脸识别方案
+	cutter := c.censorCutter(ctx)             // 默认情况下使用基础封面裁剪
+	if fc.Number.GetExternalFieldUncensor() { // 带有附加标记时优先尝试人脸识别方案
 		cutter = c.uncensorCutter(ctx)
 	}
 	raw, err := c.storage.GetData(ctx, fc.Meta.Cover.Key)
@@ -103,7 +103,7 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HPosterCropper, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HPosterCropper, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &posterCropHandler{
 			faceRec: deps.FaceRec,
 			storage: deps.Storage,

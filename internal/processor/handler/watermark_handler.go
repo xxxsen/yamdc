@@ -46,9 +46,10 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 		logutil.GetLogger(ctx).Debug("no watermark tag found, skip watermark proc")
 		return nil
 	}
-	key, err := store.AnonymousDataRewriteWithStorage(ctx, h.storage, fc.Meta.Poster.Key, func(ctx context.Context, data []byte) ([]byte, error) {
-		return image.AddWatermarkFromBytes(data, tags)
-	})
+	key, err := store.AnonymousDataRewriteWithStorage(ctx, h.storage, fc.Meta.Poster.Key,
+		func(_ context.Context, data []byte) ([]byte, error) {
+			return image.AddWatermarkFromBytes(data, tags)
+		})
 	if err != nil {
 		return fmt.Errorf("save watermarked image failed, err:%w", err)
 	}
@@ -57,7 +58,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 }
 
 func init() {
-	Register(HWatermakrMaker, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HWatermakrMaker, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &watermark{storage: deps.Storage}, nil
 	})
 }

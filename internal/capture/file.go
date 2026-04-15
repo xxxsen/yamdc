@@ -14,7 +14,10 @@ func moveFile(srcFile, dstFile string) error {
 	if err != nil && strings.Contains(err.Error(), "invalid cross-device link") {
 		return moveCrossDevice(srcFile, dstFile)
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("rename %s to %s failed: %w", srcFile, dstFile, err)
+	}
+	return nil
 }
 
 func copyFile(srcFile, dstFile string) error {
@@ -29,7 +32,7 @@ func copyFile(srcFile, dstFile string) error {
 	defer func() {
 		_ = src.Close()
 	}()
-	dst, err := os.OpenFile(dstFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	dst, err := os.OpenFile(dstFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("create dst:%s failed, err:%w", dstFile, err)
 	}

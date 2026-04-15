@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,14 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 	"golang.org/x/net/html"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	errPrecheckNotMatched           = errors.New("precheck did not match current plugin")
+	errResponseTreatedAsNotFound    = errors.New("response is treated as not found")
+	errWorkflowNotConfigured        = errors.New("workflow is not configured")
+	errNoMultiRequestCandidateTried = errors.New("no multi_request candidate tried")
+	errMissingWorkflowBaseResponse  = errors.New("missing workflow base response")
 )
 
 type CompileSummary struct {
@@ -153,19 +162,24 @@ func CompileDraft(raw *PluginSpec) (*CompileResult, error) {
 	}, nil
 }
 
-func DebugRequest(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, number string) (*RequestDebugResult, error) {
+func DebugRequest(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	raw *PluginSpec,
+	number string,
+) (*RequestDebugResult, error) {
 	plg, err := newCompiledPlugin(raw)
 	if err != nil {
 		return nil, err
 	}
 	ctx = pluginapi.InitContainer(ctx)
-	ctx = meta.SetNumberId(ctx, number)
+	ctx = meta.SetNumberID(ctx, number)
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("precheck did not match current plugin")
+		return nil, errPrecheckNotMatched
 	}
 	if plg.spec.request != nil {
 		req, err := plg.OnMakeHTTPRequest(ctx, number)
@@ -174,8 +188,9 @@ func DebugRequest(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, 
 		}
 		rsp, err := cli.Do(req)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execute request: %w", err)
 		}
+		defer func() { _ = rsp.Body.Close() }()
 		resp, err := captureHTTPResponse(rsp, plg.spec.request.decodeCharset)
 		if err != nil {
 			return nil, err
@@ -188,26 +203,29 @@ func DebugRequest(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, 
 	return debugMultiRequest(ctx, cli, plg, number)
 }
 
-func DebugScrape(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, number string) (*ScrapeDebugResult, error) {
-	plg, err := newCompiledPlugin(raw)
-	if err != nil {
-		return nil, err
-	}
-	ctx = pluginapi.InitContainer(ctx)
-	ctx = meta.SetNumberId(ctx, number)
+type scrapeHTTPResult struct {
+	finalReq   *http.Request
+	decoded    []byte
+	statusCode int
+	headers    http.Header
+}
+
+func debugScrapeFetch(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin, number string,
+) (*scrapeHTTPResult, error) {
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("precheck did not match current plugin")
+		return nil, errPrecheckNotMatched
 	}
 	req, err := plg.OnMakeHTTPRequest(ctx, number)
 	if err != nil {
 		return nil, err
 	}
 	finalReq := req
-	invoker := func(callCtx context.Context, target *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, target *http.Request) (*http.Response, error) {
 		finalReq = target
 		return cli.Do(target)
 	}
@@ -215,122 +233,112 @@ func DebugScrape(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, n
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rsp.Body.Close() }()
 	ok, err = plg.OnPrecheckResponse(ctx, finalReq, rsp)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("response is treated as not found")
+		return nil, errResponseTreatedAsNotFound
 	}
 	rawData, err := client.ReadHTTPData(rsp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read response data: %w", err)
 	}
-	finalReqSpec := plg.spec.finalRequest()
-	decoded, err := decodeBytes(rawData, finalReqSpec.decodeCharset)
+	decoded, err := decodeBytes(rawData, plg.spec.finalRequest().decodeCharset)
 	if err != nil {
 		return nil, err
 	}
-	result := &ScrapeDebugResult{
-		Request: requestDebug(finalReq),
-		Response: &HTTPResponseDebug{
-			StatusCode:  rsp.StatusCode,
-			Headers:     cloneHeader(rsp.Header),
-			Body:        string(decoded),
-			BodyPreview: previewBody(string(decoded)),
-		},
-		Fields: make(map[string]FieldDebugResult, len(plg.spec.scrape.fields)),
-	}
+	return &scrapeHTTPResult{
+		finalReq:   finalReq,
+		decoded:    decoded,
+		statusCode: rsp.StatusCode,
+		headers:    rsp.Header,
+	}, nil
+}
+
+func debugScrapeDecodeFields(ctx context.Context, plg *SearchPlugin, result *ScrapeDebugResult, decoded []byte) {
 	switch plg.spec.scrape.format {
 	case formatHTML:
 		node, err := htmlquery.Parse(bytes.NewReader(decoded))
 		if err != nil {
 			result.Error = fmt.Sprintf("parse html failed: %s", err.Error())
-			return result, nil
+			return
 		}
 		result.Meta, err = plg.traceDecodeHTML(ctx, node, result.Fields)
 		if err != nil {
 			result.Error = fmt.Sprintf("trace html fields failed: %s", err.Error())
-			return result, nil
+			return
 		}
 	case formatJSON:
+		var err error
 		result.Meta, err = plg.traceDecodeJSON(ctx, decoded, result.Fields)
 		if err != nil {
 			result.Error = fmt.Sprintf("trace json fields failed: %s", err.Error())
-			return result, nil
+			return
 		}
 	default:
 		result.Error = fmt.Sprintf("unsupported scrape format:%s", plg.spec.scrape.format)
-		return result, nil
 	}
+}
+
+func DebugScrape(
+	ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, number string,
+) (*ScrapeDebugResult, error) {
+	plg, err := newCompiledPlugin(raw)
+	if err != nil {
+		return nil, err
+	}
+	ctx = pluginapi.InitContainer(ctx)
+	ctx = meta.SetNumberID(ctx, number)
+	fetch, err := debugScrapeFetch(ctx, cli, plg, number)
+	if err != nil {
+		return nil, err
+	}
+	result := &ScrapeDebugResult{
+		Request: requestDebug(fetch.finalReq),
+		Response: &HTTPResponseDebug{
+			StatusCode:  fetch.statusCode,
+			Headers:     cloneHeader(fetch.headers),
+			Body:        string(fetch.decoded),
+			BodyPreview: previewBody(string(fetch.decoded)),
+		},
+		Fields: make(map[string]FieldDebugResult, len(plg.spec.scrape.fields)),
+	}
+	debugScrapeDecodeFields(ctx, plg, result, fetch.decoded)
 	if result.Meta != nil {
 		plg.applyPostprocess(ctx, result.Meta)
 	}
 	return result, nil
 }
 
-func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, number string) (*WorkflowDebugResult, error) {
+func DebugWorkflow(
+	ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, number string,
+) (*WorkflowDebugResult, error) {
 	plg, err := newCompiledPlugin(raw)
 	if err != nil {
 		return nil, err
 	}
 	ctx = pluginapi.InitContainer(ctx)
-	ctx = meta.SetNumberId(ctx, number)
+	ctx = meta.SetNumberID(ctx, number)
 	ok, err := plg.OnPrecheckRequest(ctx, strings.TrimSpace(number))
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("precheck did not match current plugin")
+		return nil, errPrecheckNotMatched
 	}
 	if plg.spec.workflow == nil && plg.spec.multiRequest == nil {
-		return nil, fmt.Errorf("workflow is not configured")
+		return nil, errWorkflowNotConfigured
 	}
 	result := &WorkflowDebugResult{}
 	host := selectedHost(nil, plg.spec.hosts)
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
 	evalCtx := &evalContext{number: number, host: host, vars: readVarsFromContext(ctx)}
+
 	var baseResp *HTTPResponseDebug
-	if plg.spec.multiRequest != nil {
-		mr, finalCtx, err := debugWorkflowMultiRequest(ctx, cli, plg, evalCtx)
-		if mr != nil {
-			result.Steps = append(result.Steps, mr.steps...)
-		}
-		if err != nil {
-			result.Error = fmt.Sprintf("multi_request failed: %s", err.Error())
-			return result, nil
-		}
-		evalCtx = finalCtx
-		baseResp = mr.response
-	} else {
-		req, err := plg.buildRequest(ctx, plg.spec.request, evalCtx)
-		if err != nil {
-			result.Error = fmt.Sprintf("build request failed: %s", err.Error())
-			return result, nil
-		}
-		rsp, err := cli.Do(req)
-		if err != nil {
-			result.Error = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
-			return result, nil
-		}
-		resp, err := captureHTTPResponse(rsp, plg.spec.request.decodeCharset)
-		if err != nil {
-			result.Error = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
-			return result, nil
-		}
-		result.Steps = append(result.Steps, WorkflowDebugStep{
-			Stage:    "request",
-			Summary:  fmt.Sprintf("opened initial page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
-			Request:  ptrRequestDebug(requestDebug(req)),
-			Response: resp,
-		})
-		if err := checkAcceptedStatus(plg.spec.request, resp.StatusCode); err != nil {
-			result.Error = fmt.Sprintf("status check failed: url=%s %s", req.URL.String(), err.Error())
-			return result, nil
-		}
-		baseResp = resp
-	}
-	if plg.spec.workflow == nil {
+	baseResp, evalCtx, result = debugWorkflowRequestPhase(ctx, cli, plg, evalCtx, result)
+	if result.Error != "" || plg.spec.workflow == nil {
 		return result, nil
 	}
 	steps, err := debugWorkflowSearchSelect(ctx, cli, plg, evalCtx, baseResp)
@@ -339,6 +347,73 @@ func DebugWorkflow(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec,
 		result.Error = err.Error()
 	}
 	return result, nil
+}
+
+func debugWorkflowRequestPhase(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	plg *SearchPlugin,
+	evalCtx *evalContext,
+	result *WorkflowDebugResult,
+) (*HTTPResponseDebug, *evalContext, *WorkflowDebugResult) {
+	if plg.spec.multiRequest != nil {
+		return debugWorkflowMultiRequestPhase(ctx, cli, plg, evalCtx, result)
+	}
+	baseResp, result := debugWorkflowSingleRequestPhase(ctx, cli, plg, evalCtx, result)
+	return baseResp, evalCtx, result
+}
+
+func debugWorkflowMultiRequestPhase(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	plg *SearchPlugin,
+	evalCtx *evalContext,
+	result *WorkflowDebugResult,
+) (*HTTPResponseDebug, *evalContext, *WorkflowDebugResult) {
+	mr, finalCtx, err := debugWorkflowMultiRequest(ctx, cli, plg, evalCtx)
+	if mr != nil {
+		result.Steps = append(result.Steps, mr.steps...)
+	}
+	if err != nil {
+		result.Error = fmt.Sprintf("multi_request failed: %s", err.Error())
+		return nil, nil, result
+	}
+	return mr.response, finalCtx, result
+}
+
+func debugWorkflowSingleRequestPhase(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	plg *SearchPlugin,
+	evalCtx *evalContext,
+	result *WorkflowDebugResult,
+) (*HTTPResponseDebug, *WorkflowDebugResult) {
+	req, err := plg.buildRequest(ctx, plg.spec.request, evalCtx)
+	if err != nil {
+		result.Error = fmt.Sprintf("build request failed: %s", err.Error())
+		return nil, result
+	}
+	rsp, err := cli.Do(req) //nolint:bodyclose // captureHTTPResponse closes the body
+	if err != nil {
+		result.Error = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
+		return nil, result
+	}
+	resp, err := captureHTTPResponse(rsp, plg.spec.request.decodeCharset)
+	if err != nil {
+		result.Error = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
+		return nil, result
+	}
+	result.Steps = append(result.Steps, WorkflowDebugStep{
+		Stage:    "request",
+		Summary:  fmt.Sprintf("opened initial page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
+		Request:  ptrRequestDebug(requestDebug(req)),
+		Response: resp,
+	})
+	if err := checkAcceptedStatus(plg.spec.request, resp.StatusCode); err != nil {
+		result.Error = fmt.Sprintf("status check failed: url=%s %s", req.URL.String(), err.Error())
+		return nil, result
+	}
+	return resp, result
 }
 
 func DebugCase(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, spec CaseSpec) (*CaseDebugResult, error) {
@@ -354,7 +429,11 @@ func DebugCase(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, spe
 		status = "success"
 	}
 	if expected := strings.TrimSpace(spec.Output.Status); expected != "" && !strings.EqualFold(expected, status) {
-		return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf("expected status=%s but got %s", expected, status), Meta: scrape.Meta}, nil
+		return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf(
+			"expected status=%s but got %s",
+			expected,
+			status,
+		), Meta: scrape.Meta}, nil
 	}
 	if expected := strings.TrimSpace(spec.Output.Title); expected != "" {
 		got := ""
@@ -362,7 +441,11 @@ func DebugCase(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, spe
 			got = strings.TrimSpace(scrape.Meta.Title)
 		}
 		if got != expected {
-			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf("expected title=%s but got %s", expected, got), Meta: scrape.Meta}, nil
+			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf(
+				"expected title=%s but got %s",
+				expected,
+				got,
+			), Meta: scrape.Meta}, nil
 		}
 	}
 	if len(spec.Output.TagSet) != 0 {
@@ -371,7 +454,11 @@ func DebugCase(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, spe
 			got = scrape.Meta.Genres
 		}
 		if !equalNormalizedSet(spec.Output.TagSet, got) {
-			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf("expected tag_set=%v but got %v", normalizeStringSet(spec.Output.TagSet), normalizeStringSet(got)), Meta: scrape.Meta}, nil
+			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf(
+				"expected tag_set=%v but got %v",
+				normalizeStringSet(spec.Output.TagSet),
+				normalizeStringSet(got),
+			), Meta: scrape.Meta}, nil
 		}
 	}
 	if len(spec.Output.ActorSet) != 0 {
@@ -380,24 +467,66 @@ func DebugCase(ctx context.Context, cli client.IHTTPClient, raw *PluginSpec, spe
 			got = scrape.Meta.Actors
 		}
 		if !equalNormalizedSet(spec.Output.ActorSet, got) {
-			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf("expected actor_set=%v but got %v", normalizeStringSet(spec.Output.ActorSet), normalizeStringSet(got)), Meta: scrape.Meta}, nil
+			return &CaseDebugResult{Pass: false, Errmsg: fmt.Sprintf(
+				"expected actor_set=%v but got %v",
+				normalizeStringSet(spec.Output.ActorSet),
+				normalizeStringSet(got),
+			), Meta: scrape.Meta}, nil
 		}
 	}
 	return &CaseDebugResult{Pass: true, Meta: scrape.Meta}, nil
 }
 
-func newCompiledPlugin(raw *PluginSpec) (*YAMLSearchPlugin, error) {
+func newCompiledPlugin(raw *PluginSpec) (*SearchPlugin, error) {
 	spec, err := compilePlugin(raw)
 	if err != nil {
 		return nil, err
 	}
-	return &YAMLSearchPlugin{spec: spec}, nil
+	return &SearchPlugin{spec: spec}, nil
 }
 
-func debugMultiRequest(ctx context.Context, cli client.IHTTPClient, plg *YAMLSearchPlugin, number string) (*RequestDebugResult, error) {
-	host := selectedHost(nil, plg.spec.hosts)
-	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
-	evalCtx := &evalContext{number: number, host: host, vars: readVarsFromContext(ctx)}
+func tryDebugMultiRequestCandidate(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin, candidate string, evalCtx *evalContext,
+) (RequestDebugAttempt, *HTTPResponseDebug) {
+	itemCtx := &evalContext{number: evalCtx.number, host: evalCtx.host, vars: evalCtx.vars, candidate: candidate}
+	req, err := plg.buildRequest(ctx, plg.spec.multiRequest.request, itemCtx)
+	if err != nil {
+		return RequestDebugAttempt{Candidate: candidate, Error: err.Error()}, nil
+	}
+	attempt := RequestDebugAttempt{Candidate: candidate, Request: requestDebug(req)}
+	rsp, err := cli.Do(req) //nolint:bodyclose // captureHTTPResponse closes the body
+	if err != nil {
+		attempt.Error = err.Error()
+		return attempt, nil
+	}
+	resp, err := captureHTTPResponse(rsp, plg.spec.multiRequest.request.decodeCharset)
+	if err != nil {
+		attempt.Error = err.Error()
+		return attempt, nil
+	}
+	attempt.Response = resp
+	if err := checkAcceptedStatus(plg.spec.multiRequest.request, resp.StatusCode); err != nil {
+		attempt.Error = err.Error()
+		return attempt, nil
+	}
+	node, err := htmlquery.Parse(strings.NewReader(resp.Body))
+	if err != nil {
+		attempt.Error = err.Error()
+		return attempt, nil
+	}
+	itemCtx.body = resp.Body
+	ok, err := plg.spec.multiRequest.successWhen.Eval(itemCtx, node)
+	if err != nil {
+		attempt.Error = err.Error()
+		return attempt, nil
+	}
+	attempt.Matched = ok
+	return attempt, resp
+}
+
+func iterateMultiRequestCandidates(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin, evalCtx *evalContext,
+) (*RequestDebugResult, error) {
 	seen := map[string]struct{}{}
 	out := &RequestDebugResult{}
 	for _, candidateTmpl := range plg.spec.multiRequest.candidates {
@@ -411,67 +540,35 @@ func debugMultiRequest(ctx context.Context, cli client.IHTTPClient, plg *YAMLSea
 			}
 			seen[candidate] = struct{}{}
 		}
-		itemCtx := &evalContext{number: evalCtx.number, host: evalCtx.host, vars: evalCtx.vars, candidate: candidate}
-		req, err := plg.buildRequest(ctx, plg.spec.multiRequest.request, itemCtx)
-		if err != nil {
-			return nil, err
-		}
-		attempt := RequestDebugAttempt{
-			Candidate: candidate,
-			Request:   requestDebug(req),
-		}
-		rsp, err := cli.Do(req)
-		if err != nil {
-			attempt.Error = err.Error()
-			out.Attempts = append(out.Attempts, attempt)
-			continue
-		}
-		resp, err := captureHTTPResponse(rsp, plg.spec.multiRequest.request.decodeCharset)
-		if err != nil {
-			attempt.Error = err.Error()
-			out.Attempts = append(out.Attempts, attempt)
-			continue
-		}
-		attempt.Response = resp
-		if err := checkAcceptedStatus(plg.spec.multiRequest.request, resp.StatusCode); err != nil {
-			attempt.Error = err.Error()
-			out.Attempts = append(out.Attempts, attempt)
-			continue
-		}
-		node, err := htmlquery.Parse(strings.NewReader(resp.Body))
-		if err != nil {
-			attempt.Error = err.Error()
-			out.Attempts = append(out.Attempts, attempt)
-			continue
-		}
-		itemCtx.body = resp.Body
-		ok, err := plg.spec.multiRequest.successWhen.Eval(itemCtx, node)
-		if err != nil {
-			attempt.Error = err.Error()
-			out.Attempts = append(out.Attempts, attempt)
-			continue
-		}
-		attempt.Matched = ok
+		attempt, resp := tryDebugMultiRequestCandidate(ctx, cli, plg, candidate, evalCtx)
 		out.Attempts = append(out.Attempts, attempt)
-		if !ok {
-			continue
+		if attempt.Matched {
+			out.Candidate = candidate
+			out.Request = attempt.Request
+			out.Response = resp
+			return out, nil
 		}
-		out.Candidate = candidate
-		out.Request = attempt.Request
-		out.Response = resp
-		return out, nil
 	}
 	if len(out.Attempts) == 0 {
-		return nil, fmt.Errorf("no multi_request candidate tried")
+		return nil, errNoMultiRequestCandidateTried
 	}
-	return out, fmt.Errorf("no multi_request matched")
+	return out, errNoMultiRequestMatched
+}
+
+func debugMultiRequest(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin, number string,
+) (*RequestDebugResult, error) {
+	host := selectedHost(nil, plg.spec.hosts)
+	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
+	evalCtx := &evalContext{number: number, host: host, vars: readVarsFromContext(ctx)}
+	return iterateMultiRequestCandidates(ctx, cli, plg, evalCtx)
 }
 
 func captureHTTPResponse(rsp *http.Response, charset string) (*HTTPResponseDebug, error) {
 	defer func() { _ = rsp.Body.Close() }()
 	raw, err := client.ReadHTTPData(rsp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read http data: %w", err)
 	}
 	decoded, err := decodeBytes(raw, charset)
 	if err != nil {
@@ -520,7 +617,10 @@ func previewBody(body string) string {
 	return body[:maxLen]
 }
 
-func (p *YAMLSearchPlugin) traceDecodeHTML(ctx context.Context, node *html.Node, out map[string]FieldDebugResult) (*model.MovieMeta, error) {
+func (p *SearchPlugin) traceDecodeHTML(ctx context.Context, node *html.Node, out map[string]FieldDebugResult) (
+	*model.MovieMeta,
+	error,
+) {
 	mv := &model.MovieMeta{
 		Cover:  &model.File{},
 		Poster: &model.File{},
@@ -538,13 +638,16 @@ func (p *YAMLSearchPlugin) traceDecodeHTML(ctx context.Context, node *html.Node,
 		}
 		out[field.name] = dbg
 		if field.required && !dbg.Matched {
-			return nil, nil
+			return nil, nil //nolint:nilnil // nil signals "not found" to caller
 		}
 	}
 	return mv, nil
 }
 
-func (p *YAMLSearchPlugin) traceDecodeJSON(ctx context.Context, data []byte, out map[string]FieldDebugResult) (*model.MovieMeta, error) {
+func (p *SearchPlugin) traceDecodeJSON(ctx context.Context, data []byte, out map[string]FieldDebugResult) (
+	*model.MovieMeta,
+	error,
+) {
 	var doc any
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("decode json data failed, err:%w", err)
@@ -566,13 +669,13 @@ func (p *YAMLSearchPlugin) traceDecodeJSON(ctx context.Context, data []byte, out
 		}
 		out[field.name] = dbg
 		if field.required && !dbg.Matched {
-			return nil, nil
+			return nil, nil //nolint:nilnil // nil signals "not found" to caller
 		}
 	}
 	return mv, nil
 }
 
-func (p *YAMLSearchPlugin) fieldByName(name string) *compiledField {
+func (p *SearchPlugin) fieldByName(name string) *compiledField {
 	for _, field := range p.spec.scrape.fields {
 		if field.name == name {
 			return field
@@ -581,7 +684,10 @@ func (p *YAMLSearchPlugin) fieldByName(name string) *compiledField {
 	return nil
 }
 
-func (p *YAMLSearchPlugin) traceFieldHTML(ctx context.Context, mv *model.MovieMeta, node *html.Node, field *compiledField) (FieldDebugResult, error) {
+func (p *SearchPlugin) traceFieldHTML(ctx context.Context, mv *model.MovieMeta, node *html.Node, field *compiledField) (
+	FieldDebugResult,
+	error,
+) {
 	if isListField(field.name) {
 		values := decoder.DecodeList(node, field.selector.expr)
 		steps := make([]TransformStep, 0, len(field.transforms))
@@ -614,7 +720,10 @@ func (p *YAMLSearchPlugin) traceFieldHTML(ctx context.Context, mv *model.MovieMe
 	return dbg, err
 }
 
-func (p *YAMLSearchPlugin) traceFieldJSON(ctx context.Context, mv *model.MovieMeta, doc any, field *compiledField) (FieldDebugResult, error) {
+func (p *SearchPlugin) traceFieldJSON(ctx context.Context, mv *model.MovieMeta, doc any, field *compiledField) (
+	FieldDebugResult,
+	error,
+) {
 	values, err := evalJSONPathStrings(doc, field.selector.expr)
 	if err != nil {
 		return FieldDebugResult{}, err
@@ -690,7 +799,13 @@ func traceListTransforms(values []string, transforms []*TransformSpec, steps *[]
 	return out
 }
 
-func traceAssignStringField(ctx context.Context, mv *model.MovieMeta, field, value string, parserSpec ParserSpec) (interface{}, error) {
+func traceAssignStringField(
+	ctx context.Context,
+	mv *model.MovieMeta,
+	field,
+	value string,
+	parserSpec ParserSpec,
+) (interface{}, error) {
 	if strings.TrimSpace(value) == "" && (parserSpec.Kind == "" || parserSpec.Kind == "string") {
 		return value, nil
 	}
@@ -714,7 +829,68 @@ type workflowMultiRequestDebug struct {
 	response *HTTPResponseDebug
 }
 
-func debugWorkflowMultiRequest(ctx context.Context, cli client.IHTTPClient, plg *YAMLSearchPlugin, evalCtx *evalContext) (*workflowMultiRequestDebug, *evalContext, error) {
+type workflowCandidateResult struct {
+	step     WorkflowDebugStep
+	response *HTTPResponseDebug
+	evalCtx  *evalContext
+	matched  bool
+}
+
+func tryDebugWorkflowCandidate(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin, candidate string, evalCtx *evalContext,
+) workflowCandidateResult {
+	itemCtx := &evalContext{number: evalCtx.number, host: evalCtx.host, vars: evalCtx.vars, candidate: candidate}
+	req, err := plg.buildRequest(ctx, plg.spec.multiRequest.request, itemCtx)
+	if err != nil {
+		return workflowCandidateResult{step: WorkflowDebugStep{
+			Stage: "multi_request", Candidate: candidate,
+			Summary: fmt.Sprintf("build request for candidate %q failed: %s", candidate, err.Error()),
+		}}
+	}
+	step := WorkflowDebugStep{
+		Stage: "multi_request", Candidate: candidate,
+		Request: ptrRequestDebug(requestDebug(req)),
+	}
+	rsp, err := cli.Do(req) //nolint:bodyclose // captureHTTPResponse closes the body
+	if err != nil {
+		step.Summary = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
+		return workflowCandidateResult{step: step}
+	}
+	resp, err := captureHTTPResponse(rsp, plg.spec.multiRequest.request.decodeCharset)
+	if err != nil {
+		step.Summary = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
+		return workflowCandidateResult{step: step}
+	}
+	step.Response = resp
+	if err := checkAcceptedStatus(plg.spec.multiRequest.request, resp.StatusCode); err != nil {
+		step.Summary = fmt.Sprintf("status=%d rejected: %s", resp.StatusCode, err.Error())
+		return workflowCandidateResult{step: step}
+	}
+	node, err := htmlquery.Parse(strings.NewReader(resp.Body))
+	if err != nil {
+		step.Summary = fmt.Sprintf("parse html failed: %s", err.Error())
+		return workflowCandidateResult{step: step}
+	}
+	itemCtx.body = resp.Body
+	matched, err := plg.spec.multiRequest.successWhen.Eval(itemCtx, node)
+	if err != nil {
+		step.Summary = fmt.Sprintf("eval success_when failed: %s", err.Error())
+		return workflowCandidateResult{step: step}
+	}
+	if !matched {
+		step.Summary = fmt.Sprintf("success_when not matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
+		return workflowCandidateResult{step: step}
+	}
+	step.Summary = fmt.Sprintf("candidate matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
+	return workflowCandidateResult{step: step, response: resp, evalCtx: itemCtx, matched: true}
+}
+
+func debugWorkflowMultiRequest(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	plg *SearchPlugin,
+	evalCtx *evalContext,
+) (*workflowMultiRequestDebug, *evalContext, error) {
 	seen := map[string]struct{}{}
 	result := &workflowMultiRequestDebug{}
 	for _, candidateTmpl := range plg.spec.multiRequest.candidates {
@@ -725,191 +901,115 @@ func debugWorkflowMultiRequest(ctx context.Context, cli client.IHTTPClient, plg 
 		if plg.spec.multiRequest.unique {
 			if _, ok := seen[candidate]; ok {
 				result.steps = append(result.steps, WorkflowDebugStep{
-					Stage:     "multi_request",
-					Candidate: candidate,
-					Summary:   "skipped (duplicate candidate)",
+					Stage: "multi_request", Candidate: candidate,
+					Summary: "skipped (duplicate candidate)",
 				})
 				continue
 			}
 			seen[candidate] = struct{}{}
 		}
-		itemCtx := &evalContext{number: evalCtx.number, host: evalCtx.host, vars: evalCtx.vars, candidate: candidate}
-		req, err := plg.buildRequest(ctx, plg.spec.multiRequest.request, itemCtx)
-		if err != nil {
-			return result, nil, fmt.Errorf("build request for candidate %q failed: %w", candidate, err)
+		cr := tryDebugWorkflowCandidate(ctx, cli, plg, candidate, evalCtx)
+		result.steps = append(result.steps, cr.step)
+		if cr.matched {
+			result.response = cr.response
+			return result, cr.evalCtx, nil
 		}
-		step := WorkflowDebugStep{
-			Stage:     "multi_request",
-			Candidate: candidate,
-			Request:   ptrRequestDebug(requestDebug(req)),
-		}
-		rsp, err := cli.Do(req)
-		if err != nil {
-			step.Summary = fmt.Sprintf("request failed: url=%s err=%s", req.URL.String(), err.Error())
-			result.steps = append(result.steps, step)
-			continue
-		}
-		resp, err := captureHTTPResponse(rsp, plg.spec.multiRequest.request.decodeCharset)
-		if err != nil {
-			step.Summary = fmt.Sprintf("read response failed: url=%s err=%s", req.URL.String(), err.Error())
-			result.steps = append(result.steps, step)
-			continue
-		}
-		step.Response = resp
-		if err := checkAcceptedStatus(plg.spec.multiRequest.request, resp.StatusCode); err != nil {
-			step.Summary = fmt.Sprintf("status=%d rejected: %s", resp.StatusCode, err.Error())
-			result.steps = append(result.steps, step)
-			continue
-		}
-		node, err := htmlquery.Parse(strings.NewReader(resp.Body))
-		if err != nil {
-			step.Summary = fmt.Sprintf("parse html failed: %s", err.Error())
-			result.steps = append(result.steps, step)
-			continue
-		}
-		itemCtx.body = resp.Body
-		matched, err := plg.spec.multiRequest.successWhen.Eval(itemCtx, node)
-		if err != nil {
-			step.Summary = fmt.Sprintf("eval success_when failed: %s", err.Error())
-			result.steps = append(result.steps, step)
-			continue
-		}
-		if !matched {
-			step.Summary = fmt.Sprintf("success_when not matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
-			result.steps = append(result.steps, step)
-			continue
-		}
-		step.Summary = fmt.Sprintf("candidate matched, status=%d body_size=%d", resp.StatusCode, len(resp.Body))
-		result.steps = append(result.steps, step)
-		result.response = resp
-		return result, itemCtx, nil
 	}
-	return result, nil, fmt.Errorf("no multi_request candidate matched after trying %d candidate(s)", len(seen))
+	return result, nil, fmt.Errorf("tried %d candidate(s): %w", len(seen), errNoMultiRequestMatched)
 }
 
-func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg *YAMLSearchPlugin, evalCtx *evalContext, baseResp *HTTPResponseDebug) ([]WorkflowDebugStep, error) {
-	if baseResp == nil {
-		return nil, fmt.Errorf("missing workflow base response (no request stage returned a body)")
-	}
-	node, err := htmlquery.Parse(strings.NewReader(baseResp.Body))
-	if err != nil {
-		return nil, fmt.Errorf("parse response body as HTML failed: body_size=%d err=%s", len(baseResp.Body), err.Error())
-	}
-	body := baseResp.Body
-	w := plg.spec.workflow
+func debugCollectSelectors(node *html.Node, w *compiledSearchSelectWorkflow) (
+	map[string][]string, []string, int, error,
+) {
 	results := make(map[string][]string, len(w.selectors))
 	expectedLen := -1
-	selectorSummary := make([]string, 0, len(w.selectors))
+	summary := make([]string, 0, len(w.selectors))
 	for _, sel := range w.selectors {
 		items := decoder.DecodeList(node, sel.expr)
 		results[sel.name] = items
-		selectorSummary = append(selectorSummary, fmt.Sprintf("%s=%d", sel.name, len(items)))
+		summary = append(summary, fmt.Sprintf("%s=%d", sel.name, len(items)))
 		if expectedLen == -1 {
 			expectedLen = len(items)
 			continue
 		}
 		if expectedLen != len(items) {
-			step := WorkflowDebugStep{
-				Stage:     "search_select",
-				Summary:   fmt.Sprintf("selector count mismatch: %s", strings.Join(selectorSummary, ", ")),
-				Selectors: results,
-			}
-			return []WorkflowDebugStep{step}, fmt.Errorf("search_select selector result count mismatch: %s (all selectors must return the same number of results)", strings.Join(selectorSummary, ", "))
+			return results, summary, expectedLen,
+				fmt.Errorf("%w: %s", errSelectorCountMismatch, strings.Join(summary, ", "))
 		}
 	}
-	step := WorkflowDebugStep{
-		Stage:     "search_select",
-		Selectors: results,
-		Items:     make([]WorkflowSelectorItem, 0, max(expectedLen, 0)),
+	return results, summary, expectedLen, nil
+}
+
+func debugMatchWorkflowItem(
+	evalCtx *evalContext, w *compiledSearchSelectWorkflow,
+	results map[string][]string, body string, node *html.Node, i int,
+) (WorkflowSelectorItem, *evalContext, error) {
+	itemCtx := &evalContext{
+		number: evalCtx.number, host: evalCtx.host, body: body, vars: evalCtx.vars,
+		item:          make(map[string]string, len(results)),
+		itemVariables: make(map[string]string, len(w.itemVariables)),
 	}
-	matched := make([]*evalContext, 0, expectedLen)
-	for i := 0; i < expectedLen; i++ {
-		itemCtx := &evalContext{
-			number:        evalCtx.number,
-			host:          evalCtx.host,
-			body:          body,
-			vars:          evalCtx.vars,
-			item:          make(map[string]string, len(results)),
-			itemVariables: make(map[string]string, len(w.itemVariables)),
+	itemDbg := WorkflowSelectorItem{Index: i, Item: make(map[string]string, len(results))}
+	for name, lst := range results {
+		itemCtx.item[name] = lst[i]
+		itemDbg.Item[name] = lst[i]
+	}
+	for key, tmpl := range w.itemVariables {
+		v, err := tmpl.Render(itemCtx)
+		if err != nil {
+			return itemDbg, nil, fmt.Errorf("item_variables render failed at index %d: %w", i, err)
 		}
-		itemDbg := WorkflowSelectorItem{
-			Index: i,
-			Item:  make(map[string]string, len(results)),
-		}
-		for name, lst := range results {
-			itemCtx.item[name] = lst[i]
-			itemDbg.Item[name] = lst[i]
-		}
-		for key, tmpl := range w.itemVariables {
-			v, err := tmpl.Render(itemCtx)
+		itemCtx.itemVariables[key] = v
+	}
+	if len(itemCtx.itemVariables) != 0 {
+		itemDbg.ItemVariables = itemCtx.itemVariables
+	}
+	matchPass := true
+	if w.match != nil {
+		itemDbg.MatchDetails = make([]WorkflowMatchDetail, 0, len(w.match.conditions))
+		for _, cond := range w.match.conditions {
+			ok, err := cond.Eval(itemCtx, node)
 			if err != nil {
-				step.Summary = fmt.Sprintf("item_variables render failed at index %d: %s", i, err.Error())
-				return []WorkflowDebugStep{step}, err
+				return itemDbg, nil, fmt.Errorf("eval condition failed at index %d: %w", i, err)
 			}
-			itemCtx.itemVariables[key] = v
+			itemDbg.MatchDetails = append(itemDbg.MatchDetails, WorkflowMatchDetail{
+				Condition: renderCondition(cond),
+				Pass:      ok,
+			})
 		}
-		if len(itemCtx.itemVariables) != 0 {
-			itemDbg.ItemVariables = itemCtx.itemVariables
+		ok, err := w.match.Eval(itemCtx, node)
+		if err != nil {
+			return itemDbg, nil, fmt.Errorf("eval match failed at index %d: %w", i, err)
 		}
-		matchPass := true
-		if w.match != nil {
-			itemDbg.MatchDetails = make([]WorkflowMatchDetail, 0, len(w.match.conditions))
-			for _, cond := range w.match.conditions {
-				ok, err := cond.Eval(itemCtx, node)
-				if err != nil {
-					step.Summary = fmt.Sprintf("eval condition failed at index %d: %s", i, err.Error())
-					return []WorkflowDebugStep{step}, err
-				}
-				itemDbg.MatchDetails = append(itemDbg.MatchDetails, WorkflowMatchDetail{
-					Condition: renderCondition(cond),
-					Pass:      ok,
-				})
-			}
-			ok, err := w.match.Eval(itemCtx, node)
-			if err != nil {
-				step.Summary = fmt.Sprintf("eval match failed at index %d: %s", i, err.Error())
-				return []WorkflowDebugStep{step}, err
-			}
-			matchPass = ok
-		}
-		itemDbg.Matched = matchPass
-		step.Items = append(step.Items, itemDbg)
-		if matchPass {
-			matched = append(matched, itemCtx)
-		}
+		matchPass = ok
 	}
-	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
-		step.Summary = fmt.Sprintf("matched %d/%d items (expect_count=%d), selector_counts=[%s], response_body_size=%d",
-			len(matched), expectedLen, w.match.expectCount, strings.Join(selectorSummary, ", "), len(body))
-		return []WorkflowDebugStep{step}, fmt.Errorf("search_select matched count mismatch: got %d but expect_count=%d (total_items=%d, selectors=[%s], body_size=%d). Check the response tab to verify the correct page was fetched",
-			len(matched), w.match.expectCount, expectedLen, strings.Join(selectorSummary, ", "), len(body))
+	itemDbg.Matched = matchPass
+	if matchPass {
+		return itemDbg, itemCtx, nil
 	}
-	if len(matched) == 0 {
-		step.Summary = fmt.Sprintf("0/%d items matched, selector_counts=[%s], response_body_size=%d",
-			expectedLen, strings.Join(selectorSummary, ", "), len(body))
-		return []WorkflowDebugStep{step}, fmt.Errorf("search_select: no item matched out of %d candidates (selectors=[%s], body_size=%d). Check the response tab to verify the correct page was fetched",
-			expectedLen, strings.Join(selectorSummary, ", "), len(body))
-	}
-	step.Summary = fmt.Sprintf("%d/%d items matched", len(matched), expectedLen)
+	return itemDbg, nil, nil
+}
+
+func debugFollowNextRequest(
+	ctx context.Context, cli client.IHTTPClient, plg *SearchPlugin,
+	w *compiledSearchSelectWorkflow, matched []*evalContext,
+) (string, *WorkflowDebugStep, error) {
 	value, err := w.ret.Render(matched[0])
 	if err != nil {
-		step.Summary += fmt.Sprintf(", return render failed: %s", err.Error())
-		return []WorkflowDebugStep{step}, fmt.Errorf("render return template failed: %w", err)
+		return "", nil, fmt.Errorf("render return template failed: %w", err)
 	}
-	step.SelectedValue = value
 	matched[0].value = value
 	nextReq, err := plg.buildRequest(ctx, w.nextRequest, matched[0])
 	if err != nil {
-		step.Summary += fmt.Sprintf(", build next_request failed: %s", err.Error())
-		return []WorkflowDebugStep{step}, fmt.Errorf("build next_request failed: selected_value=%s err=%w", value, err)
+		return value, nil, fmt.Errorf("build next_request failed: selected_value=%s err=%w", value, err)
 	}
-	rsp, err := cli.Do(nextReq)
+	rsp, err := cli.Do(nextReq) //nolint:bodyclose // captureHTTPResponse closes the body
 	if err != nil {
-		return []WorkflowDebugStep{step}, fmt.Errorf("next_request failed: url=%s err=%w", nextReq.URL.String(), err)
+		return value, nil, fmt.Errorf("next_request failed: url=%s err=%w", nextReq.URL.String(), err)
 	}
 	resp, err := captureHTTPResponse(rsp, w.nextRequest.decodeCharset)
 	if err != nil {
-		return []WorkflowDebugStep{step}, fmt.Errorf("read next_request response failed: url=%s err=%w", nextReq.URL.String(), err)
+		return value, nil, fmt.Errorf("read next_request response failed: url=%s err=%w", nextReq.URL.String(), err)
 	}
 	if err := checkAcceptedStatus(w.nextRequest, resp.StatusCode); err != nil {
 		nextStep := WorkflowDebugStep{
@@ -918,17 +1018,103 @@ func debugWorkflowSearchSelect(ctx context.Context, cli client.IHTTPClient, plg 
 			Request:  ptrRequestDebug(requestDebug(nextReq)),
 			Response: resp,
 		}
-		return []WorkflowDebugStep{step, nextStep}, fmt.Errorf("next_request status check failed: url=%s %w", nextReq.URL.String(), err)
+		return value, &nextStep, fmt.Errorf("next_request status check failed: url=%s %w", nextReq.URL.String(), err)
 	}
-	return []WorkflowDebugStep{
-		step,
-		{
-			Stage:    "next_request",
-			Summary:  fmt.Sprintf("opened detail page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
-			Request:  ptrRequestDebug(requestDebug(nextReq)),
-			Response: resp,
-		},
-	}, nil
+	step := WorkflowDebugStep{
+		Stage:    "next_request",
+		Summary:  fmt.Sprintf("opened detail page, status=%d body_size=%d", resp.StatusCode, len(resp.Body)),
+		Request:  ptrRequestDebug(requestDebug(nextReq)),
+		Response: resp,
+	}
+	return value, &step, nil
+}
+
+func debugMatchAllWorkflowItems(
+	evalCtx *evalContext, w *compiledSearchSelectWorkflow, results map[string][]string,
+	body string, node *html.Node, expectedLen int, step *WorkflowDebugStep,
+) ([]*evalContext, error) {
+	matched := make([]*evalContext, 0, expectedLen)
+	for i := 0; i < expectedLen; i++ {
+		itemDbg, itemCtx, err := debugMatchWorkflowItem(evalCtx, w, results, body, node, i)
+		step.Items = append(step.Items, itemDbg)
+		if err != nil {
+			step.Summary = err.Error()
+			return nil, err
+		}
+		if itemCtx != nil {
+			matched = append(matched, itemCtx)
+		}
+	}
+	return matched, nil
+}
+
+func debugValidateMatchCount(
+	matched []*evalContext, w *compiledSearchSelectWorkflow, expectedLen int,
+	summaryStr string, bodySize int, step *WorkflowDebugStep,
+) error {
+	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
+		step.Summary = fmt.Sprintf("matched %d/%d items (expect_count=%d), selector_counts=[%s], response_body_size=%d",
+			len(matched), expectedLen, w.match.expectCount, summaryStr, bodySize)
+		return fmt.Errorf(
+			"got %d expect_count=%d total_items=%d selectors=[%s] body_size=%d: %w",
+			len(matched), w.match.expectCount, expectedLen, summaryStr, bodySize, errSearchSelectCountMismatch,
+		)
+	}
+	if len(matched) == 0 {
+		step.Summary = fmt.Sprintf("0/%d items matched, selector_counts=[%s], response_body_size=%d",
+			expectedLen, summaryStr, bodySize)
+		return fmt.Errorf("total_items=%d selectors=[%s] body_size=%d: %w",
+			expectedLen, summaryStr, bodySize, errNoSearchSelectMatched)
+	}
+	step.Summary = fmt.Sprintf("%d/%d items matched", len(matched), expectedLen)
+	return nil
+}
+
+func debugWorkflowSearchSelect(
+	ctx context.Context,
+	cli client.IHTTPClient,
+	plg *SearchPlugin,
+	evalCtx *evalContext,
+	baseResp *HTTPResponseDebug,
+) ([]WorkflowDebugStep, error) {
+	if baseResp == nil {
+		return nil, errMissingWorkflowBaseResponse
+	}
+	node, err := htmlquery.Parse(strings.NewReader(baseResp.Body))
+	if err != nil {
+		return nil, fmt.Errorf("parse response body as HTML failed, body_size=%d: %w", len(baseResp.Body), err)
+	}
+	w := plg.spec.workflow
+	results, selectorSummary, expectedLen, err := debugCollectSelectors(node, w)
+	if err != nil {
+		step := WorkflowDebugStep{
+			Stage: "search_select", Selectors: results,
+			Summary: fmt.Sprintf("selector count mismatch: %s", strings.Join(selectorSummary, ", ")),
+		}
+		return []WorkflowDebugStep{step}, err
+	}
+	step := WorkflowDebugStep{
+		Stage: "search_select", Selectors: results,
+		Items: make([]WorkflowSelectorItem, 0, max(expectedLen, 0)),
+	}
+	matched, err := debugMatchAllWorkflowItems(evalCtx, w, results, baseResp.Body, node, expectedLen, &step)
+	if err != nil {
+		return []WorkflowDebugStep{step}, err
+	}
+	summaryStr := strings.Join(selectorSummary, ", ")
+	if err := debugValidateMatchCount(matched, w, expectedLen, summaryStr, len(baseResp.Body), &step); err != nil {
+		return []WorkflowDebugStep{step}, err
+	}
+	value, nextStep, err := debugFollowNextRequest(ctx, cli, plg, w, matched)
+	step.SelectedValue = value
+	if nextStep != nil {
+		return []WorkflowDebugStep{step, *nextStep}, err
+	}
+	if err != nil {
+		step.Summary += fmt.Sprintf(", %s", err.Error())
+		return []WorkflowDebugStep{step}, err
+	}
+	return []WorkflowDebugStep{step}, nil
 }
 
 func renderCondition(cond *compiledCondition) string {
@@ -972,11 +1158,4 @@ func equalNormalizedSet(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

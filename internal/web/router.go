@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,7 +9,7 @@ import (
 )
 
 func (a *API) Engine(addr string) (webapi.IWebEngine, error) {
-	return webapi.NewEngine(
+	engine, err := webapi.NewEngine(
 		"",
 		addr,
 		webapi.WithExtraMiddlewares(corsMiddleware()),
@@ -21,6 +22,10 @@ func (a *API) Engine(addr string) (webapi.IWebEngine, error) {
 			a.registerEngineAssetRoutes(group)
 		}),
 	)
+	if err != nil {
+		return nil, fmt.Errorf("create web engine failed: %w", err)
+	}
+	return engine, nil
 }
 
 func corsMiddleware() gin.HandlerFunc {

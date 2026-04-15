@@ -3,6 +3,7 @@ package movieidcleaner
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,6 +22,14 @@ const (
 	defaultRemoteEntry = "ruleset"
 )
 
+var (
+	errCleanerCallbackRequired     = errors.New("movieid cleaner bundle callback is required")
+	errBundleManagerNil            = errors.New("bundle manager is nil")
+	errBundleDataRequired          = errors.New("bundle data is required")
+	errBundleManifestEntryRequired = errors.New("bundle manifest entry is required")
+	errInvalidBundleEntry          = errors.New("invalid bundle manifest entry")
+)
+
 type OnDataReadyFunc func(context.Context, *RuleSet, []string) error
 
 type Manager struct {
@@ -31,33 +40,43 @@ type BundleManifest struct {
 	Entry string `yaml:"entry"`
 }
 
-func NewManager(dataDir string, cli client.IHTTPClient, sourceType string, location string, cb OnDataReadyFunc) (*Manager, error) {
+func NewManager(
+	dataDir string,
+	cli client.IHTTPClient,
+	sourceType,
+	location string,
+	cb OnDataReadyFunc,
+) (*Manager, error) {
 	if cb == nil {
-		return nil, fmt.Errorf("movieid cleaner bundle callback is required")
+		return nil, errCleanerCallbackRequired
 	}
-	manager, err := basebundle.NewManager("number_cleaner", dataDir, cli, sourceType, location, "remote-rules", func(ctx context.Context, data *basebundle.BundleData) error {
-		rs, files, err := LoadRuleSetFromBundleData(data)
-		if err != nil {
-			return err
-		}
-		return cb(ctx, rs, files)
-	})
+	manager, err := basebundle.NewManager("number_cleaner", dataDir, cli, sourceType, location, "remote-rules",
+		func(ctx context.Context, data *basebundle.Data) error {
+			rs, files, err := LoadRuleSetFromBundleData(data)
+			if err != nil {
+				return err
+			}
+			return cb(ctx, rs, files)
+		})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create bundle manager failed: %w", err)
 	}
 	return &Manager{manager: manager}, nil
 }
 
 func (m *Manager) Start(ctx context.Context) error {
 	if m == nil || m.manager == nil {
-		return fmt.Errorf("bundle manager is nil")
+		return errBundleManagerNil
 	}
-	return m.manager.Start(ctx)
+	if err := m.manager.Start(ctx); err != nil {
+		return fmt.Errorf("start bundle manager failed: %w", err)
+	}
+	return nil
 }
 
-func LoadRuleSetFromBundleData(data *basebundle.BundleData) (*RuleSet, []string, error) {
+func LoadRuleSetFromBundleData(data *basebundle.Data) (*RuleSet, []string, error) {
 	if data == nil {
-		return nil, nil, fmt.Errorf("bundle data is required")
+		return nil, nil, errBundleDataRequired
 	}
 	entry, err := resolveBundleEntry(data.FS, data.Base, defaultRemoteEntry)
 	if err != nil {
@@ -77,7 +96,7 @@ func LoadRuleSetFromBundleData(data *basebundle.BundleData) (*RuleSet, []string,
 func LoadRuleSetFromZip(zipPath string) (*RuleSet, []string, error) {
 	reader, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("open zip %s failed: %w", zipPath, err)
 	}
 	defer func() {
 		_ = reader.Close()
@@ -86,19 +105,19 @@ func LoadRuleSetFromZip(zipPath string) (*RuleSet, []string, error) {
 	if root := detectZipRoot(reader.File); root != "" {
 		base = root
 	}
-	return LoadRuleSetFromBundleData(&basebundle.BundleData{
+	return LoadRuleSetFromBundleData(&basebundle.Data{
 		FS:   &reader.Reader,
 		Base: base,
 	})
 }
 
-func resolveBundleEntry(fsys fs.FS, base string, defaultEntry string) (string, error) {
+func resolveBundleEntry(fsys fs.FS, base, defaultEntry string) (string, error) {
 	entry := defaultEntry
 	if manifest, ok, err := readManifest(fsys, base); err != nil {
 		return "", err
 	} else if ok {
 		if strings.TrimSpace(manifest.Entry) == "" {
-			return "", fmt.Errorf("bundle manifest entry is required")
+			return "", errBundleManifestEntryRequired
 		}
 		entry = manifest.Entry
 	}
@@ -124,11 +143,11 @@ func readManifest(fsys fs.FS, base string) (*BundleManifest, bool, error) {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, false, err
+			return nil, false, fmt.Errorf("read manifest %s failed: %w", target, err)
 		}
 		manifest := &BundleManifest{}
 		if err := yaml.Unmarshal(raw, manifest); err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("unmarshal manifest %s failed: %w", target, err)
 		}
 		return manifest, true, nil
 	}
@@ -139,7 +158,7 @@ func cleanBundleEntry(raw string) (string, error) {
 	clean := path.Clean(strings.TrimSpace(raw))
 	clean = strings.TrimPrefix(clean, "/")
 	if clean == "" || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
-		return "", fmt.Errorf("invalid bundle manifest entry: %s", raw)
+		return "", fmt.Errorf("invalid bundle manifest entry: %s: %w", raw, errInvalidBundleEntry)
 	}
 	return clean, nil
 }

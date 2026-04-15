@@ -16,7 +16,10 @@ import (
 
 const (
 	defaultAITaggerPrompt = `
-You are an expert in tagging movie and media content. The input is a title or description written in Chinese, Japanese, or English. Your task is to extract up to 5 keywords that are explicitly mentioned or directly implied by the text. Do not guess or invent.
+You are an expert in tagging movie and media content.
+The input is a title or description written in Chinese, Japanese, or English.
+Your task is to extract up to 5 keywords that are explicitly mentioned
+or directly implied by the text. Do not guess or invent.
 
 Each keyword must:
 - Be in Simplified Chinese
@@ -53,7 +56,8 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 	if len(fc.Meta.PlotTranslated) > 0 {
 		plot = fc.Meta.PlotTranslated
 	}
-	if utf8.RuneCountInString(title) < defaultMinTitleLengthForAITagging && utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
+	if utf8.RuneCountInString(title) < defaultMinTitleLengthForAITagging &&
+		utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
 		return nil
 	}
 	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
@@ -75,7 +79,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 }
 
 func init() {
-	Register(HAITagger, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HAITagger, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &aiTaggerHandler{engine: deps.AIEngine}, nil
 	})
 }

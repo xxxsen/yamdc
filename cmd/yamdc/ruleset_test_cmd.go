@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -40,7 +38,7 @@ func newRulesetTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ruleset-test",
 		Short: "Verify one ruleset bundle directory",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			res := verifyRulesetBundle(strings.TrimSpace(ruleset), strings.TrimSpace(casefile))
 			return renderBundleVerifyResult(os.Stdout, res, output)
 		},
@@ -52,7 +50,7 @@ func newRulesetTestCmd() *cobra.Command {
 	return cmd
 }
 
-func verifyRulesetBundle(ruleset string, casefile string) bundleVerifyResult {
+func verifyRulesetBundle(ruleset, casefile string) bundleVerifyResult {
 	if ruleset == "" {
 		return bundleVerifyResult{Pass: false, Errmsg: "ruleset is required"}
 	}
@@ -100,11 +98,11 @@ func verifyRulesetBundle(ruleset string, casefile string) bundleVerifyResult {
 
 func loadRulesetCaseFile(path string) (*rulesetCaseFile, error) {
 	if path == "" {
-		return nil, fmt.Errorf("casefile is required")
+		return nil, errCasefileRequired
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat case file %s failed: %w", path, err)
 	}
 	if info.IsDir() {
 		return loadRulesetCaseDir(path)
@@ -113,47 +111,48 @@ func loadRulesetCaseFile(path string) (*rulesetCaseFile, error) {
 }
 
 func loadRulesetCaseDir(dir string) (*rulesetCaseFile, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
-			continue
-		}
-		files = append(files, filepath.Join(dir, entry.Name()))
-	}
-	slices.Sort(files)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no json case files found in dir: %s", dir)
-	}
-	out := &rulesetCaseFile{
-		Cases: make([]*rulesetCaseItem, 0, len(files)),
-	}
-	for _, file := range files {
-		item, err := loadRulesetCaseJSONFile(file)
-		if err != nil {
-			return nil, fmt.Errorf("load case file failed: %s: %w", file, err)
-		}
-		out.Cases = append(out.Cases, item.Cases...)
-	}
-	return out, nil
+	return loadCaseDir(dir, loadRulesetCaseJSONFile,
+		func(f *rulesetCaseFile) int { return len(f.Cases) },
+		func(dst, src *rulesetCaseFile) { dst.Cases = append(dst.Cases, src.Cases...) },
+	)
 }
 
 func loadRulesetCaseJSONFile(path string) (*rulesetCaseFile, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+	return loadJSONCaseFile[rulesetCaseFile](path, nil)
+}
+
+func assertRulesetCaseOutput(name string, item *rulesetCaseItem, res *movieidcleaner.Result) *bundleVerifyCaseItem {
+	if expected := strings.TrimSpace(item.Output.Number); expected != "" {
+		if !strings.EqualFold(res.NumberID, expected) {
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected number=%s but got %s", expected, res.NumberID)}
+		}
 	}
-	out := &rulesetCaseFile{}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return nil, err
+	if item.Output.Uncensor != nil && res.Uncensor != *item.Output.Uncensor {
+		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+			"expected uncensor=%t but got %t", *item.Output.Uncensor, res.Uncensor)}
 	}
-	return out, nil
+	if expected := strings.TrimSpace(item.Output.Category); expected != "" {
+		if !strings.EqualFold(res.Category, expected) {
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected category=%s but got %s", expected, res.Category)}
+		}
+	}
+	if expected := strings.TrimSpace(item.Output.Status); expected != "" {
+		if !strings.EqualFold(string(res.Status), expected) {
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected status=%s but got %s", expected, res.Status)}
+		}
+	}
+	if len(item.Output.Suffixes) != 0 {
+		exp := normalizeStringSet(item.Output.Suffixes)
+		got := normalizeStringSet(res.Suffixes)
+		if !slices.Equal(exp, got) {
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected suffix-set=%v but got %v", exp, got)}
+		}
+	}
+	return nil
 }
 
 func verifyRulesetCase(cleaner movieidcleaner.Cleaner, index int, item *rulesetCaseItem) *bundleVerifyCaseItem {
@@ -172,30 +171,8 @@ func verifyRulesetCase(cleaner movieidcleaner.Cleaner, index int, item *rulesetC
 	if err != nil {
 		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: err.Error()}
 	}
-	if expected := strings.TrimSpace(item.Output.Number); expected != "" {
-		if !strings.EqualFold(res.NumberID, expected) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected number=%s but got %s", expected, res.NumberID)}
-		}
-	}
-	if item.Output.Uncensor != nil && res.Uncensor != *item.Output.Uncensor {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected uncensor=%t but got %t", *item.Output.Uncensor, res.Uncensor)}
-	}
-	if expected := strings.TrimSpace(item.Output.Category); expected != "" {
-		if !strings.EqualFold(res.Category, expected) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected category=%s but got %s", expected, res.Category)}
-		}
-	}
-	if expected := strings.TrimSpace(item.Output.Status); expected != "" {
-		if !strings.EqualFold(string(res.Status), expected) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected status=%s but got %s", expected, res.Status)}
-		}
-	}
-	if len(item.Output.Suffixes) != 0 {
-		exp := normalizeStringSet(item.Output.Suffixes)
-		got := normalizeStringSet(res.Suffixes)
-		if !slices.Equal(exp, got) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected suffix-set=%v but got %v", exp, got)}
-		}
+	if fail := assertRulesetCaseOutput(name, item, res); fail != nil {
+		return fail
 	}
 	return &bundleVerifyCaseItem{Name: name, Pass: true}
 }

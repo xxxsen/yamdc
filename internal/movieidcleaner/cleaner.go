@@ -80,7 +80,7 @@ type explainCollector struct {
 	steps []ExplainStep
 }
 
-func (c *explainCollector) add(stage string, rule string, input string, output string, matched bool, summary string) {
+func (c *explainCollector) add(stage, rule, input, output string, matched bool, summary string) {
 	if c == nil {
 		return
 	}
@@ -94,7 +94,15 @@ func (c *explainCollector) add(stage string, rule string, input string, output s
 	})
 }
 
-func (c *explainCollector) addWithValues(stage string, rule string, input string, output string, matched bool, summary string, values []string) {
+func (c *explainCollector) addWithValues(
+	stage,
+	rule,
+	input,
+	output string,
+	matched bool,
+	summary string,
+	values []string,
+) {
 	if c == nil {
 		return
 	}
@@ -112,7 +120,16 @@ func (c *explainCollector) addWithValues(stage string, rule string, input string
 	c.steps = append(c.steps, step)
 }
 
-func (c *explainCollector) addCandidate(stage string, rule string, input string, output string, matched bool, summary string, candidate Candidate, selected bool) {
+func (c *explainCollector) addCandidate(
+	stage,
+	rule,
+	input,
+	output string,
+	matched bool,
+	summary string,
+	candidate Candidate,
+	selected bool,
+) {
 	if c == nil {
 		return
 	}
@@ -180,12 +197,9 @@ func NewCleaner(rs *RuleSet) (Cleaner, error) {
 	return &cleaner{rules: crs}, nil
 }
 
-func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
-	out := &compiledRuleSet{options: rs.Options}
-	if out.options.CaseMode == "" {
-		out.options.CaseMode = "upper"
-	}
-	for _, item := range rs.Normalizers {
+func compileNormalizers(items []NormalizerRule) []compiledNormalizerRule {
+	out := make([]compiledNormalizerRule, 0, len(items))
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
@@ -202,21 +216,14 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 			}
 			r.replacer = strings.NewReplacer(kv...)
 		}
-		out.normalizers = append(out.normalizers, r)
+		out = append(out, r)
 	}
-	for _, item := range rs.RewriteRules {
-		if item.Disabled {
-			continue
-		}
-		re, err := regexp.Compile(item.Pattern)
-		if err != nil {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule failed", Rule: item.Name, Cause: err}
-		}
-		out.rewriteRules = append(out.rewriteRules, compiledRewriteRule{
-			name: item.Name, re: re, replace: item.Replace,
-		})
-	}
-	for _, item := range rs.SuffixRules {
+	return out
+}
+
+func compileSuffixRules(items []SuffixRule) ([]compiledSuffixRule, error) {
+	out := make([]compiledSuffixRule, 0, len(items))
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
@@ -238,9 +245,14 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 		if item.Type == "token" {
 			r.aliasRegex = compileAliasRegex(item.Aliases)
 		}
-		out.suffixRules = append(out.suffixRules, r)
+		out = append(out, r)
 	}
-	for _, item := range rs.NoiseRules {
+	return out, nil
+}
+
+func compileNoiseRules(items []NoiseRule) ([]compiledNoiseRule, error) {
+	out := make([]compiledNoiseRule, 0, len(items))
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
@@ -255,9 +267,14 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 		if item.Type == "token" {
 			r.aliasRegex = compileAliasRegex(item.Aliases)
 		}
-		out.noiseRules = append(out.noiseRules, r)
+		out = append(out, r)
 	}
-	for _, item := range rs.Matchers {
+	return out, nil
+}
+
+func compileMatcherRules(items []MatcherRule) ([]compiledMatcherRule, error) {
+	out := make([]compiledMatcherRule, 0, len(items))
+	for _, item := range items {
 		if item.Disabled {
 			continue
 		}
@@ -265,7 +282,7 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 		if err != nil {
 			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile matcher rule failed", Rule: item.Name, Cause: err}
 		}
-		out.matchers = append(out.matchers, compiledMatcherRule{
+		m := compiledMatcherRule{
 			name:              item.Name,
 			category:          item.Category,
 			uncensorSet:       item.Uncensor != nil,
@@ -274,10 +291,42 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 			score:             item.Score,
 			requireBoundary:   item.RequireBoundary,
 			prefixes:          item.Prefixes,
-		})
-		if item.Uncensor != nil {
-			out.matchers[len(out.matchers)-1].uncensorValue = *item.Uncensor
 		}
+		if item.Uncensor != nil {
+			m.uncensorValue = *item.Uncensor
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
+	out := &compiledRuleSet{options: rs.Options}
+	if out.options.CaseMode == "" {
+		out.options.CaseMode = "upper"
+	}
+	out.normalizers = compileNormalizers(rs.Normalizers)
+	var err error
+	for _, item := range rs.RewriteRules {
+		if item.Disabled {
+			continue
+		}
+		re, err := regexp.Compile(item.Pattern)
+		if err != nil {
+			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule failed", Rule: item.Name, Cause: err}
+		}
+		out.rewriteRules = append(out.rewriteRules, compiledRewriteRule{
+			name: item.Name, re: re, replace: item.Replace,
+		})
+	}
+	if out.suffixRules, err = compileSuffixRules(rs.SuffixRules); err != nil {
+		return nil, err
+	}
+	if out.noiseRules, err = compileNoiseRules(rs.NoiseRules); err != nil {
+		return nil, err
+	}
+	if out.matchers, err = compileMatcherRules(rs.Matchers); err != nil {
+		return nil, err
 	}
 	for _, item := range rs.PostProcessors {
 		if item.Disabled {
@@ -304,15 +353,12 @@ func compileAliasRegex(aliases []string) []*regexp.Regexp {
 }
 
 func (c *cleaner) Clean(input string) (*Result, error) {
-	result, _, err := c.run(input, false)
-	return result, err
+	result, _ := c.run(input, false)
+	return result, nil
 }
 
 func (c *cleaner) Explain(input string) (*ExplainResult, error) {
-	result, collector, err := c.run(input, true)
-	if err != nil {
-		return nil, err
-	}
+	result, collector := c.run(input, true)
 	return &ExplainResult{
 		Input:      input,
 		InputNoExt: result.InputNoExt,
@@ -321,14 +367,90 @@ func (c *cleaner) Explain(input string) (*ExplainResult, error) {
 	}, nil
 }
 
-func (c *cleaner) run(input string, withExplain bool) (*Result, *explainCollector, error) {
-	raw := input
+type runState struct {
+	raw         string
+	inputNoExt  string
+	suffixes    []string
+	rewriteHits []string
+	suffixHits  []string
+	noiseHits   []string
+}
+
+func (rs *runState) allHits() []string {
+	return append(append(rs.rewriteHits, rs.suffixHits...), rs.noiseHits...)
+}
+
+func buildNoMatchResult(state *runState, work string, collector *explainCollector) *Result {
+	if collector != nil {
+		collector.add("result", "selected_candidate", work, "", false, "no candidate matched")
+	}
+	return &Result{
+		RawInput:   state.raw,
+		InputNoExt: state.inputNoExt,
+		Status:     StatusNoMatch,
+		Confidence: ConfidenceLow,
+		RuleHits:   state.allHits(),
+		Warnings:   []string{"no candidate matched"},
+	}
+}
+
+func buildMatchResult(
+	state *runState,
+	best Candidate,
+	candidates []Candidate,
+	normalized string,
+	collector *explainCollector,
+) *Result {
+	parsed, err := number.Parse(normalized)
+	if err != nil {
+		if collector != nil {
+			collector.add("result", "number_parse", normalized, "", false, "normalized output rejected by number.Parse")
+		}
+		return &Result{
+			RawInput:        state.raw,
+			InputNoExt:      state.inputNoExt,
+			Status:          StatusLowQuality,
+			Confidence:      ConfidenceLow,
+			RuleHits:        append(state.allHits(), best.RuleHits...),
+			Warnings:        []string{"normalized output rejected by number.Parse"},
+			Candidates:      candidates,
+			Category:        best.Category,
+			CategoryMatched: best.CategoryMatched,
+			Uncensor:        best.Uncensor,
+			UncensorMatched: best.UncensorMatched,
+		}
+	}
+	confidence := confidenceByScore(best.Score)
+	status := StatusSuccess
+	var warnings []string
+	if confidence == ConfidenceLow {
+		status = StatusLowQuality
+		warnings = append(warnings, "low confidence candidate")
+	}
+	if collector != nil {
+		collector.add("result", "number_parse", normalized, parsed.GetNumberID(), true,
+			"normalized output accepted by number.Parse")
+	}
+	return &Result{
+		RawInput:        state.raw,
+		InputNoExt:      state.inputNoExt,
+		Normalized:      normalized,
+		NumberID:        parsed.GetNumberID(),
+		Suffixes:        state.suffixes,
+		Category:        best.Category,
+		Uncensor:        best.Uncensor,
+		CategoryMatched: best.CategoryMatched,
+		UncensorMatched: best.UncensorMatched,
+		Confidence:      confidence,
+		Status:          status,
+		RuleHits:        append(state.allHits(), best.RuleHits...),
+		Warnings:        warnings,
+		Candidates:      candidates,
+	}
+}
+
+func (c *cleaner) run(input string, withExplain bool) (*Result, *explainCollector) {
 	work := input
-	var suffixes []string
-	var rewriteHits []string
-	var suffixHits []string
-	var noiseHits []string
-	var candidates []Candidate
 	var collector *explainCollector
 	if withExplain {
 		collector = &explainCollector{}
@@ -340,80 +462,22 @@ func (c *cleaner) run(input string, withExplain bool) (*Result, *explainCollecto
 			collector.add("normalizers", item.name, before, work, before != work, "")
 		}
 	}
-	inputNoExt := work
-	work, rewriteHits = applyRewriteRulesWithExplain(work, c.rules.rewriteRules, collector)
-	suffixes, work, suffixHits = extractSuffixesWithExplain(work, c.rules.suffixRules, collector)
-	work, noiseHits = removeNoiseWithExplain(work, c.rules.noiseRules, collector)
-	candidates = collectCandidatesWithExplain(work, c.rules.matchers, collector)
+	state := &runState{raw: input, inputNoExt: work}
+	work, state.rewriteHits = applyRewriteRulesWithExplain(work, c.rules.rewriteRules, collector)
+	state.suffixes, work, state.suffixHits = extractSuffixesWithExplain(work, c.rules.suffixRules, collector)
+	work, state.noiseHits = removeNoiseWithExplain(work, c.rules.noiseRules, collector)
+	candidates := collectCandidatesWithExplain(work, c.rules.matchers, collector)
 	if len(candidates) == 0 {
-		result := &Result{
-			RawInput:        raw,
-			InputNoExt:      inputNoExt,
-			Status:          StatusNoMatch,
-			Confidence:      ConfidenceLow,
-			RuleHits:        append(append(rewriteHits, suffixHits...), noiseHits...),
-			Warnings:        []string{"no candidate matched"},
-			Candidates:      nil,
-			CategoryMatched: false,
-			UncensorMatched: false,
-		}
-		if collector != nil {
-			collector.add("result", "selected_candidate", work, "", false, "no candidate matched")
-		}
-		return result, collector, nil
+		return buildNoMatchResult(state, work, collector), collector
 	}
 	best := candidates[0]
-	confidence := confidenceByScore(best.Score)
 	if collector != nil {
-		collector.addCandidate("result", "selected_candidate", work, best.NumberID, true, "selected best candidate", best, true)
+		collector.addCandidate("result", "selected_candidate", work, best.NumberID, true,
+			"selected best candidate", best, true)
 	}
-	normalized := rebuildWithExplain(best.NumberID, suffixes, c.rules.postProcessors, collector)
-	parsed, err := number.Parse(normalized)
-	if err != nil {
-		result := &Result{
-			RawInput:        raw,
-			InputNoExt:      inputNoExt,
-			Status:          StatusLowQuality,
-			Confidence:      ConfidenceLow,
-			RuleHits:        append(append(append(rewriteHits, suffixHits...), noiseHits...), best.RuleHits...),
-			Warnings:        []string{"normalized output rejected by number.Parse"},
-			Candidates:      candidates,
-			Category:        best.Category,
-			CategoryMatched: best.CategoryMatched,
-			Uncensor:        best.Uncensor,
-			UncensorMatched: best.UncensorMatched,
-		}
-		if collector != nil {
-			collector.add("result", "number_parse", normalized, "", false, "normalized output rejected by number.Parse")
-		}
-		return result, collector, nil
-	}
-	status := StatusSuccess
-	warnings := []string{}
-	if confidence == ConfidenceLow {
-		status = StatusLowQuality
-		warnings = append(warnings, "low confidence candidate")
-	}
-	result := &Result{
-		RawInput:        raw,
-		InputNoExt:      inputNoExt,
-		Normalized:      normalized,
-		NumberID:        parsed.GetNumberID(),
-		Suffixes:        suffixes,
-		Category:        best.Category,
-		Uncensor:        best.Uncensor,
-		CategoryMatched: best.CategoryMatched,
-		UncensorMatched: best.UncensorMatched,
-		Confidence:      confidence,
-		Status:          status,
-		RuleHits:        append(append(append(rewriteHits, suffixHits...), noiseHits...), best.RuleHits...),
-		Warnings:        warnings,
-		Candidates:      candidates,
-	}
-	if collector != nil {
-		collector.add("result", "number_parse", normalized, parsed.GetNumberID(), true, "normalized output accepted by number.Parse")
-	}
-	return result, collector, nil
+	normalized := rebuildWithExplain(best.NumberID, state.suffixes, c.rules.postProcessors, collector)
+	result := buildMatchResult(state, best, candidates, normalized, collector)
+	return result, collector
 }
 
 func applyNormalizer(in string, rule compiledNormalizerRule, opts Options) string {
@@ -463,7 +527,11 @@ func applyNormalizer(in string, rule compiledNormalizerRule, opts Options) strin
 	}
 }
 
-func applyRewriteRulesWithExplain(in string, rules []compiledRewriteRule, collector *explainCollector) (string, []string) {
+func applyRewriteRulesWithExplain(
+	in string,
+	rules []compiledRewriteRule,
+	collector *explainCollector,
+) (string, []string) {
 	work := in
 	hits := make([]string, 0, len(rules))
 	for _, rule := range rules {
@@ -492,46 +560,58 @@ func applyRewriteRulesWithExplain(in string, rules []compiledRewriteRule, collec
 	return normalizeSpaces(work), hits
 }
 
+func removeNoiseRegex(work string, rule compiledNoiseRule, collector *explainCollector) (string, bool) {
+	before := work
+	if !rule.re.MatchString(work) {
+		if collector != nil {
+			collector.add("noise_rules", rule.name, before, before, false, "pattern not matched")
+		}
+		return work, false
+	}
+	work = rule.re.ReplaceAllString(work, " ")
+	if collector != nil {
+		collector.add("noise_rules", rule.name, before, normalizeSpaces(work), true, "noise removed")
+	}
+	return work, true
+}
+
+func removeNoiseToken(work string, rule compiledNoiseRule, collector *explainCollector) (string, bool) {
+	before := work
+	matched := false
+	for _, aliasRe := range rule.aliasRegex {
+		if aliasRe.MatchString(work) {
+			matched = true
+			work = aliasRe.ReplaceAllString(work, " ")
+		}
+	}
+	if collector != nil {
+		summary := "token not matched"
+		if matched {
+			summary = "noise removed"
+		}
+		collector.add("noise_rules", rule.name, before, normalizeSpaces(work), matched, summary)
+	}
+	return work, matched
+}
+
 func removeNoiseWithExplain(in string, rules []compiledNoiseRule, collector *explainCollector) (string, []string) {
 	work := in
 	hits := make([]string, 0, 8)
 	for _, rule := range rules {
-		before := work
+		var matched bool
 		switch rule.typ {
 		case "regex":
-			if !rule.re.MatchString(work) {
-				if collector != nil {
-					collector.add("noise_rules", rule.name, before, before, false, "pattern not matched")
-				}
-				continue
-			}
-			hits = append(hits, rule.name)
-			work = rule.re.ReplaceAllString(work, " ")
-			if collector != nil {
-				collector.add("noise_rules", rule.name, before, normalizeSpaces(work), true, "noise removed")
-			}
+			work, matched = removeNoiseRegex(work, rule, collector)
 		case "token":
-			matched := false
-			for _, aliasRe := range rule.aliasRegex {
-				if aliasRe.MatchString(work) {
-					matched = true
-					work = aliasRe.ReplaceAllString(work, " ")
-				}
-			}
-			if collector != nil {
-				summary := "token not matched"
-				if matched {
-					summary = "noise removed"
-				}
-				collector.add("noise_rules", rule.name, before, normalizeSpaces(work), matched, summary)
-			}
-			if matched {
-				hits = append(hits, rule.name)
-			}
+			work, matched = removeNoiseToken(work, rule, collector)
 		default:
 			if collector != nil {
-				collector.add("noise_rules", rule.name, before, before, false, "unsupported noise rule type")
+				collector.add("noise_rules", rule.name, work, work, false, "unsupported noise rule type")
 			}
+			continue
+		}
+		if matched {
+			hits = append(hits, rule.name)
 		}
 	}
 	return normalizeSpaces(work), hits
@@ -607,10 +687,23 @@ func dedupeCandidates(items []Candidate) []Candidate {
 	return out
 }
 
-func rebuildWithExplain(numberID string, suffixes []string, post []compiledPostProcessRule, collector *explainCollector) string {
+func rebuildWithExplain(
+	numberID string,
+	suffixes []string,
+	post []compiledPostProcessRule,
+	collector *explainCollector,
+) string {
 	normalized := numberID
 	if collector != nil {
-		collector.addWithValues("post_processors", "attach_suffixes", numberID, numberID, len(suffixes) != 0, "prepare normalized output", suffixes)
+		collector.addWithValues(
+			"post_processors",
+			"attach_suffixes",
+			numberID,
+			numberID,
+			len(suffixes) != 0,
+			"prepare normalized output",
+			suffixes,
+		)
 	}
 	for _, suffix := range suffixes {
 		if suffix == "" {
@@ -623,7 +716,15 @@ func rebuildWithExplain(numberID string, suffixes []string, post []compiledPostP
 			normalized = suffix
 		}
 		if collector != nil {
-			collector.addWithValues("post_processors", "attach_suffixes", before, normalized, true, "suffix appended", []string{suffix})
+			collector.addWithValues(
+				"post_processors",
+				"attach_suffixes",
+				before,
+				normalized,
+				true,
+				"suffix appended",
+				[]string{suffix},
+			)
 		}
 	}
 	for _, item := range post {
@@ -631,7 +732,7 @@ func rebuildWithExplain(numberID string, suffixes []string, post []compiledPostP
 		switch item.builtin {
 		case "normalize_hyphen":
 			normalized = strings.ReplaceAll(normalized, " ", "-")
-			normalized = strings.ReplaceAll(normalized, "_", "_")
+			normalized = strings.ReplaceAll(normalized, "_", "-")
 			normalized = regexp.MustCompile(`-+`).ReplaceAllString(normalized, "-")
 			normalized = strings.Trim(normalized, "- ")
 		case "reorder_suffix":
@@ -649,67 +750,59 @@ func rebuildWithExplain(numberID string, suffixes []string, post []compiledPostP
 	return normalized
 }
 
-func extractSuffixesWithExplain(in string, rules []compiledSuffixRule, collector *explainCollector) ([]string, string, []string) {
-	work := in
-	suffixSet := make(map[string]int)
-	hits := make([]string, 0, 8)
-	for _, rule := range rules {
-		before := work
-		collected := make([]string, 0, 2)
-		switch rule.typ {
-		case "regex":
-			matches := rule.re.FindAllStringSubmatchIndex(work, -1)
-			if len(matches) == 0 {
-				if collector != nil {
-					collector.add("suffix_rules", rule.name, before, before, false, "pattern not matched")
-				}
-				continue
-			}
-			for _, match := range matches {
-				val := resolveCanonical(work, rule.canonical, rule.canonicalTemplate, rule.re, match)
-				if val == "" {
-					continue
-				}
-				val = strings.ToUpper(strings.TrimSpace(val))
-				if val == "" {
-					continue
-				}
-				collected = append(collected, val)
-				if _, ok := suffixSet[val]; !ok {
-					suffixSet[val] = rule.priority
-				}
-				hits = append(hits, rule.name)
-			}
-			work = rule.re.ReplaceAllString(work, " ")
-		case "token":
-			matched := false
-			for _, aliasRe := range rule.aliasRegex {
-				if !aliasRe.MatchString(work) {
-					continue
-				}
-				matched = true
-				work = aliasRe.ReplaceAllString(work, " ")
-			}
-			if matched {
-				val := strings.ToUpper(strings.TrimSpace(rule.canonical))
-				if val != "" {
-					collected = append(collected, val)
-					if _, ok := suffixSet[val]; !ok {
-						suffixSet[val] = rule.priority
-					}
-				}
-				hits = append(hits, rule.name)
-			}
+func extractSuffixRegex(
+	work string,
+	rule compiledSuffixRule,
+	suffixSet map[string]int,
+) (string, []string, []string) {
+	collected := make([]string, 0, 2)
+	var hits []string
+	matches := rule.re.FindAllStringSubmatchIndex(work, -1)
+	if len(matches) == 0 {
+		return work, collected, nil
+	}
+	for _, match := range matches {
+		val := resolveCanonical(work, rule.canonical, rule.canonicalTemplate, rule.re, match)
+		val = strings.ToUpper(strings.TrimSpace(val))
+		if val == "" {
+			continue
 		}
-		if collector != nil {
-			matched := len(collected) != 0
-			summary := "suffix not matched"
-			if matched {
-				summary = "suffix extracted"
-			}
-			collector.addWithValues("suffix_rules", rule.name, before, normalizeSpaces(work), matched, summary, collected)
+		collected = append(collected, val)
+		if _, ok := suffixSet[val]; !ok {
+			suffixSet[val] = rule.priority
+		}
+		hits = append(hits, rule.name)
+	}
+	return rule.re.ReplaceAllString(work, " "), collected, hits
+}
+
+func extractSuffixToken(
+	work string,
+	rule compiledSuffixRule,
+	suffixSet map[string]int,
+) (string, []string, []string) {
+	collected := make([]string, 0, 2)
+	matched := false
+	for _, aliasRe := range rule.aliasRegex {
+		if aliasRe.MatchString(work) {
+			matched = true
+			work = aliasRe.ReplaceAllString(work, " ")
 		}
 	}
+	if !matched {
+		return work, collected, nil
+	}
+	val := strings.ToUpper(strings.TrimSpace(rule.canonical))
+	if val != "" {
+		collected = append(collected, val)
+		if _, ok := suffixSet[val]; !ok {
+			suffixSet[val] = rule.priority
+		}
+	}
+	return work, collected, []string{rule.name}
+}
+
+func sortSuffixSet(suffixSet map[string]int) []string {
 	type item struct {
 		val      string
 		priority int
@@ -725,13 +818,47 @@ func extractSuffixesWithExplain(in string, rules []compiledSuffixRule, collector
 		return items[i].priority > items[j].priority
 	})
 	out := make([]string, 0, len(items))
-	for _, item := range items {
-		out = append(out, item.val)
+	for _, it := range items {
+		out = append(out, it.val)
 	}
-	return out, normalizeSpaces(work), hits
+	return out
 }
 
-func resolveCanonical(src string, canonical string, tmpl string, re *regexp.Regexp, match []int) string {
+func extractSuffixesWithExplain(
+	in string, rules []compiledSuffixRule, collector *explainCollector,
+) ([]string, string, []string) {
+	work := in
+	suffixSet := make(map[string]int)
+	hits := make([]string, 0, 8)
+	for _, rule := range rules {
+		before := work
+		var collected []string
+		var ruleHits []string
+		switch rule.typ {
+		case "regex":
+			work, collected, ruleHits = extractSuffixRegex(work, rule, suffixSet)
+		case "token":
+			work, collected, ruleHits = extractSuffixToken(work, rule, suffixSet)
+		default:
+			if collector != nil {
+				collector.add("suffix_rules", rule.name, before, before, false, "suffix not matched")
+			}
+			continue
+		}
+		hits = append(hits, ruleHits...)
+		if collector != nil {
+			matched := len(collected) != 0
+			summary := "suffix not matched"
+			if matched {
+				summary = "suffix extracted"
+			}
+			collector.addWithValues("suffix_rules", rule.name, before, normalizeSpaces(work), matched, summary, collected)
+		}
+	}
+	return sortSuffixSet(suffixSet), normalizeSpaces(work), hits
+}
+
+func resolveCanonical(src, canonical, tmpl string, re *regexp.Regexp, match []int) string {
 	if tmpl != "" {
 		return string(re.ExpandString(nil, tmpl, src, match))
 	}

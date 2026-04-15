@@ -35,7 +35,11 @@ func NewFFProbe() (*FFProbe, error) {
 }
 
 func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error) {
-	cmd := exec.CommandContext(ctx, p.cmd, []string{"-i", file, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"}...)
+	cmd := exec.CommandContext( //nolint:gosec // ffprobe path is from exec.LookPath, args are controlled
+		ctx,
+		p.cmd,
+		[]string{"-i", file, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"}...,
+	)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("call ffprobe to detect video duration failed, err:%w", err)

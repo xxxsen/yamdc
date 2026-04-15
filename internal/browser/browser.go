@@ -43,7 +43,11 @@ func (c *httpClientWrap) Do(req *http.Request) (*http.Response, error) {
 	params := GetParams(req.Context())
 	if params == nil {
 		c.injectCookies(req)
-		return c.impl.Do(req)
+		resp, err := c.impl.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("http request failed: %w", err)
+		}
+		return resp, nil
 	}
 	localParams := *params
 	localParams.Cookies = append(req.Cookies(), c.jar.Cookies(req.URL)...)

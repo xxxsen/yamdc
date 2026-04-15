@@ -56,7 +56,15 @@ func (r *LogRepository) ListByJobID(ctx context.Context, jobID int64, limit int)
 	items := make([]LogItem, 0, limit)
 	for rows.Next() {
 		var item LogItem
-		if err := rows.Scan(&item.ID, &item.JobID, &item.Level, &item.Stage, &item.Message, &item.Detail, &item.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&item.ID,
+			&item.JobID,
+			&item.Level,
+			&item.Stage,
+			&item.Message,
+			&item.Detail,
+			&item.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan log failed: %w", err)
 		}
 		items = append(items, item)

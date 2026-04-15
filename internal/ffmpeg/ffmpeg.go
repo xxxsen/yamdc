@@ -32,7 +32,7 @@ type FFMpeg struct {
 func NewFFMpeg() (*FFMpeg, error) {
 	location, err := exec.LookPath("ffmpeg")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ffmpeg not found in PATH: %w", err)
 	}
 	return &FFMpeg{cmd: location}, nil
 }
@@ -42,7 +42,17 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 	defer func() {
 		_ = os.Remove(dstFile)
 	}()
-	cmd := exec.Command(p.cmd, "-i", "pipe:0", "-vf", "format=yuv420p", "-f", "image2", dstFile)
+	//nolint:gosec // ffmpeg path is from exec.LookPath, args are controlled
+	cmd := exec.CommandContext(ctx,
+		p.cmd,
+		"-i",
+		"pipe:0",
+		"-vf",
+		"format=yuv420p",
+		"-f",
+		"image2",
+		dstFile,
+	)
 	cmd.Stdin = bytes.NewReader(data)
 	err := cmd.Run()
 	if err != nil {

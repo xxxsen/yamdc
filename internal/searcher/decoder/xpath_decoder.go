@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 
 	"github.com/antchfx/htmlquery"
@@ -9,7 +10,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-type XPathHtmlDecoder struct {
+type XPathHTMLDecoder struct {
 	NumberExpr          string
 	TitleExpr           string
 	PlotExpr            string
@@ -26,7 +27,7 @@ type XPathHtmlDecoder struct {
 	SampleImageListExpr string
 }
 
-func (d *XPathHtmlDecoder) decodeSingle(c *config, node *html.Node, expr string) string {
+func (d *XPathHTMLDecoder) decodeSingle(c *config, node *html.Node, expr string) string {
 	if len(expr) == 0 {
 		return ""
 	}
@@ -37,7 +38,7 @@ func (d *XPathHtmlDecoder) decodeSingle(c *config, node *html.Node, expr string)
 	return c.DefaultStringProcessor(DecodeSingle(node, expr))
 }
 
-func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) []string {
+func (d *XPathHTMLDecoder) decodeMulti(c *config, node *html.Node, expr string) []string {
 	rs := make([]string, 0, 5)
 	if len(expr) == 0 {
 		return rs
@@ -45,15 +46,15 @@ func (d *XPathHtmlDecoder) decodeMulti(c *config, node *html.Node, expr string) 
 	return c.DefaultStringListProcessor(DecodeList(node, expr))
 }
 
-func (d *XPathHtmlDecoder) DecodeHTML(data []byte, opts ...Option) (*model.MovieMeta, error) {
+func (d *XPathHTMLDecoder) DecodeHTML(data []byte, opts ...Option) (*model.MovieMeta, error) {
 	node, err := htmlquery.Parse(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse html: %w", err)
 	}
 	return d.Decode(node, opts...)
 }
 
-func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
+func (d *XPathHTMLDecoder) applyOpts(opts ...Option) *config {
 	c := &config{
 		OnNumberParse:              defaultStringParser,
 		OnTitleParse:               defaultStringParser,
@@ -79,7 +80,7 @@ func (d *XPathHtmlDecoder) applyOpts(opts ...Option) *config {
 	return c
 }
 
-func (d *XPathHtmlDecoder) Decode(node *html.Node, opts ...Option) (*model.MovieMeta, error) {
+func (d *XPathHTMLDecoder) Decode(node *html.Node, opts ...Option) (*model.MovieMeta, error) {
 	c := d.applyOpts(opts...)
 	meta := &model.MovieMeta{
 		Number:       c.OnNumberParse(d.decodeSingle(c, node, d.NumberExpr)),

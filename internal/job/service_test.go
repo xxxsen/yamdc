@@ -20,9 +20,9 @@ import (
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
-func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository, *repository.SQLite) {
+func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository) {
 	t.Helper()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, sqlite.Close())
@@ -31,13 +31,12 @@ func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository
 	jobRepo := repository.NewJobRepository(sqlite.DB())
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
-	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo, sqlite
+	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo
 }
 
 func newTestService(t *testing.T) (*Service, *repository.JobRepository) {
 	t.Helper()
-	svc, repo, _ := newTestServiceWithSQLite(t)
-	return svc, repo
+	return newTestServiceWithSQLite(t)
 }
 
 func insertJob(t *testing.T, repo *repository.JobRepository, absPath string, status jobdef.Status) int64 {
@@ -87,7 +86,7 @@ func TestServiceDeleteRejectsProcessing(t *testing.T) {
 func TestServiceDeleteRemovesFileAndSoftDeletesJob(t *testing.T) {
 	svc, repo := newTestService(t)
 	file := filepath.Join(t.TempDir(), "B.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0644))
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 	jobID := insertJob(t, repo, file, jobdef.StatusFailed)
 
 	err := svc.Delete(context.Background(), jobID)
@@ -97,7 +96,7 @@ func TestServiceDeleteRemovesFileAndSoftDeletesJob(t *testing.T) {
 	require.True(t, os.IsNotExist(statErr))
 
 	got, err := repo.GetByID(context.Background(), jobID)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, repository.ErrJobNotFound)
 	require.Nil(t, got)
 }
 
@@ -169,15 +168,15 @@ func TestServiceRunRequiresManualEditForLowConfidenceNumber(t *testing.T) {
 }
 
 func TestServiceRunProcessesJobsSequentially(t *testing.T) {
-	svc, repo, _ := newTestServiceWithSQLite(t)
-	cap, maxConcurrent := newSequentialTestCapture(t)
-	svc.capture = cap
+	svc, repo := newTestServiceWithSQLite(t)
+	capt, maxConcurrent := newSequentialTestCapture(t)
+	svc.capture = capt
 
 	dir := t.TempDir()
 	file1 := filepath.Join(dir, "SEQ-001.mp4")
 	file2 := filepath.Join(dir, "SEQ-002.mp4")
-	require.NoError(t, os.WriteFile(file1, []byte("x"), 0644))
-	require.NoError(t, os.WriteFile(file2, []byte("x"), 0644))
+	require.NoError(t, os.WriteFile(file1, []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(file2, []byte("x"), 0o600))
 
 	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName:              filepath.Base(file1),
@@ -226,7 +225,7 @@ func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
 	newFile := filepath.Join(dir, "HEYZO-0040.mp4")
-	require.NoError(t, os.WriteFile(newFile, []byte("x"), 0644))
+	require.NoError(t, os.WriteFile(newFile, []byte("x"), 0o600))
 
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName:              "HEYZO-040.mp4",
@@ -269,9 +268,9 @@ type loggingTestSearcher struct {
 	err  error
 }
 
-func (s *loggingTestSearcher) Name() string                    { return "logging-test" }
-func (s *loggingTestSearcher) Check(ctx context.Context) error { return nil }
-func (s *loggingTestSearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
+func (s *loggingTestSearcher) Name() string                  { return "logging-test" }
+func (s *loggingTestSearcher) Check(_ context.Context) error { return nil }
+func (s *loggingTestSearcher) Search(_ context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
 	if s.err != nil {
 		return nil, false, s.err
 	}
@@ -280,15 +279,15 @@ func (s *loggingTestSearcher) Search(ctx context.Context, n *number.Number) (*mo
 	return &meta, true, nil
 }
 
-func (s *sequentialTestSearcher) Name() string                    { return "sequential-test" }
-func (s *sequentialTestSearcher) Check(ctx context.Context) error { return nil }
+func (s *sequentialTestSearcher) Name() string                  { return "sequential-test" }
+func (s *sequentialTestSearcher) Check(_ context.Context) error { return nil }
 
-func (s *sequentialTestSearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
+func (s *sequentialTestSearcher) Search(_ context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
 	current := atomic.AddInt32(&s.current, 1)
 	defer atomic.AddInt32(&s.current, -1)
 	for {
-		max := s.max.Load()
-		if current <= max || s.max.CompareAndSwap(max, current) {
+		maxVal := s.max.Load()
+		if current <= maxVal || s.max.CompareAndSwap(maxVal, current) {
 			break
 		}
 	}
@@ -303,13 +302,13 @@ func (s *sequentialTestSearcher) Search(ctx context.Context, n *number.Number) (
 
 type noopProcessor struct{}
 
-func (p *noopProcessor) Name() string                                             { return "noop" }
-func (p *noopProcessor) Process(ctx context.Context, fc *model.FileContext) error { return nil }
+func (p *noopProcessor) Name() string                                          { return "noop" }
+func (p *noopProcessor) Process(_ context.Context, _ *model.FileContext) error { return nil }
 
 func newSequentialTestCapture(t *testing.T) (*capture.Capture, *atomic.Int32) {
 	t.Helper()
 	searcher := &sequentialTestSearcher{}
-	cap, err := capture.New(
+	capt, err := capture.New(
 		capture.WithScanDir(t.TempDir()),
 		capture.WithSaveDir(t.TempDir()),
 		capture.WithSeacher(searcher),
@@ -317,12 +316,12 @@ func newSequentialTestCapture(t *testing.T) (*capture.Capture, *atomic.Int32) {
 		capture.WithStorage(store.NewMemStorage()),
 	)
 	require.NoError(t, err)
-	return cap, &searcher.max
+	return capt, &searcher.max
 }
 
 func newLoggingTestCapture(t *testing.T, searcher *loggingTestSearcher) *capture.Capture {
 	t.Helper()
-	cap, err := capture.New(
+	capt, err := capture.New(
 		capture.WithScanDir(t.TempDir()),
 		capture.WithSaveDir(t.TempDir()),
 		capture.WithSeacher(searcher),
@@ -330,7 +329,7 @@ func newLoggingTestCapture(t *testing.T, searcher *loggingTestSearcher) *capture
 		capture.WithStorage(store.NewMemStorage()),
 	)
 	require.NoError(t, err)
-	return cap
+	return capt
 }
 
 func findLogByMessage(logs []repository.LogItem, message string) *repository.LogItem {
@@ -343,9 +342,9 @@ func findLogByMessage(logs []repository.LogItem, message string) *repository.Log
 }
 
 func TestServiceRunOneWritesDetailedScrapeLogs(t *testing.T) {
-	svc, repo, _ := newTestServiceWithSQLite(t)
+	svc, repo := newTestServiceWithSQLite(t)
 	file := filepath.Join(t.TempDir(), "LOG-001.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName:              filepath.Base(file),
 		FileExt:               filepath.Ext(file),
@@ -397,9 +396,9 @@ func TestServiceRunOneWritesDetailedScrapeLogs(t *testing.T) {
 }
 
 func TestServiceRunOneWritesDetailedFailureLogs(t *testing.T) {
-	svc, repo, _ := newTestServiceWithSQLite(t)
+	svc, repo := newTestServiceWithSQLite(t)
 	file := filepath.Join(t.TempDir(), "LOG-ERR-001.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName:              filepath.Base(file),
 		FileExt:               filepath.Ext(file),
@@ -435,7 +434,7 @@ func TestServiceRunOneWritesDetailedFailureLogs(t *testing.T) {
 	require.Equal(t, jobdef.StatusFailed, got.Status)
 }
 
-func TestServiceGetJobConflictDetectsDuplicateTargetFileName(t *testing.T) {
+func TestServiceGetConflictDetectsDuplicateTargetFileName(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
 	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
@@ -472,18 +471,18 @@ func TestServiceGetJobConflictDetectsDuplicateTargetFileName(t *testing.T) {
 	job2, err := repo.GetByID(context.Background(), jobID2)
 	require.NoError(t, err)
 
-	conflict1, err := svc.GetJobConflict(context.Background(), job1)
+	conflict1, err := svc.GetConflict(context.Background(), job1)
 	require.NoError(t, err)
 	require.NotNil(t, conflict1)
 	require.Contains(t, conflict1.Reason, "冲突")
 
-	conflict2, err := svc.GetJobConflict(context.Background(), job2)
+	conflict2, err := svc.GetConflict(context.Background(), job2)
 	require.NoError(t, err)
 	require.NotNil(t, conflict2)
 	require.Contains(t, conflict2.Reason, "冲突")
 }
 
-func TestServiceGetJobConflictAllowsMultiCDTargets(t *testing.T) {
+func TestServiceGetConflictAllowsMultiCDTargets(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
 	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
@@ -520,16 +519,16 @@ func TestServiceGetJobConflictAllowsMultiCDTargets(t *testing.T) {
 	job2, err := repo.GetByID(context.Background(), jobID2)
 	require.NoError(t, err)
 
-	conflict1, err := svc.GetJobConflict(context.Background(), job1)
-	require.NoError(t, err)
+	conflict1, err := svc.GetConflict(context.Background(), job1)
+	require.ErrorIs(t, err, errNoConflict)
 	require.Nil(t, conflict1)
 
-	conflict2, err := svc.GetJobConflict(context.Background(), job2)
-	require.NoError(t, err)
+	conflict2, err := svc.GetConflict(context.Background(), job2)
+	require.ErrorIs(t, err, errNoConflict)
 	require.Nil(t, conflict2)
 }
 
-func TestServiceGetJobConflictAllowsSpecialSuffixTargets(t *testing.T) {
+func TestServiceGetConflictAllowsSpecialSuffixTargets(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
 	jobID1 := insertJobWithInput(t, repo, repository.UpsertJobInput{
@@ -566,16 +565,16 @@ func TestServiceGetJobConflictAllowsSpecialSuffixTargets(t *testing.T) {
 	job2, err := repo.GetByID(context.Background(), jobID2)
 	require.NoError(t, err)
 
-	conflict1, err := svc.GetJobConflict(context.Background(), job1)
-	require.NoError(t, err)
+	conflict1, err := svc.GetConflict(context.Background(), job1)
+	require.ErrorIs(t, err, errNoConflict)
 	require.Nil(t, conflict1)
 
-	conflict2, err := svc.GetJobConflict(context.Background(), job2)
-	require.NoError(t, err)
+	conflict2, err := svc.GetConflict(context.Background(), job2)
+	require.ErrorIs(t, err, errNoConflict)
 	require.Nil(t, conflict2)
 }
 
-func TestServiceGetJobConflictIgnoresExistingSavedirTarget(t *testing.T) {
+func TestServiceGetConflictIgnoresExistingSavedirTarget(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
@@ -597,12 +596,12 @@ func TestServiceGetJobConflictIgnoresExistingSavedirTarget(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, jobItem)
 
-	conflict, err := svc.GetJobConflict(context.Background(), jobItem)
-	require.NoError(t, err)
+	conflict, err := svc.GetConflict(context.Background(), jobItem)
+	require.ErrorIs(t, err, errNoConflict)
 	require.Nil(t, conflict)
 }
 
-func TestServiceApplyJobConflictsBatchesCurrentPageKeys(t *testing.T) {
+func TestServiceApplyConflictsBatchesCurrentPageKeys(t *testing.T) {
 	svc, repo := newTestService(t)
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -671,7 +670,7 @@ func TestServiceApplyJobConflictsBatchesCurrentPageKeys(t *testing.T) {
 	require.NotNil(t, job3)
 
 	page := []jobdef.Job{*job1, *job3}
-	require.NoError(t, svc.ApplyJobConflicts(ctx, page))
+	require.NoError(t, svc.ApplyConflicts(ctx, page))
 	require.Contains(t, page[0].ConflictTarget, "page-a-1@ABC-123.mp4")
 	require.Contains(t, page[0].ConflictTarget, "page-a-2@ABC-123.mp4")
 	require.NotContains(t, page[0].ConflictTarget, "page-b-1@XYZ-999.mp4")
@@ -680,7 +679,7 @@ func TestServiceApplyJobConflictsBatchesCurrentPageKeys(t *testing.T) {
 	require.NotContains(t, page[1].ConflictTarget, "page-a-1@ABC-123.mp4")
 }
 
-func TestServiceApplyJobConflictsIgnoresDoneAndDeletedJobs(t *testing.T) {
+func TestServiceApplyConflictsIgnoresDoneAndDeletedJobs(t *testing.T) {
 	svc, repo := newTestService(t)
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -743,7 +742,7 @@ func TestServiceApplyJobConflictsIgnoresDoneAndDeletedJobs(t *testing.T) {
 	}
 
 	page := []jobdef.Job{*job1, doneJob}
-	require.NoError(t, svc.ApplyJobConflicts(ctx, page))
+	require.NoError(t, svc.ApplyConflicts(ctx, page))
 	require.Equal(t, "", page[0].ConflictReason)
 	require.Equal(t, "", page[0].ConflictTarget)
 	require.Equal(t, "", page[1].ConflictReason)

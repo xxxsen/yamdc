@@ -2,9 +2,12 @@ package translator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
+
+var errTranslatorNoData = errors.New("translator return no data")
 
 type group struct {
 	ts []ITranslator
@@ -18,7 +21,7 @@ func (g *group) Name() string {
 	return fmt.Sprintf("G:[%s]", strings.Join(names, ","))
 }
 
-func (g *group) Translate(ctx context.Context, wording string, srclang string, dstlang string) (string, error) {
+func (g *group) Translate(ctx context.Context, wording, srclang, dstlang string) (string, error) {
 	var retErr error
 	for _, t := range g.ts {
 		rs, err := t.Translate(ctx, wording, srclang, dstlang)
@@ -27,7 +30,7 @@ func (g *group) Translate(ctx context.Context, wording string, srclang string, d
 			continue
 		}
 		if len(rs) == 0 {
-			retErr = fmt.Errorf("translator:%s return no data", t.Name())
+			retErr = fmt.Errorf("translator:%s: %w", t.Name(), errTranslatorNoData)
 			continue
 		}
 		return rs, nil

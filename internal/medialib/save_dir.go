@@ -18,13 +18,13 @@ func (s *Service) ResolveSavePath(raw string) (string, string, error) {
 
 func (s *Service) ListSaveItems() ([]Item, error) {
 	if !s.IsSaveConfigured() {
-		return nil, fmt.Errorf("save dir is not configured")
+		return nil, errSaveDirNotConfigured
 	}
 	if _, err := os.Stat(s.saveDir); err != nil {
 		if os.IsNotExist(err) {
 			return []Item{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("stat save dir: %w", err)
 	}
 	itemDirs, err := s.listRootItemDirs(s.saveDir)
 	if err != nil {
@@ -69,7 +69,7 @@ func (s *Service) UpdateSaveItem(raw string, meta Meta) (*Detail, error) {
 	return s.updateRootItem(s.saveDir, detail, absPath, meta)
 }
 
-func (s *Service) ReplaceSaveAsset(raw string, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
+func (s *Service) ReplaceSaveAsset(raw, variantKey, kind, originalName string, data []byte) (*Detail, error) {
 	relPath, absPath, err := s.ResolveSavePath(raw)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (s *Service) ReplaceSaveAsset(raw string, variantKey string, kind string, o
 	return s.replaceRootArtwork(s.saveDir, detail, absPath, variantKey, kind, originalName, data)
 }
 
-func (s *Service) CropSavePoster(raw string, variantKey string, x int, y int, width int, height int) (*Detail, error) {
+func (s *Service) CropSavePoster(raw, variantKey string, x, y, width, height int) (*Detail, error) {
 	relPath, absPath, err := s.ResolveSavePath(raw)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *Service) DeleteSaveFile(raw string) (*Detail, error) {
 	itemAbsPath := filepath.Dir(filepath.Dir(absPath))
 	itemRelPath, err := filepath.Rel(s.saveDir, itemAbsPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("compute save item relative path: %w", err)
 	}
 	return s.deleteRootFile(s.saveDir, filepath.ToSlash(itemRelPath), relPath)
 }
@@ -113,10 +113,13 @@ func (s *Service) DeleteSaveItem(raw string) error {
 	}
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat save item: %w", err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("library item is not a directory")
+		return errLibraryItemNotDir
 	}
-	return os.RemoveAll(absPath)
+	if err := os.RemoveAll(absPath); err != nil {
+		return fmt.Errorf("remove save item: %w", err)
+	}
+	return nil
 }

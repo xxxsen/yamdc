@@ -30,8 +30,12 @@ func Resolve(ctx context.Context, cli client.IHTTPClient, deps []*Dependency) er
 func handleFileDownload(ctx context.Context, m *downloadmgr.DownloadManager, dep *Dependency) error {
 	updated, err := m.Download(ctx, dep.URL, dep.Target, dep.Refresh)
 	if err != nil {
-		return err
+		return fmt.Errorf("download dependency failed: %w", err)
 	}
-	logutil.GetLogger(ctx).Debug("dependency sync succ", zap.String("link", dep.URL), zap.String("target", dep.Target), zap.Bool("updated", updated))
+	logutil.GetLogger(ctx).Debug("dependency sync succ",
+		zap.String("link", dep.URL),
+		zap.String("target", dep.Target),
+		zap.Bool("updated", updated),
+	)
 	return nil
 }

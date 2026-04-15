@@ -1,6 +1,7 @@
 package medialib
 
 import (
+	"errors"
 	"fmt"
 	stdimage "image"
 	"io/fs"
@@ -13,6 +14,17 @@ import (
 
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/nfo"
+)
+
+var (
+	errLibraryItemNotDir            = errors.New("library item is not a directory")
+	errLibraryDetailRequired        = errors.New("library detail is required")
+	errLibraryVariantNotFound       = errors.New("library variant not found")
+	errCoverNotFound                = errors.New("cover not found")
+	errCropRectOutOfBounds          = errors.New("crop rectangle out of bounds")
+	errOnlyExtrafanartDeletable     = errors.New("only extrafanart files can be deleted")
+	errInvalidLibraryPath           = errors.New("invalid library path")
+	errExtrafanartFilenameExhausted = errors.New("unable to allocate extrafanart filename")
 )
 
 var videoExts = map[string]struct{}{
@@ -32,7 +44,7 @@ func (s *Service) listRootItemDirs(root string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return []string{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("stat library root: %w", err)
 	}
 	dirs := make([]string, 0, 32)
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -58,77 +70,56 @@ func (s *Service) listRootItemDirs(root string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk library root: %w", err)
 	}
 	sort.Strings(dirs)
 	return dirs, nil
 }
 
-func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error) {
-	entries, err := os.ReadDir(absPath)
-	if err != nil {
-		return Item{}, false, err
+type dirScanResult struct {
+	updatedAt  int64
+	hasNFO     bool
+	nfoPath    string
+	videoCount int
+	fileCount  int
+	totalSize  int64
+	imageNames []string
+}
+
+func scanDirEntries(absPath string, entries []os.DirEntry, baseUpdatedAt int64) dirScanResult {
+	r := dirScanResult{
+		updatedAt:  baseUpdatedAt,
+		imageNames: make([]string, 0, 6),
 	}
-	relPath, err := filepath.Rel(root, absPath)
-	if err != nil {
-		return Item{}, false, err
-	}
-	relPath = filepath.ToSlash(relPath)
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return Item{}, false, err
-	}
-	updatedAt := info.ModTime().UnixMilli()
-	hasNFO := false
-	nfoPath := ""
-	videoCount := 0
-	fileCount := 0
-	totalSize := int64(0)
-	imageNames := make([]string, 0, 6)
 	for _, entry := range entries {
 		entryInfo, err := entry.Info()
-		if err == nil && entryInfo.ModTime().UnixMilli() > updatedAt {
-			updatedAt = entryInfo.ModTime().UnixMilli()
+		if err == nil && entryInfo.ModTime().UnixMilli() > r.updatedAt {
+			r.updatedAt = entryInfo.ModTime().UnixMilli()
 		}
 		if entry.IsDir() {
 			continue
 		}
-		fileCount++
+		r.fileCount++
 		if entryInfo != nil {
-			totalSize += entryInfo.Size()
+			r.totalSize += entryInfo.Size()
 		}
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
-		if ext == ".nfo" && !hasNFO {
-			hasNFO = true
-			nfoPath = filepath.Join(absPath, name)
+		if ext == ".nfo" && !r.hasNFO {
+			r.hasNFO = true
+			r.nfoPath = filepath.Join(absPath, name)
 		}
 		if _, ok := videoExts[ext]; ok {
-			videoCount++
+			r.videoCount++
 		}
 		if _, ok := imageExts[ext]; ok {
-			imageNames = append(imageNames, name)
+			r.imageNames = append(r.imageNames, name)
 		}
 	}
-	if !hasNFO && videoCount == 0 {
-		return Item{}, false, nil
-	}
-	item := Item{
-		RelPath:      relPath,
-		Name:         filepath.Base(absPath),
-		Title:        filepath.Base(absPath),
-		UpdatedAt:    updatedAt,
-		HasNFO:       hasNFO,
-		TotalSize:    totalSize,
-		FileCount:    fileCount,
-		VideoCount:   videoCount,
-		VariantCount: 0,
-	}
-	variants, primaryKey, err := s.scanRootVariants(root, relPath, absPath)
-	if err != nil {
-		return Item{}, false, err
-	}
-	item.VariantCount = len(variants)
+	return r
+}
+
+func applyVariantMetaToItem(item *Item, variants []Variant, primaryKey, root, relPath string, scan dirScanResult) {
 	if primary, ok := findVariant(variants, primaryKey); ok {
 		item.Title = firstNonEmpty(primary.Meta.TitleTranslated, primary.Meta.Title, primary.Meta.OriginalTitle, item.Title)
 		item.Number = firstNonEmpty(primary.Meta.Number, item.Number)
@@ -137,10 +128,11 @@ func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error
 			item.Actors = append([]string(nil), primary.Meta.Actors...)
 		}
 		item.PosterPath = firstNonEmpty(primary.PosterPath, primary.Meta.PosterPath, item.PosterPath)
-		item.CoverPath = firstNonEmpty(primary.CoverPath, primary.Meta.CoverPath, primary.Meta.FanartPath, primary.Meta.ThumbPath, item.CoverPath)
+		item.CoverPath = firstNonEmpty(
+			primary.CoverPath, primary.Meta.CoverPath, primary.Meta.FanartPath, primary.Meta.ThumbPath, item.CoverPath)
 		item.HasNFO = item.HasNFO || primary.NFOPath != ""
-	} else if hasNFO {
-		mov, err := nfo.ParseMovie(nfoPath)
+	} else if scan.hasNFO {
+		mov, err := nfo.ParseMovie(scan.nfoPath)
 		if err == nil {
 			meta := libraryMetaFromMovie(root, relPath, mov)
 			item.Title = firstNonEmpty(meta.TitleTranslated, meta.Title, meta.OriginalTitle, item.Title)
@@ -152,15 +144,51 @@ func (s *Service) inspectRootDir(root string, absPath string) (Item, bool, error
 		}
 	}
 	if item.PosterPath == "" {
-		item.PosterPath = detectArtworkPath(relPath, imageNames, "poster")
+		item.PosterPath = detectArtworkPath(relPath, scan.imageNames, "poster")
 	}
 	if item.CoverPath == "" {
-		item.CoverPath = detectArtworkPath(relPath, imageNames, "fanart")
+		item.CoverPath = detectArtworkPath(relPath, scan.imageNames, "fanart")
 	}
+}
+
+func (s *Service) inspectRootDir(root, absPath string) (Item, bool, error) {
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		return Item{}, false, fmt.Errorf("read dir %s: %w", absPath, err)
+	}
+	relPath, err := filepath.Rel(root, absPath)
+	if err != nil {
+		return Item{}, false, fmt.Errorf("compute relative path: %w", err)
+	}
+	relPath = filepath.ToSlash(relPath)
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return Item{}, false, fmt.Errorf("stat dir %s: %w", absPath, err)
+	}
+	scan := scanDirEntries(absPath, entries, info.ModTime().UnixMilli())
+	if !scan.hasNFO && scan.videoCount == 0 {
+		return Item{}, false, nil
+	}
+	item := Item{
+		RelPath:    relPath,
+		Name:       filepath.Base(absPath),
+		Title:      filepath.Base(absPath),
+		UpdatedAt:  scan.updatedAt,
+		HasNFO:     scan.hasNFO,
+		TotalSize:  scan.totalSize,
+		FileCount:  scan.fileCount,
+		VideoCount: scan.videoCount,
+	}
+	variants, primaryKey, err := s.scanRootVariants(root, relPath, absPath)
+	if err != nil {
+		return Item{}, false, err
+	}
+	item.VariantCount = len(variants)
+	applyVariantMetaToItem(&item, variants, primaryKey, root, relPath, scan)
 	return item, true, nil
 }
 
-func (s *Service) readRootDetail(root string, relPath string, absPath string) (*Detail, error) {
+func (s *Service) readRootDetail(root, relPath, absPath string) (*Detail, error) {
 	item, ok, err := s.inspectRootDir(root, absPath)
 	if err != nil {
 		return nil, err
@@ -201,7 +229,7 @@ func (s *Service) readRootDetail(root string, relPath string, absPath string) (*
 	}, nil
 }
 
-func (s *Service) listRootFiles(root string, absPath string) ([]FileItem, error) {
+func (s *Service) listRootFiles(root, absPath string) ([]FileItem, error) {
 	files := make([]FileItem, 0, 16)
 	err := filepath.WalkDir(absPath, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -212,11 +240,11 @@ func (s *Service) listRootFiles(root string, absPath string) ([]FileItem, error)
 		}
 		info, err := entry.Info()
 		if err != nil {
-			return err
+			return fmt.Errorf("get file info: %w", err)
 		}
 		fileRelPath, err := filepath.Rel(root, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("compute file relative path: %w", err)
 		}
 		files = append(files, FileItem{
 			Name:      filepath.ToSlash(strings.TrimPrefix(path, absPath+string(filepath.Separator))),
@@ -228,7 +256,7 @@ func (s *Service) listRootFiles(root string, absPath string) ([]FileItem, error)
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk root files: %w", err)
 	}
 	sort.Slice(files, func(i, j int) bool {
 		if files[i].Kind == files[j].Kind {
@@ -239,14 +267,7 @@ func (s *Service) listRootFiles(root string, absPath string) ([]FileItem, error)
 	return files, nil
 }
 
-func (s *Service) updateRootItem(root string, detail *Detail, absPath string, meta Meta) (*Detail, error) {
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("library item is not a directory")
-	}
+func trimMetaFields(meta *Meta) {
 	meta.Title = strings.TrimSpace(meta.Title)
 	meta.TitleTranslated = strings.TrimSpace(meta.TitleTranslated)
 	meta.OriginalTitle = strings.TrimSpace(meta.OriginalTitle)
@@ -260,8 +281,58 @@ func (s *Service) updateRootItem(root string, detail *Detail, absPath string, me
 	meta.Director = strings.TrimSpace(meta.Director)
 	meta.Source = strings.TrimSpace(meta.Source)
 	meta.ScrapedAt = strings.TrimSpace(meta.ScrapedAt)
+}
+
+func writeVariantNFO(absPath, relPath string, variant Variant, primaryKey string, meta Meta) error {
+	mov := &nfo.Movie{}
+	nfoPath := selectVariantNFOPath(absPath, variant, primaryKey)
+	if variant.NFOAbsPath != "" {
+		nfoPath = variant.NFOAbsPath
+	}
+	if existing, parseErr := nfo.ParseMovie(nfoPath); parseErr == nil {
+		mov = existing
+	}
+	applyMetaToMovie(meta, mov)
+	posterValue := firstNonEmpty(
+		strings.TrimSpace(mov.Poster),
+		preserveAssetValue("", firstNonEmpty(variant.PosterPath, variant.Meta.PosterPath), relPath),
+	)
+	coverValue := firstNonEmpty(
+		strings.TrimSpace(mov.Cover),
+		strings.TrimSpace(mov.Fanart),
+		strings.TrimSpace(mov.Thumb),
+		preserveAssetValue(
+			"",
+			firstNonEmpty(variant.CoverPath, variant.Meta.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath),
+			relPath,
+		),
+	)
+	if posterValue != "" {
+		mov.Poster = posterValue
+		mov.Art.Poster = posterValue
+	}
+	if coverValue != "" {
+		mov.Cover = coverValue
+		mov.Fanart = coverValue
+		mov.Thumb = coverValue
+	}
+	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
+		return fmt.Errorf("write nfo file: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) updateRootItem(root string, detail *Detail, absPath string, meta Meta) (*Detail, error) {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("stat item dir: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, errLibraryItemNotDir
+	}
+	trimMetaFields(&meta)
 	if detail == nil {
-		return nil, fmt.Errorf("library detail is required")
+		return nil, errLibraryDetailRequired
 	}
 	relPath := detail.Item.RelPath
 	variants := detail.Variants
@@ -273,71 +344,65 @@ func (s *Service) updateRootItem(root string, detail *Detail, absPath string, me
 		}}
 	}
 	for _, variant := range variants {
-		mov := &nfo.Movie{}
-		nfoPath := selectVariantNFOPath(absPath, variant, detail.PrimaryVariantKey)
-		if variant.NFOAbsPath != "" {
-			nfoPath = variant.NFOAbsPath
-		}
-		if existing, parseErr := nfo.ParseMovie(nfoPath); parseErr == nil {
-			mov = existing
-		}
-		applyMetaToMovie(meta, mov)
-		posterValue := firstNonEmpty(
-			strings.TrimSpace(mov.Poster),
-			preserveAssetValue("", firstNonEmpty(variant.PosterPath, variant.Meta.PosterPath), relPath),
-		)
-		coverValue := firstNonEmpty(
-			strings.TrimSpace(mov.Cover),
-			strings.TrimSpace(mov.Fanart),
-			strings.TrimSpace(mov.Thumb),
-			preserveAssetValue("", firstNonEmpty(variant.CoverPath, variant.Meta.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath), relPath),
-		)
-		if posterValue != "" {
-			mov.Poster = posterValue
-			mov.Art.Poster = posterValue
-		}
-		if coverValue != "" {
-			mov.Cover = coverValue
-			mov.Fanart = coverValue
-			mov.Thumb = coverValue
-		}
-		if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
-			return nil, err
+		if err := writeVariantNFO(absPath, relPath, variant, detail.PrimaryVariantKey, meta); err != nil {
+			return nil, fmt.Errorf("write nfo file: %w", err)
 		}
 	}
 	return s.readRootDetail(root, relPath, absPath)
 }
 
-func (s *Service) replaceRootArtwork(root string, detail *Detail, absPath string, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
-	info, err := os.Stat(absPath)
-	if err != nil {
+func (s *Service) replaceRootArtwork(
+	root string, detail *Detail, absPath, variantKey, kind, originalName string, data []byte,
+) (*Detail, error) {
+	if err := validateDirDetail(absPath, detail); err != nil {
 		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("library item is not a directory")
-	}
-	if detail == nil {
-		return nil, fmt.Errorf("library detail is required")
 	}
 	relPath := detail.Item.RelPath
 	if kind == "fanart" {
-		targetName, err := pickFanartTargetName(absPath, originalName)
-		if err != nil {
-			return nil, err
-		}
-		targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(targetPath, data, 0644); err != nil {
-			return nil, err
-		}
-		return s.readRootDetail(root, relPath, absPath)
+		return s.writeFanart(root, relPath, absPath, originalName, data)
 	}
 	variant, ok := pickVariant(detail, variantKey)
 	if !ok {
-		return nil, fmt.Errorf("library variant not found")
+		return nil, errLibraryVariantNotFound
 	}
+	if err := writeVariantArtwork(absPath, detail, variant, kind, originalName, data); err != nil {
+		return nil, err
+	}
+	return s.readRootDetail(root, relPath, absPath)
+}
+
+func validateDirDetail(absPath string, detail *Detail) error {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("stat item dir: %w", err)
+	}
+	if !info.IsDir() {
+		return errLibraryItemNotDir
+	}
+	if detail == nil {
+		return errLibraryDetailRequired
+	}
+	return nil
+}
+
+func (s *Service) writeFanart(root, relPath, absPath, originalName string, data []byte) (*Detail, error) {
+	targetName, err := pickFanartTargetName(absPath, originalName)
+	if err != nil {
+		return nil, err
+	}
+	targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create fanart dir: %w", err)
+	}
+	if err := os.WriteFile(targetPath, data, 0o600); err != nil {
+		return nil, fmt.Errorf("write fanart file: %w", err)
+	}
+	return s.readRootDetail(root, relPath, absPath)
+}
+
+func writeVariantArtwork(
+	absPath string, detail *Detail, variant Variant, kind, originalName string, data []byte,
+) error {
 	mov := &nfo.Movie{}
 	nfoPath := selectVariantNFOPath(absPath, variant, detail.PrimaryVariantKey)
 	if variant.NFOAbsPath != "" {
@@ -352,8 +417,8 @@ func (s *Service) replaceRootArtwork(root string, detail *Detail, absPath string
 	}
 	targetName := pickArtworkTargetName(detail, variant, kind, ext)
 	targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
-	if err := os.WriteFile(targetPath, data, 0644); err != nil {
-		return nil, err
+	if err := os.WriteFile(targetPath, data, 0o600); err != nil {
+		return fmt.Errorf("write artwork file: %w", err)
 	}
 	switch kind {
 	case "poster":
@@ -365,26 +430,12 @@ func (s *Service) replaceRootArtwork(root string, detail *Detail, absPath string
 		mov.Thumb = targetName
 	}
 	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
-		return nil, err
+		return fmt.Errorf("write variant nfo: %w", err)
 	}
-	return s.readRootDetail(root, relPath, absPath)
+	return nil
 }
 
-func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath string, variantKey string, x int, y int, width int, height int) (*Detail, error) {
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("library item is not a directory")
-	}
-	if detail == nil {
-		return nil, fmt.Errorf("library detail is required")
-	}
-	variant, ok := pickVariant(detail, variantKey)
-	if !ok {
-		return nil, fmt.Errorf("library variant not found")
-	}
+func resolveCoverForCrop(detail *Detail, variant Variant, absPath string) ([]byte, string, error) {
 	coverPath := firstNonEmpty(
 		variant.CoverPath,
 		variant.Meta.CoverPath,
@@ -395,14 +446,18 @@ func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath s
 		detail.Meta.ThumbPath,
 	)
 	if coverPath == "" {
-		return nil, fmt.Errorf("cover not found")
+		return nil, "", errCoverNotFound
 	}
 	coverRelPath := strings.TrimPrefix(filepath.ToSlash(coverPath), detail.Item.RelPath+"/")
 	coverAbsPath := filepath.Join(absPath, filepath.FromSlash(coverRelPath))
 	raw, err := os.ReadFile(coverAbsPath)
 	if err != nil {
-		return nil, fmt.Errorf("read cover failed: %w", err)
+		return nil, "", fmt.Errorf("read cover failed: %w", err)
 	}
+	return raw, coverRelPath, nil
+}
+
+func cropImageRect(raw []byte, x, y, width, height int) ([]byte, error) {
 	img, err := imgutil.LoadImage(raw)
 	if err != nil {
 		return nil, fmt.Errorf("decode cover failed: %w", err)
@@ -410,15 +465,36 @@ func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath s
 	rect := stdimage.Rect(x, y, x+width, y+height)
 	bounds := img.Bounds()
 	if rect.Min.X < bounds.Min.X || rect.Min.Y < bounds.Min.Y || rect.Max.X > bounds.Max.X || rect.Max.Y > bounds.Max.Y {
-		return nil, fmt.Errorf("crop rectangle out of bounds")
+		return nil, errCropRectOutOfBounds
 	}
 	cropped, err := imgutil.CutImageViaRectangle(img, rect)
 	if err != nil {
 		return nil, fmt.Errorf("crop poster failed: %w", err)
 	}
-	croppedRaw, err := imgutil.WriteImageToBytes(cropped)
+	result, err := imgutil.WriteImageToBytes(cropped)
 	if err != nil {
-		return nil, fmt.Errorf("encode poster failed: %w", err)
+		return nil, fmt.Errorf("encode cropped image: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Service) cropRootPosterFromCover(
+	root string, detail *Detail, absPath, variantKey string, x, y, width, height int,
+) (*Detail, error) {
+	if err := validateDirDetail(absPath, detail); err != nil {
+		return nil, err
+	}
+	variant, ok := pickVariant(detail, variantKey)
+	if !ok {
+		return nil, errLibraryVariantNotFound
+	}
+	raw, coverRelPath, err := resolveCoverForCrop(detail, variant, absPath)
+	if err != nil {
+		return nil, err
+	}
+	croppedRaw, err := cropImageRect(raw, x, y, width, height)
+	if err != nil {
+		return nil, err
 	}
 	ext := strings.ToLower(filepath.Ext(coverRelPath))
 	if _, ok := imageExts[ext]; !ok {
@@ -429,11 +505,19 @@ func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath s
 		targetName = fmt.Sprintf("%s-poster%s", firstNonEmpty(variant.BaseName, detail.Item.Number, detail.Item.Name), ext)
 	}
 	targetPath := filepath.Join(absPath, filepath.FromSlash(targetName))
-	if err := os.WriteFile(targetPath, croppedRaw, 0644); err != nil {
+
+	if err := os.WriteFile(targetPath, croppedRaw, 0o600); err != nil {
 		return nil, fmt.Errorf("write poster failed: %w", err)
 	}
+	if err := updatePosterInNFO(absPath, variant, detail.PrimaryVariantKey, targetName); err != nil {
+		return nil, err
+	}
+	return s.readRootDetail(root, detail.Item.RelPath, absPath)
+}
+
+func updatePosterInNFO(absPath string, variant Variant, primaryKey, targetName string) error {
 	mov := &nfo.Movie{}
-	nfoPath := selectVariantNFOPath(absPath, variant, detail.PrimaryVariantKey)
+	nfoPath := selectVariantNFOPath(absPath, variant, primaryKey)
 	if variant.NFOAbsPath != "" {
 		nfoPath = variant.NFOAbsPath
 	}
@@ -443,12 +527,12 @@ func (s *Service) cropRootPosterFromCover(root string, detail *Detail, absPath s
 	mov.Poster = targetName
 	mov.Art.Poster = targetName
 	if err := nfo.WriteMovieToFile(nfoPath, mov); err != nil {
-		return nil, err
+		return fmt.Errorf("write nfo after poster crop: %w", err)
 	}
-	return s.readRootDetail(root, detail.Item.RelPath, absPath)
+	return nil
 }
 
-func (s *Service) deleteRootFile(root string, itemRelPath string, fileRelPath string) (*Detail, error) {
+func (s *Service) deleteRootFile(root, itemRelPath, fileRelPath string) (*Detail, error) {
 	relPath, absPath, err := s.resolveRootPath(root, fileRelPath)
 	if err != nil {
 		return nil, err
@@ -459,32 +543,32 @@ func (s *Service) deleteRootFile(root string, itemRelPath string, fileRelPath st
 	}
 	itemPrefix := strings.TrimSuffix(itemRelPath, "/") + "/extrafanart/"
 	if !strings.HasPrefix(relPath, itemPrefix) {
-		return nil, fmt.Errorf("only extrafanart files can be deleted")
+		return nil, errOnlyExtrafanartDeletable
 	}
 	if err := os.Remove(absPath); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("remove file: %w", err)
 	}
 	itemAbsPath := filepath.Join(root, filepath.FromSlash(itemRelPath))
 	return s.readRootDetail(root, itemRelPath, itemAbsPath)
 }
 
-func (s *Service) resolveRootPath(root string, raw string) (string, string, error) {
+func (s *Service) resolveRootPath(root, raw string) (string, string, error) {
 	if strings.TrimSpace(root) == "" || strings.TrimSpace(raw) == "" {
-		return "", "", fmt.Errorf("invalid library path")
+		return "", "", errInvalidLibraryPath
 	}
 	clean := filepath.ToSlash(filepath.Clean(strings.TrimSpace(raw)))
 	clean = strings.TrimPrefix(clean, "/")
 	if clean == "" || clean == "." || strings.HasPrefix(clean, "../") || clean == ".." {
-		return "", "", fmt.Errorf("invalid library path")
+		return "", "", errInvalidLibraryPath
 	}
 	absPath := filepath.Join(root, filepath.FromSlash(clean))
 	rel, err := filepath.Rel(root, absPath)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("compute relative path: %w", err)
 	}
 	rel = filepath.ToSlash(rel)
 	if rel == "." || strings.HasPrefix(rel, "../") || rel == ".." {
-		return "", "", fmt.Errorf("invalid library path")
+		return "", "", errInvalidLibraryPath
 	}
 	return rel, absPath, nil
 }
@@ -525,31 +609,18 @@ func detectFileKind(name string) string {
 	return "file"
 }
 
-func (s *Service) scanRootVariants(root string, relPath string, absPath string) ([]Variant, string, error) {
-	entries, err := os.ReadDir(absPath)
-	if err != nil {
-		return nil, "", err
-	}
+func collectVariantEntries(
+	entries []os.DirEntry,
+	relPath, absPath string,
+) (map[string]*Variant, []string, []variantTopFile) {
 	variantsByKey := make(map[string]*Variant)
 	keys := make([]string, 0, 8)
-	type topFile struct {
-		name    string
-		stem    string
-		ext     string
-		relPath string
-	}
-	topFiles := make([]topFile, 0, len(entries))
+	topFiles := make([]variantTopFile, 0, len(entries))
 	ensureVariant := func(key string) *Variant {
 		if current, ok := variantsByKey[key]; ok {
 			return current
 		}
-		current := &Variant{
-			Key:      key,
-			BaseName: key,
-			Meta: Meta{
-				Number: key,
-			},
-		}
+		current := &Variant{Key: key, BaseName: key, Meta: Meta{Number: key}}
 		variantsByKey[key] = current
 		keys = append(keys, key)
 		return current
@@ -561,70 +632,35 @@ func (s *Service) scanRootVariants(root string, relPath string, absPath string) 
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
 		stem := strings.TrimSuffix(name, filepath.Ext(name))
-		topFiles = append(topFiles, topFile{name: name, stem: stem, ext: ext, relPath: filepath.ToSlash(filepath.Join(relPath, name))})
+		topFiles = append(topFiles,
+			variantTopFile{name: name, stem: stem, ext: ext, relPath: filepath.ToSlash(filepath.Join(relPath, name))})
 		if _, ok := videoExts[ext]; ok {
-			variant := ensureVariant(stem)
-			variant.VideoPath = filepath.ToSlash(filepath.Join(relPath, name))
+			ensureVariant(stem).VideoPath = filepath.ToSlash(filepath.Join(relPath, name))
 			continue
 		}
 		if ext == ".nfo" {
-			variant := ensureVariant(stem)
-			variant.NFOPath = filepath.ToSlash(filepath.Join(relPath, name))
-			variant.NFOAbsPath = filepath.Join(absPath, name)
+			v := ensureVariant(stem)
+			v.NFOPath = filepath.ToSlash(filepath.Join(relPath, name))
+			v.NFOAbsPath = filepath.Join(absPath, name)
 		}
 	}
-	if len(keys) == 0 {
-		return nil, "", nil
-	}
-	sort.Strings(keys)
-	primaryKey := selectPrimaryVariant(keys, filepath.Base(absPath))
-	matchKeys := append([]string(nil), keys...)
-	sort.Slice(matchKeys, func(i, j int) bool {
-		if len(matchKeys[i]) == len(matchKeys[j]) {
-			return matchKeys[i] < matchKeys[j]
-		}
-		return len(matchKeys[i]) > len(matchKeys[j])
-	})
-	for _, file := range topFiles {
-		if _, ok := imageExts[file.ext]; !ok {
-			continue
-		}
-		for _, key := range matchKeys {
-			variant := variantsByKey[key]
-			switch {
-			case file.stem == key+"-poster":
-				variant.PosterPath = file.relPath
-			case file.stem == key+"-fanart", file.stem == key+"-cover", file.stem == key+"-thumb":
-				if variant.CoverPath == "" || strings.HasSuffix(file.stem, "-fanart") || strings.HasSuffix(file.stem, "-cover") {
-					variant.CoverPath = file.relPath
-				}
-			default:
-				continue
-			}
-			break
-		}
-	}
+	return variantsByKey, keys, topFiles
+}
+
+func finalizeVariants(
+	variantsByKey map[string]*Variant, keys []string, primaryKey, root, relPath, dirBase string,
+) []Variant {
 	variants := make([]Variant, 0, len(keys))
 	for _, key := range keys {
 		variant := cloneVariant(variantsByKey[key])
 		variant.IsPrimary = key == primaryKey
-		variant.Suffix = variantSuffix(key, primaryKey, filepath.Base(absPath))
+		variant.Suffix = variantSuffix(key, primaryKey, dirBase)
 		variant.Label = variantLabel(variant.Suffix, variant.IsPrimary)
-		if variant.NFOAbsPath != "" {
-			mov, parseErr := nfo.ParseMovie(variant.NFOAbsPath)
-			if parseErr == nil {
-				variant.Meta = libraryMetaFromMovie(root, relPath, mov)
-				if variant.PosterPath == "" {
-					variant.PosterPath = firstNonEmpty(variant.Meta.PosterPath)
-				}
-				if variant.CoverPath == "" {
-					variant.CoverPath = firstNonEmpty(variant.Meta.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath)
-				}
-			}
-		}
+		populateVariantFromNFO(&variant, root, relPath)
 		variant.Meta.Number = firstNonEmpty(variant.Meta.Number, variant.BaseName)
 		variant.Meta.PosterPath = firstNonEmpty(variant.Meta.PosterPath, variant.PosterPath)
-		variant.Meta.CoverPath = firstNonEmpty(variant.Meta.CoverPath, variant.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath)
+		variant.Meta.CoverPath = firstNonEmpty(
+			variant.Meta.CoverPath, variant.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath)
 		variant.Meta.FanartPath = firstNonEmpty(variant.Meta.FanartPath, variant.CoverPath, variant.Meta.CoverPath)
 		variant.Meta.ThumbPath = firstNonEmpty(variant.Meta.ThumbPath, variant.Meta.CoverPath, variant.CoverPath)
 		variants = append(variants, variant)
@@ -638,7 +674,79 @@ func (s *Service) scanRootVariants(root string, relPath string, absPath string) 
 		}
 		return len(variants[i].Suffix) < len(variants[j].Suffix)
 	})
-	return variants, primaryKey, nil
+	return variants
+}
+
+func (s *Service) scanRootVariants(root, relPath, absPath string) ([]Variant, string, error) {
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("read dir for variants: %w", err)
+	}
+	variantsByKey, keys, topFiles := collectVariantEntries(entries, relPath, absPath)
+	if len(keys) == 0 {
+		return nil, "", nil
+	}
+	sort.Strings(keys)
+	primaryKey := selectPrimaryVariant(keys, filepath.Base(absPath))
+	matchKeys := append([]string(nil), keys...)
+	sort.Slice(matchKeys, func(i, j int) bool {
+		if len(matchKeys[i]) == len(matchKeys[j]) {
+			return matchKeys[i] < matchKeys[j]
+		}
+		return len(matchKeys[i]) > len(matchKeys[j])
+	})
+	matchImageFilesToVariants(topFiles, matchKeys, variantsByKey)
+	return finalizeVariants(variantsByKey, keys, primaryKey, root, relPath, filepath.Base(absPath)), primaryKey, nil
+}
+
+type variantTopFile struct {
+	name    string
+	stem    string
+	ext     string
+	relPath string
+}
+
+func matchImageFilesToVariants(topFiles []variantTopFile, matchKeys []string, variantsByKey map[string]*Variant) {
+	for _, file := range topFiles {
+		if _, ok := imageExts[file.ext]; !ok {
+			continue
+		}
+		assignImageToVariant(file.stem, file.relPath, matchKeys, variantsByKey)
+	}
+}
+
+func assignImageToVariant(stem, relPath string, matchKeys []string, variantsByKey map[string]*Variant) {
+	for _, key := range matchKeys {
+		variant := variantsByKey[key]
+		switch stem {
+		case key + "-poster":
+			variant.PosterPath = relPath
+		case key + "-fanart", key + "-cover", key + "-thumb":
+			if variant.CoverPath == "" || strings.HasSuffix(stem, "-fanart") || strings.HasSuffix(stem, "-cover") {
+				variant.CoverPath = relPath
+			}
+		default:
+			continue
+		}
+		return
+	}
+}
+
+func populateVariantFromNFO(variant *Variant, root, relPath string) {
+	if variant.NFOAbsPath == "" {
+		return
+	}
+	mov, err := nfo.ParseMovie(variant.NFOAbsPath)
+	if err != nil {
+		return
+	}
+	variant.Meta = libraryMetaFromMovie(root, relPath, mov)
+	if variant.PosterPath == "" {
+		variant.PosterPath = firstNonEmpty(variant.Meta.PosterPath)
+	}
+	if variant.CoverPath == "" {
+		variant.CoverPath = firstNonEmpty(variant.Meta.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath)
+	}
 }
 
 func attachFilesToVariants(variants []Variant, files []FileItem) ([]Variant, []FileItem) {
@@ -734,14 +842,17 @@ func cloneMeta(meta Meta) Meta {
 	}
 }
 
-func libraryMetaFromMovie(root string, relPath string, mov *nfo.Movie) Meta {
+func libraryMetaFromMovie(root, relPath string, mov *nfo.Movie) Meta {
 	coverRaw := firstNonEmpty(strings.TrimSpace(mov.Cover), strings.TrimSpace(mov.Fanart), strings.TrimSpace(mov.Thumb))
 	if coverRaw == "" && len(mov.Art.Fanart) > 0 {
 		coverRaw = strings.TrimSpace(mov.Art.Fanart[0])
 	}
 	originalTitle := firstNonEmpty(strings.TrimSpace(mov.OriginalTitle), strings.TrimSpace(mov.Title))
 	titleTranslated := strings.TrimSpace(mov.TitleTranslated)
-	if titleTranslated == "" && strings.TrimSpace(mov.OriginalTitle) != "" && strings.TrimSpace(mov.Title) != "" && strings.TrimSpace(mov.Title) != strings.TrimSpace(mov.OriginalTitle) {
+	if titleTranslated == "" &&
+		strings.TrimSpace(mov.OriginalTitle) != "" &&
+		strings.TrimSpace(mov.Title) != "" &&
+		strings.TrimSpace(mov.Title) != strings.TrimSpace(mov.OriginalTitle) {
 		titleTranslated = strings.TrimSpace(mov.Title)
 	}
 	plot, plotTranslated := splitPlot(strings.TrimSpace(mov.Plot), strings.TrimSpace(mov.PlotTranslated))
@@ -760,12 +871,15 @@ func libraryMetaFromMovie(root string, relPath string, mov *nfo.Movie) Meta {
 		Director:        strings.TrimSpace(mov.Director),
 		Actors:          actorNames(mov.Actors),
 		Genres:          trimStrings(mov.Genres),
-		PosterPath:      firstNonEmpty(resolveMovieAssetPath(root, relPath, mov.Poster), resolveMovieAssetPath(root, relPath, mov.Art.Poster)),
-		CoverPath:       resolveMovieAssetPath(root, relPath, coverRaw),
-		FanartPath:      resolveMovieAssetPath(root, relPath, firstNonEmpty(strings.TrimSpace(mov.Fanart), coverRaw)),
-		ThumbPath:       resolveMovieAssetPath(root, relPath, firstNonEmpty(strings.TrimSpace(mov.Thumb), coverRaw)),
-		Source:          strings.TrimSpace(mov.ScrapeInfo.Source),
-		ScrapedAt:       strings.TrimSpace(mov.ScrapeInfo.Date),
+		PosterPath: firstNonEmpty(
+			resolveMovieAssetPath(root, relPath, mov.Poster),
+			resolveMovieAssetPath(root, relPath, mov.Art.Poster),
+		),
+		CoverPath:  resolveMovieAssetPath(root, relPath, coverRaw),
+		FanartPath: resolveMovieAssetPath(root, relPath, firstNonEmpty(strings.TrimSpace(mov.Fanart), coverRaw)),
+		ThumbPath:  resolveMovieAssetPath(root, relPath, firstNonEmpty(strings.TrimSpace(mov.Thumb), coverRaw)),
+		Source:     strings.TrimSpace(mov.ScrapeInfo.Source),
+		ScrapedAt:  strings.TrimSpace(mov.ScrapeInfo.Date),
 	}
 }
 
@@ -799,7 +913,7 @@ func applyMetaToMovie(meta Meta, mov *nfo.Movie) {
 	}
 }
 
-func splitPlot(plot string, plotTranslated string) (string, string) {
+func splitPlot(plot, plotTranslated string) (string, string) {
 	if strings.TrimSpace(plotTranslated) != "" {
 		return strings.TrimSpace(plot), strings.TrimSpace(plotTranslated)
 	}
@@ -831,7 +945,7 @@ func selectPrimaryVariant(keys []string, dirBase string) string {
 	return primary
 }
 
-func variantSuffix(key string, primaryKey string, dirBase string) string {
+func variantSuffix(key, primaryKey, dirBase string) string {
 	switch {
 	case primaryKey != "" && strings.HasPrefix(key, primaryKey+"-"):
 		return strings.TrimPrefix(key, primaryKey+"-")
@@ -898,7 +1012,7 @@ func trimStrings(items []string) []string {
 	return out
 }
 
-func resolveMovieAssetPath(root string, relDir string, raw string) string {
+func resolveMovieAssetPath(root, relDir, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
@@ -915,7 +1029,7 @@ func resolveMovieAssetPath(root string, relDir string, raw string) string {
 	return filepath.ToSlash(rel)
 }
 
-func preserveAssetValue(current string, relPath string, relDir string) string {
+func preserveAssetValue(current, relPath, relDir string) string {
 	if strings.TrimSpace(current) != "" {
 		return current
 	}
@@ -929,12 +1043,17 @@ func preserveAssetValue(current string, relPath string, relDir string) string {
 	return filepath.Base(relPath)
 }
 
-func pickArtworkTargetName(detail *Detail, variant Variant, kind string, ext string) string {
+func pickArtworkTargetName(detail *Detail, variant Variant, kind, ext string) string {
 	currentPath := ""
 	if kind == "poster" {
 		currentPath = firstNonEmpty(variant.PosterPath, variant.Meta.PosterPath)
 	} else {
-		currentPath = firstNonEmpty(variant.CoverPath, variant.Meta.CoverPath, variant.Meta.FanartPath, variant.Meta.ThumbPath)
+		currentPath = firstNonEmpty(
+			variant.CoverPath,
+			variant.Meta.CoverPath,
+			variant.Meta.FanartPath,
+			variant.Meta.ThumbPath,
+		)
 	}
 	if currentPath == "" && detail != nil {
 		if kind == "poster" {
@@ -960,7 +1079,7 @@ func pickArtworkTargetName(detail *Detail, variant Variant, kind string, ext str
 	return fmt.Sprintf("%s-fanart%s", base, ext)
 }
 
-func pickFanartTargetName(absPath string, originalName string) (string, error) {
+func pickFanartTargetName(absPath, originalName string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(originalName))
 	if _, ok := imageExts[ext]; !ok {
 		ext = ".jpg"
@@ -981,10 +1100,10 @@ func pickFanartTargetName(absPath string, originalName string) (string, error) {
 		if _, err := os.Stat(filepath.Join(absPath, filepath.FromSlash(relPath))); os.IsNotExist(err) {
 			return relPath, nil
 		} else if err != nil {
-			return "", err
+			return "", fmt.Errorf("stat fanart candidate: %w", err)
 		}
 	}
-	return "", fmt.Errorf("unable to allocate extrafanart filename")
+	return "", errExtrafanartFilenameExhausted
 }
 
 func firstNonEmpty(values ...string) string {

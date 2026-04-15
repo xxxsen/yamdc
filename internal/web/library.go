@@ -101,7 +101,7 @@ func (a *API) handleListLibrary(c *gin.Context) {
 		writeFail(c.Writer, errCodeListLibraryFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", a.toLibraryListItems(items))
+	writeSuccess(c.Writer, "ok", a.toLibraryListItems(items))
 }
 
 func (a *API) handleLibraryItemGet(c *gin.Context) {
@@ -120,7 +120,7 @@ func (a *API) handleLibraryItemGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeLibraryItemReadFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, "ok", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryItemPatch(c *gin.Context) {
@@ -138,12 +138,15 @@ func (a *API) handleLibraryItemPatch(c *gin.Context) {
 	}
 	detail, err := a.saveLibrary().UpdateSaveItem(pathValue, fromLibraryMeta(req.Meta))
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("library item update failed", zap.String("path", pathValue), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("library item update failed",
+			zap.String("path", pathValue),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeLibraryUpdateFailed, err.Error())
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("library item updated", zap.String("path", detail.Item.RelPath))
-	writeSuccess(c.Writer, http.StatusOK, "library item updated", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, "library item updated", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryItemDelete(c *gin.Context) {
@@ -157,12 +160,15 @@ func (a *API) handleLibraryItemDelete(c *gin.Context) {
 			writeFail(c.Writer, errCodeLibraryItemNotFound, err.Error())
 			return
 		}
-		logutil.GetLogger(c.Request.Context()).Warn("library item delete failed", zap.String("path", pathValue), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("library item delete failed",
+			zap.String("path", pathValue),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeLibraryItemDeleteFailed, err.Error())
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("library item deleted", zap.String("path", pathValue))
-	writeSuccess(c.Writer, http.StatusOK, "library item deleted", nil)
+	writeSuccess(c.Writer, "library item deleted", nil)
 }
 
 func (a *API) handleLibraryFileGet(c *gin.Context) {
@@ -218,12 +224,18 @@ func (a *API) handleLibraryFileDelete(c *gin.Context) {
 			writeFail(c.Writer, errCodeLibraryFileDeleteDenied, err.Error())
 			return
 		}
-		logutil.GetLogger(c.Request.Context()).Error("library file delete failed", zap.String("path", relPath), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Error("library file delete failed",
+			zap.String("path", relPath),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeLibraryFileDeleteFailed, "delete library file failed")
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("library file deleted", zap.String("path", relPath), zap.String("item_path", detail.Item.RelPath))
-	writeSuccess(c.Writer, http.StatusOK, "library file deleted", a.toLibraryDetail(detail))
+	logutil.GetLogger(c.Request.Context()).Info("library file deleted",
+		zap.String("path", relPath),
+		zap.String("item_path", detail.Item.RelPath),
+	)
+	writeSuccess(c.Writer, "library file deleted", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryAsset(c *gin.Context) {
@@ -278,7 +290,7 @@ func (a *API) handleLibraryAsset(c *gin.Context) {
 		zap.String("kind", kind),
 		zap.String("file_name", header.Filename),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "library asset replaced", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, "library asset replaced", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryPosterCrop(c *gin.Context) {
@@ -324,7 +336,7 @@ func (a *API) handleLibraryPosterCrop(c *gin.Context) {
 		zap.Int("width", req.Width),
 		zap.Int("height", req.Height),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "library poster cropped", a.toLibraryDetail(detail))
+	writeSuccess(c.Writer, "library poster cropped", a.toLibraryDetail(detail))
 }
 
 func (a *API) toLibraryListItems(items []medialib.Item) []libraryListItem {
@@ -385,7 +397,7 @@ func (a *API) loadLibraryConflictFlags() map[string]struct{} {
 	return out
 }
 
-func buildLibraryConflictKey(relPath string, number string) string {
+func buildLibraryConflictKey(relPath, number string) string {
 	relPath = strings.TrimSpace(relPath)
 	number = strings.TrimSpace(number)
 	if number != "" {

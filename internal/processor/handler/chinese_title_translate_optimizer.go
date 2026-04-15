@@ -26,9 +26,7 @@ const (
 	defaultYesJav100QueryLinkTplt = "https://www.yesjav.com/search.asp?q=%s&"
 )
 
-var (
-	defaultYesJav100TitleExtractRegexp = regexp.MustCompile(`(?:\[.*?\]\s*)?([A-Z]+-\d+\s+[^()]+)`)
-)
+var defaultYesJav100TitleExtractRegexp = regexp.MustCompile(`(?:\[.*?\]\s*)?([A-Z]+-\d+\s+[^()]+)`)
 
 type chineseTitleTranslateOptimizer struct {
 	once sync.Once
@@ -55,7 +53,11 @@ func (c *chineseTitleTranslateOptimizer) tryInitCNumber(ctx context.Context) {
 	})
 }
 
-func (c *chineseTitleTranslateOptimizer) readTitleFromCNumber(ctx context.Context, numberid string) (string, bool, error) {
+func (c *chineseTitleTranslateOptimizer) readTitleFromCNumber(ctx context.Context, numberid string) (
+	string,
+	bool,
+	error,
+) {
 	c.tryInitCNumber(ctx)
 	title, ok := c.m[numberid]
 	if !ok {
@@ -64,7 +66,7 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromCNumber(ctx context.Contex
 	return title, true, nil
 }
 
-func (c *chineseTitleTranslateOptimizer) encodeNumberId(numberid string) string {
+func (c *chineseTitleTranslateOptimizer) encodeNumberID(numberid string) string {
 	encodedid := strings.ReplaceAll(numberid, "-", "%2D")
 	encodedid = strings.ReplaceAll(encodedid, "_", "%5F")
 	return encodedid
@@ -78,26 +80,28 @@ func (c *chineseTitleTranslateOptimizer) cleanSearchTitle(title string) string {
 	return strings.TrimSpace(sts[1])
 }
 
-func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(ctx context.Context, numberid string) (string, bool, error) {
-	//本质上yesjav100 也是个刮削源, 在这里做这些逻辑还是有点奇怪
+func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(
+	ctx context.Context, numberid string,
+) (string, bool, error) {
+	// 本质上yesjav100 也是个刮削源, 在这里做这些逻辑还是有点奇怪
 	numberid = strings.ToUpper(numberid)
-	encodedid := c.encodeNumberId(numberid)
+	encodedid := c.encodeNumberID(numberid)
 
 	link := fmt.Sprintf(defaultYesJav100QueryLinkTplt, encodedid)
-	req, err := http.NewRequest(http.MethodGet, link, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 	if err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("create request: %w", err)
 	}
 	rsp, err := c.cli.Do(req)
 	if err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("execute request: %w", err)
 	}
 	defer func() {
 		_ = rsp.Body.Close()
 	}()
 	raw, err := client.ReadHTTPData(rsp)
 	if err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("read response data: %w", err)
 	}
 	node, err := htmlquery.Parse(bytes.NewReader(raw))
 	if err != nil {
@@ -137,11 +141,19 @@ func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.F
 	for _, h := range hlist {
 		newTitle, ok, err := h.handler(ctx, fc.Number.GetNumberID())
 		if err != nil {
-			logutil.GetLogger(ctx).Error("call sub handler for optimized title failed, skip", zap.Error(err), zap.String("title_searcher", h.name), zap.String("numberid", fc.Number.GetNumberID()))
+			logutil.GetLogger(ctx).Error("call sub handler for optimized title failed, skip",
+				zap.Error(err),
+				zap.String("title_searcher", h.name),
+				zap.String("numberid", fc.Number.GetNumberID()),
+			)
 			continue
 		}
 		if ok {
-			logutil.GetLogger(ctx).Info("optimized chinese title found", zap.String("numberid", fc.Number.GetNumberID()), zap.String("title_searcher", h.name), zap.String("title", newTitle))
+			logutil.GetLogger(ctx).Info("optimized chinese title found",
+				zap.String("numberid", fc.Number.GetNumberID()),
+				zap.String("title_searcher", h.name),
+				zap.String("title", newTitle),
+			)
 			fc.Meta.TitleTranslated = newTitle
 			return nil
 		}
@@ -151,7 +163,7 @@ func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.F
 }
 
 func init() {
-	Register(HChineseTitleTranslateOptimizer, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HChineseTitleTranslateOptimizer, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &chineseTitleTranslateOptimizer{cli: deps.HTTPClient}, nil
 	})
 }

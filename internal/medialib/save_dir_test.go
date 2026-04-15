@@ -12,7 +12,7 @@ func TestServiceListSaveItems(t *testing.T) {
 	saveDir := t.TempDir()
 	itemDir := filepath.Join(saveDir, "demo")
 	require.NoError(t, os.MkdirAll(itemDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o600))
 
 	svc := NewService(nil, "", saveDir)
 	items, err := svc.ListSaveItems()
@@ -27,7 +27,7 @@ func TestServiceGetAndUpdateSaveDetail(t *testing.T) {
 	saveDir := t.TempDir()
 	itemDir := filepath.Join(saveDir, "demo")
 	require.NoError(t, os.MkdirAll(itemDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o600))
 
 	svc := NewService(nil, "", saveDir)
 	detail, err := svc.GetSaveDetail("demo")
@@ -54,8 +54,8 @@ func TestServiceDeleteSaveExtrafanartFile(t *testing.T) {
 	itemDir := filepath.Join(saveDir, "demo")
 	extraDir := filepath.Join(itemDir, "extrafanart")
 	require.NoError(t, os.MkdirAll(extraDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "cover.jpg"), []byte("image"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "ABC-123.mp4"), []byte("video"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "cover.jpg"), []byte("image"), 0o600))
 
 	svc := NewService(nil, "", saveDir)
 	detail, err := svc.DeleteSaveFile("demo/extrafanart/cover.jpg")

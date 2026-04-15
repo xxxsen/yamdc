@@ -44,18 +44,22 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 	}
 	logger = logger.With(zap.String("key", f.Key))
 
-	key, err := store.AnonymousDataRewriteWithStorage(ctx, p.storage, f.Key, func(ctx context.Context, data []byte) ([]byte, error) {
-		raw, err := image.TranscodeToJpeg(data)
-		if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && ffmpeg.IsFFMpegEnabled() {
-			data, err = ffmpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
-			if err != nil {
-				logger.Error("use ffmpeg to correct invalid image data failed", zap.Error(err))
-				return nil, err
+	key, err := store.AnonymousDataRewriteWithStorage(ctx, p.storage, f.Key,
+		func(ctx context.Context, data []byte) ([]byte, error) {
+			raw, err := image.TranscodeToJpeg(data)
+			if err != nil && strings.Contains(err.Error(), "luma/chroma subsampling ratio") && ffmpeg.IsFFMpegEnabled() {
+				data, err = ffmpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
+				if err != nil {
+					logger.Error("use ffmpeg to correct invalid image data failed", zap.Error(err))
+					return nil, fmt.Errorf("ffmpeg image correction failed: %w", err)
+				}
+				raw, err = image.TranscodeToJpeg(data)
 			}
-			raw, err = image.TranscodeToJpeg(data)
-		}
-		return raw, err
-	})
+			if err != nil {
+				return nil, fmt.Errorf("transcode to jpeg failed: %w", err)
+			}
+			return raw, nil
+		})
 	if err != nil {
 		logger.Error("transcoded image data failed", zap.Error(err))
 		return nil //
@@ -66,7 +70,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 }
 
 func init() {
-	Register(HImageTranscoder, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HImageTranscoder, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &imageTranscodeHandler{storage: deps.Storage}, nil
 	})
 }

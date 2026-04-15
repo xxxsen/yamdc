@@ -20,14 +20,14 @@ func TestLoadRuleSetFromDir(t *testing.T) {
 version: v1
 options:
   case_mode: upper
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-normalizers.yaml"), []byte(`
 version: v1
 normalizers:
   - name: basename
     type: builtin
     builtin: basename
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "003-matchers.yaml"), []byte(`
 version: v1
 matchers:
@@ -35,7 +35,7 @@ matchers:
     pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
     normalize_template: '$1-$2'
     score: 80
-`), 0644))
+`), 0o600))
 
 	rs, err := LoadRuleSetFromPath(dir)
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ matchers:
     pattern: '(?i)AAA([0-9]+)'
     normalize_template: 'AAA-$1'
     score: 80
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-b.yaml"), []byte(`
 version: v1
 matchers:
@@ -62,7 +62,7 @@ matchers:
     pattern: '(?i)BBB([0-9]+)'
     normalize_template: 'BBB-$1'
     score: 80
-`), 0644))
+`), 0o600))
 
 	_, err := LoadRuleSetFromPath(dir)
 	require.Error(t, err)
@@ -75,7 +75,7 @@ func TestLoadRuleSetFromDirDuplicateNormalizerName(t *testing.T) {
 version: v1
 options:
   case_mode: upper
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-normalizers.yaml"), []byte(`
 version: v1
 normalizers:
@@ -85,7 +85,7 @@ normalizers:
   - name: dup
     type: builtin
     builtin: strip_ext
-`), 0644))
+`), 0o600))
 
 	_, err := LoadRuleSetFromPath(dir)
 	require.Error(t, err)
@@ -98,7 +98,7 @@ func TestLoadRuleSetFromDirAllowsCrossTypeDuplicateName(t *testing.T) {
 version: v1
 options:
   case_mode: upper
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-suffix.yaml"), []byte(`
 version: v1
 suffix_rules:
@@ -106,7 +106,7 @@ suffix_rules:
     type: token
     aliases: ["中字"]
     canonical: C
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "003-matcher.yaml"), []byte(`
 version: v1
 matchers:
@@ -114,7 +114,7 @@ matchers:
     pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
     normalize_template: '$1-$2'
     score: 80
-`), 0644))
+`), 0o600))
 
 	rs, err := LoadRuleSetFromPath(dir)
 	require.NoError(t, err)
@@ -125,15 +125,15 @@ matchers:
 
 func TestLoadRuleSetFromPathUsesManifestEntryForDir(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "ruleset"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "ruleset"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte(`
 entry: ruleset
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "ruleset", "002-matchers.yaml"), []byte(`
 version: v1
 matchers:
@@ -141,7 +141,7 @@ matchers:
     pattern: '(?i)\b([A-Z]{2,10})[-_\s]?([0-9]{2,6})\b'
     normalize_template: '$1-$2'
     score: 80
-`), 0644))
+`), 0o600))
 
 	rs, err := LoadRuleSetFromPath(dir)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ matchers:
     normalize_template: '$1-$2'
     score: 80
 `,
-	}), 0644))
+	}), 0o600))
 
 	rs, files, err := LoadRuleSetFromZip(zipPath)
 	require.NoError(t, err)
@@ -192,7 +192,7 @@ matchers:
     normalize_template: '$1-$2'
     score: 80
 `,
-	}), 0644))
+	}), 0o600))
 
 	rs, files, err := LoadRuleSetFromZip(zipPath)
 	require.NoError(t, err)
@@ -241,8 +241,8 @@ matchers:
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "remote-rules"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"), []byte("stale"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "remote-rules"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "remote-rules", "xxxsen-yamdc-script.zip.temp"), []byte("stale"), 0o600))
 
 	err = manager.Start(context.Background())
 	require.NoError(t, err)
@@ -255,7 +255,7 @@ matchers:
 	fail = true
 	latest = nil
 	latestFiles = nil
-	manager, err = NewManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
+	manager, err = NewManager(dataDir, stubHTTPClient{do: func(_ *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("network down")
 	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script", func(_ context.Context, rs *RuleSet, files []string) error {
 		latest = rs
@@ -272,15 +272,15 @@ matchers:
 
 func TestLocalBundleManagerLoad(t *testing.T) {
 	ruleDir := filepath.Join(t.TempDir(), "rules")
-	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "manifest.yaml"), []byte(`
 entry: ruleset
-`), 0644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
-`), 0644))
+`), 0o600))
 
 	var latest *RuleSet
 	var latestFiles []string

@@ -25,6 +25,20 @@ type API struct {
 	editor   *plugineditor.Service
 }
 
-func NewAPI(jobRepo *repository.JobRepository, scanner *scanner.Service, jobSvc *job.Service, saveDir string, media *medialib.Service, storage store.IStorage, cleaner movieidcleaner.Cleaner, debugger *searcher.Debugger, handlers *phandler.Debugger, editor *plugineditor.Service) *API {
-	return &API{jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage, cleaner: cleaner, debugger: debugger, handlers: handlers, editor: editor}
+func NewAPI(
+	jobRepo *repository.JobRepository,
+	scanner *scanner.Service,
+	jobSvc *job.Service,
+	saveDir string,
+	media *medialib.Service,
+	storage store.IStorage,
+	cleaner movieidcleaner.Cleaner,
+	debugger *searcher.Debugger,
+	handlers *phandler.Debugger,
+	editor *plugineditor.Service,
+) *API {
+	return &API{
+		jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, saveDir: saveDir, media: media, store: storage,
+		cleaner: cleaner, debugger: debugger, handlers: handlers, editor: editor,
+	}
 }

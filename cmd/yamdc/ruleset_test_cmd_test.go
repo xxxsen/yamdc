@@ -15,7 +15,7 @@ func TestLoadRulesetCaseFileFromJSONFile(t *testing.T) {
   "cases": [
     {"name":"a","input":"foo","output":{"number":"FOO-1"}}
   ]
-}`), 0644))
+}`), 0o600))
 
 	out, err := loadRulesetCaseFile(path)
 	require.NoError(t, err)
@@ -29,13 +29,13 @@ func TestLoadRulesetCaseFileFromDirScansJSON(t *testing.T) {
   "cases": [
     {"name":"a","input":"foo","output":{"number":"FOO-1"}}
   ]
-}`), 0644))
+}`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "002-extra.json"), []byte(`{
   "cases": [
     {"name":"b","input":"bar","output":{"status":"no_match"}}
   ]
-}`), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.txt"), []byte(`{"cases":[]}`), 0644))
+}`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.txt"), []byte(`{"cases":[]}`), 0o600))
 
 	out, err := loadRulesetCaseFile(dir)
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func TestLoadRulesetCaseFileFromDirScansJSON(t *testing.T) {
 
 func TestLoadRulesetCaseFileFromDirRequiresJSON(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "default.txt"), []byte(`{"cases":[]}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "default.txt"), []byte(`{"cases":[]}`), 0o600))
 
 	_, err := loadRulesetCaseFile(dir)
 	require.Error(t, err)

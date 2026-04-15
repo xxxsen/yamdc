@@ -12,7 +12,7 @@ func formatTimeToDate(ts int64) string {
 	return t.Format(time.DateOnly)
 }
 
-func convertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
+func convertMetaToMovieNFO(m *model.MovieMeta) *nfo.Movie {
 	title := m.Title
 	if len(m.TitleTranslated) > 0 {
 		title = m.TitleTranslated
@@ -31,7 +31,7 @@ func convertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 		Release:         formatTimeToDate(m.ReleaseDate),
 		ReleaseDate:     formatTimeToDate(m.ReleaseDate),
 		Premiered:       formatTimeToDate(m.ReleaseDate),
-		Runtime:         uint64(m.Duration) / 60, //分钟数
+		Runtime:         uint64(m.Duration) / 60, //nolint:gosec // Duration is always non-negative
 		Year:            time.UnixMilli(m.ReleaseDate).Year(),
 		Tags:            m.Genres,
 		Genres:          m.Genres,
@@ -66,5 +66,5 @@ func convertMetaToMovieNFO(m *model.MovieMeta) (*nfo.Movie, error) {
 	for _, image := range m.SampleImages {
 		mv.Art.Fanart = append(mv.Art.Fanart, image.Name)
 	}
-	return mv, nil
+	return mv
 }

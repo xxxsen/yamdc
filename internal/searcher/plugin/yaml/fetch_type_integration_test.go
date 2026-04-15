@@ -22,20 +22,22 @@ import (
 //	FETCH_TYPE_TEST_URL      remote YAML plugin URL (required, skip if empty)
 //	FETCH_TYPE_TEST_NUMBER   movie number to search (required, skip if empty)
 //	FETCH_TYPE_TEST_WAIT     browser wait_selector xpath (optional)
-func fetchTestEnv(t *testing.T) (yamlURL, numberID, waitSelector string) {
+func fetchTestEnv(t *testing.T) (string, string, string) {
 	t.Helper()
-	yamlURL = os.Getenv("FETCH_TYPE_TEST_URL")
-	numberID = os.Getenv("FETCH_TYPE_TEST_NUMBER")
-	waitSelector = os.Getenv("FETCH_TYPE_TEST_WAIT")
+	yamlURL := os.Getenv("FETCH_TYPE_TEST_URL")
+	numberID := os.Getenv("FETCH_TYPE_TEST_NUMBER")
+	waitSelector := os.Getenv("FETCH_TYPE_TEST_WAIT")
 	if yamlURL == "" || numberID == "" {
 		t.Skip("set FETCH_TYPE_TEST_URL and FETCH_TYPE_TEST_NUMBER to run")
 	}
-	return
+	return yamlURL, numberID, waitSelector
 }
 
 func fetchRemoteYAML(t *testing.T, url string) []byte {
 	t.Helper()
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	require.NoError(t, err, "create request")
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err, "fetch remote YAML")
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "remote YAML HTTP status")

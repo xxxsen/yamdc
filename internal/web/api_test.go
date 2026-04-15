@@ -41,11 +41,11 @@ func phandlerDebugRuntime() appdeps.Runtime {
 	}
 }
 
-func executeGinHandler(method string, target string, body io.Reader, handler gin.HandlerFunc) *httptest.ResponseRecorder {
+func executeGinHandler(target string, body io.Reader, handler gin.HandlerFunc) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(method, target, body)
+	ctx.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, target, body)
 	handler(ctx)
 	return rec
 }
@@ -77,7 +77,7 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/assets/img-key", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/assets/img-key", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -88,7 +88,7 @@ func TestHandleAssetDetectContentType(t *testing.T) {
 
 func TestHandleHandlerDebugRun(t *testing.T) {
 	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}
-	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+	rec := executeGinHandler("/api/debug/handler/run", strings.NewReader(`{
 		"mode":"single",
 		"handler_id":"number_title",
 		"meta":{"number":"ABC-123","title":"sample title"}
@@ -107,21 +107,21 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 }
 
 func TestHandleHandlerDebugRunChain(t *testing.T) {
-	phandler.Register("test_chain_fail", func(args interface{}, deps appdeps.Runtime) (phandler.IHandler, error) {
-		return testHandlerFn(func(ctx context.Context, fc *model.FileContext) error {
-			fc.Meta.Title = fc.Meta.Title + "-failed"
+	phandler.Register("test_chain_fail", func(_ interface{}, _ appdeps.Runtime) (phandler.IHandler, error) {
+		return testHandlerFn(func(_ context.Context, fc *model.FileContext) error {
+			fc.Meta.Title += "-failed"
 			return fmt.Errorf("boom")
 		}), nil
 	})
-	phandler.Register("test_chain_ok", func(args interface{}, deps appdeps.Runtime) (phandler.IHandler, error) {
-		return testHandlerFn(func(ctx context.Context, fc *model.FileContext) error {
-			fc.Meta.Title = fc.Meta.Title + "-ok"
+	phandler.Register("test_chain_ok", func(_ interface{}, _ appdeps.Runtime) (phandler.IHandler, error) {
+		return testHandlerFn(func(_ context.Context, fc *model.FileContext) error {
+			fc.Meta.Title += "-ok"
 			return nil
 		}), nil
 	})
 
 	api := &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"test_chain_fail", "test_chain_ok"}, map[string]phandler.DebugHandlerOption{})}
-	rec := executeGinHandler(http.MethodPost, "/api/debug/handler/run", strings.NewReader(`{
+	rec := executeGinHandler("/api/debug/handler/run", strings.NewReader(`{
 		"mode":"chain",
 		"handler_ids":["test_chain_fail","test_chain_ok"],
 		"meta":{"number":"ABC-123","title":"sample title"}
@@ -158,7 +158,7 @@ func TestEngineHealthzRoute(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/healthz", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -181,7 +181,7 @@ func TestEngineCORSPreflight(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodOptions, "/api/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/api/healthz", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -194,7 +194,7 @@ func TestEngineCORSPreflight(t *testing.T) {
 
 func TestEngineJobRunRoute(t *testing.T) {
 	dbPath := t.TempDir() + "/app.db"
-	sqlite, err := repository.NewSQLite(dbPath)
+	sqlite, err := repository.NewSQLite(context.Background(), dbPath)
 	require.NoError(t, err)
 	defer func() { _ = sqlite.Close() }()
 
@@ -224,7 +224,7 @@ func TestEngineJobRunRoute(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/jobs/%d/run", item.ID), nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("/api/jobs/%d/run", item.ID), nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -251,7 +251,7 @@ func TestEngineJobRunRoute(t *testing.T) {
 
 func TestEngineReviewSaveRoute(t *testing.T) {
 	dbPath := t.TempDir() + "/app.db"
-	sqlite, err := repository.NewSQLite(dbPath)
+	sqlite, err := repository.NewSQLite(context.Background(), dbPath)
 	require.NoError(t, err)
 	defer func() { _ = sqlite.Close() }()
 
@@ -288,7 +288,7 @@ func TestEngineReviewSaveRoute(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/review/jobs/%d", item.ID), strings.NewReader(`{"review_data":"{\"number\":\"ABC-456\",\"title\":\"new\"}"}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, fmt.Sprintf("/api/review/jobs/%d", item.ID), strings.NewReader(`{"review_data":"{\"number\":\"ABC-456\",\"title\":\"new\"}"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -316,7 +316,7 @@ func TestEngineAssetRouteGet(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/assets/img-key", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/assets/img-key", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -339,7 +339,7 @@ func TestEngineAssetRoutePost(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/assets/poster.png", strings.NewReader(body.String()))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/assets/poster.png", strings.NewReader(body.String()))
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -363,13 +363,13 @@ func TestEngineLibraryFileRouteGet(t *testing.T) {
 	saveDir := t.TempDir()
 	filePath := filepath.Join(saveDir, "demo", "cover.jpg")
 	require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
-	require.NoError(t, os.WriteFile(filePath, []byte{0xff, 0xd8, 0xff, 0xdb}, 0o644))
+	require.NoError(t, os.WriteFile(filePath, []byte{0xff, 0xd8, 0xff, 0xdb}, 0o600))
 
 	api := &API{saveDir: saveDir}
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/library/file?path=demo/cover.jpg", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/library/file?path=demo/cover.jpg", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -386,7 +386,7 @@ func TestEngineLibraryFileRouteGetNotFound(t *testing.T) {
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/library/file?path=missing.jpg", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/library/file?path=missing.jpg", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -405,13 +405,13 @@ func TestEngineLibraryItemRouteDelete(t *testing.T) {
 	saveDir := t.TempDir()
 	itemDir := filepath.Join(saveDir, "demo")
 	require.NoError(t, os.MkdirAll(itemDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte("<movie></movie>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte("<movie></movie>"), 0o600))
 
 	api := &API{saveDir: saveDir}
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/library/item?path=demo", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/library/item?path=demo", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -431,7 +431,7 @@ func TestHandlePluginEditorCompile(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 
-	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/compile", strings.NewReader(`{
+	rec := executeGinHandler("/api/debug/plugin-editor/compile", strings.NewReader(`{
 		"draft":{
 			"version":1,
 			"name":"fixture",
@@ -467,7 +467,7 @@ func TestHandlePluginEditorCompile(t *testing.T) {
 }
 
 func TestHandlePluginEditorScrape(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1></body></html>`))
 	}))
 	defer srv.Close()
@@ -497,7 +497,7 @@ func TestHandlePluginEditorScrape(t *testing.T) {
 			}
 		}
 	}`, srv.URL)
-	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/scrape", strings.NewReader(body), api.handlePluginEditorScrape)
+	rec := executeGinHandler("/api/debug/plugin-editor/scrape", strings.NewReader(body), api.handlePluginEditorScrape)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -562,7 +562,7 @@ func TestHandlePluginEditorWorkflow(t *testing.T) {
 			}
 		}
 	}`, srv.URL)
-	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/workflow", strings.NewReader(body), api.handlePluginEditorWorkflow)
+	rec := executeGinHandler("/api/debug/plugin-editor/workflow", strings.NewReader(body), api.handlePluginEditorWorkflow)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -582,7 +582,7 @@ func TestHandlePluginEditorWorkflow(t *testing.T) {
 }
 
 func TestHandlePluginEditorCase(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1><div class="actors"><span>Alice</span></div></body></html>`))
 	}))
 	defer srv.Close()
@@ -612,7 +612,7 @@ func TestHandlePluginEditorCase(t *testing.T) {
 			"output":{"title":"Sample Title","actor_set":["Alice"],"status":"success"}
 		}
 	}`, srv.URL)
-	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/case", strings.NewReader(body), api.handlePluginEditorCase)
+	rec := executeGinHandler("/api/debug/plugin-editor/case", strings.NewReader(body), api.handlePluginEditorCase)
 
 	var payload struct {
 		Code int `json:"code"`
@@ -636,7 +636,7 @@ func TestHandlePluginEditorImport(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 
-	rec := executeGinHandler(http.MethodPost, "/api/debug/plugin-editor/import", strings.NewReader(`{
+	rec := executeGinHandler("/api/debug/plugin-editor/import", strings.NewReader(`{
 		"yaml":"version: 1\nname: fixture\ntype: one-step\nhosts:\n  - https://fixture.example\nrequest:\n  method: GET\n  path: /search/${number}\nscrape:\n  format: html\n  fields:\n    title:\n      selector:\n        kind: xpath\n        expr: //title/text()\n      parser: string\n      required: true\n"
 	}`), api.handlePluginEditorImport)
 
@@ -661,13 +661,13 @@ func TestEngineMediaLibraryFileRouteGet(t *testing.T) {
 	libraryDir := t.TempDir()
 	filePath := filepath.Join(libraryDir, "movie", "poster.jpg")
 	require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
-	require.NoError(t, os.WriteFile(filePath, []byte{0xff, 0xd8, 0xff, 0xdb}, 0o644))
+	require.NoError(t, os.WriteFile(filePath, []byte{0xff, 0xd8, 0xff, 0xdb}, 0o600))
 
 	api := &API{media: medialib.NewService(nil, libraryDir, "")}
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/media-library/file?path=movie/poster.jpg", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/media-library/file?path=movie/poster.jpg", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 

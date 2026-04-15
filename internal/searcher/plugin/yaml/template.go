@@ -1,12 +1,31 @@
 package yaml
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
 
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
+)
+
+var (
+	errUnknownTemplateFunction   = errors.New("unknown template function")
+	errInvalidTemplateExpr       = errors.New("invalid template expression")
+	errUnterminatedTemplate      = errors.New("unterminated template")
+	errBuildURLExpects2Args      = errors.New("build_url expects 2 arguments")
+	errToUpperExpects1Arg        = errors.New("to_upper expects 1 argument")
+	errToLowerExpects1Arg        = errors.New("to_lower expects 1 argument")
+	errTrimExpects1Arg           = errors.New("trim expects 1 argument")
+	errTrimPrefixExpects2Args    = errors.New("trim_prefix expects 2 arguments")
+	errTrimSuffixExpects2Args    = errors.New("trim_suffix expects 2 arguments")
+	errReplaceExpects3Args       = errors.New("replace expects 3 arguments")
+	errCleanNumberExpects1Arg    = errors.New("clean_number expects 1 argument")
+	errFirstNonEmptyExpects2Args = errors.New("first_non_empty expects at least 2 arguments")
+	errLastSegmentExpects2Args   = errors.New("last_segment expects 2 arguments")
+	errUnknownTemplateVariable   = errors.New("unknown template variable")
+	errInvalidArgumentList       = errors.New("invalid argument list")
 )
 
 type evalContext struct {
@@ -59,8 +78,13 @@ func validateTemplateExpr(expr string) error {
 	if name, args, ok, err := parseCall(expr); err != nil {
 		return err
 	} else if ok {
-		if !slices.Contains([]string{"build_url", "to_upper", "to_lower", "trim", "trim_prefix", "trim_suffix", "replace", "clean_number", "first_non_empty", "concat", "last_segment"}, name) {
-			return fmt.Errorf("unknown template function:%s", name)
+		knownFuncs := []string{
+			"build_url", "to_upper", "to_lower", "trim", "trim_prefix",
+			"trim_suffix", "replace", "clean_number", "first_non_empty",
+			"concat", "last_segment",
+		}
+		if !slices.Contains(knownFuncs, name) {
+			return fmt.Errorf("unknown template function: %s: %w", name, errUnknownTemplateFunction)
 		}
 		for _, arg := range args {
 			if err := validateTemplateArg(arg); err != nil {
@@ -72,7 +96,7 @@ func validateTemplateExpr(expr string) error {
 	if isVariableRef(expr) {
 		return nil
 	}
-	return fmt.Errorf("invalid template expression:%s", expr)
+	return fmt.Errorf("invalid template expression: %s: %w", expr, errInvalidTemplateExpr)
 }
 
 func validateTemplateArg(arg string) error {
@@ -80,9 +104,7 @@ func validateTemplateArg(arg string) error {
 	if arg == "" {
 		return nil
 	}
-	if quoted, ok, err := unquoteArg(arg); err != nil {
-		return err
-	} else if ok {
+	if quoted, ok := unquoteArg(arg); ok {
 		return validateTemplate(quoted)
 	}
 	if strings.HasPrefix(arg, "${") && strings.HasSuffix(arg, "}") {
@@ -147,7 +169,7 @@ func findTemplateEnd(raw string, start int) (int, error) {
 			}
 		}
 	}
-	return 0, fmt.Errorf("unterminated template:%s", raw[start:])
+	return 0, fmt.Errorf("unterminated template: %s: %w", raw[start:], errUnterminatedTemplate)
 }
 
 func evalTemplateExpr(expr string, ctx *evalContext) (string, error) {
@@ -176,9 +198,7 @@ func evalTemplateArg(arg string, ctx *evalContext) (string, error) {
 	if arg == "" {
 		return "", nil
 	}
-	if quoted, ok, err := unquoteArg(arg); err != nil {
-		return "", err
-	} else if ok {
+	if quoted, ok := unquoteArg(arg); ok {
 		return renderTemplate(quoted, ctx)
 	}
 	if strings.HasPrefix(arg, "${") && strings.HasSuffix(arg, "}") {
@@ -206,85 +226,97 @@ func evalTemplateArg(arg string, ctx *evalContext) (string, error) {
 	return arg, nil
 }
 
+func evalBuildURL(args []string) (string, error) {
+	if len(args) != 2 {
+		return "", errBuildURLExpects2Args
+	}
+	if u, err := url.Parse(args[1]); err == nil && u.IsAbs() {
+		return args[1], nil
+	}
+	base, err := url.Parse(args[0])
+	if err != nil {
+		return "", fmt.Errorf("parse base url failed, err:%w", err)
+	}
+	ref, err := url.Parse(args[1])
+	if err != nil {
+		return "", fmt.Errorf("parse ref url failed, err:%w", err)
+	}
+	return base.ResolveReference(ref).String(), nil
+}
+
+func evalLastSegment(args []string) (string, error) {
+	if len(args) != 2 {
+		return "", errLastSegmentExpects2Args
+	}
+	if args[1] == "" {
+		return args[0], nil
+	}
+	parts := strings.Split(args[0], args[1])
+	if len(parts) == 0 {
+		return "", nil
+	}
+	return parts[len(parts)-1], nil
+}
+
+func evalFirstNonEmpty(args []string) (string, error) {
+	if len(args) < 2 {
+		return "", errFirstNonEmptyExpects2Args
+	}
+	for _, item := range args {
+		if strings.TrimSpace(item) != "" {
+			return item, nil
+		}
+	}
+	return "", nil
+}
+
 func evalTemplateFunc(name string, args []string) (string, error) {
 	switch name {
 	case "build_url":
-		if len(args) != 2 {
-			return "", fmt.Errorf("build_url expects 2 arguments")
-		}
-		if u, err := url.Parse(args[1]); err == nil && u.IsAbs() {
-			return args[1], nil
-		}
-		base, err := url.Parse(args[0])
-		if err != nil {
-			return "", fmt.Errorf("parse base url failed, err:%w", err)
-		}
-		ref, err := url.Parse(args[1])
-		if err != nil {
-			return "", fmt.Errorf("parse ref url failed, err:%w", err)
-		}
-		return base.ResolveReference(ref).String(), nil
+		return evalBuildURL(args)
 	case "to_upper":
 		if len(args) != 1 {
-			return "", fmt.Errorf("to_upper expects 1 argument")
+			return "", errToUpperExpects1Arg
 		}
 		return strings.ToUpper(args[0]), nil
 	case "to_lower":
 		if len(args) != 1 {
-			return "", fmt.Errorf("to_lower expects 1 argument")
+			return "", errToLowerExpects1Arg
 		}
 		return strings.ToLower(args[0]), nil
 	case "trim":
 		if len(args) != 1 {
-			return "", fmt.Errorf("trim expects 1 argument")
+			return "", errTrimExpects1Arg
 		}
 		return strings.TrimSpace(args[0]), nil
 	case "trim_prefix":
 		if len(args) != 2 {
-			return "", fmt.Errorf("trim_prefix expects 2 arguments")
+			return "", errTrimPrefixExpects2Args
 		}
 		return strings.TrimPrefix(args[0], args[1]), nil
 	case "trim_suffix":
 		if len(args) != 2 {
-			return "", fmt.Errorf("trim_suffix expects 2 arguments")
+			return "", errTrimSuffixExpects2Args
 		}
 		return strings.TrimSuffix(args[0], args[1]), nil
 	case "replace":
 		if len(args) != 3 {
-			return "", fmt.Errorf("replace expects 3 arguments")
+			return "", errReplaceExpects3Args
 		}
 		return strings.ReplaceAll(args[0], args[1], args[2]), nil
 	case "clean_number":
 		if len(args) != 1 {
-			return "", fmt.Errorf("clean_number expects 1 argument")
+			return "", errCleanNumberExpects1Arg
 		}
 		return strings.NewReplacer("-", "", "_", "").Replace(args[0]), nil
 	case "first_non_empty":
-		if len(args) < 2 {
-			return "", fmt.Errorf("first_non_empty expects at least 2 arguments")
-		}
-		for _, item := range args {
-			if strings.TrimSpace(item) != "" {
-				return item, nil
-			}
-		}
-		return "", nil
+		return evalFirstNonEmpty(args)
 	case "concat":
 		return strings.Join(args, ""), nil
 	case "last_segment":
-		if len(args) != 2 {
-			return "", fmt.Errorf("last_segment expects 2 arguments")
-		}
-		if args[1] == "" {
-			return args[0], nil
-		}
-		parts := strings.Split(args[0], args[1])
-		if len(parts) == 0 {
-			return "", nil
-		}
-		return parts[len(parts)-1], nil
+		return evalLastSegment(args)
 	default:
-		return "", fmt.Errorf("unknown template function:%s", name)
+		return "", fmt.Errorf("unknown template function: %s: %w", name, errUnknownTemplateFunction)
 	}
 }
 
@@ -313,7 +345,7 @@ func resolveTemplateVar(ref string, ctx *evalContext) (string, error) {
 	if v, ok := resolveMapRef(ref, "meta.", ctx.meta); ok {
 		return v, nil
 	}
-	return "", fmt.Errorf("unknown template variable:%s", ref)
+	return "", fmt.Errorf("unknown template variable: %s: %w", ref, errUnknownTemplateVariable)
 }
 
 func resolveMapRef(ref, prefix string, m map[string]string) (string, bool) {
@@ -377,7 +409,7 @@ func splitArgs(in string) ([]string, error) {
 		case ')':
 			depthParen--
 			if depthParen < 0 {
-				return nil, fmt.Errorf("invalid argument list:%s", in)
+				return nil, fmt.Errorf("invalid argument list: %s: %w", in, errInvalidArgumentList)
 			}
 		case ',':
 			if depthParen == 0 {
@@ -387,26 +419,21 @@ func splitArgs(in string) ([]string, error) {
 		}
 	}
 	if inQuote || depthParen != 0 {
-		return nil, fmt.Errorf("invalid argument list:%s", in)
+		return nil, fmt.Errorf("invalid argument list: %s: %w", in, errInvalidArgumentList)
 	}
 	args = append(args, strings.TrimSpace(in[start:]))
 	return args, nil
 }
 
-func unquoteArg(in string) (string, bool, error) {
+func unquoteArg(in string) (string, bool) {
 	if len(in) < 2 || in[0] != '"' || in[len(in)-1] != '"' {
-		return "", false, nil
+		return "", false
 	}
-	u, err := strconvUnquote(in)
-	if err != nil {
-		return "", false, err
-	}
-	return u, true, nil
+	return strconvUnquote(in), true
 }
 
-func strconvUnquote(in string) (string, error) {
-	// avoid importing strconv in condition parser separately.
-	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(in[1 : len(in)-1]), nil
+func strconvUnquote(in string) string {
+	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(in[1 : len(in)-1])
 }
 
 func isIdentifier(in string) bool {
@@ -415,12 +442,12 @@ func isIdentifier(in string) bool {
 	}
 	for i, ch := range in {
 		if i == 0 {
-			if !(ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') {
+			if ch != '_' && (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') {
 				return false
 			}
 			continue
 		}
-		if !(ch == '_' || ch == '.' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9') {
+		if ch != '_' && ch != '.' && (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') {
 			return false
 		}
 	}
@@ -434,7 +461,10 @@ func isVariableRef(in string) bool {
 	switch {
 	case in == "number", in == "host", in == "body", in == "value", in == "candidate":
 		return true
-	case strings.HasPrefix(in, "vars."), strings.HasPrefix(in, "item."), strings.HasPrefix(in, "item_variables."), strings.HasPrefix(in, "meta."):
+	case strings.HasPrefix(in, "vars."), strings.HasPrefix(in, "item."), strings.HasPrefix(
+		in,
+		"item_variables.",
+	), strings.HasPrefix(in, "meta."):
 		return true
 	default:
 		return false

@@ -44,7 +44,7 @@ chains:
 
 func TestResolveBundles(t *testing.T) {
 	left := &Bundle{
-		Manifest: &BundleManifest{
+		Manifest: &Manifest{
 			Version: 1,
 			Name:    "left",
 			Entry:   "plugins",
@@ -66,7 +66,7 @@ func TestResolveBundles(t *testing.T) {
 		Order: 0,
 	}
 	right := &Bundle{
-		Manifest: &BundleManifest{
+		Manifest: &Manifest{
 			Version: 1,
 			Name:    "right",
 			Entry:   "plugins",
@@ -138,7 +138,7 @@ chains:
 
 	fail = true
 	latest = nil
-	manager, err = NewManager("searcher_plugin", dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
+	manager, err = NewManager("searcher_plugin", dataDir, stubHTTPClient{do: func(_ *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("network down")
 	}}, []Source{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
 		latest = resolved
@@ -172,7 +172,7 @@ func TestManagerEmitSerializesCallbacks(t *testing.T) {
 		},
 		bundles: map[int]*Bundle{
 			0: {
-				Manifest: &BundleManifest{
+				Manifest: &Manifest{
 					Version: 1,
 					Name:    "bundle-a",
 					Entry:   "plugins",
@@ -228,8 +228,8 @@ func writeBundleFiles(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, content := range files {
 		target := filepath.Join(dir, filepath.FromSlash(name))
-		require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
-		require.NoError(t, os.WriteFile(target, []byte(content), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+		require.NoError(t, os.WriteFile(target, []byte(content), 0o600))
 	}
 }
 

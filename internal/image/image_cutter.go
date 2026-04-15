@@ -2,6 +2,7 @@ package image
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"math"
@@ -9,11 +10,21 @@ import (
 	"github.com/xxxsen/yamdc/internal/face"
 )
 
-const (
-	defaultAspectRatio = 2.0 / 3.0 //poster的宽高比实际为2:3
+var (
+	errCropUnsatisfied    = errors.New("unable to crop satisfy image")
+	errInvalidResolution  = errors.New("invalid image resolution")
+	errInvalidAspectRatio = errors.New("invalid aspect ratio")
+	errInvalidRectangle   = errors.New("invalid rectangle")
+	errNoSubImageSupport  = errors.New("image does not support sub image")
+	errNoFaceRecognizer   = errors.New("no face recognizer")
+	errNoFaceFound        = errors.New("no face found")
 )
 
-func determineCutFrameViaHeight(dx, dy int, dxCenter int, aspectRatio float64) (image.Rectangle, error) {
+const (
+	defaultAspectRatio = 2.0 / 3.0 // poster的宽高比实际为2:3
+)
+
+func determineCutFrameViaHeight(dx, dy, dxCenter int, aspectRatio float64) (image.Rectangle, error) {
 	cropWidth := int(float64(dy) * aspectRatio)
 	cropWidthLeft := dxCenter - cropWidth/2
 	cropWidthRight := dxCenter + cropWidth/2
@@ -26,7 +37,7 @@ func determineCutFrameViaHeight(dx, dy int, dxCenter int, aspectRatio float64) (
 		cropWidthRight = dx
 	}
 	if cropWidthLeft < 0 || cropWidthRight > dx {
-		return image.Rectangle{}, fmt.Errorf("unable to crop satisfy image, left:%d, right:%d", cropWidthLeft, cropWidthRight)
+		return image.Rectangle{}, fmt.Errorf("%w, left: %d, right: %d", errCropUnsatisfied, cropWidthLeft, cropWidthRight)
 	}
 	return image.Rectangle{
 		Min: image.Point{cropWidthLeft, 0},
@@ -34,7 +45,7 @@ func determineCutFrameViaHeight(dx, dy int, dxCenter int, aspectRatio float64) (
 	}, nil
 }
 
-func determineCutFrameViaWidth(dx, dy int, dyCenter int, aspectRatio float64) (image.Rectangle, error) {
+func determineCutFrameViaWidth(dx, dy, dyCenter int, aspectRatio float64) (image.Rectangle, error) {
 	cropHeight := int(float64(dx) / aspectRatio)
 	cropHeightTop := dyCenter - cropHeight/2
 	cropHeightBottom := dyCenter + cropHeight/2
@@ -47,7 +58,7 @@ func determineCutFrameViaWidth(dx, dy int, dyCenter int, aspectRatio float64) (i
 		cropHeightBottom = dy
 	}
 	if cropHeightTop < 0 || cropHeightBottom > dy {
-		return image.Rectangle{}, fmt.Errorf("unable to crop satisfy image, top:%d, bottom:%d", cropHeightTop, cropHeightBottom)
+		return image.Rectangle{}, fmt.Errorf("%w, top: %d, bottom: %d", errCropUnsatisfied, cropHeightTop, cropHeightBottom)
 	}
 	return image.Rectangle{
 		Min: image.Point{0, cropHeightTop},
@@ -56,14 +67,14 @@ func determineCutFrameViaWidth(dx, dy int, dyCenter int, aspectRatio float64) (i
 }
 
 // DetermineCutFrame 根据图片宽高及截取中心点, 计算出最终截图的边框
-func DetermineCutFrame(dx, dy int, dxCenter, dyCenter int, aspectRatio float64) (image.Rectangle, error) {
+func DetermineCutFrame(dx, dy, dxCenter, dyCenter int, aspectRatio float64) (image.Rectangle, error) {
 	if dx == 0 || dy == 0 {
-		return image.Rectangle{}, fmt.Errorf("invalid image resolution")
+		return image.Rectangle{}, errInvalidResolution
 	}
 	if aspectRatio == 0 {
-		return image.Rectangle{}, fmt.Errorf("invalid aspectRatio")
+		return image.Rectangle{}, errInvalidAspectRatio
 	}
-	if float64(dx)/float64(dy) > aspectRatio { //宽高比大于预期, 那么可以以高度来反算宽度
+	if float64(dx)/float64(dy) > aspectRatio { // 宽高比大于预期, 那么可以以高度来反算宽度
 		return determineCutFrameViaHeight(dx, dy, dxCenter, aspectRatio)
 	}
 	return determineCutFrameViaWidth(dx, dy, dyCenter, aspectRatio)
@@ -71,20 +82,20 @@ func DetermineCutFrame(dx, dy int, dxCenter, dyCenter int, aspectRatio float64) 
 
 func CutImageViaRectangle(img image.Image, rect image.Rectangle) (image.Image, error) {
 	if img.Bounds().Max.X < rect.Max.X || img.Bounds().Max.Y < rect.Max.Y {
-		return nil, fmt.Errorf("invalid rectangle")
+		return nil, errInvalidRectangle
 	}
 	subImager, ok := img.(interface {
 		SubImage(r image.Rectangle) image.Image
 	})
 	if !ok {
-		return nil, fmt.Errorf("image does not support sub image")
+		return nil, errNoSubImageSupport
 	}
 	croppedImg := subImager.SubImage(rect)
 	return croppedImg, nil
 }
 
 func CutCensoredImage(img image.Image) (image.Image, error) {
-	//从最右侧进行裁剪
+	// 从最右侧进行裁剪
 	cutFrame, err := DetermineCutFrame(img.Bounds().Dx(), img.Bounds().Dy(), img.Bounds().Dx(), 0, defaultAspectRatio)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine cut frame, err:%w", err)
@@ -94,7 +105,7 @@ func CutCensoredImage(img image.Image) (image.Image, error) {
 
 func CutImageWithFaceRecUsing(ctx context.Context, faceRec face.IFaceRec, img image.Image) (image.Image, error) {
 	if faceRec == nil {
-		return nil, fmt.Errorf("no face recognizer")
+		return nil, errNoFaceRecognizer
 	}
 	data, err := toJpegData(img)
 	if err != nil {
@@ -102,10 +113,10 @@ func CutImageWithFaceRecUsing(ctx context.Context, faceRec face.IFaceRec, img im
 	}
 	fs, err := faceRec.SearchFaces(ctx, data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search faces: %w", err)
 	}
 	if len(fs) == 0 {
-		return nil, fmt.Errorf("no face found")
+		return nil, errNoFaceFound
 	}
 	selectedFace := face.FindMaxFace(fs)
 

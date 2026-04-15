@@ -38,7 +38,7 @@ func newRulesetScoreCmd() *cobra.Command {
 		Use:     "ruleset-score",
 		Aliases: []string{"ruleset_score"},
 		Short:   "Score movieid cleaner confidence for txt case files",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			res, err := scoreRulesetBundle(strings.TrimSpace(ruleset), strings.TrimSpace(casefile))
 			if err != nil {
 				return err
@@ -54,12 +54,12 @@ func newRulesetScoreCmd() *cobra.Command {
 	return cmd
 }
 
-func scoreRulesetBundle(ruleset string, casefile string) (*rulesetScoreOutput, error) {
+func scoreRulesetBundle(ruleset, casefile string) (*rulesetScoreOutput, error) {
 	if ruleset == "" {
-		return nil, fmt.Errorf("ruleset is required")
+		return nil, errRulesetRequired
 	}
 	if casefile == "" {
-		return nil, fmt.Errorf("casefile is required")
+		return nil, errCasefileRequired
 	}
 	resolved, err := resolveRuleSourcePath(".", ruleset)
 	if err != nil {
@@ -67,11 +67,11 @@ func scoreRulesetBundle(ruleset string, casefile string) (*rulesetScoreOutput, e
 	}
 	rs, err := movieidcleaner.LoadRuleSetFromPath(resolved)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load ruleset from path failed: %w", err)
 	}
 	cleaner, err := movieidcleaner.NewCleaner(rs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create cleaner failed: %w", err)
 	}
 	files, err := loadRulesetScoreCaseFile(casefile)
 	if err != nil {
@@ -109,7 +109,7 @@ type rulesetScoreInputFile struct {
 func loadRulesetScoreCaseFile(path string) ([]*rulesetScoreInputFile, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat case file %s failed: %w", path, err)
 	}
 	if info.IsDir() {
 		return loadRulesetScoreCaseDir(path)
@@ -124,7 +124,7 @@ func loadRulesetScoreCaseFile(path string) ([]*rulesetScoreInputFile, error) {
 func loadRulesetScoreCaseDir(dir string) ([]*rulesetScoreInputFile, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read case dir %s failed: %w", dir, err)
 	}
 	files := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -138,7 +138,7 @@ func loadRulesetScoreCaseDir(dir string) ([]*rulesetScoreInputFile, error) {
 	}
 	slices.Sort(files)
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no txt case files found in dir: %s", dir)
+		return nil, fmt.Errorf("no txt case files found in dir: %s: %w", dir, errNoCaseFilesInDir)
 	}
 	out := make([]*rulesetScoreInputFile, 0, len(files))
 	for _, file := range files {
@@ -154,7 +154,7 @@ func loadRulesetScoreCaseDir(dir string) ([]*rulesetScoreInputFile, error) {
 func loadRulesetScoreTXTFile(path string) (*rulesetScoreInputFile, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read case file %s failed: %w", path, err)
 	}
 	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(lines))
@@ -191,12 +191,14 @@ func buildScoredMovieID(raw string, res *movieidcleaner.Result) string {
 
 func renderRulesetScoreResult(out *os.File, result *rulesetScoreOutput, format string) error {
 	if format != "json" {
-		return fmt.Errorf("unsupported output format: %s", format)
+		return fmt.Errorf("unsupported output format: %s: %w", format, errUnsupportedOutputFormat)
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal score result failed: %w", err)
 	}
-	_, err = fmt.Fprintln(out, string(data))
-	return err
+	if _, err = fmt.Fprintln(out, string(data)); err != nil {
+		return fmt.Errorf("write score result failed: %w", err)
+	}
+	return nil
 }

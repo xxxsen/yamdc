@@ -2,7 +2,7 @@ package searcher
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"sync"
 
@@ -12,6 +12,8 @@ import (
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
+
+var errCheckOnCategorySearcher = errors.New("unable to perform check on category searcher")
 
 type RuntimeCategorySearcher struct {
 	mu           sync.RWMutex
@@ -40,22 +42,22 @@ func (s *RuntimeCategorySearcher) Name() string {
 	return "category"
 }
 
-func (s *RuntimeCategorySearcher) Check(ctx context.Context) error {
-	return fmt.Errorf("unable to perform check on category searcher")
+func (s *RuntimeCategorySearcher) Check(_ context.Context) error {
+	return errCheckOnCategorySearcher
 }
 
 func (s *RuntimeCategorySearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
 	cat := n.GetExternalFieldCategory()
-	//没分类, 那么使用主链进行查询
-	//存在分类, 但是分类对应的链没有配置, 则使用主链进行查询
-	//如果已经存在分类链, 则不再进行降级
-	logger := logutil.GetLogger(ctx).With(zap.String("cat", string(cat)))
+	// 没分类, 那么使用主链进行查询
+	// 存在分类, 但是分类对应的链没有配置, 则使用主链进行查询
+	// 如果已经存在分类链, 则不再进行降级
+	logger := logutil.GetLogger(ctx).With(zap.String("cat", cat))
 	s.mu.RLock()
 	chain := append([]ISearcher(nil), s.defSearcher...)
 	catChains := s.catSearchers
 	s.mu.RUnlock()
 	if len(cat) > 0 {
-		if c, ok := catChains[strings.ToUpper(strings.TrimSpace(string(cat)))]; ok {
+		if c, ok := catChains[strings.ToUpper(strings.TrimSpace(cat))]; ok {
 			chain = append([]ISearcher(nil), c...)
 			logger.Debug("use cat chain for search")
 		} else {

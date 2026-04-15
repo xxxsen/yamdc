@@ -6,7 +6,7 @@ type config struct {
 
 type Option func(c *config)
 
-func WithProxyUrl(p string) Option {
+func WithProxyURL(p string) Option {
 	return func(c *config) {
 		c.proxy = p
 	}

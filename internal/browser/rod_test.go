@@ -14,9 +14,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/browser"
 )
 
-var (
-	testRemoteURL = os.Getenv("BROWSER_REMOTE_URL") // e.g. "localhost:9222"
-)
+var testRemoteURL = os.Getenv("BROWSER_REMOTE_URL") // e.g. "localhost:9222"
 
 func newNavigator(t *testing.T) browser.INavigator {
 	t.Helper()
@@ -125,7 +123,7 @@ func TestBrowserWaitXPath(t *testing.T) {
 	if len(preview) > 3000 {
 		preview = preview[:3000] + "\n... (truncated)"
 	}
-	fmt.Printf("--- HTML preview (with XPath wait) ---\n%s\n", preview)
+	t.Logf("--- HTML preview (with XPath wait) ---\n%s", preview)
 }
 
 func TestBrowserInjectHeadersAndCookies(t *testing.T) {

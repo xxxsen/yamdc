@@ -10,7 +10,7 @@ type externalField struct {
 }
 
 type Number struct {
-	numberId          string
+	numberID          string
 	isChineseSubtitle bool
 	isMultiCD         bool
 	multiCDIndex      int
@@ -39,7 +39,7 @@ func (n *Number) GetExternalFieldCategory() string {
 }
 
 func (n *Number) GetNumberID() string {
-	return n.numberId
+	return n.numberID
 }
 
 func (n *Number) GetIsChineseSubtitle() bool {

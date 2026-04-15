@@ -29,7 +29,7 @@ func NewNavigator(cfg *Config) INavigator {
 	return NewRodNavigator(cfg.DataDir, cfg.Proxy)
 }
 
-func NewRodNavigator(dataDir string, proxy string) INavigator {
+func NewRodNavigator(dataDir, proxy string) INavigator {
 	return &rodBrowser{provider: newLocalProvider(dataDir, proxy)}
 }
 
@@ -45,63 +45,90 @@ func NewRemoteNavigator(remoteURL string) INavigator {
 func (rb *rodBrowser) Navigate(ctx context.Context, rawURL string, params *Params) (*NavigateResult, error) {
 	b, err := rb.provider.Acquire()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("acquire browser failed: %w", err)
 	}
 	defer func() {
 		rb.provider.Release()
 		logutil.GetLogger(ctx).Debug("browser navigate released")
 	}()
 
+	page, err := prepareStealthPage(b, rawURL, params)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = page.Close() }()
+
+	page = page.Context(ctx)
+	if err := navigatePage(page, rawURL, params); err != nil {
+		return nil, err
+	}
+
+	return collectNavigateResult(page)
+}
+
+func prepareStealthPage(b *rod.Browser, rawURL string, params *Params) (*rod.Page, error) {
 	page, err := stealth.Page(b)
 	if err != nil {
 		return nil, fmt.Errorf("create stealth page failed: %w", err)
 	}
-	defer func() { _ = page.Close() }()
-
 	if err := injectCookies(page, rawURL, params.Cookies); err != nil {
+		_ = page.Close()
 		return nil, fmt.Errorf("inject cookies failed: %w", err)
 	}
 	if err := injectHeaders(page, params.Headers); err != nil {
+		_ = page.Close()
 		return nil, fmt.Errorf("inject headers failed: %w", err)
 	}
+	return page, nil
+}
 
-	page = page.Context(ctx)
-
-	if params.WaitSelector != "" {
-		if err := page.Navigate(rawURL); err != nil {
-			return nil, fmt.Errorf("navigate to %s failed: %w", rawURL, err)
-		}
-		waitTimeout := defaultPageTimeout
-		if params.WaitTimeout > 0 {
-			waitTimeout = params.WaitTimeout
-		}
-		waitPage := page.Timeout(waitTimeout)
-		if _, err := waitPage.ElementX(params.WaitSelector); err != nil {
-			return nil, fmt.Errorf("wait xpath %q failed: %w", params.WaitSelector, err)
-		}
-	} else {
-		wait := page.WaitNavigation(proto.PageLifecycleEventNameNetworkAlmostIdle)
-		if err := page.Navigate(rawURL); err != nil {
-			return nil, fmt.Errorf("navigate to %s failed: %w", rawURL, err)
-		}
-		wait()
-	}
-
+func collectNavigateResult(page *rod.Page) (*NavigateResult, error) {
 	html, err := page.HTML()
 	if err != nil {
 		return nil, fmt.Errorf("get page html failed: %w", err)
 	}
-
-	pageCookies := extractCookies(page)
-
 	return &NavigateResult{
 		HTML:    []byte(html),
-		Cookies: pageCookies,
+		Cookies: extractCookies(page),
 	}, nil
 }
 
 func (rb *rodBrowser) Close() error {
-	return rb.provider.Close()
+	if err := rb.provider.Close(); err != nil {
+		return fmt.Errorf("close browser provider failed: %w", err)
+	}
+	return nil
+}
+
+func navigatePage(page *rod.Page, rawURL string, params *Params) error {
+	if params.WaitSelector != "" {
+		return navigateWithSelector(page, rawURL, params)
+	}
+	return navigateWithIdle(page, rawURL)
+}
+
+func navigateWithSelector(page *rod.Page, rawURL string, params *Params) error {
+	if err := page.Navigate(rawURL); err != nil {
+		return fmt.Errorf("navigate to %s failed: %w", rawURL, err)
+	}
+	waitTimeout := defaultPageTimeout
+	if params.WaitTimeout > 0 {
+		waitTimeout = params.WaitTimeout
+	}
+	waitPage := page.Timeout(waitTimeout)
+	if _, err := waitPage.ElementX(params.WaitSelector); err != nil {
+		return fmt.Errorf("wait xpath %q failed: %w", params.WaitSelector, err)
+	}
+	return nil
+}
+
+func navigateWithIdle(page *rod.Page, rawURL string) error {
+	wait := page.WaitNavigation(proto.PageLifecycleEventNameNetworkAlmostIdle)
+	if err := page.Navigate(rawURL); err != nil {
+		return fmt.Errorf("navigate to %s failed: %w", rawURL, err)
+	}
+	wait()
+	return nil
 }
 
 func injectCookies(page *rod.Page, rawURL string, cookies []*http.Cookie) error {
@@ -142,7 +169,10 @@ func injectHeaders(page *rod.Page, headers http.Header) error {
 		}
 	}
 	_, err := page.SetExtraHeaders(dict)
-	return err
+	if err != nil {
+		return fmt.Errorf("set extra headers failed: %w", err)
+	}
+	return nil
 }
 
 func extractCookies(page *rod.Page) []*http.Cookie {

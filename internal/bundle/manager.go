@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -27,9 +28,19 @@ const (
 	defaultRemoteSyncInterval = 24 * time.Hour
 )
 
-type OnDataReadyFunc func(context.Context, *BundleData) error
+var (
+	errBundleCallbackRequired   = errors.New("bundle manager callback is required")
+	errInvalidRemoteLocation    = errors.New("invalid remote bundle location")
+	errUnsupportedSourceType    = errors.New("unsupported bundle source type")
+	errDownloadBundleFailed     = errors.New("download bundle failed")
+	errQueryGitHubTagFailed     = errors.New("query latest github tag failed")
+	errNoGitHubTags             = errors.New("no github tags found for repo")
+	errLocalBundleNotADirectory = errors.New("local bundle path must be a directory")
+)
 
-type BundleData struct {
+type OnDataReadyFunc func(context.Context, *Data) error
+
+type Data struct {
 	Source string
 	FS     fs.FS
 	Base   string
@@ -37,7 +48,7 @@ type BundleData struct {
 	close  func() error
 }
 
-func (d *BundleData) Close() error {
+func (d *Data) Close() error {
 	if d == nil || d.close == nil {
 		return nil
 	}
@@ -61,13 +72,21 @@ type githubRepo struct {
 	repo  string
 }
 
-func NewManager(name string, dataDir string, cli client.IHTTPClient, sourceType string, location string, cacheSubDir string, cb OnDataReadyFunc) (*Manager, error) {
+func NewManager(
+	name,
+	dataDir string,
+	cli client.IHTTPClient,
+	sourceType,
+	location,
+	cacheSubDir string,
+	cb OnDataReadyFunc,
+) (*Manager, error) {
 	sourceType = strings.ToLower(strings.TrimSpace(sourceType))
 	if sourceType == "" {
 		sourceType = SourceTypeLocal
 	}
 	if cb == nil {
-		return nil, fmt.Errorf("bundle manager callback is required")
+		return nil, errBundleCallbackRequired
 	}
 	m := &Manager{
 		name:         strings.TrimSpace(name),
@@ -83,7 +102,7 @@ func NewManager(name string, dataDir string, cli client.IHTTPClient, sourceType 
 	case SourceTypeRemote:
 		repo, ok := parseGitHubRepoURL(m.location)
 		if !ok {
-			return nil, fmt.Errorf("invalid remote bundle location: %s", location)
+			return nil, fmt.Errorf("invalid remote bundle location: %s: %w", location, errInvalidRemoteLocation)
 		}
 		filename := fmt.Sprintf("%s-%s.zip", repo.owner, repo.repo)
 		m.cacheDir = filepath.Join(dataDir, cacheSubDir)
@@ -91,14 +110,14 @@ func NewManager(name string, dataDir string, cli client.IHTTPClient, sourceType 
 		m.tempPath = filepath.Join(m.cacheDir, filename+".temp")
 		return m, nil
 	default:
-		return nil, fmt.Errorf("unsupported bundle source type: %s", sourceType)
+		return nil, fmt.Errorf("unsupported bundle source type: %s: %w", sourceType, errUnsupportedSourceType)
 	}
 }
 
 func (m *Manager) Start(ctx context.Context) error {
 	switch m.sourceType {
 	case SourceTypeLocal:
-		data, err := openLocalBundleData(m.location)
+		data, err := openLocalData(m.location)
 		if err != nil {
 			return err
 		}
@@ -113,7 +132,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		go m.watchRemote(ctx)
 		return nil
 	default:
-		return fmt.Errorf("unsupported bundle source type: %s", m.sourceType)
+		return fmt.Errorf("unsupported bundle source type: %s: %w", m.sourceType, errUnsupportedSourceType)
 	}
 }
 
@@ -126,7 +145,7 @@ func (m *Manager) startRemote(ctx context.Context) error {
 		if _, statErr := os.Stat(m.zipPath); statErr != nil {
 			return fmt.Errorf("sync remote %s bundle failed: %w", m.name, err)
 		}
-		data, openErr := openZipBundleData(m.zipPath)
+		data, openErr := openZipData(m.zipPath)
 		if openErr != nil {
 			return openErr
 		}
@@ -138,7 +157,7 @@ func (m *Manager) startRemote(ctx context.Context) error {
 	if updated {
 		return nil
 	}
-	data, err := openZipBundleData(m.zipPath)
+	data, err := openZipData(m.zipPath)
 	if err != nil {
 		return err
 	}
@@ -157,15 +176,19 @@ func (m *Manager) watchRemote(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if _, err := m.syncAndActivate(ctx); err != nil {
-				logutil.GetLogger(ctx).Warn("bundle remote sync failed", zap.String("bundle", m.name), zap.String("location", m.location), zap.Error(err))
+				logutil.GetLogger(ctx).Warn("bundle remote sync failed",
+					zap.String("bundle", m.name),
+					zap.String("location", m.location),
+					zap.Error(err),
+				)
 			}
 		}
 	}
 }
 
 func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {
-	if err := os.MkdirAll(m.cacheDir, 0755); err != nil {
-		return false, err
+	if err := os.MkdirAll(m.cacheDir, 0o755); err != nil {
+		return false, fmt.Errorf("create bundle cache dir: %w", err)
 	}
 	if err := m.cleanupTemp(); err != nil {
 		return false, err
@@ -174,13 +197,18 @@ func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	downloadURL := fmt.Sprintf("https://codeload.github.com/%s/%s/zip/refs/tags/%s", parseRepoOrPanic(m.location).owner, parseRepoOrPanic(m.location).repo, url.PathEscape(tag))
+	downloadURL := fmt.Sprintf(
+		"https://codeload.github.com/%s/%s/zip/refs/tags/%s",
+		parseRepoOrPanic(m.location).owner,
+		parseRepoOrPanic(m.location).repo,
+		url.PathEscape(tag),
+	)
 	raw, err := m.downloadBundle(ctx, downloadURL)
 	if err != nil {
 		return false, err
 	}
-	if err := os.WriteFile(m.tempPath, raw, 0644); err != nil {
-		return false, err
+	if err := os.WriteFile(m.tempPath, raw, 0o600); err != nil {
+		return false, fmt.Errorf("write bundle temp file: %w", err)
 	}
 	keepTemp := false
 	defer func() {
@@ -199,7 +227,7 @@ func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {
 			return false, nil
 		}
 	}
-	data, err := openZipBundleData(m.tempPath)
+	data, err := openZipData(m.tempPath)
 	if err != nil {
 		return false, err
 	}
@@ -210,7 +238,7 @@ func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if err := os.Rename(m.tempPath, m.zipPath); err != nil {
-		return false, err
+		return false, fmt.Errorf("rename bundle temp to final: %w", err)
 	}
 	keepTemp = true
 	return true, nil
@@ -218,7 +246,7 @@ func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {
 
 func (m *Manager) cleanupTemp() error {
 	if err := os.Remove(m.tempPath); err != nil && !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("remove bundle temp file: %w", err)
 	}
 	return nil
 }
@@ -226,19 +254,23 @@ func (m *Manager) cleanupTemp() error {
 func (m *Manager) downloadBundle(ctx context.Context, downloadURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create bundle download request: %w", err)
 	}
 	rsp, err := m.cli.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute bundle download request: %w", err)
 	}
 	if rsp.StatusCode != http.StatusOK {
 		defer func() {
 			_ = rsp.Body.Close()
 		}()
-		return nil, fmt.Errorf("download bundle failed, status:%d", rsp.StatusCode)
+		return nil, fmt.Errorf("download bundle failed, status:%d: %w", rsp.StatusCode, errDownloadBundleFailed)
 	}
-	return client.ReadHTTPData(rsp)
+	data, err := client.ReadHTTPData(rsp)
+	if err != nil {
+		return nil, fmt.Errorf("read bundle download response: %w", err)
+	}
+	return data, nil
 }
 
 func (m *Manager) fetchLatestGitHubTag(ctx context.Context) (string, error) {
@@ -246,51 +278,51 @@ func (m *Manager) fetchLatestGitHubTag(ctx context.Context) (string, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=1", repo.owner, repo.repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create github tags request: %w", err)
 	}
 	rsp, err := m.cli.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("execute github tags request: %w", err)
 	}
 	defer func() {
 		_ = rsp.Body.Close()
 	}()
 	if rsp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("query latest github tag failed, status:%d", rsp.StatusCode)
+		return "", fmt.Errorf("query latest github tag failed, status:%d: %w", rsp.StatusCode, errQueryGitHubTagFailed)
 	}
 	data, err := client.ReadHTTPData(rsp)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read github tags response: %w", err)
 	}
 	var tags []struct {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(data, &tags); err != nil {
-		return "", err
+		return "", fmt.Errorf("unmarshal github tags: %w", err)
 	}
 	if len(tags) == 0 || strings.TrimSpace(tags[0].Name) == "" {
-		return "", fmt.Errorf("no github tags found for repo: %s/%s", repo.owner, repo.repo)
+		return "", fmt.Errorf("no github tags found for repo: %s/%s: %w", repo.owner, repo.repo, errNoGitHubTags)
 	}
 	return tags[0].Name, nil
 }
 
-func openLocalBundleData(dir string) (*BundleData, error) {
+func openLocalData(dir string) (*Data, error) {
 	absDir, err := filepath.Abs(strings.TrimSpace(dir))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve absolute bundle path: %w", err)
 	}
 	info, err := os.Stat(absDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat local bundle dir: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("local bundle path must be a directory: %s", absDir)
+		return nil, fmt.Errorf("local bundle path must be a directory: %s: %w", absDir, errLocalBundleNotADirectory)
 	}
 	files, err := listFilesFromFS(os.DirFS(absDir), ".")
 	if err != nil {
 		return nil, err
 	}
-	return &BundleData{
+	return &Data{
 		Source: absDir,
 		FS:     os.DirFS(absDir),
 		Base:   ".",
@@ -298,10 +330,10 @@ func openLocalBundleData(dir string) (*BundleData, error) {
 	}, nil
 }
 
-func openZipBundleData(zipPath string) (*BundleData, error) {
+func openZipData(zipPath string) (*Data, error) {
 	reader, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open bundle zip: %w", err)
 	}
 	root := detectZipRoot(reader.File)
 	base := "."
@@ -313,7 +345,7 @@ func openZipBundleData(zipPath string) (*BundleData, error) {
 		_ = reader.Close()
 		return nil, err
 	}
-	return &BundleData{
+	return &Data{
 		Source: zipPath,
 		FS:     &reader.Reader,
 		Base:   base,
@@ -337,7 +369,7 @@ func listFilesFromFS(fsys fs.FS, base string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk bundle filesystem: %w", err)
 	}
 	sort.Strings(files)
 	return files, nil
@@ -400,28 +432,28 @@ func fileExists(path string) (bool, error) {
 	if os.IsNotExist(err) {
 		return false, nil
 	}
-	return false, err
+	return false, fmt.Errorf("stat file: %w", err)
 }
 
-func filesEqual(left string, right string) (bool, error) {
+func filesEqual(left, right string) (bool, error) {
 	leftInfo, err := os.Stat(left)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("stat left file: %w", err)
 	}
 	rightInfo, err := os.Stat(right)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("stat right file: %w", err)
 	}
 	if leftInfo.Size() != rightInfo.Size() {
 		return false, nil
 	}
 	leftData, err := os.ReadFile(left)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read left file: %w", err)
 	}
 	rightData, err := os.ReadFile(right)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read right file: %w", err)
 	}
 	if len(leftData) != len(rightData) {
 		return false, nil

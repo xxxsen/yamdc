@@ -41,12 +41,12 @@ func TestBuildMovieIDCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(ruleDir, "ruleset"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "manifest.yaml"), []byte(`
 entry: ruleset
-`), 0o644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(ruleDir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
-`), 0o644))
+`), 0o600))
 
 	c := &config.Config{
 		DataDir: dataDir,
@@ -85,7 +85,7 @@ func TestPrepareSearcherPluginsAllowsBlankRemoteLocation(t *testing.T) {
 		},
 	}
 	manager, err := prepareSearcherPlugins(context.Background(), client.MustNewClient(), c)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errNoPluginSources)
 	require.Nil(t, manager)
 }
 
@@ -185,7 +185,7 @@ func writePluginBundleDir(t *testing.T, dir string, files map[string]string) {
 	for name, content := range files {
 		target := filepath.Join(dir, filepath.FromSlash(name))
 		require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
-		require.NoError(t, os.WriteFile(target, []byte(content), 0o644))
+		require.NoError(t, os.WriteFile(target, []byte(content), 0o600))
 	}
 }
 

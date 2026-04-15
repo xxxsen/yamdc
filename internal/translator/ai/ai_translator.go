@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,16 +12,20 @@ import (
 
 const (
 	defaultTranslatePrompt = `
-You are a professional translator. The following text is in either English or Japanese and comes from a movie or entertainment media. 
-Translate it into natural, fluent Chinese. ONLY output the translated Chinese text. Do not explain or comment. 
+You are a professional translator. The following text is in either English or Japanese
+and comes from a movie or entertainment media.
+Translate it into natural, fluent Chinese. ONLY output the translated Chinese text.
+Do not explain or comment.
 
 Text:
 "{WORDING}"
 `
 )
 
+var errAIEngineNotInit = errors.New("ai engine not init yet")
+
 var keywordsReplace = map[string]string{
-	//"schoolgirl": "girl",
+	// "schoolgirl": "girl",
 }
 
 type aiTranslator struct {
@@ -35,17 +40,17 @@ func (g *aiTranslator) replaceKeyword(in string) string {
 	return in
 }
 
-func (g *aiTranslator) Translate(ctx context.Context, wording string, _ string, _ string) (string, error) {
+func (g *aiTranslator) Translate(ctx context.Context, wording, _, _ string) (string, error) {
 	wording = g.replaceKeyword(wording)
 	if g.engine == nil {
-		return "", fmt.Errorf("ai engine not init yet")
+		return "", errAIEngineNotInit
 	}
 	args := map[string]interface{}{
 		"WORDING": wording,
 	}
 	res, err := g.engine.Complete(ctx, g.c.prompt, args)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("ai translate failed: %w", err)
 	}
 	return res, nil
 }
