@@ -18,6 +18,9 @@ var testRemoteURL = os.Getenv("BROWSER_REMOTE_URL") // e.g. "localhost:9222"
 
 func newNavigator(t *testing.T) browser.INavigator {
 	t.Helper()
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" && testRemoteURL == "" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 or BROWSER_REMOTE_URL to run browser integration tests")
+	}
 	var nav browser.INavigator
 	if testRemoteURL != "" {
 		t.Logf("Using remote browser at %s", testRemoteURL)

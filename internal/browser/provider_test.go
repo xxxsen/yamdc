@@ -70,10 +70,10 @@ func TestNewLocalProvider_WithProxy(t *testing.T) {
 
 func TestLocalProvider_Acquire_BrowserAlreadySet(t *testing.T) {
 	tests := []struct {
-		name          string
-		hasIdleTimer  bool
-		wantTimerNil  bool
-		wantActive    int
+		name         string
+		hasIdleTimer bool
+		wantTimerNil bool
+		wantActive   int
 	}{
 		{"no idle timer", false, true, 1},
 		{"with idle timer", true, true, 1},
@@ -132,9 +132,32 @@ func TestLocalProvider_EnsureBrowserLocked_AlreadySet(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestLocalProvider_Close_WithIdleTimerAndBrowser(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
+	dataDir := filepath.Join(os.TempDir(), "yamdc-test-close-timer-browser")
+	p := newLocalProvider(dataDir, "").(*localProvider)
+	_, err := p.Acquire()
+	if err != nil {
+		t.Skipf("cannot launch browser: %v", err)
+	}
+	p.mu.Lock()
+	p.idleTimer = time.AfterFunc(time.Hour, func() {})
+	p.mu.Unlock()
+
+	err = p.Close()
+	assert.NoError(t, err)
+	assert.Nil(t, p.browser)
+	assert.Nil(t, p.idleTimer)
+}
+
 // ---------- localProvider full lifecycle (real browser) ----------
 
 func TestLocalProvider_FullLifecycle(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	dataDir := filepath.Join(os.TempDir(), "yamdc-test-browser-lifecycle")
 	p := newLocalProvider(dataDir, "").(*localProvider)
 	t.Cleanup(func() { _ = p.Close() })
@@ -170,6 +193,9 @@ func TestLocalProvider_FullLifecycle(t *testing.T) {
 }
 
 func TestLocalProvider_FullLifecycle_WithProxy(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	dataDir := filepath.Join(os.TempDir(), "yamdc-test-browser-proxy")
 	p := newLocalProvider(dataDir, "http://nonexistent-proxy:9999").(*localProvider)
 	t.Cleanup(func() { _ = p.Close() })
@@ -185,6 +211,9 @@ func TestLocalProvider_FullLifecycle_WithProxy(t *testing.T) {
 // ---------- remoteProvider tests ----------
 
 func TestRemoteProvider_AcquireConnectFailure(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	p := newRemoteProvider("http://127.0.0.1:1").(*remoteProvider)
 	_, err := p.Acquire()
 	assert.Error(t, err)
@@ -215,7 +244,7 @@ func TestRemoteProvider_Close_WithBrowser(t *testing.T) {
 	assert.Nil(t, p.browser)
 }
 
-func TestRemoteProvider_Release(t *testing.T) {
+func TestRemoteProvider_Release(_ *testing.T) {
 	p := newRemoteProvider("ws://localhost:0").(*remoteProvider)
 	p.Release()
 }
@@ -223,6 +252,9 @@ func TestRemoteProvider_Release(t *testing.T) {
 // ---------- idle timer callback ----------
 
 func TestLocalProvider_IdleTimerCallback(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	saved := browserIdleTimeout
 	browserIdleTimeout = 10 * time.Millisecond
 	t.Cleanup(func() { browserIdleTimeout = saved })
@@ -238,10 +270,13 @@ func TestLocalProvider_IdleTimerCallback(t *testing.T) {
 
 	p.Release()
 
-	time.Sleep(200 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.browser == nil
+	}, 2*time.Second, 10*time.Millisecond, "browser should be closed by idle timer")
 
 	p.mu.Lock()
-	assert.Nil(t, p.browser, "browser should be closed by idle timer")
 	assert.Nil(t, p.idleTimer, "timer reference should be cleared")
 	p.mu.Unlock()
 }
@@ -259,10 +294,13 @@ func TestLocalProvider_IdleTimerCallback_ActiveCount(t *testing.T) {
 	p.startIdleTimerLocked()
 	p.mu.Unlock()
 
-	time.Sleep(200 * time.Millisecond)
+	assert.Never(t, func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.browser == nil
+	}, 200*time.Millisecond, 10*time.Millisecond, "browser should NOT be closed when activeCount > 0")
 
 	p.mu.Lock()
-	assert.NotNil(t, p.browser, "browser should NOT be closed when activeCount > 0")
 	if p.idleTimer != nil {
 		p.idleTimer.Stop()
 	}

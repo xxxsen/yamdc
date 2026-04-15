@@ -700,9 +700,13 @@ func TestTriggerFullSync(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		libraryDir := t.TempDir()
 		svc := newTestMediaServiceWithDirs(t, libraryDir, t.TempDir())
-		err := svc.TriggerFullSync(context.Background())
+		ctx := context.Background()
+		err := svc.TriggerFullSync(ctx)
 		require.NoError(t, err)
-		time.Sleep(100 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			st, stErr := svc.getTaskState(ctx, TaskSync)
+			return stErr == nil && st.Status == "completed"
+		}, 5*time.Second, 10*time.Millisecond)
 	})
 }
 
@@ -737,9 +741,13 @@ func TestTriggerMove(t *testing.T) {
 		libraryDir := t.TempDir()
 		saveDir := t.TempDir()
 		svc := newTestMediaServiceWithDirs(t, libraryDir, saveDir)
-		err := svc.TriggerMove(context.Background())
+		ctx := context.Background()
+		err := svc.TriggerMove(ctx)
 		require.NoError(t, err)
-		time.Sleep(100 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			st, stErr := svc.getTaskState(ctx, TaskMove)
+			return stErr == nil && st.Status == "completed"
+		}, 5*time.Second, 10*time.Millisecond)
 	})
 }
 

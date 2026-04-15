@@ -32,6 +32,9 @@ var (
 
 func getTestBrowser(t *testing.T) *rod.Browser {
 	t.Helper()
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	testBrowserOnce.Do(func() {
 		browserDir := filepath.Join(os.TempDir(), "yamdc-test-browser-shared", "browser")
 		launcher.DefaultBrowserDir = browserDir
@@ -71,7 +74,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, `<!DOCTYPE html><html><body><div id="content">hello</div></body></html>`)
+		_, _ = fmt.Fprint(w, `<!DOCTYPE html><html><body><div id="content">hello</div></body></html>`)
 	}))
 	t.Cleanup(srv.Close)
 	return srv
@@ -179,6 +182,9 @@ func TestRodBrowser_Close_ProviderSuccess(t *testing.T) {
 // ---------- rodBrowser.Navigate error paths ----------
 
 func TestRodBrowser_Navigate_AcquireError(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	nav := NewRemoteNavigator("http://127.0.0.1:1")
 	_, err := nav.Navigate(context.Background(), "http://example.com", &Params{})
 	require.Error(t, err)
@@ -195,6 +201,21 @@ func TestRodBrowser_Navigate_AcquireError_MockProvider(t *testing.T) {
 		},
 	}
 	_, err := rb.Navigate(context.Background(), "http://example.com", &Params{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "acquire browser failed")
+}
+
+func TestRodBrowser_Navigate_InjectCookiesError_Mock(t *testing.T) {
+	rb := &rodBrowser{
+		provider: &mockBrowserProvider{
+			acquireFunc: func() (*rod.Browser, error) {
+				return nil, errors.New("no browser")
+			},
+		},
+	}
+	_, err := rb.Navigate(context.Background(), "http://[::1", &Params{
+		Cookies: []*http.Cookie{{Name: "a", Value: "1"}},
+	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "acquire browser failed")
 }
@@ -401,7 +422,68 @@ func TestCollectNavigateResult(t *testing.T) {
 	assert.Contains(t, string(result.HTML), "hello")
 }
 
-// ---------- injectCookies (rod.go) ----------
+// ---------- buildCookieSetParams (rod.go) — pure logic ----------
+
+func TestBuildCookieSetParams(t *testing.T) {
+	tests := []struct {
+		name    string
+		rawURL  string
+		cookies []*http.Cookie
+		wantLen int
+		wantErr bool
+		errMsg  string
+	}{
+		{"nil cookies", "http://example.com", nil, 0, false, ""},
+		{"empty cookies", "http://example.com", []*http.Cookie{}, 0, false, ""},
+		{"invalid url", "http://[::1", []*http.Cookie{{Name: "a", Value: "1"}}, 0, true, "parse url"},
+		{"single cookie", "http://example.com", []*http.Cookie{{Name: "a", Value: "1"}}, 1, false, ""},
+		{"multiple cookies", "http://example.com/path", []*http.Cookie{
+			{Name: "a", Value: "1"}, {Name: "b", Value: "2"},
+		}, 2, false, ""},
+		{"duplicate names deduped", "https://example.com", []*http.Cookie{
+			{Name: "a", Value: "1"}, {Name: "b", Value: "2"}, {Name: "a", Value: "3"},
+		}, 2, false, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			params, err := buildCookieSetParams(tc.rawURL, tc.cookies)
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errMsg)
+				return
+			}
+			require.NoError(t, err)
+			assert.Len(t, params, tc.wantLen)
+			for _, p := range params {
+				assert.Equal(t, "/", p.Path)
+				assert.NotEmpty(t, p.Domain)
+			}
+		})
+	}
+}
+
+func TestBuildCookieSetParams_DomainExtraction(t *testing.T) {
+	tests := []struct {
+		name       string
+		rawURL     string
+		wantDomain string
+	}{
+		{"http host", "http://example.com/page", "example.com"},
+		{"https host with port", "https://example.com:8443/page", "example.com"},
+		{"ip address", "http://192.168.1.1/page", "192.168.1.1"},
+		{"localhost", "http://localhost:3000", "localhost"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			params, err := buildCookieSetParams(tc.rawURL, []*http.Cookie{{Name: "k", Value: "v"}})
+			require.NoError(t, err)
+			require.Len(t, params, 1)
+			assert.Equal(t, tc.wantDomain, params[0].Domain)
+		})
+	}
+}
+
+// ---------- injectCookies (rod.go) — real browser paths ----------
 
 func TestInjectCookiesRod(t *testing.T) {
 	b := getTestBrowser(t)
@@ -409,68 +491,67 @@ func TestInjectCookiesRod(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		rawURL  string
 		cookies []*http.Cookie
-		wantErr bool
-		errMsg  string
 	}{
-		{
-			name:    "nil cookies",
-			rawURL:  srv.URL,
-			cookies: nil,
-		},
-		{
-			name:    "empty cookies",
-			rawURL:  srv.URL,
-			cookies: []*http.Cookie{},
-		},
-		{
-			name:    "single cookie",
-			rawURL:  srv.URL,
-			cookies: []*http.Cookie{{Name: "a", Value: "1"}},
-		},
-		{
-			name:    "multiple cookies",
-			rawURL:  srv.URL,
-			cookies: []*http.Cookie{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}},
-		},
-		{
-			name:    "duplicate cookie names",
-			rawURL:  srv.URL,
-			cookies: []*http.Cookie{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}, {Name: "a", Value: "3"}},
-		},
-		{
-			name:    "invalid url",
-			rawURL:  "http://[::1",
-			cookies: []*http.Cookie{{Name: "a", Value: "1"}},
-			wantErr: true,
-			errMsg:  "parse url",
-		},
+		{"single cookie", []*http.Cookie{{Name: "a", Value: "1"}}},
+		{"multiple cookies", []*http.Cookie{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}}},
+		{"duplicate cookie names", []*http.Cookie{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}, {Name: "a", Value: "3"}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if len(tc.cookies) == 0 {
-				err := injectCookies(nil, tc.rawURL, tc.cookies)
-				assert.NoError(t, err)
-				return
-			}
-			if tc.wantErr {
-				err := injectCookies(nil, tc.rawURL, tc.cookies)
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errMsg)
-				return
-			}
 			page, err := stealth.Page(b)
 			require.NoError(t, err)
 			defer func() { _ = page.Close() }()
 
-			err = injectCookies(page, tc.rawURL, tc.cookies)
+			err = injectCookies(page, srv.URL, tc.cookies)
 			assert.NoError(t, err)
 		})
 	}
 }
 
-// ---------- injectHeaders (rod.go) ----------
+// ---------- buildExtraHeaders (rod.go) — pure logic ----------
+
+func TestBuildExtraHeaders(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers http.Header
+		wantNil bool
+		wantLen int
+	}{
+		{"nil headers", nil, true, 0},
+		{"empty headers", http.Header{}, true, 0},
+		{"single header", http.Header{"X-Custom": {"val"}}, false, 2},
+		{"multiple headers", http.Header{"X-A": {"1"}, "X-B": {"2"}}, false, 4},
+		{"header with empty values only", http.Header{"X-Empty": {}}, false, 0},
+		{"mixed headers", http.Header{"X-A": {"1"}, "X-Empty": {}, "X-B": {"2"}}, false, 4},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := buildExtraHeaders(tc.headers)
+			if tc.wantNil {
+				assert.Nil(t, result)
+			} else {
+				assert.Len(t, result, tc.wantLen)
+			}
+		})
+	}
+}
+
+func TestInjectHeaders_NilDict(t *testing.T) {
+	err := injectHeaders(nil, nil)
+	assert.NoError(t, err)
+	err = injectHeaders(nil, http.Header{})
+	assert.NoError(t, err)
+}
+
+func TestInjectCookies_EmptyParams(t *testing.T) {
+	err := injectCookies(nil, "http://example.com", nil)
+	assert.NoError(t, err)
+	err = injectCookies(nil, "http://example.com", []*http.Cookie{})
+	assert.NoError(t, err)
+}
+
+// ---------- injectHeaders (rod.go) — real browser paths ----------
 
 func TestInjectHeadersRod(t *testing.T) {
 	b := getTestBrowser(t)
@@ -478,21 +559,13 @@ func TestInjectHeadersRod(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers http.Header
-		needsPage bool
 	}{
-		{"nil headers", nil, false},
-		{"empty headers", http.Header{}, false},
-		{"single header", http.Header{"X-Custom": {"val"}}, true},
-		{"multiple headers", http.Header{"X-A": {"1"}, "X-B": {"2"}}, true},
-		{"header with empty values", http.Header{"X-Empty": {}}, true},
+		{"single header", http.Header{"X-Custom": {"val"}}},
+		{"multiple headers", http.Header{"X-A": {"1"}, "X-B": {"2"}}},
+		{"header with empty values", http.Header{"X-Empty": {}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if !tc.needsPage {
-				err := injectHeaders(nil, tc.headers)
-				assert.NoError(t, err)
-				return
-			}
 			page, err := stealth.Page(b)
 			require.NoError(t, err)
 			defer func() { _ = page.Close() }()
@@ -503,7 +576,104 @@ func TestInjectHeadersRod(t *testing.T) {
 	}
 }
 
-// ---------- extractCookies (rod.go) ----------
+// ---------- convertRodCookies (rod.go) — pure logic ----------
+
+func TestConvertRodCookies(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []*proto.NetworkCookie
+		wantLen int
+	}{
+		{"nil input", nil, 0},
+		{"empty input", []*proto.NetworkCookie{}, 0},
+		{"single cookie", []*proto.NetworkCookie{
+			{Name: "a", Value: "1", Domain: ".example.com", Path: "/", Secure: true, HTTPOnly: true},
+		}, 1},
+		{"multiple cookies", []*proto.NetworkCookie{
+			{Name: "a", Value: "1", Domain: ".example.com", Path: "/"},
+			{Name: "b", Value: "2", Domain: ".other.com", Path: "/api"},
+		}, 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := convertRodCookies(tc.input)
+			if tc.wantLen == 0 {
+				assert.Nil(t, result)
+			} else {
+				assert.Len(t, result, tc.wantLen)
+			}
+		})
+	}
+}
+
+func TestConvertRodCookies_FieldMapping(t *testing.T) {
+	input := []*proto.NetworkCookie{{
+		Name:     "session",
+		Value:    "abc123",
+		Domain:   ".example.com",
+		Path:     "/app",
+		Secure:   true,
+		HTTPOnly: true,
+	}}
+	result := convertRodCookies(input)
+	require.Len(t, result, 1)
+	c := result[0]
+	assert.Equal(t, "session", c.Name)
+	assert.Equal(t, "abc123", c.Value)
+	assert.Equal(t, ".example.com", c.Domain)
+	assert.Equal(t, "/app", c.Path)
+	assert.True(t, c.Secure)
+	assert.True(t, c.HttpOnly)
+	assert.True(t, c.Expires.IsZero())
+}
+
+func TestConvertRodCookies_Expires(t *testing.T) {
+	tests := []struct {
+		name     string
+		expires  proto.TimeSinceEpoch
+		wantZero bool
+	}{
+		{"no expiry", 0, true},
+		{"with expiry", proto.TimeSinceEpoch(1700000000), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := convertRodCookies([]*proto.NetworkCookie{{
+				Name: "ck", Value: "v", Expires: tc.expires,
+			}})
+			require.Len(t, result, 1)
+			if tc.wantZero {
+				assert.True(t, result[0].Expires.IsZero())
+			} else {
+				assert.False(t, result[0].Expires.IsZero())
+			}
+		})
+	}
+}
+
+func TestConvertRodCookies_SameSite(t *testing.T) {
+	tests := []struct {
+		name         string
+		sameSite     proto.NetworkCookieSameSite
+		wantSameSite http.SameSite
+	}{
+		{"lax", proto.NetworkCookieSameSiteLax, http.SameSiteLaxMode},
+		{"strict", proto.NetworkCookieSameSiteStrict, http.SameSiteStrictMode},
+		{"none", proto.NetworkCookieSameSiteNone, http.SameSiteNoneMode},
+		{"default/empty", "", 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := convertRodCookies([]*proto.NetworkCookie{{
+				Name: "ck", Value: "v", SameSite: tc.sameSite,
+			}})
+			require.Len(t, result, 1)
+			assert.Equal(t, tc.wantSameSite, result[0].SameSite)
+		})
+	}
+}
+
+// ---------- extractCookies (rod.go) — real browser ----------
 
 func TestExtractCookiesRod(t *testing.T) {
 	b := getTestBrowser(t)
@@ -685,6 +855,9 @@ func TestRemoteProvider_Acquire_Success(t *testing.T) {
 // ---------- prepareStealthPage with dead browser ----------
 
 func TestPrepareStealthPage_BrowserClosed(t *testing.T) {
+	if os.Getenv("YAMDC_BROWSER_TEST") != "1" {
+		t.Skip("set YAMDC_BROWSER_TEST=1 to run browser-dependent tests")
+	}
 	browserDir := filepath.Join(os.TempDir(), "yamdc-test-stealth-closed", "browser")
 	launcher.DefaultBrowserDir = browserDir
 	l := launcher.New().NoSandbox(true).Set("disable-gpu").Set("disable-dev-shm-usage")

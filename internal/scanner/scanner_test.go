@@ -196,6 +196,8 @@ func TestStartHonorsNonPositiveIntervalAndExitsOnCancel(t *testing.T) {
 	defer cancel()
 
 	scanDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "IMM-001.mp4"), []byte("x"), 0o600))
+
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -205,17 +207,26 @@ func TestStartHonorsNonPositiveIntervalAndExitsOnCancel(t *testing.T) {
 	repo := repository.NewJobRepository(sqlite.DB())
 	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
 
+	pollCtx := context.Background()
 	svc.Start(ctx, 0)
-	time.Sleep(30 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileName == "IMM-001.mp4"
+	}, 2*time.Second, 5*time.Millisecond, "first background scan should upsert the media file")
+
 	cancel()
-	time.Sleep(30 * time.Millisecond)
+	// Start runs in a goroutine; allow time for it to observe ctx cancellation after any in-flight Scan.
+	time.Sleep(500 * time.Millisecond)
 }
 
 func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	scanDir := t.TempDir()
+	mediaPath := filepath.Join(scanDir, "TICK-001.mp4")
+	require.NoError(t, os.WriteFile(mediaPath, []byte("a"), 0o600))
+
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -225,9 +236,20 @@ func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
 	repo := repository.NewJobRepository(sqlite.DB())
 	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
 
+	pollCtx := context.Background()
 	svc.Start(ctx, 5*time.Millisecond)
-	<-ctx.Done()
-	time.Sleep(10 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 1
+	}, 2*time.Second, 5*time.Millisecond, "initial scan should record file_size=1")
+
+	require.NoError(t, os.WriteFile(mediaPath, []byte("bb"), 0o600))
+	require.Eventually(t, func() bool {
+		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
+		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 2
+	}, 2*time.Second, 5*time.Millisecond, "periodic scan should pick up new file size")
+
+	cancel()
 }
 
 func TestNewRegistersExtraMediaExtensionsCaseInsensitive(t *testing.T) {

@@ -21,7 +21,9 @@ import (
 func pigoCascadeRoot(t *testing.T) string {
 	t.Helper()
 	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/esimov/pigo").Output()
-	require.NoError(t, err)
+	if err != nil {
+		t.Skipf("cannot locate pigo module: %v", err)
+	}
 	return strings.TrimSpace(string(out))
 }
 

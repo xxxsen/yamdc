@@ -50,7 +50,6 @@ func TestStore(t *testing.T) {
 	// 测试不过期的数据
 	err = PutDataTo(ctx, storage, "zzz", []byte("aaa"))
 	assert.NoError(t, err)
-	time.Sleep(1 * time.Second)
 	exist, err = IsDataExistIn(ctx, storage, "zzz")
 	assert.NoError(t, err)
 	assert.True(t, exist)
@@ -150,9 +149,10 @@ func TestSqliteStore_GetData_Expired(t *testing.T) {
 
 	ctx := context.Background()
 	require.NoError(t, s.PutData(ctx, "expkey", []byte("v"), 1*time.Millisecond))
-	time.Sleep(50 * time.Millisecond)
-	_, getErr := s.GetData(ctx, "expkey")
-	assert.Error(t, getErr)
+	assert.Eventually(t, func() bool {
+		_, getErr := s.GetData(ctx, "expkey")
+		return getErr != nil
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSqliteStore_IsDataExist_Expired(t *testing.T) {
@@ -163,10 +163,10 @@ func TestSqliteStore_IsDataExist_Expired(t *testing.T) {
 
 	ctx := context.Background()
 	require.NoError(t, s.PutData(ctx, "expkey", []byte("v"), 1*time.Millisecond))
-	time.Sleep(50 * time.Millisecond)
-	ok, err := s.IsDataExist(ctx, "expkey")
-	require.NoError(t, err)
-	assert.False(t, ok)
+	assert.Eventually(t, func() bool {
+		ok, existErr := s.IsDataExist(ctx, "expkey")
+		return existErr == nil && !ok
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSqliteStore_CleanupExpired_DirectCall(t *testing.T) {
@@ -177,7 +177,10 @@ func TestSqliteStore_CleanupExpired_DirectCall(t *testing.T) {
 
 	ctx := context.Background()
 	require.NoError(t, s.PutData(ctx, "expkey", []byte("v"), 1*time.Millisecond))
-	time.Sleep(50 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		_, getErr := s.GetData(ctx, "expkey")
+		return getErr != nil
+	}, 5*time.Second, 100*time.Millisecond)
 	require.NoError(t, s.cleanupExpired(ctx))
 
 	var cnt int

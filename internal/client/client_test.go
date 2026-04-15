@@ -72,12 +72,12 @@ func TestClientWrap_Do_TransportError(t *testing.T) {
 
 func TestNewClient_TimeoutEnforced(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
 
-	cli, err := NewClient(WithTimeout(15 * time.Millisecond))
+	cli, err := NewClient(WithTimeout(50 * time.Millisecond))
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
 	require.NoError(t, err)
