@@ -51,13 +51,13 @@ func TestNewHTTPClient_NoParams_DelegatesToImpl(t *testing.T) {
 
 	impl := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return http.DefaultClient.Do(req) //nolint:bodyclose
+			return http.DefaultClient.Do(req) //nolint:gosec
 		},
 	}
 	nav := &mockNavigator{
 		navigateFunc: func(_ context.Context, _ string, _ *Params) (*NavigateResult, error) {
 			t.Fatal("navigator should not be called without params")
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		},
 	}
 	client := NewHTTPClient(impl, nav)
@@ -80,7 +80,10 @@ func TestNewHTTPClient_NoParams_ImplError(t *testing.T) {
 	client := NewHTTPClient(impl, nav)
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
-	_, err := client.Do(req)
+	rsp, err := client.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http request failed")
 }
@@ -89,7 +92,7 @@ func TestNewHTTPClient_WithParams_DelegatesToNavigator(t *testing.T) {
 	impl := &mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("impl should not be called when params present")
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		},
 	}
 	nav := &mockNavigator{
@@ -133,7 +136,10 @@ func TestNewHTTPClient_WithParams_NavigatorError(t *testing.T) {
 	params := &Params{WaitSelector: "//div"}
 	ctx := WithParams(context.Background(), params)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com", nil)
-	_, err := client.Do(req)
+	rsp, err := client.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "browser navigate failed")
 }
@@ -158,7 +164,7 @@ func TestNewHTTPClient_WithParams_NilHeaders(t *testing.T) {
 func TestNewHTTPClient_CookieJar_PersistsAcrossCalls(t *testing.T) {
 	callCount := 0
 	nav := &mockNavigator{
-		navigateFunc: func(_ context.Context, _ string, p *Params) (*NavigateResult, error) {
+		navigateFunc: func(_ context.Context, _ string, _ *Params) (*NavigateResult, error) {
 			callCount++
 			return &NavigateResult{
 				HTML:    []byte("ok"),
@@ -220,7 +226,10 @@ func TestInjectCookies_NoDuplicates(t *testing.T) {
 	req2 := &http.Request{Method: http.MethodGet, URL: u, Header: make(http.Header)}
 	req2 = req2.WithContext(context.Background())
 	req2.AddCookie(&http.Cookie{Name: "browser_ck", Value: "existing"})
-	_, err = client.Do(req2)
+	rsp2, err := client.Do(req2)
+	if rsp2 != nil && rsp2.Body != nil {
+		defer func() { _ = rsp2.Body.Close() }()
+	}
 	require.NoError(t, err)
 
 	cookies := capturedReq.Cookies()
@@ -297,7 +306,10 @@ func TestInjectCookies_WithExistingCookies(t *testing.T) {
 
 	req2 := &http.Request{Method: http.MethodGet, URL: u, Header: make(http.Header)}
 	req2 = req2.WithContext(context.Background())
-	_, err = client.Do(req2)
+	rsp2, err := client.Do(req2)
+	if rsp2 != nil && rsp2.Body != nil {
+		defer func() { _ = rsp2.Body.Close() }()
+	}
 	require.NoError(t, err)
 
 	found := false

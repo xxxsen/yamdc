@@ -154,7 +154,7 @@ func TestDetectZipRoot(t *testing.T) {
 func TestFileExists(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "exists.txt")
-	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
 
 	ok, err := fileExists(f)
 	require.NoError(t, err)
@@ -173,9 +173,9 @@ func TestFilesEqual(t *testing.T) {
 	b := filepath.Join(dir, "b.txt")
 	c := filepath.Join(dir, "c.txt")
 
-	require.NoError(t, os.WriteFile(a, []byte("hello"), 0o644))
-	require.NoError(t, os.WriteFile(b, []byte("hello"), 0o644))
-	require.NoError(t, os.WriteFile(c, []byte("world"), 0o644))
+	require.NoError(t, os.WriteFile(a, []byte("hello"), 0o600))
+	require.NoError(t, os.WriteFile(b, []byte("hello"), 0o600))
+	require.NoError(t, os.WriteFile(c, []byte("world"), 0o600))
 
 	eq, err := filesEqual(a, b)
 	require.NoError(t, err)
@@ -190,8 +190,8 @@ func TestFilesEqual_DifferentSizes(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.txt")
 	b := filepath.Join(dir, "b.txt")
-	require.NoError(t, os.WriteFile(a, []byte("short"), 0o644))
-	require.NoError(t, os.WriteFile(b, []byte("longer content"), 0o644))
+	require.NoError(t, os.WriteFile(a, []byte("short"), 0o600))
+	require.NoError(t, os.WriteFile(b, []byte("longer content"), 0o600))
 
 	eq, err := filesEqual(a, b)
 	require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestFilesEqual_DifferentSizes(t *testing.T) {
 func TestFilesEqual_LeftMissing(t *testing.T) {
 	dir := t.TempDir()
 	b := filepath.Join(dir, "b.txt")
-	require.NoError(t, os.WriteFile(b, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(b, []byte("x"), 0o600))
 	_, err := filesEqual(filepath.Join(dir, "missing"), b)
 	assert.Error(t, err)
 }
@@ -209,7 +209,7 @@ func TestFilesEqual_LeftMissing(t *testing.T) {
 func TestFilesEqual_RightMissing(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.txt")
-	require.NoError(t, os.WriteFile(a, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(a, []byte("x"), 0o600))
 	_, err := filesEqual(a, filepath.Join(dir, "missing"))
 	assert.Error(t, err)
 }
@@ -218,9 +218,9 @@ func TestFilesEqual_RightMissing(t *testing.T) {
 
 func TestOpenLocalData_Success(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte("a"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "b.yaml"), []byte("b"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "b.yaml"), []byte("b"), 0o600))
 
 	data, err := openLocalData(dir)
 	require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestOpenLocalData_Success(t *testing.T) {
 
 func TestOpenLocalData_NotADir(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "file.txt")
-	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
 
 	_, err := openLocalData(f)
 	require.Error(t, err)
@@ -254,7 +254,7 @@ func TestOpenZipData_Success(t *testing.T) {
 		"root/a.yaml":     "content_a",
 		"root/sub/b.yaml": "content_b",
 	})
-	require.NoError(t, os.WriteFile(zipPath, zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(zipPath, zipBytes, 0o600))
 
 	data, err := openZipData(zipPath)
 	require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestOpenZipData_Success(t *testing.T) {
 
 func TestOpenZipData_InvalidZip(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "bad.zip")
-	require.NoError(t, os.WriteFile(f, []byte("not-a-zip"), 0o644))
+	require.NoError(t, os.WriteFile(f, []byte("not-a-zip"), 0o600))
 	_, err := openZipData(f)
 	require.Error(t, err)
 }
@@ -280,9 +280,9 @@ func TestOpenZipData_InvalidZip(t *testing.T) {
 
 func TestListFilesFromFS(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "y.txt"), []byte("y"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "y.txt"), []byte("y"), 0o600))
 
 	files, err := listFilesFromFS(os.DirFS(dir), ".")
 	require.NoError(t, err)
@@ -333,7 +333,7 @@ func TestNewManager_Remote_Valid(t *testing.T) {
 
 func TestStart_Local_Success(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "f.yaml"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "f.yaml"), []byte("x"), 0o600))
 
 	var received *Data
 	m, err := NewManager("test", "/tmp", nil, "local", dir, "", func(_ context.Context, d *Data) error {
@@ -350,7 +350,7 @@ func TestStart_Local_Success(t *testing.T) {
 
 func TestStart_Local_CBError(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "f.yaml"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "f.yaml"), []byte("x"), 0o600))
 
 	m, err := NewManager("test", "/tmp", nil, "local", dir, "", func(_ context.Context, _ *Data) error {
 		return errors.New("cb error")
@@ -374,8 +374,8 @@ func TestStart_Remote_Success(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "content"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -392,7 +392,7 @@ func TestStart_Remote_Success(t *testing.T) {
 		doFunc: func(req *http.Request) (*http.Response, error) {
 			req.URL.Scheme = "http"
 			req.URL.Host = srv.Listener.Addr().String()
-			return http.DefaultClient.Do(req) //nolint:bodyclose
+			return http.DefaultClient.Do(req) //nolint:gosec
 		},
 	}, "remote", "https://github.com/owner/repo", "cache", func(_ context.Context, d *Data) error {
 		received = d
@@ -412,7 +412,7 @@ func TestStart_Remote_FetchTagsFails_FallbackToCache(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o600))
 
 	var received *Data
 	m, err := NewManager("test", dataDir, &mockHTTPClient{
@@ -464,7 +464,7 @@ func TestFetchLatestGitHubTag_Success(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -485,7 +485,7 @@ func TestFetchLatestGitHubTag_NonOKStatus(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -507,7 +507,7 @@ func TestFetchLatestGitHubTag_EmptyTags(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -528,7 +528,7 @@ func TestFetchLatestGitHubTag_InvalidJSON(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -561,7 +561,7 @@ func TestDownloadBundle_Success(t *testing.T) {
 	m := &Manager{
 		cli: &mockHTTPClient{
 			doFunc: func(req *http.Request) (*http.Response, error) {
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -579,7 +579,7 @@ func TestDownloadBundle_Non200(t *testing.T) {
 	m := &Manager{
 		cli: &mockHTTPClient{
 			doFunc: func(req *http.Request) (*http.Response, error) {
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -609,7 +609,7 @@ func TestCleanupTemp_NoFile(t *testing.T) {
 
 func TestCleanupTemp_FileExists(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "test.temp")
-	require.NoError(t, os.WriteFile(tmp, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(tmp, []byte("x"), 0o600))
 	m := &Manager{tempPath: tmp}
 	assert.NoError(t, m.cleanupTemp())
 	_, err := os.Stat(tmp)
@@ -622,8 +622,8 @@ func TestSyncAndActivate_UpdatedTrue(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -645,7 +645,7 @@ func TestSyncAndActivate_UpdatedTrue(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, d *Data) error {
@@ -663,8 +663,8 @@ func TestSyncAndActivate_SameContent_NotUpdated(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -678,7 +678,7 @@ func TestSyncAndActivate_SameContent_NotUpdated(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o600))
 
 	m := &Manager{
 		location: "https://github.com/owner/repo",
@@ -689,7 +689,7 @@ func TestSyncAndActivate_SameContent_NotUpdated(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -747,7 +747,7 @@ func TestFetchLatestGitHubTag_BlankTagName(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 	}
@@ -773,7 +773,7 @@ func TestStartRemote_SyncFail_CacheInvalidZip(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), []byte("not-a-zip"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), []byte("not-a-zip"), 0o600))
 
 	m := &Manager{
 		name:         "test",
@@ -802,8 +802,8 @@ func TestStartRemote_NotUpdated_LoadsExistingZip(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -817,7 +817,7 @@ func TestStartRemote_NotUpdated_LoadsExistingZip(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o600))
 
 	var cbCalled int
 	m := &Manager{
@@ -832,7 +832,7 @@ func TestStartRemote_NotUpdated_LoadsExistingZip(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -891,7 +891,7 @@ func TestOpenZipData_NoRoot(t *testing.T) {
 		"a.yaml": "content_a",
 		"b.yaml": "content_b",
 	})
-	require.NoError(t, os.WriteFile(zipPath, zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(zipPath, zipBytes, 0o600))
 
 	data, err := openZipData(zipPath)
 	require.NoError(t, err)
@@ -921,8 +921,8 @@ func TestFilesEqual_SameSizeDifferentContent(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.txt")
 	b := filepath.Join(dir, "b.txt")
-	require.NoError(t, os.WriteFile(a, []byte("abcde"), 0o644))
-	require.NoError(t, os.WriteFile(b, []byte("abcdf"), 0o644))
+	require.NoError(t, os.WriteFile(a, []byte("abcde"), 0o600))
+	require.NoError(t, os.WriteFile(b, []byte("abcdf"), 0o600))
 
 	eq, err := filesEqual(a, b)
 	require.NoError(t, err)
@@ -954,7 +954,7 @@ func TestSyncAndActivate_DownloadError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = tagSrv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -969,7 +969,7 @@ func TestFileExists_StatError(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "perm")
 	require.NoError(t, os.MkdirAll(p, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(p, "f"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(p, "f"), []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(p, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(p, 0o755) })
 
@@ -984,7 +984,7 @@ func TestFilesEqual_ReadLeftError(t *testing.T) {
 	a := filepath.Join(dir, "a")
 	b := filepath.Join(dir, "b")
 	require.NoError(t, os.WriteFile(a, []byte("hello"), 0o000))
-	require.NoError(t, os.WriteFile(b, []byte("hello"), 0o644))
+	require.NoError(t, os.WriteFile(b, []byte("hello"), 0o600))
 	t.Cleanup(func() { _ = os.Chmod(a, 0o644) })
 
 	_, err := filesEqual(a, b)
@@ -995,7 +995,7 @@ func TestFilesEqual_ReadRightError(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a")
 	b := filepath.Join(dir, "b")
-	require.NoError(t, os.WriteFile(a, []byte("hello"), 0o644))
+	require.NoError(t, os.WriteFile(a, []byte("hello"), 0o600))
 	require.NoError(t, os.WriteFile(b, []byte("hello"), 0o000))
 	t.Cleanup(func() { _ = os.Chmod(b, 0o644) })
 
@@ -1020,7 +1020,7 @@ func TestOpenZipData_EmptyZip(t *testing.T) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
 	require.NoError(t, w.Close())
-	require.NoError(t, os.WriteFile(f, buf.Bytes(), 0o644))
+	require.NoError(t, os.WriteFile(f, buf.Bytes(), 0o600))
 
 	data, err := openZipData(f)
 	require.NoError(t, err)
@@ -1054,7 +1054,7 @@ func TestCleanupTemp_PermissionError(t *testing.T) {
 	sub := filepath.Join(dir, "locked")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 	tmpFile := filepath.Join(sub, "test.temp")
-	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(sub, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(sub, 0o755) })
 
@@ -1085,7 +1085,7 @@ func TestSyncAndActivate_CleanupTempError(t *testing.T) {
 	cacheDir := filepath.Join(dir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
 	tmpFile := filepath.Join(cacheDir, "test.zip.temp")
-	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(cacheDir, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(cacheDir, 0o755) })
 
@@ -1108,7 +1108,7 @@ func TestStartRemote_CleanupTempError(t *testing.T) {
 	cacheDir := filepath.Join(dir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
 	tmpFile := filepath.Join(cacheDir, "test.zip.temp")
-	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(cacheDir, 0o555))
 	t.Cleanup(func() { _ = os.Chmod(cacheDir, 0o755) })
 
@@ -1167,8 +1167,8 @@ func TestSyncAndActivate_WriteFileError(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1193,7 +1193,7 @@ func TestSyncAndActivate_WriteFileError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1209,8 +1209,8 @@ func TestSyncAndActivate_RenameError(t *testing.T) {
 	existingZipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1old"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1224,7 +1224,7 @@ func TestSyncAndActivate_RenameError(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), existingZipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), existingZipBytes, 0o600))
 
 	cbCalled := false
 	m := &Manager{
@@ -1236,7 +1236,7 @@ func TestSyncAndActivate_RenameError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -1266,7 +1266,7 @@ func TestOpenZipData_ListFilesError(t *testing.T) {
 	require.NoError(t, err)
 	_, _ = fw.Write([]byte("content"))
 	require.NoError(t, w.Close())
-	require.NoError(t, os.WriteFile(zipPath, buf.Bytes(), 0o644))
+	require.NoError(t, os.WriteFile(zipPath, buf.Bytes(), 0o600))
 
 	data, err := openZipData(zipPath)
 	require.NoError(t, err)
@@ -1279,7 +1279,7 @@ func TestOpenLocalData_PermError(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "noperm")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(sub, "f.yaml"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "f.yaml"), []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(dir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
@@ -1293,8 +1293,8 @@ func TestSyncAndActivate_FileExistsError(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1311,7 +1311,7 @@ func TestSyncAndActivate_FileExistsError(t *testing.T) {
 
 	zipDir := filepath.Join(cacheDir, "owner-repo.zip")
 	require.NoError(t, os.MkdirAll(zipDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(zipDir, "blocker"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(zipDir, "blocker"), []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(zipDir, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(zipDir, 0o755) })
 
@@ -1324,7 +1324,7 @@ func TestSyncAndActivate_FileExistsError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1341,7 +1341,7 @@ func TestOpenLocalData_ListFilesPermError(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "perm")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(sub, "f.yaml"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "f.yaml"), []byte("x"), 0o600))
 	inner := filepath.Join(sub, "inner")
 	require.NoError(t, os.MkdirAll(inner, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(inner, 0o755) })
@@ -1354,8 +1354,8 @@ func TestOpenLocalData_ListFilesPermError(t *testing.T) {
 
 func TestSyncAndActivate_InvalidTempZip(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1376,7 +1376,7 @@ func TestSyncAndActivate_InvalidTempZip(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1389,8 +1389,8 @@ func TestStartRemote_NotUpdated_ZipOpenError(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1404,7 +1404,7 @@ func TestStartRemote_NotUpdated_ZipOpenError(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o600))
 
 	m := &Manager{
 		name:         "test",
@@ -1418,7 +1418,7 @@ func TestStartRemote_NotUpdated_ZipOpenError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return errors.New("cb error on not-updated") },
@@ -1434,7 +1434,7 @@ func TestStartRemote_FallbackCBError(t *testing.T) {
 	dataDir := t.TempDir()
 	cacheDir := filepath.Join(dataDir, "cache")
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "owner-repo.zip"), zipBytes, 0o600))
 
 	m := &Manager{
 		name:         "test",
@@ -1463,8 +1463,8 @@ func TestSyncAndActivate_CBError(t *testing.T) {
 	zipBytes := makeZip(t, map[string]string{"root/a.yaml": "v1"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/repos/owner/repo/tags":
+		switch r.URL.Path {
+		case "/repos/owner/repo/tags":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode([]struct {
 				Name string `json:"name"`
@@ -1485,7 +1485,7 @@ func TestSyncAndActivate_CBError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:bodyclose
+				return http.DefaultClient.Do(req) //nolint:gosec
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {

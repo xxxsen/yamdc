@@ -184,13 +184,13 @@ func TestTranslateHandlerHandle(t *testing.T) {
 	h := &translaterHandler{storage: storage, translator: translator}
 	fc := &model.FileContext{
 		Meta: &model.MovieMeta{
-			Title:     "original title",
-			TitleLang: "ja",
-			Plot:      "original plot",
-			PlotLang:  "ja",
-			Genres:    []string{"genre1"},
+			Title:      "original title",
+			TitleLang:  "ja",
+			Plot:       "original plot",
+			PlotLang:   "ja",
+			Genres:     []string{"genre1"},
 			GenresLang: "ja",
-			Actors:    []string{"actor1"},
+			Actors:     []string{"actor1"},
 			ActorsLang: "ja",
 		},
 	}

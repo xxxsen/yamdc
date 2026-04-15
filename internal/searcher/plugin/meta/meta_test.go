@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type testCtxKey struct{}
+
 func TestSetGetNumberID(t *testing.T) {
 	ctx := context.Background()
 	assert.Empty(t, GetNumberID(ctx))
@@ -15,7 +17,7 @@ func TestSetGetNumberID(t *testing.T) {
 	assert.Equal(t, "ABC-123", GetNumberID(ctx))
 
 	// child context inherits value
-	child := context.WithValue(ctx, struct{}{}, "noise")
+	child := context.WithValue(ctx, testCtxKey{}, "noise")
 	assert.Equal(t, "ABC-123", GetNumberID(child))
 }
 

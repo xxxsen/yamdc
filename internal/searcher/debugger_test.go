@@ -38,7 +38,7 @@ type mockCleaner struct {
 
 func (m *mockCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return m.res, m.err }
 func (m *mockCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 func TestDebuggerUsesSnapshotCreators(t *testing.T) {
@@ -281,7 +281,7 @@ func TestCloneStringMap(t *testing.T) {
 
 func TestRequestURL(t *testing.T) {
 	assert.Equal(t, "", requestURL(nil))
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com/path", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/path", nil)
 	assert.Equal(t, "https://example.com/path", requestURL(req))
 }
 
@@ -312,8 +312,8 @@ func TestBoolMessage(t *testing.T) {
 
 func TestCollectVisiblePlugins(t *testing.T) {
 	creators := map[string]factory.CreatorFunc{
-		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil },
-		"b": func(_ interface{}) (api.IPlugin, error) { return nil, nil },
+		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"b": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
 	}
 	result := collectVisiblePlugins(
 		[]string{"a", "b", "  ", "a", "nonexistent"},
@@ -398,7 +398,7 @@ func TestDebugSearch_HandleHTTPReturnsNilResponse(t *testing.T) {
 				return http.NewRequestWithContext(ctx2, http.MethodGet, "http://example.com/", nil)
 			},
 			handleHTTPReqFn: func(_ context.Context, _ api.HTTPInvoker, _ *http.Request) (*http.Response, error) {
-				return nil, nil
+				return nil, nil //nolint:nilnil
 			},
 		}, nil
 	})
@@ -437,8 +437,8 @@ func TestDebugSearch_PrecheckResponseError(t *testing.T) {
 	ctx := factory.NewRegisterContext()
 	ctx.Register("rsp-err-plg", func(_ interface{}) (api.IPlugin, error) {
 		return &fullPlugin{
-			precheckOK:    true,
-			precheckRspOK: false,
+			precheckOK:     true,
+			precheckRspOK:  false,
 			precheckRspErr: errors.New("precheck rsp error"),
 			makeReqFn: func(ctx2 context.Context, _ string) (*http.Request, error) {
 				return http.NewRequestWithContext(ctx2, http.MethodGet, srv.URL, nil)
@@ -547,7 +547,7 @@ func TestDebugSearch_VerifyMetaFails(t *testing.T) {
 
 func TestCloneCreators(t *testing.T) {
 	in := map[string]factory.CreatorFunc{
-		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil },
+		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
 	}
 	out := cloneCreators(in)
 	require.Len(t, out, 1)

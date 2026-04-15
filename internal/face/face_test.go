@@ -37,9 +37,9 @@ func TestFindMaxFace_AllZero(t *testing.T) {
 }
 
 func TestFindMaxFace_PicksLargestArea(t *testing.T) {
-	small := image.Rect(0, 0, 2, 2)  // 4
-	med := image.Rect(1, 1, 4, 3)    // 3*2=6
-	big := image.Rect(0, 0, 5, 5)    // 25
+	small := image.Rect(0, 0, 2, 2) // 4
+	med := image.Rect(1, 1, 4, 3)   // 3*2=6
+	big := image.Rect(0, 0, 5, 5)   // 25
 	got := FindMaxFace([]image.Rectangle{small, med, big})
 	assert.Equal(t, big, got)
 }

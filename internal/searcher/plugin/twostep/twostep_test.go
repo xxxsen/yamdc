@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 func deepBrokenHTML() string {
@@ -38,40 +37,52 @@ func TestIsCodeInValidStatusCodeList(t *testing.T) {
 }
 
 func TestHandleXPathTwoStepSearch_FirstInvokerError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("network down")
 	}
 	xctx := &XPathTwoStepContext{ValidStatusCode: []int{200}}
-	_, err := HandleXPathTwoStepSearch(context.Background(), invoker, req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), invoker, req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "step search failed")
 }
 
 func TestHandleXPathTwoStepSearch_InvalidStatus(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(strings.NewReader("err")),
 		}, nil
 	}
 	xctx := &XPathTwoStepContext{ValidStatusCode: []int{200}}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errStatusCodeNotInValidList)
 }
 
 func TestHandleXPathTwoStepSearch_HTMLParseFails(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader(deepBrokenHTML())),
 		}, nil
 	}
 	xctx := &XPathTwoStepContext{ValidStatusCode: []int{200}}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read data as html")
 }
@@ -81,8 +92,9 @@ func TestHandleXPathTwoStepSearch_ResultCountMismatch(t *testing.T) {
 <span id="a">1</span><span id="a">2</span>
 <span id="b">only</span>
 </body></html>`
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(html))}, nil
 	}
 	xctx := &XPathTwoStepContext{
@@ -92,17 +104,21 @@ func TestHandleXPathTwoStepSearch_ResultCountMismatch(t *testing.T) {
 			{Name: "a", XPath: `//*[@id='a']`},
 			{Name: "b", XPath: `//*[@id='b']`},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) { return "", false, nil },
+		LinkSelector: func(_ []*XPathPair) (string, bool, error) { return "", false, nil },
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errResultCountMismatch)
 }
 
 func TestHandleXPathTwoStepSearch_NoResultsWhenCheckEnabled(t *testing.T) {
 	html := `<html><body><span id="a">x</span></body></html>`
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(html))}, nil
 	}
 	xctx := &XPathTwoStepContext{
@@ -111,16 +127,20 @@ func TestHandleXPathTwoStepSearch_NoResultsWhenCheckEnabled(t *testing.T) {
 		Ps: []*XPathPair{
 			{Name: "a", XPath: `//*[@id='missing']`},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) { return "", false, nil },
+		LinkSelector: func(_ []*XPathPair) (string, bool, error) { return "", false, nil },
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errNoResultFound)
 }
 
 func TestHandleXPathTwoStepSearch_LinkSelectorError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil
 	}
 	xctx := &XPathTwoStepContext{
@@ -128,18 +148,22 @@ func TestHandleXPathTwoStepSearch_LinkSelectorError(t *testing.T) {
 		Ps: []*XPathPair{
 			{Name: "hrefs", XPath: `//*[@id='links']//a/@href`},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(_ []*XPathPair) (string, bool, error) {
 			return "", false, fmt.Errorf("user reject")
 		},
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "select link from result")
 }
 
 func TestHandleXPathTwoStepSearch_LinkSelectorNotOK(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil
 	}
 	xctx := &XPathTwoStepContext{
@@ -147,18 +171,22 @@ func TestHandleXPathTwoStepSearch_LinkSelectorNotOK(t *testing.T) {
 		Ps: []*XPathPair{
 			{Name: "hrefs", XPath: `//*[@id='links']//a/@href`},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(_ []*XPathPair) (string, bool, error) {
 			return "", false, nil
 		},
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errNoLinkSelectResult)
 }
 
 func TestHandleXPathTwoStepSearch_SecondRequestBuildFails(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil
 	}
 	xctx := &XPathTwoStepContext{
@@ -166,19 +194,23 @@ func TestHandleXPathTwoStepSearch_SecondRequestBuildFails(t *testing.T) {
 		Ps: []*XPathPair{
 			{Name: "hrefs", XPath: `//*[@id='links']//a/@href`},
 		},
-		LinkSelector: func(ps []*XPathPair) (string, bool, error) {
+		LinkSelector: func(_ []*XPathPair) (string, bool, error) {
 			return ":", true, nil // invalid URL when joined with empty prefix
 		},
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "re-create result page link")
 }
 
 func TestHandleXPathTwoStepSearch_SecondInvokerError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
 	calls := 0
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		calls++
 		if calls == 1 {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil
@@ -196,16 +228,20 @@ func TestHandleXPathTwoStepSearch_SecondInvokerError(t *testing.T) {
 			return ps[0].Result[0], true, nil
 		},
 	}
-	_, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "second hop")
 }
 
 func TestHandleXPathTwoStepSearch_Success(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/start", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
+	require.NoError(t, err)
 	finalBody := `<html><body><h1>done</h1></body></html>`
 	calls := 0
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, r *http.Request) (*http.Response, error) {
 		calls++
 		if calls == 1 {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil

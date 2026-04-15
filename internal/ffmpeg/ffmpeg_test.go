@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsFFMpegEnabled(t *testing.T) {
+func TestIsFFMpegEnabled(_ *testing.T) {
 	_ = IsFFMpegEnabled()
 }
 
@@ -34,7 +34,7 @@ func TestNewFFMpeg_LookPathError(t *testing.T) {
 func TestFFMpeg_Convert_RunError(t *testing.T) {
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "false")
 	}
 	p := &FFMpeg{cmd: "/nonexistent-ffmpeg"}
@@ -46,7 +46,7 @@ func TestFFMpeg_Convert_RunError(t *testing.T) {
 func TestFFMpeg_Convert_ReadOutputError(t *testing.T) {
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "true")
 	}
 	p := &FFMpeg{cmd: "/x"}
@@ -61,9 +61,9 @@ func TestFFMpeg_Convert_Success_Mock(t *testing.T) {
 
 	dir := t.TempDir()
 	fixture := filepath.Join(dir, "fixture")
-	require.NoError(t, os.WriteFile(fixture, []byte("out"), 0o644))
+	require.NoError(t, os.WriteFile(fixture, []byte("out"), 0o600))
 
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, arg ...string) *exec.Cmd {
 		dst := arg[len(arg)-1]
 		return exec.CommandContext(ctx, "cp", fixture, dst)
 	}
@@ -92,9 +92,9 @@ func TestConvertToYuv420pJpegFromBytes_ForwardWhenEnabled(t *testing.T) {
 
 	dir := t.TempDir()
 	fixture := filepath.Join(dir, "fixture")
-	require.NoError(t, os.WriteFile(fixture, []byte("ok"), 0o644))
+	require.NoError(t, os.WriteFile(fixture, []byte("ok"), 0o600))
 
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, arg ...string) *exec.Cmd {
 		dst := arg[len(arg)-1]
 		return exec.CommandContext(ctx, "cp", fixture, dst)
 	}

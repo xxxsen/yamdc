@@ -150,7 +150,7 @@ func TestApplyRequestParams_AllTypes(t *testing.T) {
 		headers: map[string]*template{"X-Custom": hdrTmpl},
 		cookies: map[string]*template{"session": cookieTmpl},
 	}
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	err = applyRequestParams(req, spec, &evalContext{})
 	require.NoError(t, err)
 	assert.Equal(t, "qval", req.URL.Query().Get("q"))
@@ -502,13 +502,16 @@ func TestOnHandleHTTPRequest_SimplePassThrough(t *testing.T) {
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	rsp, err := plg.OnHandleHTTPRequest(ctx, func(_ context.Context, r *http.Request) (*http.Response, error) {
+	rsp, err := plg.OnHandleHTTPRequest(ctx, func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte("<html></html>"))),
 			Header:     make(http.Header),
 		}, nil
 	}, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.NoError(t, err)
 	assert.Equal(t, 200, rsp.StatusCode)
 }
@@ -555,7 +558,7 @@ func TestSetBodyContentType_Extended(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest(http.MethodPost, "http://example.com/", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", nil)
 			spec := &compiledRequest{body: &compiledRequestBody{kind: tt.kind}}
 			setBodyContentType(req, spec)
 			if tt.expected != "" {
@@ -566,7 +569,7 @@ func TestSetBodyContentType_Extended(t *testing.T) {
 }
 
 func TestSetBodyContentType_NilBody(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	spec := &compiledRequest{}
 	setBodyContentType(req, spec)
 	assert.Empty(t, req.Header.Get("Content-Type"))
@@ -757,7 +760,7 @@ func TestCompileSearchSelect_MissingNextRequest(t *testing.T) {
 
 func TestCompileSearchSelect_InvalidNextRequest(t *testing.T) {
 	_, err := compileSearchSelect(&SearchSelectWorkflowSpec{
-		Selectors: []*SelectorListSpec{{Name: "link", Kind: "xpath", Expr: "//a"}},
+		Selectors:   []*SelectorListSpec{{Name: "link", Kind: "xpath", Expr: "//a"}},
 		NextRequest: &RequestSpec{Method: "DELETE", Path: "/"},
 	})
 	require.Error(t, err)
@@ -956,7 +959,7 @@ func TestRenderRawBody_Error(t *testing.T) {
 func TestApplyRequestParams_QueryError(t *testing.T) {
 	badTmpl, err := compileTemplate("${vars.missing}")
 	require.NoError(t, err)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	spec := &compiledRequest{query: map[string]*template{"k": badTmpl}}
 	err = applyRequestParams(req, spec, &evalContext{})
 	require.Error(t, err)
@@ -965,7 +968,7 @@ func TestApplyRequestParams_QueryError(t *testing.T) {
 func TestApplyRequestParams_HeaderError(t *testing.T) {
 	badTmpl, err := compileTemplate("${vars.missing}")
 	require.NoError(t, err)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	spec := &compiledRequest{headers: map[string]*template{"k": badTmpl}}
 	err = applyRequestParams(req, spec, &evalContext{})
 	require.Error(t, err)
@@ -974,7 +977,7 @@ func TestApplyRequestParams_HeaderError(t *testing.T) {
 func TestApplyRequestParams_CookieError(t *testing.T) {
 	badTmpl, err := compileTemplate("${vars.missing}")
 	require.NoError(t, err)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	spec := &compiledRequest{cookies: map[string]*template{"k": badTmpl}}
 	err = applyRequestParams(req, spec, &evalContext{})
 	require.Error(t, err)
@@ -1016,7 +1019,7 @@ func TestOnDecorateMediaRequest_NilBaseReq(t *testing.T) {
 	compiled.multiRequest = nil
 	plg := &SearchPlugin{spec: compiled}
 	ctx := pluginapi.InitContainer(context.Background())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/img.jpg", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/img.jpg", nil)
 	err = plg.OnDecorateMediaRequest(ctx, req)
 	require.NoError(t, err)
 }
@@ -1122,11 +1125,14 @@ func TestOnHandleHTTPRequest_WorkflowNilMultiRequestNil(t *testing.T) {
 	plg := buildTestPlugin(t, simpleOneStepSpec("https://example.com"))
 	ctx := pluginapi.InitContainer(context.Background())
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(nil))}, nil
 	}
 	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.NoError(t, err)
 	assert.Equal(t, 200, rsp.StatusCode)
 }
@@ -1140,7 +1146,7 @@ func TestOnDecorateMediaRequest_HeaderAndCookieError(t *testing.T) {
 	compiled.request.headers = map[string]*template{"X-Bad": badTmpl}
 	plg := &SearchPlugin{spec: compiled}
 	ctx := pluginapi.InitContainer(context.Background())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/img.jpg", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/img.jpg", nil)
 	err = plg.OnDecorateMediaRequest(ctx, req)
 	require.Error(t, err)
 }
@@ -1154,7 +1160,7 @@ func TestOnDecorateMediaRequest_CookieRenderError(t *testing.T) {
 	compiled.request.cookies = map[string]*template{"sid": badTmpl}
 	plg := &SearchPlugin{spec: compiled}
 	ctx := pluginapi.InitContainer(context.Background())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/img.jpg", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/img.jpg", nil)
 	err = plg.OnDecorateMediaRequest(ctx, req)
 	require.Error(t, err)
 }

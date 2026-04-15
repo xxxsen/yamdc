@@ -28,7 +28,7 @@ func (m *mockFaceRec) SearchFaces(_ context.Context, _ []byte) ([]image.Rectangl
 	return m.faces, m.err
 }
 
-func makeTestImage(t *testing.T, w, h int) []byte {
+func makeTestImage(t *testing.T, w, h int) []byte { //nolint:unparam
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for x := 0; x < w; x++ {

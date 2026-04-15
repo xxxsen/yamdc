@@ -42,17 +42,17 @@ func (c *erroringCleaner) Clean(string) (*movieidcleaner.Result, error) {
 }
 
 func (c *erroringCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 type nilResultCleaner struct{}
 
 func (nilResultCleaner) Clean(string) (*movieidcleaner.Result, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 func (nilResultCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 type emptyNormalizedCleaner struct{}
@@ -68,7 +68,7 @@ func (emptyNormalizedCleaner) Clean(input string) (*movieidcleaner.Result, error
 }
 
 func (emptyNormalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 type normalizedCleaner struct {
@@ -84,7 +84,7 @@ func (c normalizedCleaner) Clean(string) (*movieidcleaner.Result, error) {
 }
 
 func (normalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {
@@ -487,4 +487,3 @@ func TestScanWalkReadErrorOnUnreadableSubdir(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "walk scan dir")
 }
-

@@ -63,7 +63,7 @@ func TestParseIDParam(t *testing.T) {
 }
 
 func TestHandleScan(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t)
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
 	scanDir := t.TempDir()
 	scanSvc := scanner.New(scanDir, nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
 
@@ -85,7 +85,7 @@ func TestHandleScan(t *testing.T) {
 }
 
 func TestHandleScanWithFile(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t)
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
 	scanDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "test.mp4"), []byte("data"), 0o600))
 	scanSvc := scanner.New(scanDir, nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
@@ -514,7 +514,7 @@ func TestLoadReviewMeta(t *testing.T) {
 
 	// With raw data.
 	require.NoError(t, scrapeRepo.UpsertRawData(context.Background(), j.ID, "test", `{"number":"LOADMETA-001","title":"raw"}`))
-	c, rec = newGinContext(http.MethodGet, "/test", nil)
+	c, _ = newGinContext(http.MethodGet, "/test", nil)
 	meta, ok = api.loadReviewMeta(c, j.ID)
 	assert.True(t, ok)
 	assert.NotNil(t, meta)
@@ -522,7 +522,7 @@ func TestLoadReviewMeta(t *testing.T) {
 
 	// With review data overriding raw.
 	require.NoError(t, scrapeRepo.SaveReviewData(context.Background(), j.ID, `{"number":"LOADMETA-001","title":"reviewed"}`))
-	c, rec = newGinContext(http.MethodGet, "/test", nil)
+	c, _ = newGinContext(http.MethodGet, "/test", nil)
 	meta, ok = api.loadReviewMeta(c, j.ID)
 	assert.True(t, ok)
 	assert.NotNil(t, meta)
@@ -539,7 +539,7 @@ func TestLoadReviewMeta(t *testing.T) {
 }
 
 func TestHandleScanError(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t)
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
 	scanSvc := scanner.New("/nonexistent/path/that/does/not/exist", nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
 	api := &API{scanner: scanSvc}
 	c, rec := newGinContext(http.MethodPost, "/api/scan", nil)

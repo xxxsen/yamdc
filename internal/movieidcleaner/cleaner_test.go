@@ -576,10 +576,10 @@ func TestSortSuffixSet(t *testing.T) {
 
 func TestCompileNormalizers(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          []NormalizerRule
-		expectedLen    int
-		hasReplacer    bool
+		name        string
+		input       []NormalizerRule
+		expectedLen int
+		hasReplacer bool
 	}{
 		{
 			name:        "empty",
@@ -698,7 +698,7 @@ func TestResolveCanonical(t *testing.T) {
 	}
 }
 
-func TestExplainCollectorNil(t *testing.T) {
+func TestExplainCollectorNil(_ *testing.T) {
 	var c *explainCollector
 	c.add("stage", "rule", "in", "out", true, "summary")
 	c.addWithValues("stage", "rule", "in", "out", true, "summary", []string{"v"})

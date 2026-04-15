@@ -241,10 +241,9 @@ func TestAnonymousDataRewriteWithStorage_FnError(t *testing.T) {
 
 func TestAnonymousDataRewriteWithStorage_PutError(t *testing.T) {
 	s := &errStorage{putErr: errors.New("write err")}
-	key, err := AnonymousDataRewriteWithStorage(context.Background(), s, "k", func(_ context.Context, data []byte) ([]byte, error) {
+	key, err := AnonymousDataRewriteWithStorage(context.Background(), s, "k", func(_ context.Context, _ []byte) ([]byte, error) {
 		return []byte("new"), nil
 	})
 	require.Error(t, err)
 	assert.Equal(t, "k", key)
 }
-

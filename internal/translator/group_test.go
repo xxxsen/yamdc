@@ -19,7 +19,7 @@ type stubTr struct {
 
 func (s *stubTr) Name() string { return s.name }
 
-func (s *stubTr) Translate(_ context.Context, wording, _, _ string) (string, error) {
+func (s *stubTr) Translate(_ context.Context, _, _, _ string) (string, error) {
 	if s.err != nil {
 		return "", s.err
 	}

@@ -36,7 +36,7 @@ func TestResolve_SingleDep_Success(t *testing.T) {
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 	deps := []*Dependency{
@@ -52,14 +52,14 @@ func TestResolve_SingleDep_Success(t *testing.T) {
 
 func TestResolve_MultipleDeps_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("content-" + r.URL.Path))
+		_, _ = w.Write([]byte("content-" + r.URL.Path)) //nolint:gosec
 	}))
 	defer srv.Close()
 
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 	deps := []*Dependency{
@@ -84,7 +84,7 @@ func TestResolve_DownloadError(t *testing.T) {
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 	deps := []*Dependency{
@@ -106,11 +106,11 @@ func TestResolve_Refresh_AlreadyExists(t *testing.T) {
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(target, []byte("old"), 0o644))
+	require.NoError(t, os.WriteFile(target, []byte("old"), 0o600))
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 
@@ -123,18 +123,18 @@ func TestResolve_Refresh_AlreadyExists(t *testing.T) {
 }
 
 func TestResolve_NoRefresh_AlreadyExists(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not download when file exists and refresh=false")
 	}))
 	defer srv.Close()
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(target, []byte("old"), 0o644))
+	require.NoError(t, os.WriteFile(target, []byte("old"), 0o600))
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 	deps := []*Dependency{
@@ -157,7 +157,7 @@ func TestResolve_PartialFailure(t *testing.T) {
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 	deps := []*Dependency{

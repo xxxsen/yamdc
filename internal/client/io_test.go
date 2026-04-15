@@ -110,7 +110,7 @@ func TestBuildReaderFromHTTPResponse_ZstdInvalid(t *testing.T) {
 
 type errReader struct{}
 
-func (errReader) Read(p []byte) (int, error) {
+func (errReader) Read(_ []byte) (int, error) {
 	return 0, errors.New("boom")
 }
 

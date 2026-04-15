@@ -2,10 +2,13 @@ package ffmpeg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+var errFFProbeNotEnabled = errors.New("ffprobe is not enabled")
 
 var defaultFFProbe *FFProbe
 
@@ -34,7 +37,7 @@ func NewFFProbe() (*FFProbe, error) {
 }
 
 func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error) {
-	cmd := commandContext( //nolint:gosec // ffprobe path is from exec.LookPath, args are controlled
+	cmd := commandContext(
 		ctx,
 		p.cmd,
 		[]string{"-i", file, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"}...,
@@ -53,7 +56,7 @@ func (p *FFProbe) ReadDuration(ctx context.Context, file string) (float64, error
 
 func ReadDuration(ctx context.Context, file string) (float64, error) {
 	if defaultFFProbe == nil {
-		return 0, fmt.Errorf("ffprobe is not enabled")
+		return 0, errFFProbeNotEnabled
 	}
 	return defaultFFProbe.ReadDuration(ctx, file)
 }

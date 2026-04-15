@@ -137,10 +137,10 @@ func TestParseCall(t *testing.T) {
 	assert.Equal(t, "fn", name)
 	assert.Equal(t, []string{"a", "b"}, args)
 
-	_, _, ok, _ = parseCall("not_a_call")
+	_, _, ok, _ = parseCall("not_a_call") //nolint:dogsled
 	assert.False(t, ok)
 
-	_, _, ok, _ = parseCall("123(a)")
+	_, _, ok, _ = parseCall("123(a)") //nolint:dogsled
 	assert.False(t, ok)
 }
 
@@ -202,12 +202,13 @@ func TestCompileConditionGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g, err := compileConditionGroup(tt.spec)
-			if tt.wantErr {
+			switch {
+			case tt.wantErr:
 				require.Error(t, err)
-			} else if tt.wantNil {
+			case tt.wantNil:
 				require.NoError(t, err)
 				require.Nil(t, g)
-			} else {
+			default:
 				require.NoError(t, err)
 				require.NotNil(t, g)
 			}
@@ -386,7 +387,7 @@ func TestValidatePluginSpec(t *testing.T) {
 		{name: "no_hosts", spec: &PluginSpec{Version: 1, Name: "test", Type: "one-step"}, wantErr: true},
 		{name: "both_request_and_multi", spec: &PluginSpec{
 			Version: 1, Name: "test", Type: "one-step", Hosts: []string{"h"},
-			Request: &RequestSpec{Method: "GET", Path: "/"},
+			Request:      &RequestSpec{Method: "GET", Path: "/"},
 			MultiRequest: &MultiRequestSpec{},
 		}, wantErr: true},
 		{name: "two_step_no_workflow", spec: &PluginSpec{
@@ -440,14 +441,14 @@ func TestCompileRequest_Nil(t *testing.T) {
 
 func TestCompileRequest_Full(t *testing.T) {
 	spec := &RequestSpec{
-		Method:  "POST",
-		Path:    "/api",
-		Query:   map[string]string{"q": "val"},
-		Headers: map[string]string{"X-Key": "v"},
-		Cookies: map[string]string{"session": "abc"},
-		Body:    &RequestBodySpec{Kind: "json", Values: map[string]string{"a": "b"}},
-		Response: &ResponseSpec{DecodeCharset: "utf-8"},
-		Browser:  &BrowserSpec{WaitSelector: "div", WaitTimeout: 10},
+		Method:              "POST",
+		Path:                "/api",
+		Query:               map[string]string{"q": "val"},
+		Headers:             map[string]string{"X-Key": "v"},
+		Cookies:             map[string]string{"session": "abc"},
+		Body:                &RequestBodySpec{Kind: "json", Values: map[string]string{"a": "b"}},
+		Response:            &ResponseSpec{DecodeCharset: "utf-8"},
+		Browser:             &BrowserSpec{WaitSelector: "div", WaitTimeout: 10},
 		AcceptStatusCodes:   []int{200, 201},
 		NotFoundStatusCodes: []int{404},
 	}
@@ -940,7 +941,7 @@ scrape:
 
 func TestOnPrecheckResponse(t *testing.T) {
 	plg := mustCompilePlugin(t, minimalOneStepYAML())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 
 	tests := []struct {
 		name   string
@@ -1184,7 +1185,7 @@ func TestOnGetHosts(t *testing.T) {
 
 func TestOnDecorateRequest(t *testing.T) {
 	plg := mustCompilePlugin(t, minimalOneStepYAML())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	err := plg.OnDecorateRequest(context.Background(), req)
 	require.NoError(t, err)
 }
@@ -1192,21 +1193,21 @@ func TestOnDecorateRequest(t *testing.T) {
 // --- setBodyContentType ---
 
 func TestSetBodyContentType(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodPost, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", nil)
 	setBodyContentType(req, &compiledRequest{body: nil})
 	assert.Empty(t, req.Header.Get("Content-Type"))
 
 	formBody, _ := compileRequestBody(&RequestBodySpec{Kind: "form"})
-	req2, _ := http.NewRequest(http.MethodPost, "http://example.com/", nil)
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", nil)
 	setBodyContentType(req2, &compiledRequest{body: formBody})
 	assert.Equal(t, "application/x-www-form-urlencoded", req2.Header.Get("Content-Type"))
 
 	jsonBody, _ := compileRequestBody(&RequestBodySpec{Kind: "json"})
-	req3, _ := http.NewRequest(http.MethodPost, "http://example.com/", nil)
+	req3, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", nil)
 	setBodyContentType(req3, &compiledRequest{body: jsonBody})
 	assert.Equal(t, "application/json", req3.Header.Get("Content-Type"))
 
-	req4, _ := http.NewRequest(http.MethodPost, "http://example.com/", nil)
+	req4, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", nil)
 	req4.Header.Set("Content-Type", "custom")
 	setBodyContentType(req4, &compiledRequest{body: formBody})
 	assert.Equal(t, "custom", req4.Header.Get("Content-Type"))
@@ -1406,7 +1407,7 @@ scrape:
 `
 	plg := mustCompilePlugin(t, yamlStr)
 	ctx := pluginapi.InitContainer(context.Background())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 
 	ok, err := plg.OnPrecheckResponse(ctx, req, &http.Response{StatusCode: 200})
 	assert.NoError(t, err)
@@ -1624,7 +1625,7 @@ func TestBuildRequest_WithURL(t *testing.T) {
 // --- applyRequestParams ---
 
 func TestApplyRequestParams(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	queryTmpl, _ := compileTemplate("val")
 	headerTmpl, _ := compileTemplate("hval")
 	cookieTmpl, _ := compileTemplate("cval")
@@ -1650,7 +1651,7 @@ func TestApplyRequestParams(t *testing.T) {
 
 func TestApplyBrowserContext(t *testing.T) {
 	plg := mustCompilePlugin(t, minimalOneStepYAML())
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	result := plg.applyBrowserContext(req, plg.spec.request)
 	assert.Equal(t, req, result)
 }
@@ -1904,7 +1905,7 @@ scrape:
 	ctx = meta.SetNumberID(ctx, "ABC-123")
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
 
-	invoker := func(_ context.Context, req *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		body := `<html><body><div class="found">ok</div></body></html>`
 		return &http.Response{
 			StatusCode: 200,
@@ -1956,7 +1957,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -1996,7 +2000,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -2062,7 +2069,7 @@ func TestOnHandleHTTPRequest_PlainRequest(t *testing.T) {
 	ctx := pluginapi.InitContainer(context.Background())
 	ctx = meta.SetNumberID(ctx, "ABC-123")
 
-	invoker := func(_ context.Context, req *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: 200,
 			Body:       nopCloser([]byte(`<html><title>T</title></html>`)),
@@ -2272,7 +2279,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -2570,7 +2580,7 @@ func TestOnDecorateMediaRequest_WithReferer(t *testing.T) {
 	ctx := pluginapi.InitContainer(context.Background())
 	ctx = meta.SetNumberID(ctx, "ABC-123")
 	pluginapi.SetContainerValue(ctx, ctxKeyFinalPage, "https://example.com/page")
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/img.jpg", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/img.jpg", nil)
 	err := plg.OnDecorateMediaRequest(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/page", req.Header.Get("Referer"))
@@ -2696,7 +2706,7 @@ func TestEvalTwoStringCondition_AllBranches(t *testing.T) {
 
 // --- SyncBundle / BuildRegisterContext ---
 
-func TestSyncBundle(t *testing.T) {
+func TestSyncBundle(_ *testing.T) {
 	plugins := map[string][]byte{
 		"test-plugin": []byte(minimalOneStepYAML()),
 	}
@@ -2803,7 +2813,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -2857,7 +2870,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -2912,7 +2928,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3353,7 +3372,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3611,7 +3633,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3653,7 +3678,10 @@ scrape:
 		return nil, fmt.Errorf("network error")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3691,7 +3719,10 @@ scrape:
 		return nil, fmt.Errorf("connection timeout")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3938,7 +3969,10 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -3989,7 +4023,10 @@ scrape:
 		return nil, fmt.Errorf("detail page unreachable")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
@@ -4144,6 +4181,9 @@ scrape:
 		}, nil
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
-	_, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }

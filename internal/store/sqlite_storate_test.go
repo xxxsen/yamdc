@@ -111,7 +111,7 @@ func TestMustNewSqliteStorage_Panics(t *testing.T) {
 	})
 }
 
-func TestConfigureSqliteStoreDB_NilDB(t *testing.T) {
+func TestConfigureSqliteStoreDB_NilDB(_ *testing.T) {
 	configureSqliteStoreDB(context.Background(), nil)
 }
 
@@ -217,7 +217,7 @@ func TestSqliteStore_Init_AppliesMigrations(t *testing.T) {
 	t.Cleanup(func() { _ = s.Close() })
 
 	var tableName string
-	err = s.db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='cache_tab'").Scan(&tableName)
+	err = s.db.QueryRowContext(context.Background(), "SELECT name FROM sqlite_master WHERE type='table' AND name='cache_tab'").Scan(&tableName)
 	require.NoError(t, err)
 	assert.Equal(t, "cache_tab", tableName)
 }
@@ -304,8 +304,8 @@ func TestNewSqliteStorage_InitFails(t *testing.T) {
 
 	db, err := openTestDB(file)
 	require.NoError(t, err)
-	_, _ = db.Exec("CREATE TABLE cache_tab (key TEXT)")
-	_, _ = db.Exec("CREATE VIEW idx_expireat AS SELECT 1")
+	_, _ = db.ExecContext(context.Background(), "CREATE TABLE cache_tab (key TEXT)")
+	_, _ = db.ExecContext(context.Background(), "CREATE VIEW idx_expireat AS SELECT 1")
 	_ = db.Close()
 
 	_, err = NewSqliteStorage(context.Background(), file)

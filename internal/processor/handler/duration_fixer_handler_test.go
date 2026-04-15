@@ -54,7 +54,7 @@ func TestDurationFixerHandlerWithFFProbe(t *testing.T) {
 	t.Run("invalid media file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		fakeFile := filepath.Join(tmpDir, "fake.mp4")
-		require.NoError(t, os.WriteFile(fakeFile, []byte("not a real video"), 0o644))
+		require.NoError(t, os.WriteFile(fakeFile, []byte("not a real video"), 0o600))
 		fc := &model.FileContext{
 			Meta:         &model.MovieMeta{Duration: 0},
 			FullFilePath: fakeFile,

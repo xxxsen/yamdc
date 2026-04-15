@@ -549,7 +549,7 @@ func TestNewTagMapper_ReadFileError(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "unreadable.json")
 	require.NoError(t, os.WriteFile(filePath, []byte("[]"), 0o600))
 	require.NoError(t, os.Chmod(filePath, 0o000))
-	t.Cleanup(func() { os.Chmod(filePath, 0o600) })
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0o600) })
 
 	mapper, err := NewTagMapper(filePath)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsFFProbeEnabled(t *testing.T) {
+func TestIsFFProbeEnabled(_ *testing.T) {
 	_ = IsFFProbeEnabled()
 }
 
@@ -29,7 +29,7 @@ func TestNewFFProbe_LookPathError(t *testing.T) {
 func TestFFProbe_ReadDuration_OutputError(t *testing.T) {
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "false")
 	}
 	p := &FFProbe{cmd: "/x"}
@@ -41,7 +41,7 @@ func TestFFProbe_ReadDuration_OutputError(t *testing.T) {
 func TestFFProbe_ReadDuration_ParseError(t *testing.T) {
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sh", "-c", `printf 'not-a-number'`)
 	}
 	p := &FFProbe{cmd: "/x"}
@@ -53,7 +53,7 @@ func TestFFProbe_ReadDuration_ParseError(t *testing.T) {
 func TestFFProbe_ReadDuration_Success(t *testing.T) {
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sh", "-c", `printf '  12.5 \n'`)
 	}
 	p := &FFProbe{cmd: "/x"}
@@ -78,7 +78,7 @@ func TestReadDuration_ForwardWhenEnabled(t *testing.T) {
 	}
 	origCC := commandContext
 	t.Cleanup(func() { commandContext = origCC })
-	commandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	commandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		return exec.CommandContext(ctx, "sh", "-c", `printf '3'`)
 	}
 
@@ -100,7 +100,7 @@ func TestFFProbe_ReadDuration_Integration(t *testing.T) {
 	// Minimal MP4 header-ish bytes; ffprobe may still error — use ffmpeg to mux if needed.
 	// Prefer: generate with ffmpeg when both exist.
 	if _, err := lookPath("ffmpeg"); err == nil {
-		gen := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-f", "lavfi", "-i",
+		gen := exec.CommandContext(context.Background(), "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-f", "lavfi", "-i",
 			"color=c=black:s=64x64:d=1", "-shortest", "-c:v", "libx264", "-t", "1", vpath)
 		if err := gen.Run(); err != nil {
 			t.Skip("could not generate test video:", err)

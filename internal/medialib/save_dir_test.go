@@ -352,7 +352,7 @@ func TestListSaveItemsInspectError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.mp4"), []byte("v"), 0o600))
 
 	require.NoError(t, os.Chmod(itemDir, 0o000))
-	t.Cleanup(func() { os.Chmod(itemDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(itemDir, 0o755) })
 
 	svc := NewService(nil, "", saveDir)
 	_, err := svc.ListSaveItems()

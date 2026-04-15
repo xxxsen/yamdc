@@ -7,7 +7,6 @@ import (
 	"github.com/antchfx/htmlquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/html"
 )
 
 func TestCompileConditionGroup_InvalidCondition(t *testing.T) {
@@ -264,13 +263,6 @@ func TestConditionGroupEval_AndMode_ErrorPropagation(t *testing.T) {
 	}
 	_, err := g.Eval(&evalContext{}, nil)
 	require.Error(t, err)
-}
-
-func helperParseHTML(t *testing.T, s string) *html.Node {
-	t.Helper()
-	n, err := htmlquery.Parse(strings.NewReader(s))
-	require.NoError(t, err)
-	return n
 }
 
 func TestCompileTwoStringArgs_FirstArgNotQuoted(t *testing.T) {

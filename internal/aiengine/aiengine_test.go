@@ -39,7 +39,7 @@ func TestCreate_RegisteredEngine_Gemini(t *testing.T) {
 func TestRegister_DuplicatePanics(t *testing.T) {
 	require.Panics(t, func() {
 		aiengine.Register("gemini", func(_ interface{}, _ ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		})
 	})
 }

@@ -14,10 +14,10 @@ import (
 
 func TestNewDebugger(t *testing.T) {
 	tests := []struct {
-		name         string
-		handlers     []string
-		configs      map[string]DebugHandlerOption
-		wantCount    int
+		name      string
+		handlers  []string
+		configs   map[string]DebugHandlerOption
+		wantCount int
 	}{
 		{
 			name:      "empty handlers",
@@ -26,9 +26,9 @@ func TestNewDebugger(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			name:     "filters out duration_fixer",
-			handlers: []string{HNumberTitle, HDurationFixer, HTagPadder},
-			configs:  nil,
+			name:      "filters out duration_fixer",
+			handlers:  []string{HNumberTitle, HDurationFixer, HTagPadder},
+			configs:   nil,
 			wantCount: 2,
 		},
 		{
@@ -133,10 +133,10 @@ func TestDebugChainMode(t *testing.T) {
 	d := NewDebugger(appdeps.Runtime{}, nil, []string{HNumberTitle, HTagPadder, HActorSpliter}, nil)
 
 	tests := []struct {
-		name       string
-		req        DebugRequest
-		wantSteps  int
-		wantErr    bool
+		name      string
+		req       DebugRequest
+		wantSteps int
+		wantErr   bool
 	}{
 		{
 			name: "chain all",
@@ -327,7 +327,7 @@ func (c *testCleaner) Clean(_ string) (*movieidcleaner.Result, error) {
 }
 
 func (c *testCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
 func TestParseNumberWithCleaner(t *testing.T) {

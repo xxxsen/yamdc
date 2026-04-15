@@ -16,7 +16,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
-func newTestService(t *testing.T) (*Service, string, string) {
+func newTestService(t *testing.T) (*Service, string, string) { //nolint:unparam
 	t.Helper()
 	libraryDir := t.TempDir()
 	saveDir := t.TempDir()
@@ -42,7 +42,7 @@ func writePNG(t *testing.T, path string, w, h int) {
 	}
 	f, err := os.Create(path)
 	require.NoError(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	require.NoError(t, png.Encode(f, img))
 }
 
@@ -1706,7 +1706,7 @@ func TestUpdateRootItemWriteError(t *testing.T) {
 	}
 
 	require.NoError(t, os.Chmod(item, 0o444))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, err := svc.updateRootItem(root, detail, item, Meta{Title: "T"})
 	assert.Error(t, err)
@@ -1905,7 +1905,7 @@ func TestInspectRootDirUnreadable(t *testing.T) {
 	require.NoError(t, os.MkdirAll(item, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(item, "movie.mp4"), []byte("v"), 0o600))
 	require.NoError(t, os.Chmod(item, 0o000))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, _, err := svc.inspectRootDir(root, item)
 	assert.Error(t, err)
@@ -1928,7 +1928,7 @@ func TestReadRootDetailInspectError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(item, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(item, "movie.mp4"), []byte("v"), 0o600))
 	require.NoError(t, os.Chmod(item, 0o000))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, err := svc.readRootDetail(root, "noperm", item)
 	assert.Error(t, err)
@@ -1946,7 +1946,7 @@ func TestListRootItemDirsWalkError(t *testing.T) {
 	inner := filepath.Join(item, "deep")
 	require.NoError(t, os.MkdirAll(inner, 0o755))
 	require.NoError(t, os.Chmod(inner, 0o000))
-	t.Cleanup(func() { os.Chmod(inner, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(inner, 0o755) })
 
 	_, err := svc.listRootItemDirs(root)
 	assert.Error(t, err)
@@ -2016,7 +2016,7 @@ func TestPickFanartTargetNameStatError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(efDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(efDir, "f.jpg"), []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(efDir, 0o000))
-	t.Cleanup(func() { os.Chmod(efDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(efDir, 0o755) })
 
 	_, err := pickFanartTargetName(dir, "new.jpg")
 	assert.Error(t, err)
@@ -2036,7 +2036,7 @@ func TestReplaceRootArtworkWriteError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, os.Chmod(item, 0o555))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, err = svc.replaceRootArtwork(root, detail, item, "", "poster", "poster.jpg", []byte("img"))
 	assert.Error(t, err)
@@ -2052,7 +2052,7 @@ func TestWriteFanartMkdirError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(item, "movie.mp4"), []byte("v"), 0o600))
 
 	require.NoError(t, os.Chmod(item, 0o555))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, err := svc.writeFanart(root, "movie", item, "extra.jpg", []byte("img"))
 	assert.Error(t, err)
@@ -2073,7 +2073,7 @@ func TestCropRootPosterFromCoverWriteError(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, os.Chmod(item, 0o555))
-	t.Cleanup(func() { os.Chmod(item, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(item, 0o755) })
 
 	_, err = svc.cropRootPosterFromCover(root, detail, item, "", 0, 0, 50, 50)
 	assert.Error(t, err)
@@ -2084,7 +2084,7 @@ func TestCropRootPosterFromCoverWriteError(t *testing.T) {
 func TestUpdatePosterInNFOWriteError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	variant := Variant{Key: "movie", BaseName: "movie"}
 	err := updatePosterInNFO(dir, variant, "movie", "poster.jpg")
@@ -2103,7 +2103,7 @@ func TestDeleteRootFileRemoveError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(efDir, "extra.jpg"), []byte("img"), 0o600))
 
 	require.NoError(t, os.Chmod(efDir, 0o555))
-	t.Cleanup(func() { os.Chmod(efDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(efDir, 0o755) })
 
 	_, err := svc.deleteRootFile(root, "movie", "movie/extrafanart/extra.jpg")
 	assert.Error(t, err)
@@ -2114,7 +2114,7 @@ func TestDeleteRootFileRemoveError(t *testing.T) {
 func TestWriteVariantArtworkWriteError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	detail := &Detail{
 		Item:              Item{RelPath: "item", Number: "NUM", Name: "movie"},
@@ -2130,7 +2130,7 @@ func TestWriteVariantArtworkWriteError(t *testing.T) {
 func TestWriteVariantNFOWriteError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	variant := Variant{Key: "V", BaseName: "V"}
 	err := writeVariantNFO(dir, "item", variant, "V", Meta{Title: "T"})
@@ -2146,7 +2146,7 @@ func TestListRootItemDirsStatError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(root, 0o755))
 
 	require.NoError(t, os.Chmod(root, 0o000))
-	t.Cleanup(func() { os.Chmod(root, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
 
 	_, err := svc.listRootItemDirs(root)
 	assert.Error(t, err)

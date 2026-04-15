@@ -47,7 +47,7 @@ type stubCleaner struct {
 	explainErr    error
 }
 
-func (s *stubCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return nil, nil }
+func (*stubCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return nil, nil } //nolint:nilnil
 func (s *stubCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
 	return s.explainResult, s.explainErr
 }
@@ -76,7 +76,7 @@ func decodeResponse(t *testing.T, rec *httptest.ResponseRecorder) responseBody {
 	return out
 }
 
-func buildMultipartImage(t *testing.T, fieldName, fileName string, data []byte) (*bytes.Buffer, string) {
+func buildMultipartImage(t *testing.T, fieldName, fileName string, data []byte) (*bytes.Buffer, string) { //nolint:unparam
 	t.Helper()
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -96,7 +96,7 @@ func jpegBytes() []byte {
 	return []byte{0xff, 0xd8, 0xff, 0xdb}
 }
 
-func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) {
+func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) { //nolint:unparam
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	sqlite, err := repository.NewSQLite(context.Background(), dbPath)
@@ -161,9 +161,11 @@ type failingStore struct{}
 func (f *failingStore) GetData(_ context.Context, _ string) ([]byte, error) {
 	return nil, fmt.Errorf("store get error")
 }
+
 func (f *failingStore) PutData(_ context.Context, _ string, _ []byte, _ time.Duration) error {
 	return fmt.Errorf("store put error")
 }
+
 func (f *failingStore) IsDataExist(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }

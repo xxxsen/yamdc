@@ -376,7 +376,7 @@ func newClosedTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func newTestSQLiteWithRawDB(t *testing.T) (*SQLite, *sql.DB) {
+func newTestSQLiteWithRawDB(t *testing.T) (*SQLite, *sql.DB) { //nolint:unparam
 	t.Helper()
 	s := newTestSQLite(t)
 	return s, s.DB()
@@ -420,7 +420,7 @@ func TestNewSQLiteCorruptDBInitError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestConfigureSQLiteNilDB(t *testing.T) {
+func TestConfigureSQLiteNilDB(_ *testing.T) {
 	configureSQLite(context.Background(), nil)
 }
 
@@ -632,7 +632,7 @@ func TestUpsertScannedJobExecError(t *testing.T) {
 	repo := NewJobRepository(db)
 	ctx := context.Background()
 
-	_, err := db.Exec(`CREATE TRIGGER block_insert BEFORE INSERT ON yamdc_job_tab
+	_, err := db.ExecContext(ctx, `CREATE TRIGGER block_insert BEFORE INSERT ON yamdc_job_tab
 		BEGIN SELECT RAISE(ABORT, 'insert blocked'); END`)
 	require.NoError(t, err)
 
@@ -650,7 +650,7 @@ func TestUpdateNumberExecError(t *testing.T) {
 	ctx := context.Background()
 	id := insertTestJob(t, repo, "A.mp4", "A")
 
-	_, err := db.Exec(`CREATE TRIGGER block_num_update BEFORE UPDATE ON yamdc_job_tab
+	_, err := db.ExecContext(ctx, `CREATE TRIGGER block_num_update BEFORE UPDATE ON yamdc_job_tab
 		WHEN NEW.number != OLD.number
 		BEGIN SELECT RAISE(ABORT, 'number update blocked'); END`)
 	require.NoError(t, err)
@@ -666,7 +666,7 @@ func TestUpdateSourcePathExecError(t *testing.T) {
 	ctx := context.Background()
 	id := insertTestJob(t, repo, "A.mp4", "A")
 
-	_, err := db.Exec(`CREATE TRIGGER block_path_update BEFORE UPDATE ON yamdc_job_tab
+	_, err := db.ExecContext(ctx, `CREATE TRIGGER block_path_update BEFORE UPDATE ON yamdc_job_tab
 		WHEN NEW.file_name != OLD.file_name
 		BEGIN SELECT RAISE(ABORT, 'path update blocked'); END`)
 	require.NoError(t, err)
@@ -699,9 +699,9 @@ func TestListActiveJobsByConflictKeysScanError(t *testing.T) {
 	ctx := context.Background()
 	insertTestJob(t, repo, "A.mp4", "A")
 
-	_, err := db.Exec(`ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE VIEW yamdc_job_tab AS
+	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_job_tab AS
 		SELECT 'not_an_int' AS id, rel_path, conflict_key, 0 AS deleted_at, status
 		FROM yamdc_job_tab_bak`)
 	require.NoError(t, err)
@@ -716,9 +716,9 @@ func TestListJobsQueryError(t *testing.T) {
 	ctx := context.Background()
 	insertTestJob(t, repo, "A.mp4", "A")
 
-	_, err := db.Exec(`ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE VIEW yamdc_job_tab AS
+	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_job_tab AS
 		SELECT id, 0 AS deleted_at, status FROM yamdc_job_tab_bak`)
 	require.NoError(t, err)
 
@@ -733,9 +733,9 @@ func TestListJobsScanError(t *testing.T) {
 	ctx := context.Background()
 	insertTestJob(t, repo, "A.mp4", "A")
 
-	_, err := db.Exec(`ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_job_tab RENAME TO yamdc_job_tab_bak`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE VIEW yamdc_job_tab AS
+	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_job_tab AS
 		SELECT 'bad' AS id, job_uid, file_name, file_ext, conflict_key,
 			rel_path, abs_path, number, raw_number, cleaned_number,
 			number_source, number_clean_status, number_clean_confidence,
@@ -755,9 +755,9 @@ func TestLogListByJobIDScanError(t *testing.T) {
 
 	require.NoError(t, logRepo.Add(ctx, 1, "info", "test", "msg", ""))
 
-	_, err := db.Exec(`ALTER TABLE yamdc_log_tab RENAME TO yamdc_log_tab_bak`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_log_tab RENAME TO yamdc_log_tab_bak`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE VIEW yamdc_log_tab AS
+	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_log_tab AS
 		SELECT 'bad' AS id, job_id, level, stage, message, detail, created_at
 		FROM yamdc_log_tab_bak`)
 	require.NoError(t, err)

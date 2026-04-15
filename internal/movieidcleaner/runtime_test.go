@@ -9,9 +9,9 @@ import (
 
 func TestNewRuntimeCleaner(t *testing.T) {
 	tests := []struct {
-		name      string
-		inner     Cleaner
-		expectPT  bool
+		name     string
+		inner    Cleaner
+		expectPT bool
 	}{
 		{
 			name:     "nil_inner_uses_passthrough",

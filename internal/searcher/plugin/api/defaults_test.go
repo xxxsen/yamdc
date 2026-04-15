@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,13 +31,15 @@ func TestDefaultPlugin_OnMakeHTTPRequest(t *testing.T) {
 
 func TestDefaultPlugin_OnDecorateRequest(t *testing.T) {
 	var p DefaultPlugin
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
+	require.NoError(t, err)
 	require.NoError(t, p.OnDecorateRequest(context.Background(), req))
 }
 
 func TestDefaultPlugin_OnPrecheckResponse(t *testing.T) {
 	var p DefaultPlugin
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
+	require.NoError(t, err)
 
 	rsp404 := &http.Response{StatusCode: http.StatusNotFound, Request: req}
 	ok, err := p.OnPrecheckResponse(context.Background(), req, rsp404)
@@ -53,13 +54,17 @@ func TestDefaultPlugin_OnPrecheckResponse(t *testing.T) {
 
 func TestDefaultPlugin_OnHandleHTTPRequest(t *testing.T) {
 	var p DefaultPlugin
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
+	require.NoError(t, err)
 	want := &http.Response{StatusCode: http.StatusTeapot, Body: io.NopCloser(nil)}
-	invoker := func(ctx context.Context, r *http.Request) (*http.Response, error) {
+	invoker := func(_ context.Context, r *http.Request) (*http.Response, error) {
 		assert.Equal(t, req, r)
 		return want, nil
 	}
 	got, err := p.OnHandleHTTPRequest(context.Background(), invoker, req)
+	if got != nil && got.Body != nil {
+		defer func() { _ = got.Body.Close() }()
+	}
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
@@ -74,6 +79,7 @@ func TestDefaultPlugin_OnDecodeHTTPData(t *testing.T) {
 
 func TestDefaultPlugin_OnDecorateMediaRequest(t *testing.T) {
 	var p DefaultPlugin
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
+	require.NoError(t, err)
 	require.NoError(t, p.OnDecorateMediaRequest(context.Background(), req))
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/antchfx/htmlquery"
-	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,8 +111,8 @@ func TestDecode_WithAllOptions(t *testing.T) {
 		WithTitleParser(func(s string) string { return "t:" + s }),
 		WithPlotParser(func(s string) string { return "p:" + s }),
 		WithActorListParser(func(v []string) []string { return append([]string{"head"}, v...) }),
-		WithReleaseDateParser(func(s string) int64 { return 7 }),
-		WithDurationParser(func(s string) int64 { return 8 }),
+		WithReleaseDateParser(func(_ string) int64 { return 7 }),
+		WithDurationParser(func(_ string) int64 { return 8 }),
 		WithStudioParser(func(s string) string { return "st:" + s }),
 		WithLabelParser(func(s string) string { return "lb:" + s }),
 		WithSeriesParser(func(s string) string { return "sr:" + s }),
@@ -213,5 +212,5 @@ func TestDecode_ModelShape(t *testing.T) {
 	require.NoError(t, err)
 	meta, err := d.Decode(doc)
 	require.NoError(t, err)
-	var _ *model.MovieMeta = meta
+	_ = meta
 }

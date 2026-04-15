@@ -3,9 +3,9 @@ package factory
 import (
 	"testing"
 
-	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 func restoreRegistry(t *testing.T, saved map[string]CreatorFunc) {

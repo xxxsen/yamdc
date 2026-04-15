@@ -104,7 +104,7 @@ func TestServiceStartKeepsNonRunningTaskState(t *testing.T) {
 	require.Equal(t, int64(200), state.FinishedAt)
 }
 
-func TestServiceStartNoDb(t *testing.T) {
+func TestServiceStartNoDb(_ *testing.T) {
 	svc := NewService(nil, "", "")
 	svc.Start(context.Background())
 }
@@ -933,8 +933,8 @@ func TestCopyDirectoryDeep(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "dst")
 	subDir := filepath.Join(src, "sub")
 	require.NoError(t, os.MkdirAll(subDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hello"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(subDir, "b.txt"), []byte("world"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hello"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "b.txt"), []byte("world"), 0o600))
 
 	require.NoError(t, copyDirectory(src, dst))
 	data, err := os.ReadFile(filepath.Join(dst, "a.txt"))
@@ -1216,12 +1216,9 @@ func TestGetDetailBadJSON(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	rows, err := svc.db.QueryContext(ctx, `SELECT id FROM yamdc_media_library_tab WHERE rel_path = ?`, "bad")
-	require.NoError(t, err)
 	var id int64
-	require.True(t, rows.Next())
-	require.NoError(t, rows.Scan(&id))
-	rows.Close()
+	err = svc.db.QueryRowContext(ctx, `SELECT id FROM yamdc_media_library_tab WHERE rel_path = ?`, "bad").Scan(&id)
+	require.NoError(t, err)
 
 	_, err = svc.GetDetail(ctx, id)
 	assert.Error(t, err)
@@ -1344,7 +1341,7 @@ func TestUpdateItemUpdateError(t *testing.T) {
 	nfoPath := filepath.Join(itemDir, "movie.nfo")
 	require.NoError(t, os.WriteFile(nfoPath, []byte("<movie/>"), 0o600))
 	require.NoError(t, os.Chmod(nfoPath, 0o000))
-	t.Cleanup(func() { os.Chmod(nfoPath, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(nfoPath, 0o755) })
 
 	_, err = svc.UpdateItem(ctx, items[0].ID, Meta{Title: "New"})
 	assert.Error(t, err)
@@ -1370,7 +1367,7 @@ func TestReplaceAssetReplaceError(t *testing.T) {
 	require.Len(t, items, 1)
 
 	require.NoError(t, os.Chmod(itemDir, 0o555))
-	t.Cleanup(func() { os.Chmod(itemDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(itemDir, 0o755) })
 
 	_, err = svc.ReplaceAsset(ctx, items[0].ID, "", "poster", "p.jpg", []byte("img"))
 	assert.Error(t, err)
@@ -1397,7 +1394,7 @@ func TestDeleteFileDeleteError(t *testing.T) {
 	require.Len(t, items, 1)
 
 	require.NoError(t, os.Chmod(efDir, 0o555))
-	t.Cleanup(func() { os.Chmod(efDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(efDir, 0o755) })
 
 	_, err = svc.DeleteFile(ctx, items[0].ID, "movie/extrafanart/extra.jpg")
 	assert.Error(t, err)
@@ -1412,7 +1409,7 @@ func TestRunFullSyncListError(t *testing.T) {
 	libraryDir := t.TempDir()
 	svc := newTestMediaServiceWithDirs(t, libraryDir, t.TempDir())
 	require.NoError(t, os.Chmod(libraryDir, 0o000))
-	t.Cleanup(func() { os.Chmod(libraryDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(libraryDir, 0o755) })
 
 	err := svc.runFullSync(context.Background(), "manual")
 	assert.Error(t, err)
@@ -1427,7 +1424,7 @@ func TestRunMoveListError(t *testing.T) {
 	saveDir := t.TempDir()
 	svc := newTestMediaServiceWithDirs(t, t.TempDir(), saveDir)
 	require.NoError(t, os.Chmod(saveDir, 0o000))
-	t.Cleanup(func() { os.Chmod(saveDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(saveDir, 0o755) })
 
 	err := svc.runMove(context.Background())
 	assert.Error(t, err)
@@ -1470,7 +1467,7 @@ func TestSyncAllItemsWithFailedItem(t *testing.T) {
 	require.NoError(t, os.MkdirAll(badItem, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(badItem, "bad.mp4"), []byte("v"), 0o600))
 	require.NoError(t, os.Chmod(badItem, 0o000))
-	t.Cleanup(func() { os.Chmod(badItem, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(badItem, 0o755) })
 
 	state := newRunningTaskState(TaskSync, 2, "test")
 	keep := svc.syncAllItems(ctx, zap.NewNop(), []string{goodItem, badItem}, &state)

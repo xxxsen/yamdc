@@ -565,8 +565,8 @@ chains:
     - name: alpha
       priority: 100
 `,
-		"plugins/alpha.yaml":    samplePluginYAML("alpha"),
-		"plugins/alpha2.yaml":   samplePluginYAML("alpha"),
+		"plugins/alpha.yaml":  samplePluginYAML("alpha"),
+		"plugins/alpha2.yaml": samplePluginYAML("alpha"),
 	})
 	_, _, err := LoadBundleFromDir(dir)
 	require.Error(t, err)

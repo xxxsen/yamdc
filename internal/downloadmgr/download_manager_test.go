@@ -27,7 +27,7 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 func defaultMockClient(srv *httptest.Server) *mockHTTPClient {
 	return &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:bodyclose
+			return srv.Client().Do(req) //nolint:gosec
 		},
 	}
 }
@@ -97,7 +97,7 @@ func TestReadFileMeta_NotExist(t *testing.T) {
 
 func TestReadFileMeta_InvalidJSON(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "bad.meta")
-	require.NoError(t, os.WriteFile(p, []byte("not-json"), 0o644))
+	require.NoError(t, os.WriteFile(p, []byte("not-json"), 0o600))
 	_, err := readFileMeta(p)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal meta")
@@ -106,7 +106,7 @@ func TestReadFileMeta_InvalidJSON(t *testing.T) {
 func TestReadFileMeta_Success(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "good.meta")
 	raw, _ := json.Marshal(&fileMeta{ETag: `"abc"`, LastModified: "Mon, 01 Jan 2024 00:00:00 GMT"})
-	require.NoError(t, os.WriteFile(p, raw, 0o644))
+	require.NoError(t, os.WriteFile(p, raw, 0o600))
 
 	meta, err := readFileMeta(p)
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestWriteFileMeta_Success(t *testing.T) {
 
 func TestAttachETag_NoMetaFile(t *testing.T) {
 	m := NewManager(nil)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	require.NoError(t, m.attachETag(req, filepath.Join(t.TempDir(), "nope.meta")))
 	assert.Empty(t, req.Header.Get("If-None-Match"))
 }
@@ -140,10 +140,10 @@ func TestAttachETag_WithMeta(t *testing.T) {
 	dir := t.TempDir()
 	metaPath := filepath.Join(dir, "f.meta")
 	raw, _ := json.Marshal(&fileMeta{ETag: `"abc"`, LastModified: "lm-value"})
-	require.NoError(t, os.WriteFile(metaPath, raw, 0o644))
+	require.NoError(t, os.WriteFile(metaPath, raw, 0o600))
 
 	m := NewManager(nil)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	require.NoError(t, m.attachETag(req, metaPath))
 	assert.Equal(t, `"abc"`, req.Header.Get("If-None-Match"))
 	assert.Equal(t, "lm-value", req.Header.Get("If-Modified-Since"))
@@ -153,10 +153,10 @@ func TestAttachETag_EmptyETagAndLastModified(t *testing.T) {
 	dir := t.TempDir()
 	metaPath := filepath.Join(dir, "f.meta")
 	raw, _ := json.Marshal(&fileMeta{})
-	require.NoError(t, os.WriteFile(metaPath, raw, 0o644))
+	require.NoError(t, os.WriteFile(metaPath, raw, 0o600))
 
 	m := NewManager(nil)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	require.NoError(t, m.attachETag(req, metaPath))
 	assert.Empty(t, req.Header.Get("If-None-Match"))
 	assert.Empty(t, req.Header.Get("If-Modified-Since"))
@@ -167,7 +167,7 @@ func TestAttachETag_EmptyETagAndLastModified(t *testing.T) {
 func TestIsFileExist(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "exists.txt")
-	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
 
 	m := NewManager(nil)
 	assert.True(t, m.isFileExist(f))
@@ -179,12 +179,12 @@ func TestIsFileExist(t *testing.T) {
 func TestDownload_FileExistsNoSync(t *testing.T) {
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o644))
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o600))
 
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not download")
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		},
 	})
 	updated, err := m.Download(context.Background(), "http://example.com/file.bin", dst, false)
@@ -229,9 +229,9 @@ func TestDownload_Sync_NotModified(t *testing.T) {
 
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(dst, []byte("cached"), 0o644))
+	require.NoError(t, os.WriteFile(dst, []byte("cached"), 0o600))
 	metaRaw, _ := json.Marshal(&fileMeta{ETag: `"etag-1"`})
-	require.NoError(t, os.WriteFile(metaFilePath(dst), metaRaw, 0o644))
+	require.NoError(t, os.WriteFile(metaFilePath(dst), metaRaw, 0o600))
 
 	m := NewManager(defaultMockClient(srv))
 	updated, err := m.Download(context.Background(), srv.URL+"/file.bin", dst, true)
@@ -248,9 +248,9 @@ func TestDownload_Sync_Updated(t *testing.T) {
 
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o644))
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o600))
 	metaRaw, _ := json.Marshal(&fileMeta{ETag: `"etag-1"`})
-	require.NoError(t, os.WriteFile(metaFilePath(dst), metaRaw, 0o644))
+	require.NoError(t, os.WriteFile(metaFilePath(dst), metaRaw, 0o600))
 
 	m := NewManager(defaultMockClient(srv))
 	updated, err := m.Download(context.Background(), srv.URL+"/file.bin", dst, true)
@@ -318,9 +318,9 @@ func TestWriteFileMeta_BadPath(t *testing.T) {
 
 func TestAttachETag_InvalidMetaFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "bad.meta")
-	require.NoError(t, os.WriteFile(p, []byte("not-json"), 0o644))
+	require.NoError(t, os.WriteFile(p, []byte("not-json"), 0o600))
 	m := NewManager(nil)
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	err := m.attachETag(req, p)
 	require.Error(t, err)
 }
@@ -335,7 +335,7 @@ func TestDownload_SyncFileExists_Success(t *testing.T) {
 
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "file.bin")
-	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o644))
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o600))
 
 	m := NewManager(defaultMockClient(srv))
 	updated, err := m.Download(context.Background(), srv.URL+"/file.bin", dst, true)
@@ -365,7 +365,7 @@ func TestDownload_EnsureDirError(t *testing.T) {
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not reach")
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		},
 	})
 	_, err := m.Download(context.Background(), "http://example.com/f", "/dev/null/bad/file.bin", false)
@@ -376,12 +376,12 @@ func TestDownload_AttachETagError(t *testing.T) {
 	dir := t.TempDir()
 	dst := filepath.Join(dir, "file.bin")
 	metaPath := metaFilePath(dst)
-	require.NoError(t, os.WriteFile(metaPath, []byte("not-json"), 0o644))
+	require.NoError(t, os.WriteFile(metaPath, []byte("not-json"), 0o600))
 
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not reach")
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		},
 	})
 	_, err := m.Download(context.Background(), "http://example.com/f", dst, true)
@@ -410,7 +410,7 @@ func TestWriteToFile_RenameError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dstDir, 0o755))
 	tempFile := filepath.Join(dstDir, "out.txt.temp")
 
-	require.NoError(t, os.WriteFile(tempFile, []byte("existing"), 0o644))
+	require.NoError(t, os.WriteFile(tempFile, []byte("existing"), 0o600))
 
 	targetDir := filepath.Join(dstDir, "blocked")
 	require.NoError(t, os.MkdirAll(targetDir, 0o755))
@@ -469,7 +469,7 @@ func TestDownload_WriteToFileError(t *testing.T) {
 	dst := filepath.Join(subdir, "file.bin")
 
 	require.NoError(t, os.MkdirAll(filepath.Dir(dst), 0o755))
-	require.NoError(t, os.WriteFile(dst+".temp", []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(dst+".temp", []byte("x"), 0o600))
 	require.NoError(t, os.Chmod(subdir, 0o444))
 	t.Cleanup(func() { _ = os.Chmod(subdir, 0o755) })
 

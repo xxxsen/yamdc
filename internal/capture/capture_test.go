@@ -82,7 +82,7 @@ func (c *errCleaner) Clean(_ string) (*movieidcleaner.Result, error) {
 	return nil, errors.New("clean error")
 }
 
-func (c *errCleaner) Explain(input string) (*movieidcleaner.ExplainResult, error) {
+func (c *errCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
 	return nil, errors.New("explain error")
 }
 
@@ -323,9 +323,9 @@ func TestIsMediaFileWithExtraExt(t *testing.T) {
 func TestReadFileList(t *testing.T) {
 	scanDir := t.TempDir()
 	saveDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("fake"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "readme.txt"), []byte("text"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "DEF-456.mkv"), []byte("fake2"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("fake"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "readme.txt"), []byte("text"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "DEF-456.mkv"), []byte("fake2"), 0o600))
 
 	capt, err := New(
 		WithScanDir(scanDir),
@@ -418,11 +418,11 @@ func TestDoMetaVerify(t *testing.T) {
 
 func TestDoDataDiscard(t *testing.T) {
 	tests := []struct {
-		name            string
-		discardTitle    bool
-		discardPlot     bool
-		wantTitle       string
-		wantPlot        string
+		name         string
+		discardTitle bool
+		discardPlot  bool
+		wantTitle    string
+		wantPlot     string
 	}{
 		{"no discard", false, false, "translated", "plot translated"},
 		{"discard title", true, false, "", "plot translated"},
@@ -700,7 +700,7 @@ func TestSaveMediaData(t *testing.T) {
 
 	scanDir := t.TempDir()
 	movieFile := filepath.Join(scanDir, "ABC-123.mp4")
-	require.NoError(t, os.WriteFile(movieFile, []byte("moviedata"), 0o644))
+	require.NoError(t, os.WriteFile(movieFile, []byte("moviedata"), 0o600))
 
 	capt, err := New(
 		WithScanDir(scanDir),
@@ -766,7 +766,7 @@ func TestMoveMovieDirect(t *testing.T) {
 	dstDir := t.TempDir()
 	src := filepath.Join(srcDir, "test.mp4")
 	dst := filepath.Join(dstDir, "test.mp4")
-	require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+	require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 
 	err := capt.moveMovieDirect(nil, src, dst)
 	require.NoError(t, err)
@@ -789,7 +789,7 @@ func TestMoveMovieByLink(t *testing.T) {
 	dstDir := t.TempDir()
 	src := filepath.Join(srcDir, "test.mp4")
 	dst := filepath.Join(dstDir, "test_link.mp4")
-	require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+	require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 
 	err = capt.moveMovieByLink(nil, src, dst)
 	require.NoError(t, err)
@@ -807,7 +807,7 @@ func TestMoveMovie(t *testing.T) {
 		capt := newTestCapture(t, movieidcleaner.NewPassthroughCleaner())
 		src := filepath.Join(t.TempDir(), "test.mp4")
 		dst := filepath.Join(t.TempDir(), "test.mp4")
-		require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+		require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 		err := capt.moveMovie(nil, src, dst)
 		require.NoError(t, err)
 		assert.FileExists(t, dst)
@@ -824,7 +824,7 @@ func TestMoveMovie(t *testing.T) {
 		require.NoError(t, err)
 		src := filepath.Join(t.TempDir(), "test.mp4")
 		dst := filepath.Join(t.TempDir(), "test_link.mp4")
-		require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+		require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 		err = capt.moveMovie(nil, src, dst)
 		require.NoError(t, err)
 		_, err = os.Readlink(dst)
@@ -897,7 +897,7 @@ func TestImportMeta(t *testing.T) {
 
 	saveDir := t.TempDir()
 	movieFile := filepath.Join(t.TempDir(), "ABC-123.mp4")
-	require.NoError(t, os.WriteFile(movieFile, []byte("movie"), 0o644))
+	require.NoError(t, os.WriteFile(movieFile, []byte("movie"), 0o600))
 
 	capt, err := New(
 		WithScanDir(t.TempDir()),
@@ -979,7 +979,7 @@ func TestRun(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, storage.PutData(ctx, "ck", []byte("cover"), 0))
 	require.NoError(t, storage.PutData(ctx, "pk", []byte("poster"), 0))
-	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("movie"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "ABC-123.mp4"), []byte("movie"), 0o600))
 
 	meta := &model.MovieMeta{
 		Title:       "Test",
@@ -1061,7 +1061,7 @@ func TestSaveMediaDataNilCoverPoster(t *testing.T) {
 	movieDir := filepath.Join(saveDir, "test")
 	require.NoError(t, os.MkdirAll(movieDir, 0o755))
 	srcFile := filepath.Join(t.TempDir(), "test.mp4")
-	require.NoError(t, os.WriteFile(srcFile, []byte("movie"), 0o644))
+	require.NoError(t, os.WriteFile(srcFile, []byte("movie"), 0o600))
 
 	storage := store.NewMemStorage()
 	capt, err := New(

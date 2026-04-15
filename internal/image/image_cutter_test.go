@@ -15,8 +15,8 @@ import (
 type noSubImage struct{}
 
 func (noSubImage) Bounds() image.Rectangle { return image.Rect(0, 0, 20, 20) }
-func (noSubImage) ColorModel() color.Model  { return color.RGBAModel }
-func (noSubImage) At(x, y int) color.Color   { return color.RGBA{A: 255} }
+func (noSubImage) ColorModel() color.Model { return color.RGBAModel }
+func (noSubImage) At(_, _ int) color.Color { return color.RGBA{A: 255} }
 
 func TestDetermineCutFrame_invalidResolution(t *testing.T) {
 	t.Parallel()
@@ -133,7 +133,7 @@ type mockFaceRec struct {
 
 func (m *mockFaceRec) Name() string { return "mock" }
 
-func (m *mockFaceRec) SearchFaces(ctx context.Context, data []byte) ([]image.Rectangle, error) {
+func (m *mockFaceRec) SearchFaces(_ context.Context, _ []byte) ([]image.Rectangle, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

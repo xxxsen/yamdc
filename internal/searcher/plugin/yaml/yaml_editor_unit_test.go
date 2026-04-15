@@ -43,7 +43,7 @@ func makeResponse(code int, body string) *http.Response {
 // --- DebugCase ---
 
 func TestDebugCase_Success(t *testing.T) {
-	cli := &testHTTPClient{roundTrip: func(req *http.Request) (*http.Response, error) {
+	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
 		return makeResponse(200, `<html><body><h1 class="title">MyTitle</h1><div class="actors"><span>Alice</span></div></body></html>`), nil
 	}}
 	spec := simpleOneStepSpec("https://example.com")
@@ -220,7 +220,7 @@ func TestDebugScrape_JSON(t *testing.T) {
 // --- requestDebug with body ---
 
 func TestRequestDebug_WithBody(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodPost, "http://example.com/", bytes.NewReader([]byte("body-data")))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/", bytes.NewReader([]byte("body-data")))
 	dbg := requestDebug(req)
 	assert.Equal(t, "body-data", dbg.Body)
 }
@@ -250,7 +250,7 @@ func TestTraceAssignStringField(t *testing.T) {
 	assert.NotZero(t, result)
 
 	mv5 := &model.MovieMeta{}
-	result, err = traceAssignStringField(ctx, mv5, "title", "T", ParserSpec{Kind: "unknown_custom"})
+	_, err = traceAssignStringField(ctx, mv5, "title", "T", ParserSpec{Kind: "unknown_custom"})
 	require.Error(t, err)
 }
 
@@ -274,6 +274,7 @@ func TestTraceListTransforms(t *testing.T) {
 
 func TestCaptureHTTPResponse(t *testing.T) {
 	rsp := makeResponse(200, "body-text")
+	defer func() { _ = rsp.Body.Close() }()
 	resp, err := captureHTTPResponse(rsp, "")
 	require.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
@@ -330,7 +331,7 @@ func simpleOneStepSpecRequired(host string) *PluginSpec {
 	return spec
 }
 
-func multiRequestSpec(host string) *PluginSpec {
+func multiRequestSpec(host string) *PluginSpec { //nolint:unparam
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-multi",
@@ -357,7 +358,7 @@ func multiRequestSpec(host string) *PluginSpec {
 	}
 }
 
-func multiRequestWorkflowSpec(host string) *PluginSpec {
+func multiRequestWorkflowSpec(host string) *PluginSpec { //nolint:unparam
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-multi-wf",
@@ -808,7 +809,7 @@ func TestDebugRequest_SingleRequest(t *testing.T) {
 
 func TestDebugWorkflow_SingleRequest(t *testing.T) {
 	callCount := 0
-	cli := &testHTTPClient{roundTrip: func(req *http.Request) (*http.Response, error) {
+	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
 		callCount++
 		if callCount == 1 {
 			return makeResponse(200, `<html><body><a href="/detail/1">link</a></body></html>`), nil
@@ -1130,7 +1131,7 @@ func TestDebugWorkflow_MultiRequest_DuplicateCandidate(t *testing.T) {
 
 func TestDebugWorkflow_NextRequestStatusRejected(t *testing.T) {
 	callCount := 0
-	cli := &testHTTPClient{roundTrip: func(req *http.Request) (*http.Response, error) {
+	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
 		callCount++
 		if callCount == 1 {
 			return makeResponse(200, `<html><body><a href="/detail/1">ABC-123</a></body></html>`), nil
@@ -1390,6 +1391,7 @@ func TestCompileDraft_CompileError(t *testing.T) {
 
 func TestCaptureHTTPResponse_DecodeError(t *testing.T) {
 	rsp := makeResponse(200, "hello")
+	defer func() { _ = rsp.Body.Close() }()
 	_, err := captureHTTPResponse(rsp, "unknown-charset")
 	require.Error(t, err)
 }
@@ -1574,9 +1576,9 @@ func TestDebugWorkflow_PrecheckNotMatched(t *testing.T) {
 	}}
 	spec := &PluginSpec{
 		Version: 1, Name: "test", Type: "two-step",
-		Hosts:   []string{"https://example.com"},
+		Hosts:    []string{"https://example.com"},
 		Precheck: &PrecheckSpec{NumberPatterns: []string{`^ONLY-\d+$`}},
-		Request: &RequestSpec{Method: "GET", Path: "/search/${number}"},
+		Request:  &RequestSpec{Method: "GET", Path: "/search/${number}"},
 		Workflow: &WorkflowSpec{
 			SearchSelect: &SearchSelectWorkflowSpec{
 				Selectors:   []*SelectorListSpec{{Name: "link", Kind: "xpath", Expr: "//a/@href"}},
@@ -1594,7 +1596,7 @@ func TestDebugWorkflow_PrecheckNotMatched(t *testing.T) {
 
 // --- helpers ---
 
-func twoStepWorkflowSpec(host string) *PluginSpec {
+func twoStepWorkflowSpec(host string) *PluginSpec { //nolint:unparam
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-twostep",
@@ -1828,4 +1830,3 @@ func TestFieldByName_NoMatch(t *testing.T) {
 	f := plg.fieldByName("nonexistent_field")
 	assert.Nil(t, f)
 }
-

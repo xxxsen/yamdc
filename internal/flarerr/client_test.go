@@ -135,7 +135,8 @@ func TestSolverClient_convertRequest(t *testing.T) {
 	t.Parallel()
 	b := &solverClient{timeout: 1500 * time.Millisecond}
 	t.Run("get_ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "https://origin.test/resource", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://origin.test/resource", nil)
+		require.NoError(t, err)
 		fr, err := b.convertRequest(req)
 		require.NoError(t, err)
 		require.NotNil(t, fr)
@@ -145,7 +146,8 @@ func TestSolverClient_convertRequest(t *testing.T) {
 	})
 
 	t.Run("non_get_rejected", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "https://origin.test/", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://origin.test/", nil)
+		require.NoError(t, err)
 		fr, err := b.convertRequest(req)
 		require.Error(t, err)
 		assert.Nil(t, fr)
@@ -162,11 +164,13 @@ func TestSolverClient_isNeedByPass(t *testing.T) {
 		},
 	}
 	t.Run("host_in_map", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "https://bypass.test/page", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://bypass.test/page", nil)
+		require.NoError(t, err)
 		assert.True(t, b.isNeedByPass(req))
 	})
 	t.Run("host_not_in_map", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "https://other.test/page", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://other.test/page", nil)
+		require.NoError(t, err)
 		assert.False(t, b.isNeedByPass(req))
 	})
 }
@@ -210,7 +214,7 @@ func newFlareSolverMux(t *testing.T, v1Handler http.HandlerFunc) *http.ServeMux 
 }
 
 func TestSolverClient_Do_passthrough(t *testing.T) {
-	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "POST /v1 should not be called", http.StatusInternalServerError)
 	}))
 	defer ts.Close()
@@ -233,13 +237,13 @@ func TestSolverClient_Do_passthrough(t *testing.T) {
 
 	c, err := New(impl, ts.URL)
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodGet, "https://passthrough.test/doc", nil)
-	req = req.WithContext(context.Background())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://passthrough.test/doc", nil)
+	require.NoError(t, err)
 
 	rsp, err := c.Do(req)
 	require.NoError(t, err)
 	require.NotNil(t, rsp)
-	defer rsp.Body.Close()
+	defer func() { _ = rsp.Body.Close() }()
 	assert.Equal(t, http.StatusTeapot, rsp.StatusCode)
 	body, _ := io.ReadAll(rsp.Body)
 	assert.Equal(t, "tea", string(body))
@@ -287,13 +291,13 @@ func TestSolverClient_Do_bypass_ok(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.AddHost("shielded.test"))
 
-	req := httptest.NewRequest(http.MethodGet, "https://shielded.test/item", nil)
-	req = req.WithContext(context.Background())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://shielded.test/item", nil)
+	require.NoError(t, err)
 
 	rsp, err := c.Do(req)
 	require.NoError(t, err)
 	require.NotNil(t, rsp)
-	defer rsp.Body.Close()
+	defer func() { _ = rsp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, rsp.StatusCode)
 	body, _ := io.ReadAll(rsp.Body)
 	assert.Equal(t, "<html>bypassed</html>", string(body))
@@ -301,7 +305,7 @@ func TestSolverClient_Do_bypass_ok(t *testing.T) {
 }
 
 func TestSolverClient_Do_bypass_solver_error_status(t *testing.T) {
-	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(flareResponse{
 			Status:  "error",
 			Message: "challenge failed",
@@ -316,10 +320,13 @@ func TestSolverClient_Do_bypass_solver_error_status(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.AddHost("badflare.test"))
 
-	req := httptest.NewRequest(http.MethodGet, "https://badflare.test/", nil)
-	req = req.WithContext(context.Background())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://badflare.test/", nil)
+	require.NoError(t, err)
 
 	rsp, err := c.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.ErrorIs(t, err, errFlareResponseStatus)
@@ -339,11 +346,14 @@ func TestSolverClient_Do_post_rejected_for_bypass_host(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.AddHost("postblock.test"))
 
-	req := httptest.NewRequest(http.MethodPost, "https://postblock.test/submit", strings.NewReader("x"))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://postblock.test/submit", strings.NewReader("x"))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "text/plain")
-	req = req.WithContext(context.Background())
 
 	rsp, err := c.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.ErrorIs(t, err, errFlareOnlyGET)
@@ -356,10 +366,13 @@ func TestSolverClient_Do_test_host_failure(t *testing.T) {
 	c, err := New(impl, "http://127.0.0.1:9")
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "https://any.test/", nil)
-	req = req.WithContext(context.Background())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://any.test/", nil)
+	require.NoError(t, err)
 
 	rsp, err := c.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.Contains(t, err.Error(), "test solver host failed")
@@ -371,7 +384,7 @@ func TestSolverClient_Do_passthrough_impl_error(t *testing.T) {
 	defer ts.Close()
 
 	var calls int
-	impl := &mockHTTPClient{doFn: func(req *http.Request) (*http.Response, error) {
+	impl := &mockHTTPClient{doFn: func(_ *http.Request) (*http.Response, error) {
 		calls++
 		if calls == 1 {
 			return okEmptyResponse(), nil
@@ -382,10 +395,13 @@ func TestSolverClient_Do_passthrough_impl_error(t *testing.T) {
 	c, err := New(impl, ts.URL)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "https://passthrough-err.test/", nil)
-	req = req.WithContext(context.Background())
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://passthrough-err.test/", nil)
+	require.NoError(t, err)
 
 	rsp, err := c.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.Contains(t, err.Error(), "solver passthrough request")
@@ -393,7 +409,7 @@ func TestSolverClient_Do_passthrough_impl_error(t *testing.T) {
 }
 
 func TestSolverClient_handleByPassRequest_decode_error(t *testing.T) {
-	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("not-json{"))
 	}))
 	defer ts.Close()
@@ -403,9 +419,13 @@ func TestSolverClient_handleByPassRequest_decode_error(t *testing.T) {
 		timeout:   time.Second,
 		byPastMap: make(map[string]struct{}),
 	}
-	req := httptest.NewRequest(http.MethodGet, "https://decode.test/p", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://decode.test/p", nil)
+	require.NoError(t, err)
 
 	rsp, err := b.handleByPassRequest(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.Contains(t, err.Error(), "decode flare response")
@@ -413,9 +433,10 @@ func TestSolverClient_handleByPassRequest_decode_error(t *testing.T) {
 
 // abruptCloseListener accepts one TCP connection and closes it immediately so
 // http.Post fails quickly without relying on OS TCP timeout behavior.
-func abruptCloseListener(t *testing.T) (baseURL string) {
+func abruptCloseListener(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	done := make(chan struct{})
 	go func() {
@@ -441,9 +462,13 @@ func TestSolverClient_handleByPassRequest_post_error(t *testing.T) {
 		timeout:   time.Second,
 		byPastMap: make(map[string]struct{}),
 	}
-	req := httptest.NewRequest(http.MethodGet, "https://posterr.test/", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://posterr.test/", nil)
+	require.NoError(t, err)
 
 	rsp, err := b.handleByPassRequest(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Nil(t, rsp)
 	assert.Contains(t, err.Error(), "post to flare solver")
@@ -457,7 +482,7 @@ func TestSolverClient_handleByPassRequest_success_direct(t *testing.T) {
 			Response: "payload",
 		},
 	}
-	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(newFlareSolverMux(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(payload)
 	}))
@@ -468,12 +493,13 @@ func TestSolverClient_handleByPassRequest_success_direct(t *testing.T) {
 		timeout:   2 * time.Second,
 		byPastMap: make(map[string]struct{}),
 	}
-	req := httptest.NewRequest(http.MethodGet, "https://direct.test/z", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://direct.test/z", nil)
+	require.NoError(t, err)
 
 	rsp, err := b.handleByPassRequest(req)
 	require.NoError(t, err)
 	require.NotNil(t, rsp)
-	defer rsp.Body.Close()
+	defer func() { _ = rsp.Body.Close() }()
 	assert.Equal(t, 201, rsp.StatusCode)
 	body, _ := io.ReadAll(rsp.Body)
 	assert.Equal(t, "payload", string(body))

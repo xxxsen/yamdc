@@ -228,7 +228,7 @@ func TestParseCall_NonIdentifierName(t *testing.T) {
 }
 
 func TestParseCall_InvalidArgs(t *testing.T) {
-	_, _, _, err := parseCall(`fn("unterminated)`)
+	_, _, _, err := parseCall(`fn("unterminated)`) //nolint:dogsled
 	require.Error(t, err)
 }
 

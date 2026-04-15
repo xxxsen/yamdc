@@ -20,7 +20,7 @@ import (
 
 func pigoCascadeRoot(t *testing.T) string {
 	t.Helper()
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/esimov/pigo").Output()
+	out, err := exec.CommandContext(context.Background(), "go", "list", "-m", "-f", "{{.Dir}}", "github.com/esimov/pigo").Output()
 	if err != nil {
 		t.Skipf("cannot locate pigo module: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestNewPigo_ReadCascadeMissing(t *testing.T) {
 
 func TestNewPigo_UnpackInvalidCascade(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, defaultFaceFinderCascade), []byte("not-a-cascade"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, defaultFaceFinderCascade), []byte("not-a-cascade"), 0o600))
 	assert.Panics(t, func() {
 		_, _ = NewPigo(dir)
 	})
@@ -183,9 +183,9 @@ func TestPigo_SearchFaces_MultipleFormats(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 500, 500))
 	for y := 0; y < 500; y++ {
 		for x := 0; x < 500; x++ {
-			r := uint8((x * 7 + y * 3) % 256)
-			g := uint8((x * 11 + y * 5) % 256)
-			b := uint8((x * 13 + y * 7) % 256)
+			r := uint8((x*7 + y*3) % 256)
+			g := uint8((x*11 + y*5) % 256)
+			b := uint8((x*13 + y*7) % 256)
 			img.Set(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
 		}
 	}
@@ -241,9 +241,9 @@ func TestPigo_SearchFaces_RandomNoiseForLowQ(t *testing.T) {
 		for x := 0; x < sz; x++ {
 			seed = seed*6364136223846793005 + 1
 			img.Set(x, y, color.RGBA{
-				R: uint8(seed >> 16),
-				G: uint8(seed >> 8),
-				B: uint8(seed),
+				R: uint8(seed >> 16), //nolint:gosec
+				G: uint8(seed >> 8),  //nolint:gosec
+				B: uint8(seed),       //nolint:gosec
 				A: 255,
 			})
 		}

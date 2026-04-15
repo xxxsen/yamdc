@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+var errFFMpegNotEnabled = errors.New("ffmpeg is not enabled")
 
 var defaultFFMpeg *FFMpeg
 
@@ -48,7 +51,6 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 	defer func() {
 		_ = os.Remove(dstFile)
 	}()
-	//nolint:gosec // ffmpeg path is from exec.LookPath, args are controlled
 	cmd := commandContext(ctx,
 		p.cmd,
 		"-i",
@@ -73,7 +75,7 @@ func (p *FFMpeg) ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte)
 
 func ConvertToYuv420pJpegFromBytes(ctx context.Context, data []byte) ([]byte, error) {
 	if defaultFFMpeg == nil {
-		return nil, fmt.Errorf("ffmpeg is not enabled")
+		return nil, errFFMpegNotEnabled
 	}
 	return defaultFFMpeg.ConvertToYuv420pJpegFromBytes(ctx, data)
 }

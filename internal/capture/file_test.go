@@ -21,7 +21,7 @@ func TestMoveFile(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.mp4")
 				dst := filepath.Join(dir, "dst.mp4")
-				require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+				require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 				return src, dst
 			},
 		},
@@ -32,7 +32,7 @@ func TestMoveFile(t *testing.T) {
 				dstDir := t.TempDir()
 				src := filepath.Join(srcDir, "src.mp4")
 				dst := filepath.Join(dstDir, "dst.mp4")
-				require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
+				require.NoError(t, os.WriteFile(src, []byte("content"), 0o600))
 				return src, dst
 			},
 		},
@@ -73,7 +73,7 @@ func TestCopyFile(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.txt")
 				dst := filepath.Join(dir, "dst.txt")
-				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o644))
+				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o600))
 				return src, dst
 			},
 		},
@@ -89,7 +89,7 @@ func TestCopyFile(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "src.txt")
-				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o644))
+				require.NoError(t, os.WriteFile(src, []byte("hello"), 0o600))
 				return src, filepath.Join(dir, "nonexist_dir", "dst.txt")
 			},
 			wantErr: true,
@@ -100,7 +100,7 @@ func TestCopyFile(t *testing.T) {
 				dir := t.TempDir()
 				src := filepath.Join(dir, "empty.txt")
 				dst := filepath.Join(dir, "dst.txt")
-				require.NoError(t, os.WriteFile(src, []byte{}, 0o644))
+				require.NoError(t, os.WriteFile(src, []byte{}, 0o600))
 				return src, dst
 			},
 		},
@@ -130,7 +130,7 @@ func TestMoveCrossDevice(t *testing.T) {
 		dstDir := t.TempDir()
 		src := filepath.Join(srcDir, "source.mp4")
 		dst := filepath.Join(dstDir, "dest.mp4")
-		require.NoError(t, os.WriteFile(src, []byte("video data"), 0o644))
+		require.NoError(t, os.WriteFile(src, []byte("video data"), 0o600))
 
 		err := moveCrossDevice(src, dst)
 		require.NoError(t, err)

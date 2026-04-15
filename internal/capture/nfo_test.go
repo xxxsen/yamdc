@@ -35,8 +35,8 @@ func TestFormatTimeToDate(t *testing.T) {
 
 func TestConvertMetaToMovieNFO(t *testing.T) {
 	tests := []struct {
-		name string
-		meta *model.MovieMeta
+		name  string
+		meta  *model.MovieMeta
 		check func(t *testing.T, meta *model.MovieMeta)
 	}{
 		{

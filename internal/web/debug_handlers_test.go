@@ -177,8 +177,8 @@ func TestHandlePluginEditorDraftNumberOp(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, rec := newGinContext(http.MethodPost, "/api/debug/plugin-editor/request", strings.NewReader(tt.body))
-			tt.api.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed, func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
-				return nil, nil
+			tt.api.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (interface{}, error) {
+				return nil, nil //nolint:nilnil
 			})
 			resp := decodeResponse(t, rec)
 			assert.Equal(t, tt.wantCode, resp.Code)

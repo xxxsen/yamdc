@@ -15,7 +15,7 @@ import (
 
 type errReader struct{}
 
-func (errReader) Read(p []byte) (n int, err error) {
+func (errReader) Read(_ []byte) (int, error) {
 	return 0, fmt.Errorf("simulated read failure")
 }
 

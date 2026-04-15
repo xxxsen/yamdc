@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,7 +53,7 @@ func TestClientWrap_Do_Success(t *testing.T) {
 
 	cli, err := NewClient()
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	require.NoError(t, err)
 	rsp, err := cli.Do(req)
 	require.NoError(t, err)
@@ -63,15 +64,18 @@ func TestClientWrap_Do_Success(t *testing.T) {
 func TestClientWrap_Do_TransportError(t *testing.T) {
 	cli, err := NewClient()
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9", nil)
 	require.NoError(t, err)
-	_, err = cli.Do(req)
+	rsp, err := cli.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http client do")
 }
 
 func TestNewClient_TimeoutEnforced(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(500 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -79,14 +83,17 @@ func TestNewClient_TimeoutEnforced(t *testing.T) {
 
 	cli, err := NewClient(WithTimeout(50 * time.Millisecond))
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
 	require.NoError(t, err)
-	_, err = cli.Do(req)
+	rsp, err := cli.Do(req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 
 func TestNewClient_WithProxyRoundTrip(t *testing.T) {
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("via-proxy"))
 	}))
@@ -103,7 +110,7 @@ func TestNewClient_WithProxyRoundTrip(t *testing.T) {
 
 	cli, err := NewClient(WithProxy(proxySrv.URL), WithTimeout(2*time.Second))
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodGet, backend.URL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, backend.URL, nil)
 	require.NoError(t, err)
 	rsp, err := cli.Do(req)
 	if err != nil {

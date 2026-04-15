@@ -14,7 +14,7 @@ import (
 
 type failingWriter struct{}
 
-func (failingWriter) Write(p []byte) (n int, err error) {
+func (failingWriter) Write(p []byte) (int, error) {
 	_ = p
 	return 0, errors.New("write failed")
 }
@@ -82,7 +82,7 @@ func TestParseMovieFromFile(t *testing.T) {
 	m := &Movie{Title: "from disk", ID: "id-1"}
 	buf := bytes.NewBuffer(nil)
 	require.NoError(t, WriteMovie(buf, m))
-	require.NoError(t, os.WriteFile(path, buf.Bytes(), 0o644))
+	require.NoError(t, os.WriteFile(path, buf.Bytes(), 0o600))
 
 	got, err := ParseMovie(path)
 	require.NoError(t, err)

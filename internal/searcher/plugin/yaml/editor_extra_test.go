@@ -160,7 +160,7 @@ func TestIterateMultiRequestCandidates_NoCandidates(t *testing.T) {
 }
 
 func TestRequestDebug_NilBody(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	dbg := requestDebug(req)
 	assert.Empty(t, dbg.Body)
 }
@@ -759,7 +759,7 @@ func TestDebugScrapeDecodeFields_JSONInvalid(t *testing.T) {
 func TestDebugRequest_SingleRequest_OKResponse(t *testing.T) {
 	htmlBody := `<html><body><h1>Test</h1></body></html>`
 	cli := &testHTTPClient{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
+		roundTrip: func(_ *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(strings.NewReader(htmlBody)),
@@ -932,7 +932,7 @@ func TestDebugCollectSelectors_CountMismatch(t *testing.T) {
 		},
 	}
 	node := helperParseHTMLForEditor(t, `<html><body><a href="/a">A</a><a href="/b">B</a><h2>Only one</h2></body></html>`)
-	_, _, _, err := debugCollectSelectors(node, w)
+	_, _, _, err := debugCollectSelectors(node, w) //nolint:dogsled
 	require.ErrorIs(t, err, errSelectorCountMismatch)
 }
 
@@ -956,7 +956,7 @@ func TestIterateMultiRequestCandidates_UniqueDedup(t *testing.T) {
 
 	callCount := 0
 	cli := &testHTTPClient{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
+		roundTrip: func(_ *http.Request) (*http.Response, error) {
 			callCount++
 			return &http.Response{
 				StatusCode: 200,

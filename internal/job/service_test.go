@@ -774,7 +774,7 @@ func setupReviewingJobWithScrapeData(
 	svc *Service,
 	repo *repository.JobRepository,
 	meta *model.MovieMeta,
-) (int64, *repository.ScrapeDataRepository) {
+) (int64, *repository.ScrapeDataRepository) { //nolint:unparam
 	t.Helper()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "REVIEW-001.mp4")
@@ -983,8 +983,10 @@ func TestBuildJobFailureDetail(t *testing.T) {
 		contains   []string
 	}{
 		{name: "all nil", job: nil, sourcePath: "", fc: nil, err: nil, contains: nil},
-		{name: "with job", job: &jobdef.Job{ID: 1, Status: "init", Number: "N", RawNumber: "R", CleanedNumber: "C", AbsPath: "/a"},
-			contains: []string{"job_id=1", "status=init", "job_number=N", "raw_number=R", "cleaned_number=C", "source_file=/a"}},
+		{
+			name: "with job", job: &jobdef.Job{ID: 1, Status: "init", Number: "N", RawNumber: "R", CleanedNumber: "C", AbsPath: "/a"},
+			contains: []string{"job_id=1", "status=init", "job_number=N", "raw_number=R", "cleaned_number=C", "source_file=/a"},
+		},
 		{name: "with source path", sourcePath: "/resolved", contains: []string{"resolved_source=/resolved"}},
 		{name: "with fc and meta", fc: &model.FileContext{
 			SaveFileBase: "SFB",
@@ -1065,38 +1067,38 @@ func TestClassifyEntry(t *testing.T) {
 		wantPrefix int
 	}{
 		{
-			name:     "exact match",
-			base:     "ABC-001",
-			fullPath: "/dir/ABC-001.mp4",
-			job:      &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
+			name:      "exact match",
+			base:      "ABC-001",
+			fullPath:  "/dir/ABC-001.mp4",
+			job:       &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
 			wantExact: 1, wantPrefix: 0,
 		},
 		{
-			name:     "prefix match with dot",
-			base:     "ABC-001.720p",
-			fullPath: "/dir/ABC-001.720p.mp4",
-			job:      &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
+			name:      "prefix match with dot",
+			base:      "ABC-001.720p",
+			fullPath:  "/dir/ABC-001.720p.mp4",
+			job:       &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
 			wantExact: 0, wantPrefix: 1,
 		},
 		{
-			name:     "prefix match with dash",
-			base:     "ABC-001-extras",
-			fullPath: "/dir/ABC-001-extras.mp4",
-			job:      &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
+			name:      "prefix match with dash",
+			base:      "ABC-001-extras",
+			fullPath:  "/dir/ABC-001-extras.mp4",
+			job:       &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
 			wantExact: 0, wantPrefix: 1,
 		},
 		{
-			name:     "no match",
-			base:     "XYZ-999",
-			fullPath: "/dir/XYZ-999.mp4",
-			job:      &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
+			name:      "no match",
+			base:      "XYZ-999",
+			fullPath:  "/dir/XYZ-999.mp4",
+			job:       &jobdef.Job{Number: "ABC-001", RawNumber: "ABC001", CleanedNumber: "ABC-001"},
 			wantExact: 0, wantPrefix: 0,
 		},
 		{
-			name:     "empty expected numbers",
-			base:     "ABC-001",
-			fullPath: "/dir/ABC-001.mp4",
-			job:      &jobdef.Job{Number: "", RawNumber: "", CleanedNumber: ""},
+			name:      "empty expected numbers",
+			base:      "ABC-001",
+			fullPath:  "/dir/ABC-001.mp4",
+			job:       &jobdef.Job{Number: "", RawNumber: "", CleanedNumber: ""},
 			wantExact: 0, wantPrefix: 0,
 		},
 	}
@@ -1204,7 +1206,7 @@ func TestServiceGetScrapeDataNotFound(t *testing.T) {
 func TestServiceSetImportGuard(t *testing.T) {
 	svc, _ := newTestService(t)
 	assert.Nil(t, svc.importGuard)
-	svc.SetImportGuard(func(ctx context.Context) error { return nil })
+	svc.SetImportGuard(func(_ context.Context) error { return nil })
 	assert.NotNil(t, svc.importGuard)
 }
 
@@ -1231,12 +1233,12 @@ func TestServiceListLogsEmpty(t *testing.T) {
 
 // ---------- addJobLog ----------
 
-func TestAddJobLogNilSvc(t *testing.T) {
+func TestAddJobLogNilSvc(_ *testing.T) {
 	var svc *Service
 	svc.addJobLog(context.Background(), 1, "info", "stage", "msg", "detail")
 }
 
-func TestAddJobLogNilLogRepo(t *testing.T) {
+func TestAddJobLogNilLogRepo(_ *testing.T) {
 	svc := &Service{}
 	svc.addJobLog(context.Background(), 1, "info", "stage", "msg", "detail")
 }
@@ -1464,7 +1466,7 @@ func TestServiceImportBlockedByGuard(t *testing.T) {
 	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
 
 	guardErr := fmt.Errorf("guard blocked")
-	svc.SetImportGuard(func(ctx context.Context) error { return guardErr })
+	svc.SetImportGuard(func(_ context.Context) error { return guardErr })
 
 	err := svc.Import(context.Background(), jobID)
 	require.ErrorIs(t, err, guardErr)
@@ -2003,13 +2005,17 @@ func TestServiceImportWithReviewData(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
 	}, jobdef.StatusReviewing)
 
-	rawMeta := &model.MovieMeta{Title: "Original", Number: "IMP-RV-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey}}
+	rawMeta := &model.MovieMeta{
+		Title: "Original", Number: "IMP-RV-001",
+		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
+	}
 	raw, _ := json.Marshal(rawMeta)
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
 
-	reviewMeta := &model.MovieMeta{Title: "Reviewed", Number: "IMP-RV-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey}}
+	reviewMeta := &model.MovieMeta{
+		Title: "Reviewed", Number: "IMP-RV-001",
+		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
+	}
 	reviewRaw, _ := json.Marshal(reviewMeta)
 	require.NoError(t, svc.scrapeRepo.SaveReviewData(context.Background(), jobID, string(reviewRaw)))
 
@@ -2038,7 +2044,7 @@ func TestServiceImportWithGuardPassing(t *testing.T) {
 	}}
 	capt := newTestCaptureWithStorage(t, searcher, storage)
 	svc.capture = capt
-	svc.SetImportGuard(func(ctx context.Context) error { return nil })
+	svc.SetImportGuard(func(_ context.Context) error { return nil })
 
 	dir := capt.ScanDir()
 	file := filepath.Join(dir, "IMP-GD-001.mp4")
@@ -2050,8 +2056,10 @@ func TestServiceImportWithGuardPassing(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
 	}, jobdef.StatusReviewing)
 
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-GD-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey}}
+	meta := &model.MovieMeta{
+		Title: "T", Number: "IMP-GD-001",
+		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
+	}
 	raw, _ := json.Marshal(meta)
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
 
@@ -2149,8 +2157,8 @@ func TestResolveJobSourcePathScanDirFallback(t *testing.T) {
 
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName: "SCAN-001.mp4", FileExt: ".mp4", RelPath: "SCAN-001.mp4",
-		AbsPath:  "/nonexistent/SCAN-001.mp4",
-		Number:   "SCAN-001", RawNumber: "SCAN-001", CleanedNumber: "SCAN-001",
+		AbsPath: "/nonexistent/SCAN-001.mp4",
+		Number:  "SCAN-001", RawNumber: "SCAN-001", CleanedNumber: "SCAN-001",
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
 	}, jobdef.StatusInit)
 
@@ -2176,8 +2184,8 @@ func TestResolveJobSourcePathScanDirWithSubDir(t *testing.T) {
 
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
 		FileName: "SUBDIR-001.mp4", FileExt: ".mp4", RelPath: "sub/SUBDIR-001.mp4",
-		AbsPath:  filepath.Join("/nonexistent", "sub", "SUBDIR-001.mp4"),
-		Number:   "SUBDIR-001", RawNumber: "SUBDIR-001", CleanedNumber: "SUBDIR-001",
+		AbsPath: filepath.Join("/nonexistent", "sub", "SUBDIR-001.mp4"),
+		Number:  "SUBDIR-001", RawNumber: "SUBDIR-001", CleanedNumber: "SUBDIR-001",
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
 	}, jobdef.StatusInit)
 
@@ -2485,7 +2493,7 @@ func TestServiceSaveReviewDataValidJSON(t *testing.T) {
 
 // ---------- Error paths via closed DB ----------
 
-func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) {
+func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam
 	t.Helper()
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
@@ -2602,7 +2610,7 @@ func TestRunOneWithDBError(t *testing.T) {
 
 // ---------- Error paths via targeted table drops ----------
 
-func dropTable(t *testing.T, svc *Service, table string) {
+func dropTable(t *testing.T, svc *Service, _ string) { //nolint:unused
 	t.Helper()
 	db := svc.jobRepo
 	_ = db
@@ -2890,8 +2898,10 @@ func TestServiceImportMarkDoneError(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
 	}, jobdef.StatusReviewing)
 
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-MDE",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey}}
+	meta := &model.MovieMeta{
+		Title: "T", Number: "IMP-MDE",
+		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
+	}
 	raw, _ := json.Marshal(meta)
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
 
@@ -3226,8 +3236,10 @@ func TestServiceImportSaveFinalDataTriggerError(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
 	}, jobdef.StatusReviewing)
 
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-TRG",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey}}
+	meta := &model.MovieMeta{
+		Title: "T", Number: "IMP-TRG",
+		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
+	}
 	raw, _ := json.Marshal(meta)
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
 

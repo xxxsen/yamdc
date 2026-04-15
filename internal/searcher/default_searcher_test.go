@@ -161,7 +161,7 @@ func TestCheck(t *testing.T) {
 				hosts = []string{srv.URL}
 				if tt.doFn == nil {
 					cli = &mockHTTPClient{do: func(req *http.Request) (*http.Response, error) {
-						return http.DefaultClient.Do(req)
+						return http.DefaultClient.Do(req) //nolint:gosec
 					}}
 				}
 			}
@@ -517,7 +517,7 @@ func TestFixSingleURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest(http.MethodGet, "https://example.com/search", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/search", nil)
 			ds := &DefaultSearcher{}
 			val := tt.input
 			ds.fixSingleURL(req, &val, "https://example.com")
@@ -527,7 +527,7 @@ func TestFixSingleURL(t *testing.T) {
 }
 
 func TestFixMeta(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com/search", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/search", nil)
 	ds := &DefaultSearcher{}
 	meta := &model.MovieMeta{
 		Cover:        &model.File{Name: "//cdn.example.com/cover.jpg"},
@@ -541,7 +541,7 @@ func TestFixMeta(t *testing.T) {
 }
 
 func TestFixMeta_NilCoverPoster(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com/search", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/search", nil)
 	ds := &DefaultSearcher{}
 	meta := &model.MovieMeta{Cover: nil, Poster: nil}
 	ds.fixMeta(context.Background(), req, meta)
@@ -568,7 +568,7 @@ func TestStoreImageData_FailedDownload(t *testing.T) {
 	assert.Nil(t, meta.Poster)
 }
 
-func TestStoreImageData_EmptyURL(t *testing.T) {
+func TestStoreImageData_EmptyURL(_ *testing.T) {
 	ds := &DefaultSearcher{
 		cc: &config{cli: &mockHTTPClient{}, storage: store.NewMemStorage()},
 	}
@@ -635,7 +635,7 @@ func TestLoadCacheData_LoaderSuccess(t *testing.T) {
 func TestDecorateRequest_PluginError(t *testing.T) {
 	plg := &fullPlugin{decorateReqErr: errors.New("decorate error")}
 	ds := &DefaultSearcher{plg: plg}
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	err := ds.decorateRequest(context.Background(), req)
 	require.Error(t, err)
 }
@@ -643,14 +643,14 @@ func TestDecorateRequest_PluginError(t *testing.T) {
 func TestDecorateImageRequest_PluginError(t *testing.T) {
 	plg := &fullPlugin{decorateMediaErr: errors.New("media decorate error")}
 	ds := &DefaultSearcher{plg: plg}
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 	err := ds.decorateImageRequest(context.Background(), req)
 	require.Error(t, err)
 }
 
 func TestSetDefaultHTTPOptions_SetsReferer(t *testing.T) {
 	ds := &DefaultSearcher{}
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com/search?q=1", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/search?q=1", nil)
 	err := ds.setDefaultHTTPOptions(req)
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/", req.Header.Get("Referer"))
@@ -658,7 +658,7 @@ func TestSetDefaultHTTPOptions_SetsReferer(t *testing.T) {
 
 func TestSetDefaultHTTPOptions_DoesNotOverrideReferer(t *testing.T) {
 	ds := &DefaultSearcher{}
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com/search", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/search", nil)
 	req.Header.Set("Referer", "https://other.com/")
 	err := ds.setDefaultHTTPOptions(req)
 	require.NoError(t, err)
@@ -746,7 +746,7 @@ func TestOnRetriveData_CacheUnmarshalFails(t *testing.T) {
 		cc:   &config{cli: &mockHTTPClient{}, storage: storage, searchCache: true},
 		plg:  plg,
 	}
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/search", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/search", nil)
 	num := mustParseNumber(t, "ABC-123")
 	ctx := api.InitContainer(context.Background())
 	_, err := ds.onRetriveData(ctx, req, num)
@@ -864,8 +864,11 @@ func TestInvokeHTTPRequest_DecorateError(t *testing.T) {
 		plg: plg,
 		cc:  &config{cli: &mockHTTPClient{}, storage: store.NewMemStorage()},
 	}
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/", nil)
-	_, err := ds.invokeHTTPRequest(context.Background(), req)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
+	rsp, err := ds.invokeHTTPRequest(context.Background(), req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
 	require.Error(t, err)
 }
 

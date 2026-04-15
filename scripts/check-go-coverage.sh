@@ -2,8 +2,10 @@
 set -euo pipefail
 
 THRESHOLD=${1:-95}
-COVER_PROFILE="coverage.out"
-COVER_PROFILE_FILTERED="coverage_filtered.out"
+TESTDATA_DIR="testdata"
+mkdir -p "${TESTDATA_DIR}"
+COVER_PROFILE="${TESTDATA_DIR}/coverage.out"
+COVER_PROFILE_FILTERED="${TESTDATA_DIR}/coverage_filtered.out"
 
 # Packages excluded from coverage threshold (integration-only, require external resources).
 EXCLUDE_PKGS=(
