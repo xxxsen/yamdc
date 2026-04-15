@@ -93,6 +93,10 @@ type SearcherPluginConfig struct {
 	Sources []SearcherPluginSource `json:"sources"`
 }
 
+type BrowserConfig struct {
+	RemoteURL string `json:"remote_url"`
+}
+
 type Config struct {
 	ScanDir              string                   `json:"scan_dir"`
 	SaveDir              string                   `json:"save_dir"`
@@ -115,6 +119,7 @@ type Config struct {
 	TagMappingConfig     TagMappingConfig         `json:"tag_mapping_config"`
 	MovieIDRulesetConfig MovieIDRulesetConfig     `json:"movieid_ruleset_config"`
 	SearcherPluginConfig SearcherPluginConfig     `json:"searcher_plugin_config"`
+	BrowserConfig        BrowserConfig            `json:"browser_config"`
 }
 
 type SwitchConfig struct {

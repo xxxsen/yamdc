@@ -63,11 +63,14 @@ export type RequestFormState = {
   acceptStatusText: string;
   notFoundStatusText: string;
   decodeCharset: string;
+  browserWaitSelector: string;
+  browserWaitTimeout: string;
 };
 
 export type EditorState = {
   name: string;
   type: string;
+  fetchType: string;
   hostsText: string;
   number: string;
   precheckPatternsText: string;

@@ -9,6 +9,7 @@ export function RequestForm(props: {
   expandAdvanced?: boolean;
   compactJSONBlocks?: boolean;
   nextRequestLayout?: boolean;
+  fetchType?: string;
 }) {
   const { state } = props;
   const targetMode = state.rawURL ? "url" : "path";
@@ -34,6 +35,26 @@ export function RequestForm(props: {
   function patchField<K extends keyof RequestFormState>(key: K, value: RequestFormState[K]) {
     props.onChange((prev) => ({ ...prev, [key]: value }));
   }
+
+  const isBrowserMode = props.fetchType === "browser";
+
+  const browserRenderingBlock = isBrowserMode ? (
+    <details className="plugin-editor-request-json-detail plugin-editor-browser-detail" open>
+      <summary>
+        <span>Browser Rendering</span>
+      </summary>
+      <div className="plugin-editor-request-inline-row plugin-editor-advanced-grid plugin-editor-browser-fields">
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+          <span>Wait XPath</span>
+          <input className="input" value={state.browserWaitSelector} onChange={(event) => patchField("browserWaitSelector", event.target.value)} placeholder='例如 //div[@class="result-list"]' />
+        </label>
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+          <span>Wait Timeout (s)</span>
+          <input className="input" type="number" value={state.browserWaitTimeout} onChange={(event) => patchField("browserWaitTimeout", event.target.value)} placeholder="默认 60" />
+        </label>
+      </div>
+    </details>
+  ) : null;
 
   return (
     <>
@@ -164,6 +185,7 @@ export function RequestForm(props: {
             </summary>
             <textarea className="input plugin-editor-textarea" value={state.bodyJSON} onChange={(event) => patchField("bodyJSON", event.target.value)} onKeyDown={handleEditorTextareaKeyDown} />
           </details>
+          {props.nextRequestLayout && browserRenderingBlock}
         </div>
       ) : (
         <div className="plugin-editor-json-grid">
@@ -193,6 +215,7 @@ export function RequestForm(props: {
               <input className="input" value={state.decodeCharset} onChange={(event) => patchField("decodeCharset", event.target.value)} placeholder="例如 euc-jp" />
             </label>
           </div>
+          {browserRenderingBlock}
         </div>
       ) : !props.expandAdvanced ? (
         <details className="plugin-editor-advanced">
@@ -213,8 +236,10 @@ export function RequestForm(props: {
               <textarea className="input plugin-editor-textarea" value={state.cookiesJSON} onChange={(event) => patchField("cookiesJSON", event.target.value)} onKeyDown={handleEditorTextareaKeyDown} />
             </label>
           </div>
+          {browserRenderingBlock}
         </details>
       ) : null}
+      {/* browser block for nextRequestLayout is inside plugin-editor-request-json-stack above */}
     </>
   );
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/antchfx/htmlquery"
+	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -33,10 +34,16 @@ const (
 	ctxKeyRequestPath = "yaml.request_path"
 )
 
+const (
+	fetchTypeGoHTTP  = "go-http"
+	fetchTypeBrowser = "browser"
+)
+
 type compiledPlugin struct {
 	version      int
 	name         string
 	pluginType   string
+	fetchType    string
 	hosts        []string
 	precheck     *compiledPrecheck
 	request      *compiledRequest
@@ -51,6 +58,11 @@ type compiledPrecheck struct {
 	variables      map[string]*template
 }
 
+type compiledBrowser struct {
+	waitSelector string
+	waitTimeout  time.Duration
+}
+
 type compiledRequest struct {
 	method              string
 	path                *template
@@ -62,6 +74,7 @@ type compiledRequest struct {
 	acceptStatusCodes   []int
 	notFoundStatusCodes []int
 	decodeCharset       string
+	browser             *compiledBrowser
 }
 
 type compiledRequestBody struct {
@@ -162,10 +175,18 @@ func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
 	if raw.Request == nil && raw.MultiRequest == nil {
 		return nil, fmt.Errorf("request or multi_request is required")
 	}
+	ft := raw.FetchType
+	if ft == "" {
+		ft = fetchTypeGoHTTP
+	}
+	if ft != fetchTypeGoHTTP && ft != fetchTypeBrowser {
+		return nil, fmt.Errorf("invalid fetch_type:%s, must be %q or %q", ft, fetchTypeGoHTTP, fetchTypeBrowser)
+	}
 	out := &compiledPlugin{
 		version:    raw.Version,
 		name:       raw.Name,
 		pluginType: raw.Type,
+		fetchType:  ft,
 		hosts:      append([]string(nil), raw.Hosts...),
 	}
 	var err error
@@ -279,6 +300,12 @@ func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 	}
 	if raw.Response != nil {
 		out.decodeCharset = strings.ToLower(strings.TrimSpace(raw.Response.DecodeCharset))
+	}
+	if raw.Browser != nil {
+		out.browser = &compiledBrowser{
+			waitSelector: raw.Browser.WaitSelector,
+			waitTimeout:  time.Duration(raw.Browser.WaitTimeout) * time.Second,
+		}
 	}
 	return out, nil
 }
@@ -852,6 +879,22 @@ func (p *YAMLSearchPlugin) buildRequest(ctx context.Context, spec *compiledReque
 				req.Header.Set("Content-Type", "application/json")
 			}
 		}
+	}
+	if p.spec.fetchType == fetchTypeBrowser {
+		params := &browser.Params{}
+		if spec.browser != nil {
+			params.WaitSelector = spec.browser.waitSelector
+			params.WaitTimeout = spec.browser.waitTimeout
+		}
+		if len(spec.headers) > 0 {
+			params.Headers = make(http.Header, len(spec.headers))
+			for key := range spec.headers {
+				if v := req.Header.Get(key); v != "" {
+					params.Headers.Set(key, v)
+				}
+			}
+		}
+		req = req.WithContext(browser.WithParams(req.Context(), params))
 	}
 	return req, nil
 }

@@ -12,3 +12,5 @@ config.json
 /.cache
 /bin
 /tmp
+/.cursor
+/issues

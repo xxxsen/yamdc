@@ -361,6 +361,8 @@ describe("buildRequestFromFormState", () => {
       acceptStatusText: "200,302",
       notFoundStatusText: "404",
       decodeCharset: "",
+      browserWaitSelector: "",
+      browserWaitTimeout: "",
     });
     expect(req.method).toBe("POST");
     expect(req.path).toBe("/api/test");
@@ -384,6 +386,8 @@ describe("buildRequestFromFormState", () => {
       acceptStatusText: "200",
       notFoundStatusText: "404",
       decodeCharset: "euc-jp",
+      browserWaitSelector: "",
+      browserWaitTimeout: "",
     });
     expect(req.path).toBeUndefined();
     expect(req.url).toBe("https://example.com/${number}");

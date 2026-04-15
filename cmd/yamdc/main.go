@@ -16,6 +16,7 @@ import (
 	_ "github.com/xxxsen/yamdc/internal/aiengine/gemini"
 	_ "github.com/xxxsen/yamdc/internal/aiengine/ollama"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/browser"
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
@@ -126,6 +127,13 @@ func runCapture(c *config.Config) error {
 	if err != nil {
 		return err
 	}
+	nav := browser.NewNavigator(&browser.Config{
+		RemoteURL: c.BrowserConfig.RemoteURL,
+		DataDir:   c.DataDir,
+		Proxy:     c.NetworkConfig.Proxy,
+	})
+	defer func() { _ = nav.Close() }()
+	cli = browser.NewHTTPClient(cli, nav)
 	if err := initDependencies(ctx, cli, c.DataDir, c.Dependencies); err != nil {
 		return err
 	}

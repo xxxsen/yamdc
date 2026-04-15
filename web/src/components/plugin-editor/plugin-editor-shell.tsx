@@ -581,7 +581,7 @@ export function PluginEditorShell() {
                   <strong>Plugin</strong>
                   <span>配置插件基础信息、Host 和预检规则。</span>
                 </div>
-                <div className="plugin-editor-form-grid">
+                <div className="plugin-editor-form-grid plugin-editor-form-grid-compact">
                   <label className="plugin-editor-field">
                     <span>Plugin Name</span>
                     <input className="input" value={state.name} onChange={(event) => patch("name", event.target.value)} />
@@ -593,6 +593,15 @@ export function PluginEditorShell() {
                       <option value="two-step">two-step</option>
                     </select>
                   </label>
+                  <label className="plugin-editor-field">
+                    <span>Fetch Type</span>
+                    <select className="input" value={state.fetchType} onChange={(event) => patch("fetchType", event.target.value)}>
+                      <option value="go-http">go-http</option>
+                      <option value="browser">browser</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="plugin-editor-form-grid">
                   <label className="plugin-editor-field plugin-editor-field-wide">
                     <span>Hosts</span>
                     <textarea
@@ -652,6 +661,7 @@ export function PluginEditorShell() {
                 nextRequestLayout
                 compactJSONBlocks
                 expandAdvanced
+                fetchType={state.fetchType}
               />
             </div>
 
@@ -823,6 +833,7 @@ export function PluginEditorShell() {
                     expandAdvanced
                     compactJSONBlocks
                     nextRequestLayout
+                    fetchType={state.fetchType}
                   />
                 </div>
               </div>
