@@ -13,7 +13,7 @@ import (
 
 func TestSmallWatermark(t *testing.T) {
 	watermark := MakeColorImage(image.Rect(0, 0, 768, 374), color.RGBA{255, 0, 0, 0})
-	f, err := os.OpenFile(filepath.Join(os.TempDir(), "watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(os.TempDir(), "watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	assert.NoError(t, err)
 	defer func() {
 		_ = f.Close()
@@ -31,7 +31,7 @@ func TestWatermark(t *testing.T) {
 	}
 	img, err := addWatermarkToImage(frame, wms)
 	assert.NoError(t, err)
-	f, err := os.OpenFile(filepath.Join(os.TempDir(), "fill_watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(os.TempDir(), "fill_watermark.jpeg"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	assert.NoError(t, err)
 	defer func() {
 		_ = f.Close()
@@ -49,6 +49,6 @@ func TestWatermarkWithRes(t *testing.T) {
 		WM4K,
 	})
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(os.TempDir(), "fill_watermark_with_res.jpeg"), raw, 0644)
+	err = os.WriteFile(filepath.Join(os.TempDir(), "fill_watermark_with_res.jpeg"), raw, 0o600) //nolint:gosec // test file in temp dir
 	assert.NoError(t, err)
 }

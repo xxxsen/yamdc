@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
@@ -9,14 +10,13 @@ import (
 
 var DefaultProcessor IProcessor = &defaultProcessor{}
 
-type defaultProcessor struct {
-}
+type defaultProcessor struct{}
 
 func (p *defaultProcessor) Name() string {
 	return "default"
 }
 
-func (p *defaultProcessor) Process(ctx context.Context, fc *model.FileContext) error {
+func (p *defaultProcessor) Process(_ context.Context, _ *model.FileContext) error {
 	return nil
 }
 
@@ -34,5 +34,8 @@ func (p *processorImpl) Name() string {
 }
 
 func (p *processorImpl) Process(ctx context.Context, meta *model.FileContext) error {
-	return p.h.Handle(ctx, meta)
+	if err := p.h.Handle(ctx, meta); err != nil {
+		return fmt.Errorf("handler %s failed: %w", p.name, err)
+	}
+	return nil
 }

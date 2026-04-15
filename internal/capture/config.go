@@ -20,9 +20,7 @@ const (
 	NamingTitleTranslated = "TITLE_TRANSLATED"
 )
 
-var (
-	defaultNamingRule = fmt.Sprintf("{%s}/{%s}", NamingReleaseYear, NamingMovieID)
-)
+var defaultNamingRule = fmt.Sprintf("{%s}/{%s}", NamingReleaseYear, NamingMovieID)
 
 type config struct {
 	ScanDir                string

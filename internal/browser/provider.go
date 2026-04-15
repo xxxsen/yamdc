@@ -69,7 +69,10 @@ func (p *localProvider) Close() error {
 	if p.browser != nil {
 		err := p.browser.Close()
 		p.browser = nil
-		return err
+		if err != nil {
+			return fmt.Errorf("close browser failed: %w", err)
+		}
+		return nil
 	}
 	return nil
 }

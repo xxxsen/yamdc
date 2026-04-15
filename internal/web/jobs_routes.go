@@ -41,7 +41,7 @@ func (a *API) handleScan(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("manual scan completed")
-	writeSuccess(c.Writer, http.StatusOK, "scan triggered", nil)
+	writeSuccess(c.Writer, "scan triggered", nil)
 }
 
 func (a *API) handleListJobs(c *gin.Context) {
@@ -68,11 +68,11 @@ func (a *API) handleListJobs(c *gin.Context) {
 		writeFail(c.Writer, errCodeListJobsFailed, err.Error())
 		return
 	}
-	if err := a.jobSvc.ApplyJobConflicts(c.Request.Context(), items.Items); err != nil {
+	if err := a.jobSvc.ApplyConflicts(c.Request.Context(), items.Items); err != nil {
 		writeFail(c.Writer, errCodeApplyJobConflictsFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", items)
+	writeSuccess(c.Writer, "ok", items)
 }
 
 func parseStatuses(raw string) []jobdef.Status {
@@ -91,8 +91,8 @@ func parseStatuses(raw string) []jobdef.Status {
 	return statuses
 }
 
-func parseIDParam(c *gin.Context, name string) (int64, bool) {
-	id, err := strconv.ParseInt(strings.TrimSpace(c.Param(name)), 10, 64)
+func parseIDParam(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
 	if err != nil {
 		writeFail(c.Writer, errCodeInvalidJobID, "invalid job id")
 		return 0, false
@@ -101,7 +101,7 @@ func parseIDParam(c *gin.Context, name string) (int64, bool) {
 }
 
 func (a *API) handleJobRun(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -111,11 +111,11 @@ func (a *API) handleJobRun(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("job run requested", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, http.StatusOK, "job started", nil)
+	writeSuccess(c.Writer, "job started", nil)
 }
 
 func (a *API) handleJobRerun(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -125,11 +125,11 @@ func (a *API) handleJobRerun(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("job rerun requested", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, http.StatusOK, "job restarted", nil)
+	writeSuccess(c.Writer, "job restarted", nil)
 }
 
 func (a *API) handleJobLogs(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -138,11 +138,11 @@ func (a *API) handleJobLogs(c *gin.Context) {
 		writeFail(c.Writer, errCodeJobLogsFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", items)
+	writeSuccess(c.Writer, "ok", items)
 }
 
 func (a *API) handleJobUpdateNumber(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -160,16 +160,23 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 	}
 	item, err := a.jobSvc.UpdateNumber(c.Request.Context(), id, req.Number)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("job number update failed", zap.Int64("job_id", id), zap.String("number", strings.TrimSpace(req.Number)), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("job number update failed",
+			zap.Int64("job_id", id),
+			zap.String("number", strings.TrimSpace(req.Number)),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeJobUpdateNumberFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("job number updated", zap.Int64("job_id", id), zap.String("number", strings.TrimSpace(req.Number)))
-	writeSuccess(c.Writer, http.StatusOK, "job number updated", item)
+	logutil.GetLogger(c.Request.Context()).Info("job number updated",
+		zap.Int64("job_id", id),
+		zap.String("number", strings.TrimSpace(req.Number)),
+	)
+	writeSuccess(c.Writer, "job number updated", item)
 }
 
 func (a *API) handleJobDelete(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -179,11 +186,11 @@ func (a *API) handleJobDelete(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("job deleted", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, http.StatusOK, "job deleted", nil)
+	writeSuccess(c.Writer, "job deleted", nil)
 }
 
 func (a *API) handleReviewGet(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -192,11 +199,11 @@ func (a *API) handleReviewGet(c *gin.Context) {
 		writeFail(c.Writer, errCodeReviewGetFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", item)
+	writeSuccess(c.Writer, "ok", item)
 }
 
 func (a *API) handleReviewSave(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -218,11 +225,11 @@ func (a *API) handleReviewSave(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("review data saved", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, http.StatusOK, "review data saved", nil)
+	writeSuccess(c.Writer, "review data saved", nil)
 }
 
 func (a *API) handleReviewImport(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -232,11 +239,11 @@ func (a *API) handleReviewImport(c *gin.Context) {
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("review import completed", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, http.StatusOK, "import completed", nil)
+	writeSuccess(c.Writer, "import completed", nil)
 }
 
 func (a *API) handleReviewPosterCrop(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
+	id, ok := parseIDParam(c)
 	if !ok {
 		return
 	}
@@ -280,44 +287,37 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 		zap.Int("height", req.Height),
 		zap.String("poster_key", poster.Key),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "poster cropped", poster)
+	writeSuccess(c.Writer, "poster cropped", poster)
 }
 
-func (a *API) handleReviewAsset(c *gin.Context) {
-	id, ok := parseIDParam(c, "id")
-	if !ok {
-		return
-	}
-	target := strings.TrimSpace(c.Query("target"))
-	if target != "cover" && target != "poster" && target != "fanart" {
-		writeFail(c.Writer, errCodeInvalidAssetTarget, "invalid asset target")
-		return
-	}
+func readUploadImageData(c *gin.Context) ([]byte, string, bool) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
-		return
+		return nil, "", false
 	}
-	defer func() {
-		_ = file.Close()
-	}()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")
-		return
+		return nil, "", false
 	}
 	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
 		writeFail(c.Writer, errCodeUploadFileNotImage, "upload file is not an image")
-		return
+		return nil, "", false
 	}
+	return data, header.Filename, true
+}
+
+func (a *API) loadReviewMeta(c *gin.Context, id int64) (*model.MovieMeta, bool) {
 	scrapeData, err := a.jobSvc.GetScrapeData(c.Request.Context(), id)
 	if err != nil {
 		writeFail(c.Writer, errCodeReviewGetFailed, err.Error())
-		return
+		return nil, false
 	}
 	if scrapeData == nil {
 		writeFail(c.Writer, errCodeReviewScrapeDataNotFound, "scrape data not found")
-		return
+		return nil, false
 	}
 	payload := scrapeData.ReviewData
 	if strings.TrimSpace(payload) == "" {
@@ -326,6 +326,27 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 	var meta model.MovieMeta
 	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
 		writeFail(c.Writer, errCodeInvalidReviewJSON, "invalid review json")
+		return nil, false
+	}
+	return &meta, true
+}
+
+func (a *API) handleReviewAsset(c *gin.Context) {
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
+	target := strings.TrimSpace(c.Query("target"))
+	if target != "cover" && target != "poster" && target != "fanart" {
+		writeFail(c.Writer, errCodeInvalidAssetTarget, "invalid asset target")
+		return
+	}
+	data, fileName, ok := readUploadImageData(c)
+	if !ok {
+		return
+	}
+	meta, ok := a.loadReviewMeta(c, id)
+	if !ok {
 		return
 	}
 	key, err := store.AnonymousPutDataTo(c.Request.Context(), a.store, data)
@@ -333,10 +354,7 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeReviewAssetStoreFailed, err.Error())
 		return
 	}
-	asset := &model.File{
-		Name: filepath.Base(header.Filename),
-		Key:  key,
-	}
+	asset := &model.File{Name: filepath.Base(fileName), Key: key}
 	switch target {
 	case "cover":
 		meta.Cover = asset
@@ -352,20 +370,13 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 	}
 	if err := a.jobSvc.SaveReviewData(c.Request.Context(), id, string(reviewData)); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review asset upload save failed",
-			zap.Int64("job_id", id),
-			zap.String("target", target),
-			zap.String("file_name", header.Filename),
-			zap.String("asset_key", key),
-			zap.Error(err),
-		)
+			zap.Int64("job_id", id), zap.String("target", target),
+			zap.String("file_name", fileName), zap.String("asset_key", key), zap.Error(err))
 		writeFail(c.Writer, errCodeReviewSaveFailed, err.Error())
 		return
 	}
 	logutil.GetLogger(c.Request.Context()).Info("review asset uploaded",
-		zap.Int64("job_id", id),
-		zap.String("target", target),
-		zap.String("file_name", header.Filename),
-		zap.String("asset_key", key),
-	)
-	writeSuccess(c.Writer, http.StatusOK, "review asset uploaded", asset)
+		zap.Int64("job_id", id), zap.String("target", target),
+		zap.String("file_name", fileName), zap.String("asset_key", key))
+	writeSuccess(c.Writer, "review asset uploaded", asset)
 }

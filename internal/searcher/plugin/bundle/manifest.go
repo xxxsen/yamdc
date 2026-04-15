@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -15,7 +16,19 @@ const (
 	allCategory        = "all"
 )
 
-type BundleManifest struct {
+var (
+	errManifestRequired           = errors.New("bundle manifest is required")
+	errUnsupportedManifestVersion = errors.New("unsupported bundle manifest version")
+	errManifestNameRequired       = errors.New("bundle manifest name is required")
+	errManifestEntryRequired      = errors.New("bundle manifest entry is required")
+	errManifestChainItemRequired  = errors.New("bundle manifest chain item is required")
+	errManifestChainNameRequired  = errors.New("bundle manifest chain plugin name is required")
+	errManifestPriorityOutOfRange = errors.New("bundle manifest plugin priority out of range")
+	errDuplicateManifestChainItem = errors.New("duplicate bundle manifest chain item")
+	errPluginNameRequired         = errors.New("plugin name is required")
+)
+
+type Manifest struct {
 	Version       int                           `yaml:"version"`
 	Name          string                        `yaml:"name"`
 	Desc          string                        `yaml:"desc"`
@@ -40,7 +53,7 @@ type PluginFile struct {
 }
 
 type Bundle struct {
-	Manifest *BundleManifest
+	Manifest *Manifest
 	Plugins  map[string]*PluginFile
 	Files    []string
 	Source   string
@@ -64,7 +77,7 @@ type ResolvedBundle struct {
 	Files          []string
 }
 
-func runtimePluginKey(category string, name string) string {
+func runtimePluginKey(category, name string) string {
 	cat := normalizeCategory(category)
 	if cat == allCategory {
 		return name
@@ -80,36 +93,43 @@ func normalizeCategory(raw string) string {
 	return strings.ToUpper(cat)
 }
 
-func validateManifest(manifest *BundleManifest) error {
+func validateManifest(manifest *Manifest) error {
 	if manifest == nil {
-		return fmt.Errorf("bundle manifest is required")
+		return errManifestRequired
 	}
 	if manifest.Version != 1 {
-		return fmt.Errorf("unsupported bundle manifest version: %d", manifest.Version)
+		return fmt.Errorf("unsupported bundle manifest version: %d: %w", manifest.Version, errUnsupportedManifestVersion)
 	}
 	if strings.TrimSpace(manifest.Name) == "" {
-		return fmt.Errorf("bundle manifest name is required")
+		return errManifestNameRequired
 	}
 	if strings.TrimSpace(manifest.Entry) == "" {
-		return fmt.Errorf("bundle manifest entry is required")
+		return errManifestEntryRequired
 	}
 	seen := make(map[string]struct{})
 	for rawChain, items := range manifest.Chains {
 		chain := normalizeCategory(rawChain)
 		for _, item := range items {
 			if item == nil {
-				return fmt.Errorf("bundle manifest chain item is required")
+				return errManifestChainItemRequired
 			}
 			name := strings.TrimSpace(item.Name)
 			if name == "" {
-				return fmt.Errorf("bundle manifest chain plugin name is required")
+				return errManifestChainNameRequired
 			}
 			if item.Priority < 1 || item.Priority > 1000 {
-				return fmt.Errorf("bundle manifest plugin priority out of range: %d", item.Priority)
+				return fmt.Errorf(
+					"bundle manifest plugin priority out of range: %d: %w",
+					item.Priority,
+					errManifestPriorityOutOfRange,
+				)
 			}
 			key := chain + "\x00" + name
 			if _, ok := seen[key]; ok {
-				return fmt.Errorf("duplicate bundle manifest chain item: chain=%s, name=%s", chain, name)
+				return fmt.Errorf(
+					"duplicate bundle manifest chain item: chain=%s, name=%s: %w",
+					chain, name, errDuplicateManifestChainItem,
+				)
 			}
 			seen[key] = struct{}{}
 		}
@@ -120,11 +140,11 @@ func validateManifest(manifest *BundleManifest) error {
 func decodePluginName(data []byte) (string, error) {
 	var head pluginHeader
 	if err := yaml.Unmarshal(data, &head); err != nil {
-		return "", err
+		return "", fmt.Errorf("unmarshal plugin header: %w", err)
 	}
 	name := strings.TrimSpace(head.Name)
 	if name == "" {
-		return "", fmt.Errorf("plugin name is required")
+		return "", errPluginNameRequired
 	}
 	return name, nil
 }

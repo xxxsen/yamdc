@@ -13,6 +13,13 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 )
 
+var (
+	errHandlerIDRequired       = errors.New("handler_id is required")
+	errInvalidMode             = errors.New("invalid mode")
+	errHandlerInstanceNotFound = errors.New("handler instance not found")
+	errMetaNumberRequired      = errors.New("meta.number is required")
+)
+
 type DebugHandlerInstance struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -58,7 +65,12 @@ type Debugger struct {
 	configs   map[string]DebugHandlerOption
 }
 
-func NewDebugger(deps appdeps.Runtime, cleaner movieidcleaner.Cleaner, handlers []string, configs map[string]DebugHandlerOption) *Debugger {
+func NewDebugger(
+	deps appdeps.Runtime,
+	cleaner movieidcleaner.Cleaner,
+	handlers []string,
+	configs map[string]DebugHandlerOption,
+) *Debugger {
 	items := make([]DebugHandlerInstance, 0, len(handlers))
 	cfgMap := make(map[string]DebugHandlerOption, len(handlers))
 	for _, name := range handlers {
@@ -89,32 +101,28 @@ func (d *Debugger) Handlers() []DebugHandlerInstance {
 	return append([]DebugHandlerInstance(nil), d.instances...)
 }
 
-func (d *Debugger) Debug(ctx context.Context, req DebugRequest) (*DebugResult, error) {
-	mode := strings.TrimSpace(req.Mode)
-	if mode == "" {
-		mode = "single"
-	}
-	handlerID := strings.TrimSpace(req.HandlerID)
-	if mode == "single" && handlerID == "" {
-		return nil, fmt.Errorf("handler_id is required")
-	}
+func (d *Debugger) prepareDebugContext(req DebugRequest) (*DebugResult, *model.FileContext, error) {
 	metaInput := req.Meta
 	if metaInput == nil {
 		metaInput = &model.MovieMeta{}
 	}
 	beforeMeta, err := cloneMovieMeta(metaInput)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	afterMeta, err := cloneMovieMeta(metaInput)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	num, err := d.parseNumber(afterMeta.Number)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	debugResult := &DebugResult{
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "single"
+	}
+	result := &DebugResult{
 		Mode:       mode,
 		NumberID:   num.GetNumberID(),
 		Category:   num.GetExternalFieldCategory(),
@@ -122,42 +130,72 @@ func (d *Debugger) Debug(ctx context.Context, req DebugRequest) (*DebugResult, e
 		BeforeMeta: beforeMeta,
 		AfterMeta:  afterMeta,
 	}
-	fc := &model.FileContext{
-		Meta:   afterMeta,
-		Number: num,
+	fc := &model.FileContext{Meta: afterMeta, Number: num}
+	return result, fc, nil
+}
+
+func (d *Debugger) debugSingleHandler(
+	ctx context.Context, fc *model.FileContext, handlerID string, result *DebugResult,
+) error {
+	instance, handlerCfg, err := d.lookupHandler(handlerID)
+	if err != nil {
+		return err
 	}
-	switch mode {
+	result.HandlerID = instance.ID
+	result.HandlerName = instance.Name
+	step, err := d.runOne(ctx, fc, *instance, handlerCfg)
+	if err != nil {
+		return err
+	}
+	result.Steps = []DebugStep{*step}
+	result.Error = step.Error
+	return nil
+}
+
+func (d *Debugger) debugChainHandlers(
+	ctx context.Context, fc *model.FileContext, handlerIDs []string, result *DebugResult,
+) error {
+	chain := d.resolveChain(handlerIDs)
+	failCount := 0
+	for _, instance := range chain {
+		step, err := d.runOne(ctx, fc, instance, d.configs[instance.ID])
+		if err != nil {
+			return err
+		}
+		result.Steps = append(result.Steps, *step)
+		if step.Error != "" {
+			failCount++
+		}
+	}
+	if failCount > 0 {
+		result.Error = fmt.Sprintf("%d handlers failed", failCount)
+	}
+	return nil
+}
+
+func (d *Debugger) Debug(ctx context.Context, req DebugRequest) (*DebugResult, error) {
+	mode := strings.TrimSpace(req.Mode)
+	handlerID := strings.TrimSpace(req.HandlerID)
+	if mode == "single" || (mode == "" && handlerID == "") {
+		if handlerID == "" && (mode == "" || mode == "single") {
+			return nil, errHandlerIDRequired
+		}
+	}
+	debugResult, fc, err := d.prepareDebugContext(req)
+	if err != nil {
+		return nil, err
+	}
+	switch debugResult.Mode {
 	case "single":
-		instance, handlerCfg, lookupErr := d.lookupHandler(handlerID)
-		if lookupErr != nil {
-			return nil, lookupErr
+		if err := d.debugSingleHandler(ctx, fc, strings.TrimSpace(req.HandlerID), debugResult); err != nil {
+			return nil, err
 		}
-		debugResult.HandlerID = instance.ID
-		debugResult.HandlerName = instance.Name
-		step, runErr := d.runOne(ctx, fc, *instance, handlerCfg)
-		if runErr != nil {
-			return nil, runErr
-		}
-		debugResult.Steps = []DebugStep{*step}
-		debugResult.Error = step.Error
 	case "chain":
-		chain := d.resolveChain(req.HandlerIDs)
-		failCount := 0
-		for _, instance := range chain {
-			step, runErr := d.runOne(ctx, fc, instance, d.configs[instance.ID])
-			if runErr != nil {
-				return nil, runErr
-			}
-			debugResult.Steps = append(debugResult.Steps, *step)
-			if step.Error != "" {
-				failCount++
-			}
-		}
-		if failCount > 0 {
-			debugResult.Error = fmt.Sprintf("%d handlers failed", failCount)
+		if err := d.debugChainHandlers(ctx, fc, req.HandlerIDs, debugResult); err != nil {
+			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("invalid mode: %s", mode)
+		return nil, fmt.Errorf("invalid mode: %s: %w", debugResult.Mode, errInvalidMode)
 	}
 	return debugResult, nil
 }
@@ -183,7 +221,12 @@ func (d *Debugger) resolveChain(handlerIDs []string) []DebugHandlerInstance {
 	return chain
 }
 
-func (d *Debugger) runOne(ctx context.Context, fc *model.FileContext, instance DebugHandlerInstance, handlerCfg DebugHandlerOption) (*DebugStep, error) {
+func (d *Debugger) runOne(
+	ctx context.Context,
+	fc *model.FileContext,
+	instance DebugHandlerInstance,
+	handlerCfg DebugHandlerOption,
+) (*DebugStep, error) {
 	beforeMeta, err := cloneMovieMeta(fc.Meta)
 	if err != nil {
 		return nil, err
@@ -214,34 +257,65 @@ func (d *Debugger) lookupHandler(handlerID string) (*DebugHandlerInstance, Debug
 			return &item, d.configs[handlerID], nil
 		}
 	}
-	return nil, DebugHandlerOption{}, fmt.Errorf("handler instance not found: %s", handlerID)
+	return nil, DebugHandlerOption{}, fmt.Errorf(
+		"handler instance not found: %s: %w",
+		handlerID,
+		errHandlerInstanceNotFound,
+	)
 }
 
 func (d *Debugger) parseNumber(rawInput string) (*number.Number, error) {
 	input := strings.TrimSpace(rawInput)
 	if input == "" {
-		return nil, fmt.Errorf("meta.number is required")
+		return nil, errMetaNumberRequired
 	}
 	if d.cleaner != nil {
-		res, err := d.cleaner.Clean(input)
-		if err == nil && res != nil && strings.TrimSpace(res.NumberID) != "" {
-			num, parseErr := number.Parse(res.NumberID)
-			if parseErr == nil {
-				if res.Category != "" {
-					num.SetExternalFieldCategory(res.Category)
-				}
-				if res.Uncensor {
-					num.SetExternalFieldUncensor(true)
-				}
-				return num, nil
-			}
-		}
-		var cleanErr *movieidcleaner.CleanError
-		if err != nil && !errors.As(err, &cleanErr) {
+		num, err := d.tryCleanNumber(input)
+		if err != nil {
 			return nil, err
 		}
+		if num != nil {
+			return num, nil
+		}
 	}
-	return number.Parse(input)
+	num, err := number.Parse(input)
+	if err != nil {
+		return nil, fmt.Errorf("parse number failed: %w", err)
+	}
+	return num, nil
+}
+
+func (d *Debugger) tryCleanNumber(input string) (*number.Number, error) {
+	res, err := d.cleaner.Clean(input)
+	if err != nil {
+		return nil, cleanNumberError(err)
+	}
+	return buildNumberFromCleanResult(res)
+}
+
+func cleanNumberError(err error) error {
+	var cleanErr *movieidcleaner.CleanError
+	if errors.As(err, &cleanErr) {
+		return nil
+	}
+	return fmt.Errorf("clean number failed: %w", err)
+}
+
+func buildNumberFromCleanResult(res *movieidcleaner.Result) (*number.Number, error) {
+	if res == nil || strings.TrimSpace(res.NumberID) == "" {
+		return nil, nil //nolint:nilnil // nil signals fallback to raw parse
+	}
+	num, parseErr := number.Parse(res.NumberID)
+	if parseErr != nil {
+		return nil, nil //nolint:nilnil,nilerr // nil signals fallback to raw parse
+	}
+	if res.Category != "" {
+		num.SetExternalFieldCategory(res.Category)
+	}
+	if res.Uncensor {
+		num.SetExternalFieldUncensor(true)
+	}
+	return num, nil
 }
 
 func cloneMovieMeta(in *model.MovieMeta) (*model.MovieMeta, error) {

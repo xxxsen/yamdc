@@ -2,7 +2,7 @@ package flarerr
 
 type flareRequest struct {
 	Cmd        string `json:"cmd"`
-	Url        string `json:"url"`
+	URL        string `json:"url"`
 	MaxTimeout int    `json:"maxTimeout"`
 }
 
@@ -18,7 +18,7 @@ type flareResponse struct {
 type flareCookie struct {
 	Domain   string `json:"domain"`
 	Expiry   int64  `json:"expiry"`
-	HttpOnly bool   `json:"httpOnly"`
+	HTTPOnly bool   `json:"httpOnly"`
 	Name     string `json:"name"`
 	Path     string `json:"path"`
 	SameSite string `json:"sameSite"`
@@ -30,7 +30,7 @@ type flareCookie struct {
 }
 
 type flareSolution struct {
-	Url       string        `json:"url"`
+	URL       string        `json:"url"`
 	Status    int           `json:"status"`
 	Cookies   []flareCookie `json:"cookies"`
 	UserAgent string        `json:"userAgent"`

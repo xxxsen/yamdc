@@ -7,7 +7,7 @@ GO_TEST_PKGS ?= ./cmd/... ./internal/...
 GOBIN ?= $(CURDIR)/bin
 GOCACHE ?= $(CURDIR)/.cache/go-build
 GOLANGCI_LINT_CACHE ?= $(CURDIR)/.cache/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT_VERSION ?= v2.11.4
 GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
 
 build:
@@ -17,7 +17,7 @@ test:
 	GOCACHE=$(GOCACHE) go test $(GO_TEST_PKGS)
 
 install-golangci-lint:
-	GOBIN=$(GOBIN) GOCACHE=$(GOCACHE) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOBIN=$(GOBIN) GOCACHE=$(GOCACHE) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 lint-go:
 	GOCACHE=$(GOCACHE) GOLANGCI_LINT_CACHE=$(GOLANGCI_LINT_CACHE) $(GOLANGCI_LINT) run --config .golangci.yml ./cmd/... ./internal/...

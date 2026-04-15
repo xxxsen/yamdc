@@ -2,19 +2,17 @@ package meta
 
 import "context"
 
-type numberIdKeyType struct{}
+type numberIDKeyType struct{}
 
-var (
-	defaultNumberIdKey = numberIdKeyType{}
-)
+var defaultNumberIDKey = numberIDKeyType{}
 
-func SetNumberId(ctx context.Context, nid string) context.Context {
-	ctx = context.WithValue(ctx, defaultNumberIdKey, nid)
+func SetNumberID(ctx context.Context, nid string) context.Context {
+	ctx = context.WithValue(ctx, defaultNumberIDKey, nid)
 	return ctx
 }
 
-func GetNumberId(ctx context.Context) string {
-	nid := ctx.Value(defaultNumberIdKey)
+func GetNumberID(ctx context.Context) string {
+	nid := ctx.Value(defaultNumberIDKey)
 	if nid == nil {
 		return ""
 	}

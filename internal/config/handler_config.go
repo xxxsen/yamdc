@@ -7,7 +7,7 @@ var sysHandler = []string{
 	"watermark_maker",
 	"actor_spliter",
 	"duration_fixer",
-	"translater",
+	"translator",
 	"chinese_title_translate_optimizer",
 	"number_title",
 	"ai_tagger",

@@ -14,7 +14,7 @@ import (
 
 func newTestMediaService(t *testing.T) *Service {
 	t.Helper()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, sqlite.Close())
@@ -98,7 +98,7 @@ func TestRunFullSyncLogsSyncedMediaMetadata(t *testing.T) {
 
 	libraryDir := t.TempDir()
 	saveDir := t.TempDir()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, sqlite.Close()) }()
 
@@ -110,7 +110,7 @@ func TestRunFullSyncLogsSyncedMediaMetadata(t *testing.T) {
   <originaltitle>Sample Original</originaltitle>
   <id>ABC-123</id>
   <premiered>2024-01-02</premiered>
-</movie>`), 0o644))
+</movie>`), 0o600))
 
 	svc := NewService(sqlite.DB(), libraryDir, saveDir)
 	require.NoError(t, svc.runFullSync(context.Background(), "manual"))
@@ -132,13 +132,13 @@ func TestRunMoveLogsPerItemProgress(t *testing.T) {
 
 	libraryDir := t.TempDir()
 	saveDir := t.TempDir()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	defer func() { require.NoError(t, sqlite.Close()) }()
 
 	itemDir := filepath.Join(saveDir, "movie")
 	require.NoError(t, os.MkdirAll(itemDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte(`<movie><title>Moved</title><id>XYZ-987</id></movie>`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(itemDir, "movie.nfo"), []byte(`<movie><title>Moved</title><id>XYZ-987</id></movie>`), 0o600))
 
 	svc := NewService(sqlite.DB(), libraryDir, saveDir)
 	require.NoError(t, svc.runMove(context.Background()))

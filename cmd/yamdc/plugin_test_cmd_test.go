@@ -16,7 +16,7 @@ func TestLoadPluginCaseJSONFileInfersPluginFromFileName(t *testing.T) {
   "cases": [
     {"name":"a","input":"ABC-123","output":{"status":"success"}}
   ]
-}`), 0644))
+}`), 0o600))
 
 	out, err := loadPluginCaseJSONFile(path)
 	require.NoError(t, err)
@@ -30,13 +30,13 @@ func TestLoadPluginCaseFileFromDirScansJSON(t *testing.T) {
   "cases": [
     {"name":"a","input":"ABC-123","output":{"status":"success"}}
   ]
-}`), 0644))
+}`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "beta.json"), []byte(`{
   "cases": [
     {"name":"b","input":"XYZ-456","output":{"status":"not_found"}}
   ]
-}`), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.txt"), []byte(`{}`), 0644))
+}`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.txt"), []byte(`{}`), 0o600))
 
 	out, err := loadPluginCaseFile(dir)
 	require.NoError(t, err)

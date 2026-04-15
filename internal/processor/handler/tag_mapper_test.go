@@ -19,7 +19,7 @@ func createTestConfigFile(t *testing.T, config []*TagNode) string {
 	data, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 
-	err = os.WriteFile(filePath, data, 0644)
+	err = os.WriteFile(filePath, data, 0o600)
 	require.NoError(t, err)
 
 	return filePath
@@ -95,7 +95,7 @@ func TestNewTagMapper_FileNotFound(t *testing.T) {
 func TestNewTagMapper_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "invalid.json")
-	err := os.WriteFile(filePath, []byte("invalid json content"), 0644)
+	err := os.WriteFile(filePath, []byte("invalid json content"), 0o600)
 	require.NoError(t, err)
 
 	mapper, err := NewTagMapper(filePath)
@@ -131,7 +131,7 @@ func TestProcessTags_EmptyMapper(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "empty.json")
 	// 创建一个空配置
-	err := os.WriteFile(filePath, []byte("[]"), 0644)
+	err := os.WriteFile(filePath, []byte("[]"), 0o600)
 	require.NoError(t, err)
 
 	mapper, err := NewTagMapper(filePath)

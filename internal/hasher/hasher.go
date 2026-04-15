@@ -1,8 +1,8 @@
 package hasher
 
 import (
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  //nolint:gosec // used for content fingerprinting, not security
+	"crypto/sha1" //nolint:gosec // used for content fingerprinting, not security
 	"encoding/hex"
 )
 
@@ -11,7 +11,7 @@ func ToMD5(in string) string {
 }
 
 func ToMD5Bytes(in []byte) string {
-	h := md5.New()
+	h := md5.New() //nolint:gosec // used for content fingerprinting, not security
 	_, _ = h.Write(in)
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -21,7 +21,7 @@ func ToSha1(in string) string {
 }
 
 func ToSha1Bytes(in []byte) string {
-	h := sha1.New()
+	h := sha1.New() //nolint:gosec // used for content fingerprinting, not security
 	_, _ = h.Write(in)
 	return hex.EncodeToString(h.Sum(nil))
 }

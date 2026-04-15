@@ -2,7 +2,7 @@ package searcher
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var errCheckOnGroupSearcher = errors.New("unable to perform check on group searcher")
+
 type group struct {
 	ss []ISearcher
 }
@@ -18,6 +20,7 @@ type group struct {
 func NewGroup(ss []ISearcher) ISearcher {
 	return &group{ss: ss}
 }
+
 func (g *group) Name() string {
 	return "group"
 }
@@ -26,8 +29,8 @@ func (g *group) Search(ctx context.Context, number *number.Number) (*model.Movie
 	return performGroupSearch(ctx, number, g.ss)
 }
 
-func (g *group) Check(ctx context.Context) error {
-	return fmt.Errorf("unable to perform check on group searcher")
+func (g *group) Check(_ context.Context) error {
+	return errCheckOnGroupSearcher
 }
 
 func performGroupSearch(ctx context.Context, number *number.Number, ss []ISearcher) (*model.MovieMeta, bool, error) {

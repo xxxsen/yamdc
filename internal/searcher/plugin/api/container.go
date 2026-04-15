@@ -11,9 +11,7 @@ type container struct {
 
 type containerType struct{}
 
-var (
-	defaultContainerTypeKey = containerType{}
-)
+var defaultContainerTypeKey = containerType{}
 
 func mustGetContainer(ctx context.Context) *container {
 	c, ok := ctx.Value(defaultContainerTypeKey).(*container)

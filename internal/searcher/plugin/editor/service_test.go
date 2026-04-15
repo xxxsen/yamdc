@@ -44,7 +44,7 @@ func TestServiceRequestDebug(t *testing.T) {
 }
 
 func TestServiceScrapeDebug(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`
 <html><body>
   <h1 class="title"> Sample Title </h1>
@@ -130,7 +130,8 @@ func TestServiceWorkflowDebugRejectsInitialNonAcceptedStatus(t *testing.T) {
 	result, err := svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Contains(t, result.Error, "status code:404")
+	require.Contains(t, result.Error, "status code")
+	require.Contains(t, result.Error, "404")
 	require.Len(t, result.Steps, 1)
 	require.Equal(t, "request", result.Steps[0].Stage)
 	require.Equal(t, http.StatusNotFound, result.Steps[0].Response.StatusCode)
@@ -155,7 +156,8 @@ func TestServiceWorkflowDebugRejectsNextRequestNonAcceptedStatus(t *testing.T) {
 	result, err := svc.WorkflowDebug(context.Background(), twoStepDraft(srv.URL), "ABC-123")
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Contains(t, result.Error, "status code:404")
+	require.Contains(t, result.Error, "status code")
+	require.Contains(t, result.Error, "404")
 	require.Len(t, result.Steps, 3)
 	require.Equal(t, "next_request", result.Steps[2].Stage)
 	require.Equal(t, http.StatusNotFound, result.Steps[2].Response.StatusCode)
@@ -187,7 +189,7 @@ func TestServiceWorkflowDebugReturnsStepDetailsWhenSearchSelectMatchFails(t *tes
 }
 
 func TestServiceCaseDebug(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><h1 class="title"> Sample Title </h1><div class="actors"><span>Alice</span></div></body></html>`))
 	}))
 	defer srv.Close()

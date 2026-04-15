@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"fmt"
 
 	gt "github.com/Conight/go-googletrans"
 	"github.com/xxxsen/yamdc/internal/translator"
@@ -31,7 +32,7 @@ func (t *googleTranslator) Name() string {
 func (t *googleTranslator) Translate(_ context.Context, wording, src, dst string) (string, error) {
 	res, err := t.t.Translate(wording, src, dst)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("google translate failed: %w", err)
 	}
 	return res.Text, nil
 }

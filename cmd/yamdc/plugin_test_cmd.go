@@ -59,7 +59,7 @@ func newPluginTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plugin-test",
 		Short: "Verify one plugin bundle directory",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			res := verifyPluginBundle(strings.TrimSpace(pluginDir), strings.TrimSpace(casefile))
 			return renderBundleVerifyResult(os.Stdout, res, output)
 		},
@@ -71,7 +71,7 @@ func newPluginTestCmd() *cobra.Command {
 	return cmd
 }
 
-func verifyPluginBundle(pluginDir string, casefile string) bundleVerifyResult {
+func verifyPluginBundle(pluginDir, casefile string) bundleVerifyResult {
 	if pluginDir == "" {
 		return bundleVerifyResult{Pass: false, Errmsg: "plugin is required"}
 	}
@@ -118,11 +118,11 @@ func verifyPluginBundle(pluginDir string, casefile string) bundleVerifyResult {
 
 func loadPluginCaseFile(path string) (*pluginCaseFile, error) {
 	if path == "" {
-		return nil, fmt.Errorf("casefile is required")
+		return nil, errCasefileRequired
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat case file %s failed: %w", path, err)
 	}
 	if info.IsDir() {
 		return loadPluginCaseDir(path)
@@ -131,92 +131,50 @@ func loadPluginCaseFile(path string) (*pluginCaseFile, error) {
 }
 
 func loadPluginCaseDir(dir string) (*pluginCaseFile, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
-			continue
-		}
-		files = append(files, filepath.Join(dir, entry.Name()))
-	}
-	slices.Sort(files)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no json case files found in dir: %s", dir)
-	}
-	out := &pluginCaseFile{
-		Cases: make([]*pluginCaseItem, 0, len(files)),
-	}
-	for _, file := range files {
-		item, err := loadPluginCaseJSONFile(file)
-		if err != nil {
-			return nil, fmt.Errorf("load case file failed: %s: %w", file, err)
-		}
-		out.Cases = append(out.Cases, item.Cases...)
-	}
-	return out, nil
+	return loadCaseDir(dir, loadPluginCaseJSONFile,
+		func(f *pluginCaseFile) int { return len(f.Cases) },
+		func(dst, src *pluginCaseFile) { dst.Cases = append(dst.Cases, src.Cases...) },
+	)
 }
 
 func loadPluginCaseJSONFile(path string) (*pluginCaseFile, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	out := &pluginCaseFile{}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(out.Plugin) == "" {
-		out.Plugin = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	}
-	for _, item := range out.Cases {
-		if item == nil {
-			continue
+	return loadJSONCaseFile[pluginCaseFile](path, func(out *pluginCaseFile, p string) {
+		if strings.TrimSpace(out.Plugin) == "" {
+			out.Plugin = strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
 		}
-		if strings.TrimSpace(item.Plugin) == "" {
-			item.Plugin = out.Plugin
+		for _, item := range out.Cases {
+			if item == nil {
+				continue
+			}
+			if strings.TrimSpace(item.Plugin) == "" {
+				item.Plugin = out.Plugin
+			}
 		}
-	}
-	return out, nil
+	})
 }
 
-func verifyPluginCase(ctx context.Context, debugger *searcher.Debugger, resolved *pluginbundle.ResolvedBundle, index int, item *pluginCaseItem) *bundleVerifyCaseItem {
-	name := fmt.Sprintf("case-%d", index+1)
-	if item != nil && strings.TrimSpace(item.Name) != "" {
-		name = strings.TrimSpace(item.Name)
-	}
+func verifyPluginCasePrecheck(name string, item *pluginCaseItem) (string, string, *bundleVerifyCaseItem) {
 	if item == nil {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "case is null"}
+		return "", "", &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "case is null"}
 	}
 	input := strings.TrimSpace(item.Input)
 	if input == "" {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "input is required"}
+		return "", "", &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "input is required"}
 	}
 	pluginName := strings.TrimSpace(item.Plugin)
 	if pluginName == "" {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "plugin is required"}
+		return "", "", &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "plugin is required"}
 	}
-	runtimeName, err := resolvePluginRuntimeName(resolved, pluginName)
-	if err != nil {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: err.Error()}
-	}
-	result, err := debugger.DebugSearch(ctx, searcher.DebugSearchOptions{
-		Input:      input,
-		Plugins:    []string{runtimeName},
-		UseCleaner: false,
-		SkipAssets: true,
-	})
-	if err != nil {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: err.Error()}
-	}
+	return input, pluginName, nil
+}
+
+func assertPluginCaseOutput(
+	name string, item *pluginCaseItem, result *searcher.DebugSearchResult,
+) *bundleVerifyCaseItem {
 	actualStatus := debugSearchStatus(result)
 	if expected := strings.TrimSpace(item.Output.Status); expected != "" && !strings.EqualFold(expected, actualStatus) {
-		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected status=%s but got %s (%s)", expected, actualStatus, pluginDebugError(result))}
+		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+			"expected status=%s but got %s (%s)", expected, actualStatus, pluginDebugError(result))}
 	}
 	if expected := strings.TrimSpace(item.Output.Title); expected != "" {
 		got := ""
@@ -224,7 +182,8 @@ func verifyPluginCase(ctx context.Context, debugger *searcher.Debugger, resolved
 			got = strings.TrimSpace(result.Meta.Title)
 		}
 		if got != expected {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected title=%s but got %s", expected, got)}
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected title=%s but got %s", expected, got)}
 		}
 	}
 	if len(item.Output.TagSet) != 0 {
@@ -233,7 +192,8 @@ func verifyPluginCase(ctx context.Context, debugger *searcher.Debugger, resolved
 			got = result.Meta.Genres
 		}
 		if !slices.Equal(normalizeStringSet(item.Output.TagSet), normalizeStringSet(got)) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected tag_set=%v but got %v", normalizeStringSet(item.Output.TagSet), normalizeStringSet(got))}
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected tag_set=%v but got %v", normalizeStringSet(item.Output.TagSet), normalizeStringSet(got))}
 		}
 	}
 	if len(item.Output.ActorSet) != 0 {
@@ -242,19 +202,51 @@ func verifyPluginCase(ctx context.Context, debugger *searcher.Debugger, resolved
 			got = result.Meta.Actors
 		}
 		if !slices.Equal(normalizeStringSet(item.Output.ActorSet), normalizeStringSet(got)) {
-			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf("expected actor_set=%v but got %v", normalizeStringSet(item.Output.ActorSet), normalizeStringSet(got))}
+			return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: fmt.Sprintf(
+				"expected actor_set=%v but got %v", normalizeStringSet(item.Output.ActorSet), normalizeStringSet(got))}
 		}
+	}
+	return nil
+}
+
+func verifyPluginCase(
+	ctx context.Context,
+	debugger *searcher.Debugger,
+	resolved *pluginbundle.ResolvedBundle,
+	index int,
+	item *pluginCaseItem,
+) *bundleVerifyCaseItem {
+	name := fmt.Sprintf("case-%d", index+1)
+	if item != nil && strings.TrimSpace(item.Name) != "" {
+		name = strings.TrimSpace(item.Name)
+	}
+	input, pluginName, fail := verifyPluginCasePrecheck(name, item)
+	if fail != nil {
+		return fail
+	}
+	runtimeName, err := resolvePluginRuntimeName(resolved, pluginName)
+	if err != nil {
+		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: err.Error()}
+	}
+	result, err := debugger.DebugSearch(ctx, searcher.DebugSearchOptions{
+		Input: input, Plugins: []string{runtimeName}, UseCleaner: false, SkipAssets: true,
+	})
+	if err != nil {
+		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: err.Error()}
+	}
+	if fail := assertPluginCaseOutput(name, item, result); fail != nil {
+		return fail
 	}
 	return &bundleVerifyCaseItem{Name: name, Pass: true}
 }
 
 func resolvePluginRuntimeName(resolved *pluginbundle.ResolvedBundle, pluginName string) (string, error) {
 	if resolved == nil {
-		return "", fmt.Errorf("resolved plugin bundle is nil")
+		return "", errResolvedBundleNil
 	}
 	name := strings.TrimSpace(pluginName)
 	if name == "" {
-		return "", fmt.Errorf("plugin is required")
+		return "", errPluginRequired
 	}
 	if _, ok := resolved.Plugins[name]; ok {
 		return name, nil
@@ -271,9 +263,9 @@ func resolvePluginRuntimeName(resolved *pluginbundle.ResolvedBundle, pluginName 
 		return matched[0], nil
 	}
 	if len(matched) == 0 {
-		return "", fmt.Errorf("plugin %s not found in bundle", name)
+		return "", fmt.Errorf("plugin %s not found in bundle: %w", name, errPluginNotFoundInBundle)
 	}
-	return "", fmt.Errorf("plugin %s resolves to multiple runtime chains: %v", name, matched)
+	return "", fmt.Errorf("plugin %s resolves to multiple runtime chains: %v: %w", name, matched, errMultipleRuntimeChains)
 }
 
 func debugSearchStatus(result *searcher.DebugSearchResult) string {
@@ -315,12 +307,14 @@ func pluginDebugError(result *searcher.DebugSearchResult) string {
 
 func renderBundleVerifyResult(out *os.File, result bundleVerifyResult, format string) error {
 	if format != "json" {
-		return fmt.Errorf("unsupported output format: %s", format)
+		return fmt.Errorf("unsupported output format: %s: %w", format, errUnsupportedOutputFormat)
 	}
 	data, err := json.Marshal(result)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal verify result failed: %w", err)
 	}
-	_, err = fmt.Fprintln(out, string(data))
-	return err
+	if _, err = fmt.Fprintln(out, string(data)); err != nil {
+		return fmt.Errorf("write verify result failed: %w", err)
+	}
+	return nil
 }

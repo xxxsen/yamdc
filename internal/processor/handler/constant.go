@@ -4,7 +4,7 @@ const (
 	HPosterCropper                  = "poster_cropper"
 	HDurationFixer                  = "duration_fixer"
 	HImageTranscoder                = "image_transcoder"
-	HTranslater                     = "translater"
+	HTranslater                     = "translator"
 	HWatermakrMaker                 = "watermark_maker"
 	HTagPadder                      = "tag_padder"
 	HTagMapper                      = "tag_mapper"

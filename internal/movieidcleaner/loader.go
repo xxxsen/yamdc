@@ -53,7 +53,7 @@ func (l *yamlLoader) Load(data []byte) (*RuleSet, error) {
 func NewCleanerFromBytes(data []byte) (Cleaner, error) {
 	rs, err := NewLoader().Load(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load rule set from bytes failed: %w", err)
 	}
 	return NewCleaner(rs)
 }
@@ -61,7 +61,7 @@ func NewCleanerFromBytes(data []byte) (Cleaner, error) {
 func LoadRuleSetFromPath(path string) (*RuleSet, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat ruleset path %s failed: %w", path, err)
 	}
 	if info.IsDir() {
 		fsys := os.DirFS(path)
@@ -78,9 +78,13 @@ func LoadRuleSetFromPath(path string) (*RuleSet, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read ruleset file %s failed: %w", path, err)
 	}
-	return NewLoader().Load(data)
+	rs, err := NewLoader().Load(data)
+	if err != nil {
+		return nil, fmt.Errorf("load ruleset from file %s failed: %w", path, err)
+	}
+	return rs, nil
 }
 
 func LoadRuleSetFromDir(dir string) (*RuleSet, error) {
@@ -91,7 +95,7 @@ func ListRuleSetFilesFromDir(dir string) ([]string, error) {
 	return ListRuleSetFilesFromFS(os.DirFS(dir), ".")
 }
 
-func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
+func MergeRuleSets(base, override *RuleSet) (*RuleSet, error) {
 	if base == nil && override == nil {
 		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "empty rule sets"}
 	}
@@ -106,12 +110,36 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error) {
 		out.Version = override.Version
 	}
 	out.Options = mergeOptions(base.Options, override.Options)
-	out.Normalizers = mergeNamedRules(base.Normalizers, override.Normalizers, func(v NormalizerRule) string { return v.Name }, func(v NormalizerRule) bool { return v.Disabled })
-	out.RewriteRules = mergeNamedRules(base.RewriteRules, override.RewriteRules, func(v RewriteRule) string { return v.Name }, func(v RewriteRule) bool { return v.Disabled })
-	out.SuffixRules = mergeNamedRules(base.SuffixRules, override.SuffixRules, func(v SuffixRule) string { return v.Name }, func(v SuffixRule) bool { return v.Disabled })
-	out.NoiseRules = mergeNamedRules(base.NoiseRules, override.NoiseRules, func(v NoiseRule) string { return v.Name }, func(v NoiseRule) bool { return v.Disabled })
-	out.Matchers = mergeNamedRules(base.Matchers, override.Matchers, func(v MatcherRule) string { return v.Name }, func(v MatcherRule) bool { return v.Disabled })
-	out.PostProcessors = mergeNamedRules(base.PostProcessors, override.PostProcessors, func(v PostProcessRule) string { return v.Name }, func(v PostProcessRule) bool { return v.Disabled })
+	out.Normalizers = mergeNamedRules(
+		base.Normalizers, override.Normalizers,
+		func(v NormalizerRule) string { return v.Name },
+		func(v NormalizerRule) bool { return v.Disabled },
+	)
+	out.RewriteRules = mergeNamedRules(
+		base.RewriteRules, override.RewriteRules,
+		func(v RewriteRule) string { return v.Name },
+		func(v RewriteRule) bool { return v.Disabled },
+	)
+	out.SuffixRules = mergeNamedRules(
+		base.SuffixRules, override.SuffixRules,
+		func(v SuffixRule) string { return v.Name },
+		func(v SuffixRule) bool { return v.Disabled },
+	)
+	out.NoiseRules = mergeNamedRules(
+		base.NoiseRules, override.NoiseRules,
+		func(v NoiseRule) string { return v.Name },
+		func(v NoiseRule) bool { return v.Disabled },
+	)
+	out.Matchers = mergeNamedRules(
+		base.Matchers, override.Matchers,
+		func(v MatcherRule) string { return v.Name },
+		func(v MatcherRule) bool { return v.Disabled },
+	)
+	out.PostProcessors = mergeNamedRules(
+		base.PostProcessors, override.PostProcessors,
+		func(v PostProcessRule) string { return v.Name },
+		func(v PostProcessRule) bool { return v.Disabled },
+	)
 	if err := validateRuleSet(out); err != nil {
 		return nil, err
 	}
@@ -127,11 +155,13 @@ func LoadRuleSetFromFS(fsys fs.FS, dir string) (*RuleSet, error) {
 	for _, file := range files {
 		data, err := fs.ReadFile(fsys, file)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read rule file %s failed: %w", file, err)
 		}
 		part, err := NewLoader().Load(data)
 		if err != nil {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("load rule fragment failed: %s", file), Cause: err}
+			return nil, &CleanError{
+				Code: ErrInvalidRuleSet, Message: fmt.Sprintf("load rule fragment failed: %s", file), Cause: err,
+			}
 		}
 		if merged == nil {
 			merged = cloneRuleSet(part)
@@ -139,7 +169,9 @@ func LoadRuleSetFromFS(fsys fs.FS, dir string) (*RuleSet, error) {
 		}
 		merged, err = mergeRuleSetFragments(merged, part)
 		if err != nil {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("merge rule fragment failed: %s", file), Cause: err}
+			return nil, &CleanError{
+				Code: ErrInvalidRuleSet, Message: fmt.Sprintf("merge rule fragment failed: %s", file), Cause: err,
+			}
 		}
 	}
 	if err := validateRuleSet(merged); err != nil {
@@ -159,7 +191,7 @@ func ListRuleSetFilesFromFS(fsys fs.FS, dir string) ([]string, error) {
 func collectRuleSetFilesFromFS(fsys fs.FS, dir string) ([]string, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read ruleset dir %s failed: %w", dir, err)
 	}
 	files := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -167,19 +199,67 @@ func collectRuleSetFilesFromFS(fsys fs.FS, dir string) ([]string, error) {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".yaml") && !strings.HasSuffix(strings.ToLower(name), ".yml") {
+		lower := strings.ToLower(name)
+		if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") {
 			continue
 		}
 		files = append(files, path.Join(dir, name))
 	}
 	sort.Strings(files)
 	if len(files) == 0 {
-		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("no yaml files found in dir: %s", dir)}
+		return nil, &CleanError{
+			Code: ErrInvalidRuleSet, Message: fmt.Sprintf("no yaml files found in dir: %s", dir),
+		}
 	}
 	return files, nil
 }
 
-func mergeRuleSetFragments(base *RuleSet, part *RuleSet) (*RuleSet, error) {
+func validateFragmentVersions(base, part *RuleSet) error {
+	if strings.TrimSpace(part.Version) == "" {
+		return &CleanError{Code: ErrInvalidRuleSet, Message: "rule fragment version is required"}
+	}
+	if base.Version != part.Version {
+		return &CleanError{
+			Code:    ErrInvalidRuleSet,
+			Message: fmt.Sprintf("rule fragment version mismatch: %s != %s", base.Version, part.Version),
+		}
+	}
+	return nil
+}
+
+func appendAllFragmentRules(out, part *RuleSet) error {
+	var err error
+	out.Normalizers, err = appendUniqueNamedRules(
+		out.Normalizers, part.Normalizers, func(v NormalizerRule) string { return v.Name })
+	if err != nil {
+		return err
+	}
+	out.RewriteRules, err = appendUniqueNamedRules(
+		out.RewriteRules, part.RewriteRules, func(v RewriteRule) string { return v.Name })
+	if err != nil {
+		return err
+	}
+	out.SuffixRules, err = appendUniqueNamedRules(
+		out.SuffixRules, part.SuffixRules, func(v SuffixRule) string { return v.Name })
+	if err != nil {
+		return err
+	}
+	out.NoiseRules, err = appendUniqueNamedRules(
+		out.NoiseRules, part.NoiseRules, func(v NoiseRule) string { return v.Name })
+	if err != nil {
+		return err
+	}
+	out.Matchers, err = appendUniqueNamedRules(
+		out.Matchers, part.Matchers, func(v MatcherRule) string { return v.Name })
+	if err != nil {
+		return err
+	}
+	out.PostProcessors, err = appendUniqueNamedRules(
+		out.PostProcessors, part.PostProcessors, func(v PostProcessRule) string { return v.Name })
+	return err
+}
+
+func mergeRuleSetFragments(base, part *RuleSet) (*RuleSet, error) {
 	if base == nil {
 		return cloneRuleSet(part), nil
 	}
@@ -189,11 +269,8 @@ func mergeRuleSetFragments(base *RuleSet, part *RuleSet) (*RuleSet, error) {
 	if strings.TrimSpace(base.Version) == "" {
 		base.Version = part.Version
 	}
-	if strings.TrimSpace(part.Version) == "" {
-		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "rule fragment version is required"}
-	}
-	if base.Version != part.Version {
-		return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("rule fragment version mismatch: %s != %s", base.Version, part.Version)}
+	if err := validateFragmentVersions(base, part); err != nil {
+		return nil, err
 	}
 	out := cloneRuleSet(base)
 	if !isZeroOptions(part.Options) {
@@ -203,35 +280,13 @@ func mergeRuleSetFragments(base *RuleSet, part *RuleSet) (*RuleSet, error) {
 			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "options conflict across rule fragments"}
 		}
 	}
-	var err error
-	out.Normalizers, err = appendUniqueNamedRules(out.Normalizers, part.Normalizers, func(v NormalizerRule) string { return v.Name })
-	if err != nil {
-		return nil, err
-	}
-	out.RewriteRules, err = appendUniqueNamedRules(out.RewriteRules, part.RewriteRules, func(v RewriteRule) string { return v.Name })
-	if err != nil {
-		return nil, err
-	}
-	out.SuffixRules, err = appendUniqueNamedRules(out.SuffixRules, part.SuffixRules, func(v SuffixRule) string { return v.Name })
-	if err != nil {
-		return nil, err
-	}
-	out.NoiseRules, err = appendUniqueNamedRules(out.NoiseRules, part.NoiseRules, func(v NoiseRule) string { return v.Name })
-	if err != nil {
-		return nil, err
-	}
-	out.Matchers, err = appendUniqueNamedRules(out.Matchers, part.Matchers, func(v MatcherRule) string { return v.Name })
-	if err != nil {
-		return nil, err
-	}
-	out.PostProcessors, err = appendUniqueNamedRules(out.PostProcessors, part.PostProcessors, func(v PostProcessRule) string { return v.Name })
-	if err != nil {
+	if err := appendAllFragmentRules(out, part); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func appendUniqueNamedRules[T any](base []T, extra []T, nameFn func(T) string) ([]T, error) {
+func appendUniqueNamedRules[T any](base, extra []T, nameFn func(T) string) ([]T, error) {
 	out := slices.Clone(base)
 	seen := make(map[string]struct{}, len(base)+len(extra))
 	for _, item := range base {
@@ -248,7 +303,9 @@ func appendUniqueNamedRules[T any](base []T, extra []T, nameFn func(T) string) (
 			continue
 		}
 		if _, ok := seen[name]; ok {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate rule name across fragments: %s", name), Rule: name}
+			return nil, &CleanError{
+				Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate rule name across fragments: %s", name), Rule: name,
+			}
 		}
 		seen[name] = struct{}{}
 		out = append(out, item)
@@ -295,7 +352,9 @@ func validateNormalizers(items []NormalizerRule) error {
 		}
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinNormalizers[item.Builtin]; !ok {
-				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin), Rule: item.Name}
+				return &CleanError{
+					Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin), Rule: item.Name,
+				}
 			}
 		}
 	}
@@ -311,10 +370,14 @@ func validateRewriteRules(items []RewriteRule) error {
 			continue
 		}
 		if strings.TrimSpace(item.Pattern) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "rewrite rule pattern is required", Rule: item.Name}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: "rewrite rule pattern is required", Rule: item.Name,
+			}
 		}
 		if _, err := regexp.Compile(item.Pattern); err != nil {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule regexp failed", Rule: item.Name, Cause: err}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: "compile rewrite rule regexp failed", Rule: item.Name, Cause: err,
+			}
 		}
 	}
 	return nil
@@ -330,15 +393,22 @@ func validateSuffixRules(items []SuffixRule) error {
 		}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
-				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile suffix rule regexp failed", Rule: item.Name, Cause: err}
+				return &CleanError{
+					Code: ErrInvalidRuleSet, Message: "compile suffix rule regexp failed", Rule: item.Name, Cause: err,
+				}
 			}
 		}
 		if item.Canonical == "" && item.CanonicalTemplate == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "suffix canonical or canonical_template is required", Rule: item.Name}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: "suffix canonical or canonical_template is required", Rule: item.Name,
+			}
 		}
 		if item.Canonical != "" {
-			if _, ok := allowedSuffixes[strings.ToUpper(item.Canonical)]; !ok && !strings.HasPrefix(strings.ToUpper(item.Canonical), "CD") {
-				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported suffix canonical: %s", item.Canonical), Rule: item.Name}
+			upper := strings.ToUpper(item.Canonical)
+			if _, ok := allowedSuffixes[upper]; !ok && !strings.HasPrefix(upper, "CD") {
+				return &CleanError{
+					Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported suffix canonical: %s", item.Canonical), Rule: item.Name,
+				}
 			}
 		}
 	}
@@ -355,7 +425,9 @@ func validateNoiseRules(items []NoiseRule) error {
 		}
 		if item.Type == "regex" {
 			if _, err := regexp.Compile(item.Pattern); err != nil {
-				return &CleanError{Code: ErrInvalidRuleSet, Message: "compile noise rule regexp failed", Rule: item.Name, Cause: err}
+				return &CleanError{
+					Code: ErrInvalidRuleSet, Message: "compile noise rule regexp failed", Rule: item.Name, Cause: err,
+				}
 			}
 		}
 	}
@@ -371,10 +443,14 @@ func validateMatchers(items []MatcherRule) error {
 			continue
 		}
 		if strings.TrimSpace(item.NormalizeTemplate) == "" {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "matcher normalize_template is required", Rule: item.Name}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: "matcher normalize_template is required", Rule: item.Name,
+			}
 		}
 		if _, err := regexp.Compile(item.Pattern); err != nil {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: "compile matcher rule regexp failed", Rule: item.Name, Cause: err}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: "compile matcher rule regexp failed", Rule: item.Name, Cause: err,
+			}
 		}
 	}
 	return nil
@@ -390,7 +466,11 @@ func validatePostProcessors(items []PostProcessRule) error {
 		}
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinPostProcessors[item.Builtin]; !ok {
-				return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported post processor builtin: %s", item.Builtin), Rule: item.Name}
+				return &CleanError{
+					Code:    ErrInvalidRuleSet,
+					Message: fmt.Sprintf("unsupported post processor builtin: %s", item.Builtin),
+					Rule:    item.Name,
+				}
 			}
 		}
 	}
@@ -413,14 +493,16 @@ func validateUniqueRuleNames[T namedRule](items []T, kind string) error {
 			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("%s name is required", kind)}
 		}
 		if _, ok := seen[name]; ok {
-			return &CleanError{Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate %s name: %s", kind, name), Rule: name}
+			return &CleanError{
+				Code: ErrInvalidRuleSet, Message: fmt.Sprintf("duplicate %s name: %s", kind, name), Rule: name,
+			}
 		}
 		seen[name] = struct{}{}
 	}
 	return nil
 }
 
-func mergeOptions(base Options, override Options) Options {
+func mergeOptions(base, override Options) Options {
 	out := base
 	if override.CaseMode != "" {
 		out.CaseMode = override.CaseMode
@@ -437,7 +519,7 @@ func mergeOptions(base Options, override Options) Options {
 	return out
 }
 
-func mergeNamedRules[T any](base []T, override []T, nameFn func(T) string, disabledFn func(T) bool) []T {
+func mergeNamedRules[T any](base, override []T, nameFn func(T) string, disabledFn func(T) bool) []T {
 	out := make([]T, 0, len(base)+len(override))
 	idx := make(map[string]int, len(base)+len(override))
 	for _, item := range base {

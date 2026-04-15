@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,15 @@ import (
 const (
 	TaskSync = "media_library_sync"
 	TaskMove = "media_library_move"
+)
+
+var (
+	errLibraryDirNotConfigured = errors.New("library dir is not configured")
+	errSaveDirNotConfigured    = errors.New("save dir is not configured")
+	errMoveTaskRunning         = errors.New("move to media library is running")
+	errSyncAlreadyRunning      = errors.New("media library sync is already running")
+	errSyncTaskRunning         = errors.New("media library sync is running")
+	errMoveAlreadyRunning      = errors.New("move to media library is already running")
 )
 
 type Service struct {
@@ -40,7 +50,7 @@ type ListItemsOptions struct {
 	Order      string
 }
 
-func NewService(db *sql.DB, libraryDir string, saveDir string) *Service {
+func NewService(db *sql.DB, libraryDir, saveDir string) *Service {
 	return &Service{
 		db:         db,
 		libraryDir: libraryDir,
@@ -121,7 +131,7 @@ func (s *Service) GetDetail(ctx context.Context, id int64) (*Detail, error) {
 		WHERE id = ?
 	`, id).Scan(&raw)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, os.ErrNotExist
 		}
 		return nil, fmt.Errorf("get media library detail failed: %w", err)
@@ -143,7 +153,7 @@ func (s *Service) GetDetailByRelPath(ctx context.Context, relPath string) (*Deta
 		WHERE rel_path = ?
 	`, relPath).Scan(&id, &raw)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, os.ErrNotExist
 		}
 		return nil, fmt.Errorf("get media library detail by rel path failed: %w", err)
@@ -174,7 +184,10 @@ func (s *Service) UpdateItem(ctx context.Context, id int64, meta Meta) (*Detail,
 	return next, nil
 }
 
-func (s *Service) ReplaceAsset(ctx context.Context, id int64, variantKey string, kind string, originalName string, data []byte) (*Detail, error) {
+func (s *Service) ReplaceAsset(ctx context.Context, id int64, variantKey, kind, originalName string, data []byte) (
+	*Detail,
+	error,
+) {
 	detail, err := s.GetDetail(ctx, id)
 	if err != nil {
 		return nil, err
@@ -217,15 +230,15 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", "manual"))
 	if !s.IsConfigured() {
 		logger.Warn("media library sync skipped because library dir is not configured")
-		return fmt.Errorf("library dir is not configured")
+		return errLibraryDirNotConfigured
 	}
 	if s.isMoveRunning() {
 		logger.Warn("media library sync skipped because move task is running")
-		return fmt.Errorf("move to media library is running")
+		return errMoveTaskRunning
 	}
 	if syncState, err := s.getTaskState(ctx, TaskSync); err == nil && syncState.Status == "running" {
 		logger.Warn("media library sync skipped because sync task is already running")
-		return fmt.Errorf("media library sync is already running")
+		return errSyncAlreadyRunning
 	}
 	logger.Info("media library sync triggered")
 	go func() {
@@ -267,19 +280,19 @@ func (s *Service) TriggerMove(ctx context.Context) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskMove))
 	if !s.IsConfigured() {
 		logger.Warn("move to media library skipped because library dir is not configured")
-		return fmt.Errorf("library dir is not configured")
+		return errLibraryDirNotConfigured
 	}
 	if s.saveDir == "" {
 		logger.Warn("move to media library skipped because save dir is not configured")
-		return fmt.Errorf("save dir is not configured")
+		return errSaveDirNotConfigured
 	}
 	if s.isSyncRunning() {
 		logger.Warn("move to media library skipped because sync task is running")
-		return fmt.Errorf("media library sync is running")
+		return errSyncTaskRunning
 	}
 	if !s.claimMove() {
 		logger.Warn("move to media library skipped because move task is already running")
-		return fmt.Errorf("move to media library is already running")
+		return errMoveAlreadyRunning
 	}
 	logger.Info("move to media library triggered")
 	go func() {
@@ -311,13 +324,7 @@ func (s *Service) GetStatusSnapshot(ctx context.Context) (*StatusSnapshot, error
 func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", reason))
 	startedAt := time.Now()
-	if !s.IsConfigured() {
-		return nil
-	}
-	if reason != "move" && s.isMoveRunning() {
-		return nil
-	}
-	if !s.claimSync() {
+	if !s.IsConfigured() || (reason != "move" && s.isMoveRunning()) || !s.claimSync() {
 		return nil
 	}
 	defer s.finishSync()
@@ -330,13 +337,29 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	logger.Info("media library sync started", zap.Int("total", len(itemDirs)))
 	state := newRunningTaskState(TaskSync, len(itemDirs), "同步媒体库中")
 	_ = s.saveTaskState(ctx, state)
+	keep := s.syncAllItems(ctx, logger, itemDirs, &state)
+	deletedCount := s.cleanupStaleItems(ctx, logger, keep, &state)
+	s.finishTask(ctx, &state, fmt.Sprintf("媒体库同步完成 (%s)", reason))
+	logger.Info("media library sync completed",
+		zap.Int("total", state.Total),
+		zap.Int("success_count", state.SuccessCount),
+		zap.Int("error_count", state.ErrorCount),
+		zap.Int("deleted_count", deletedCount),
+		zap.Duration("duration", time.Since(startedAt)),
+	)
+	return nil
+}
+
+func (s *Service) syncAllItems(
+	ctx context.Context,
+	logger *zap.Logger,
+	itemDirs []string,
+	state *TaskState,
+) map[string]struct{} {
 	keep := make(map[string]struct{}, len(itemDirs))
 	for index, absPath := range itemDirs {
 		logger.Info("media library sync item started",
-			zap.Int("index", index+1),
-			zap.Int("total", len(itemDirs)),
-			zap.String("abs_path", absPath),
-		)
+			zap.Int("index", index+1), zap.Int("total", len(itemDirs)), zap.String("abs_path", absPath))
 		itemStartedAt := time.Now()
 		result := s.syncOneItem(ctx, logger, keep, absPath)
 		state.Processed = index + 1
@@ -348,15 +371,20 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 			state.ErrorCount++
 		}
 		logger.Info("media library sync item finished",
-			zap.Int("index", index+1),
-			zap.Int("total", len(itemDirs)),
-			zap.String("rel_path", result.RelPath),
-			zap.Bool("success", result.Success),
-			zap.Bool("failed", result.Failed),
-			zap.Duration("duration", time.Since(itemStartedAt)),
-		)
-		s.persistTaskProgress(ctx, &state)
+			zap.Int("index", index+1), zap.Int("total", len(itemDirs)),
+			zap.String("rel_path", result.RelPath), zap.Bool("success", result.Success),
+			zap.Bool("failed", result.Failed), zap.Duration("duration", time.Since(itemStartedAt)))
+		s.persistTaskProgress(ctx, state)
 	}
+	return keep
+}
+
+func (s *Service) cleanupStaleItems(
+	ctx context.Context,
+	logger *zap.Logger,
+	keep map[string]struct{},
+	state *TaskState,
+) int {
 	deletedCount, err := s.deleteMissing(ctx, keep)
 	if err != nil {
 		logger.Warn("delete stale media library items failed", zap.Error(err))
@@ -364,15 +392,7 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	} else if deletedCount > 0 {
 		logger.Info("media library stale rows deleted", zap.Int("count", deletedCount))
 	}
-	s.finishTask(ctx, &state, fmt.Sprintf("媒体库同步完成 (%s)", reason))
-	logger.Info("media library sync completed",
-		zap.Int("total", state.Total),
-		zap.Int("success_count", state.SuccessCount),
-		zap.Int("error_count", state.ErrorCount),
-		zap.Int("deleted_count", deletedCount),
-		zap.Duration("duration", time.Since(startedAt)),
-	)
-	return nil
+	return deletedCount
 }
 
 func (s *Service) runMove(ctx context.Context) error {
@@ -417,8 +437,8 @@ func (s *Service) runMove(ctx context.Context) error {
 		)
 		s.persistTaskProgress(ctx, &state)
 	}
-	//移动电影, 但是不执行全量sync, 这个太慢了, 用户手动触发即可
-	//_ = s.runFullSync(ctx, "move")
+	// 移动电影, 但是不执行全量sync, 这个太慢了, 用户手动触发即可
+	// _ = s.runFullSync(ctx, "move")
 	s.finishTask(ctx, &state, "移动到媒体库完成")
 	logger.Info("move to media library completed",
 		zap.Int("total", state.Total),
@@ -429,19 +449,23 @@ func (s *Service) runMove(ctx context.Context) error {
 	return nil
 }
 
-func moveDirectory(src string, dst string) error {
+func moveDirectory(src, dst string) error {
 	err := os.Rename(src, dst)
 	if err == nil {
 		return nil
 	}
-	linkErr, ok := err.(*os.LinkError)
-	if !ok || linkErr.Err != syscall.EXDEV {
-		return err
+	linkErr := &os.LinkError{}
+	ok := errors.As(err, &linkErr)
+	if !ok || !errors.Is(linkErr.Err, syscall.EXDEV) {
+		return fmt.Errorf("rename directory: %w", err)
 	}
 	if err := copyDirectory(src, dst); err != nil {
 		return err
 	}
-	return os.RemoveAll(src)
+	if err := os.RemoveAll(src); err != nil {
+		return fmt.Errorf("remove source after copy: %w", err)
+	}
+	return nil
 }
 
 type itemTaskResult struct {
@@ -463,7 +487,7 @@ func newRunningTaskState(taskKey string, total int, message string) TaskState {
 	}
 }
 
-func (s *Service) failTask(ctx context.Context, logger *zap.Logger, taskKey string, message string, err error) {
+func (s *Service) failTask(ctx context.Context, logger *zap.Logger, taskKey, message string, err error) {
 	logger.Error(message, zap.Error(err))
 	now := time.Now().UnixMilli()
 	_ = s.saveTaskState(ctx, TaskState{
@@ -489,7 +513,12 @@ func (s *Service) finishTask(ctx context.Context, state *TaskState, message stri
 	_ = s.saveTaskState(ctx, *state)
 }
 
-func (s *Service) syncOneItem(ctx context.Context, logger *zap.Logger, keep map[string]struct{}, absPath string) itemTaskResult {
+func (s *Service) syncOneItem(
+	ctx context.Context,
+	logger *zap.Logger,
+	keep map[string]struct{},
+	absPath string,
+) itemTaskResult {
 	relPath, err := filepath.Rel(s.libraryDir, absPath)
 	if err != nil {
 		logger.Warn("resolve media library relative path failed", zap.String("abs_path", absPath), zap.Error(err))
@@ -536,7 +565,7 @@ func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult
 		logger.Warn("check target media library path failed", zap.String("rel_path", relPath), zap.Error(err))
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
-	if err := os.MkdirAll(filepath.Dir(targetAbs), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
 		logger.Warn("create media library parent directory failed", zap.String("rel_path", relPath), zap.Error(err))
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
@@ -552,39 +581,46 @@ func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult
 	return itemTaskResult{RelPath: relPath, Success: true}
 }
 
-func copyDirectory(src string, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+func copyDirectory(src, dst string) error {
+	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("compute relative path: %w", err)
 		}
 		target := filepath.Join(dst, rel)
 		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
+			if err := os.MkdirAll(target, info.Mode()); err != nil {
+				return fmt.Errorf("create directory: %w", err)
+			}
+			return nil
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return err
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("create parent directory: %w", err)
 		}
-		in, err := os.Open(path)
+		in, err := os.Open(path) //nolint:gosec // filepath.WalkDir callback on trusted directory
 		if err != nil {
-			return err
+			return fmt.Errorf("open source file: %w", err)
 		}
 		defer func() {
 			_ = in.Close()
 		}()
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 		if err != nil {
-			return err
+			return fmt.Errorf("create target file: %w", err)
 		}
 		if _, err := out.ReadFrom(in); err != nil {
 			_ = out.Close()
-			return err
+			return fmt.Errorf("copy file data: %w", err)
 		}
 		return out.Close()
 	})
+	if err != nil {
+		return fmt.Errorf("copy directory: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) upsertDetail(ctx context.Context, detail *Detail) error {
@@ -609,7 +645,8 @@ func (s *Service) upsertDetail(ctx context.Context, detail *Detail) error {
 			cover_path = excluded.cover_path,
 			item_json = excluded.item_json,
 			detail_json = excluded.detail_json
-	`, detail.Item.RelPath, detail.Item.Title, detail.Item.ReleaseDate, detail.Item.UpdatedAt, detail.Item.PosterPath, detail.Item.CoverPath, string(itemRaw), string(detailRaw), now)
+	`, detail.Item.RelPath, detail.Item.Title, detail.Item.ReleaseDate, detail.Item.UpdatedAt, detail.Item.PosterPath,
+		detail.Item.CoverPath, string(itemRaw), string(detailRaw), now)
 	if err != nil {
 		return fmt.Errorf("upsert media library detail failed: %w", err)
 	}
@@ -648,7 +685,8 @@ func (s *Service) deleteMissing(ctx context.Context, keep map[string]struct{}) (
 func (s *Service) getTaskState(ctx context.Context, taskKey string) (TaskState, error) {
 	state := TaskState{TaskKey: taskKey, Status: "idle"}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT status, total, processed, success_count, conflict_count, error_count, current, message, started_at, finished_at, updated_at
+		SELECT status, total, processed, success_count, conflict_count, error_count, current, message, started_at,
+			finished_at, updated_at
 		FROM yamdc_task_state_tab
 		WHERE task_key = ?
 	`, taskKey).Scan(
@@ -665,7 +703,7 @@ func (s *Service) getTaskState(ctx context.Context, taskKey string) (TaskState, 
 		&state.UpdatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return state, nil
 		}
 		return TaskState{}, fmt.Errorf("get task state failed: %w", err)
@@ -682,7 +720,8 @@ func (s *Service) saveTaskState(ctx context.Context, state TaskState) error {
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO yamdc_task_state_tab (
-			task_key, status, total, processed, success_count, conflict_count, error_count, current, message, started_at, finished_at, updated_at
+			task_key, status, total, processed, success_count, conflict_count, error_count, current, message, started_at,
+				finished_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(task_key) DO UPDATE SET
 			status = excluded.status,
@@ -696,7 +735,8 @@ func (s *Service) saveTaskState(ctx context.Context, state TaskState) error {
 			started_at = excluded.started_at,
 			finished_at = excluded.finished_at,
 			updated_at = excluded.updated_at
-	`, state.TaskKey, state.Status, state.Total, state.Processed, state.SuccessCount, state.ConflictCount, state.ErrorCount, state.Current, state.Message, state.StartedAt, state.FinishedAt, state.UpdatedAt)
+	`, state.TaskKey, state.Status, state.Total, state.Processed, state.SuccessCount, state.ConflictCount,
+		state.ErrorCount, state.Current, state.Message, state.StartedAt, state.FinishedAt, state.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("save task state failed: %w", err)
 	}
@@ -792,78 +832,57 @@ func matchSizeFilter(totalSize int64, sizeFilter string) bool {
 	}
 }
 
-func sortItems(items []Item, sortMode string, order string) {
+func compareItemsByMode(left, right Item, sortMode string) int {
+	switch sortMode {
+	case "title":
+		return compareStrings(firstNonEmpty(left.Title, left.Name), firstNonEmpty(right.Title, right.Name))
+	case "size":
+		return compareInt64(left.TotalSize, right.TotalSize)
+	case "year":
+		return compareStrings(releaseYear(left.ReleaseDate), releaseYear(right.ReleaseDate))
+	case "ingested":
+		return compareInt64(left.CreatedAt, right.CreatedAt)
+	default:
+		return compareInt64(left.UpdatedAt, right.UpdatedAt)
+	}
+}
+
+func compareStrings(a, b string) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func compareInt64(a, b int64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func sortItems(items []Item, sortMode, order string) {
 	if sortMode == "" {
 		sortMode = "ingested"
 	}
 	desc := order != "asc"
 	sort.Slice(items, func(i, j int) bool {
-		left := items[i]
-		right := items[j]
-		compare := 0
-		switch sortMode {
-		case "title":
-			leftTitle := firstNonEmpty(left.Title, left.Name)
-			rightTitle := firstNonEmpty(right.Title, right.Name)
-			if leftTitle != rightTitle {
-				if leftTitle < rightTitle {
-					compare = -1
-				} else {
-					compare = 1
-				}
-			}
-		case "size":
-			if left.TotalSize != right.TotalSize {
-				if left.TotalSize < right.TotalSize {
-					compare = -1
-				} else {
-					compare = 1
-				}
-			}
-		case "year":
-			leftYear := releaseYear(left.ReleaseDate)
-			rightYear := releaseYear(right.ReleaseDate)
-			if leftYear != rightYear {
-				if leftYear < rightYear {
-					compare = -1
-				} else {
-					compare = 1
-				}
-			}
-		case "ingested":
-			if left.CreatedAt != right.CreatedAt {
-				if left.CreatedAt < right.CreatedAt {
-					compare = -1
-				} else {
-					compare = 1
-				}
-			}
-		default:
-			if left.UpdatedAt != right.UpdatedAt {
-				if left.UpdatedAt < right.UpdatedAt {
-					compare = -1
-				} else {
-					compare = 1
-				}
-			}
+		cmp := compareItemsByMode(items[i], items[j], sortMode)
+		if cmp == 0 {
+			cmp = compareInt64(items[i].UpdatedAt, items[j].UpdatedAt)
 		}
-		if compare == 0 && left.UpdatedAt != right.UpdatedAt {
-			if left.UpdatedAt < right.UpdatedAt {
-				compare = -1
-			} else {
-				compare = 1
-			}
-		}
-		if compare == 0 && left.ID != right.ID {
-			if left.ID < right.ID {
-				compare = -1
-			} else {
-				compare = 1
-			}
+		if cmp == 0 {
+			cmp = compareInt64(items[i].ID, items[j].ID)
 		}
 		if desc {
-			return compare > 0
+			return cmp > 0
 		}
-		return compare < 0
+		return cmp < 0
 	})
 }

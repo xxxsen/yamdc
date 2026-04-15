@@ -8,10 +8,9 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 )
 
-type numberTitleHandler struct {
-}
+type numberTitleHandler struct{}
 
-func (h *numberTitleHandler) Handle(ctx context.Context, fc *model.FileContext) error {
+func (h *numberTitleHandler) Handle(_ context.Context, fc *model.FileContext) error {
 	title := number.GetCleanID(fc.Meta.Title)
 	num := number.GetCleanID(fc.Number.GetNumberID())
 	if strings.Contains(title, num) {
@@ -22,5 +21,5 @@ func (h *numberTitleHandler) Handle(ctx context.Context, fc *model.FileContext) 
 }
 
 func init() {
-	Register(HNumberTitle, HandlerToCreator(&numberTitleHandler{}))
+	Register(HNumberTitle, ToCreator(&numberTitleHandler{}))
 }

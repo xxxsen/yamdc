@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -20,6 +21,9 @@ type ScrapeData struct {
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
+// ErrScrapeDataNotFound is returned when scrape data is not found for a job.
+var ErrScrapeDataNotFound = errors.New("scrape data not found")
+
 type ScrapeDataRepository struct {
 	db *sql.DB
 }
@@ -28,10 +32,11 @@ func NewScrapeDataRepository(db *sql.DB) *ScrapeDataRepository {
 	return &ScrapeDataRepository{db: db}
 }
 
-func (r *ScrapeDataRepository) UpsertRawData(ctx context.Context, jobID int64, source string, rawData string) error {
+func (r *ScrapeDataRepository) UpsertRawData(ctx context.Context, jobID int64, source, rawData string) error {
 	now := time.Now().UnixMilli()
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO yamdc_scrape_data_tab (job_id, source, version, raw_data, review_data, final_data, status, created_at, updated_at)
+		INSERT INTO yamdc_scrape_data_tab (job_id, source, version, raw_data, review_data, final_data, status, created_at,
+			updated_at)
 		VALUES (?, ?, 1, ?, '', '', 'draft', ?, ?)
 		ON CONFLICT(job_id) DO UPDATE SET
 			source = excluded.source,
@@ -63,8 +68,8 @@ func (r *ScrapeDataRepository) GetByJobID(ctx context.Context, jobID int64) (*Sc
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrScrapeDataNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get scrape data failed: %w", err)

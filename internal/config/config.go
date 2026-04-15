@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/tailscale/hujson"
@@ -26,7 +27,7 @@ type ProxyConfig struct {
 }
 
 type NetworkConfig struct {
-	Timeout int64  `json:"timeout"` //单位为秒
+	Timeout int64  `json:"timeout"` // 单位为秒
 	Proxy   string `json:"proxy"`
 }
 
@@ -71,12 +72,12 @@ type PluginConfig struct {
 type FlareSolverrConfig struct {
 	Enable  bool            `json:"enable"`
 	Host    string          `json:"host"`
-	Domains map[string]bool `json:"domains"` //需要使用flaresolverr的域名列表
+	Domains map[string]bool `json:"domains"` // 需要使用flaresolverr的域名列表
 }
 
 type TagMappingConfig struct {
-	Enable   bool   `json:"enable"`    //是否启用标签映射功能
-	FilePath string `json:"file_path"` //配置文件路径
+	Enable   bool   `json:"enable"`    // 是否启用标签映射功能
+	FilePath string `json:"file_path"` // 配置文件路径
 }
 
 type MovieIDRulesetConfig struct {
@@ -123,10 +124,10 @@ type Config struct {
 }
 
 type SwitchConfig struct {
-	EnableSearchMetaCache    bool `json:"enable_search_meta_cache"`    //开启搜索缓存
-	EnableLinkMode           bool `json:"enable_link_mode"`            //测试场景下使用, 开启链接模式
-	EnablePigoFaceRecognizer bool `json:"enable_pigo_face_recognizer"` //开启pigo人脸识别
-	EnableSearcherCheck      bool `json:"enable_searcher_check"`       //测试场景使用, 检查插件的目标域名是否还能访问
+	EnableSearchMetaCache    bool `json:"enable_search_meta_cache"`    // 开启搜索缓存
+	EnableLinkMode           bool `json:"enable_link_mode"`            // 测试场景下使用, 开启链接模式
+	EnablePigoFaceRecognizer bool `json:"enable_pigo_face_recognizer"` // 开启pigo人脸识别
+	EnableSearcherCheck      bool `json:"enable_searcher_check"`       // 测试场景使用, 检查插件的目标域名是否还能访问
 }
 
 func defaultConfig() *Config {
@@ -153,19 +154,19 @@ func defaultConfig() *Config {
 				},
 				AI: AITranslateEngineConfig{
 					Enable: true,
-					Prompt: "", //不填则默认使用默认的prompt
+					Prompt: "", // 不填则默认使用默认的prompt
 				},
 			},
 		},
 		FlareSolverrConfig: FlareSolverrConfig{
-			Enable: false, //默认不启用, 毕竟还要额外配置
+			Enable: false, // 默认不启用, 毕竟还要额外配置
 			Host:   "http://127.0.0.1:8191",
 			Domains: map[string]bool{
 				"www.javlibrary.com": true,
 			},
 		},
 		TagMappingConfig: TagMappingConfig{
-			Enable:   false, //默认不启用, 毕竟还要额外配置
+			Enable:   false, // 默认不启用, 毕竟还要额外配置
 			FilePath: "",    // 如果启用,需要指定配置文件路径
 		},
 		MovieIDRulesetConfig: MovieIDRulesetConfig{},
@@ -178,15 +179,15 @@ func defaultConfig() *Config {
 func Parse(f string) (*Config, error) {
 	raw, err := os.ReadFile(f)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read config file %s failed: %w", f, err)
 	}
 	raw, err = hujson.Standardize(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("standardize config json failed: %w", err)
 	}
 	c := defaultConfig()
 	if err := json.Unmarshal(raw, c); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal config failed: %w", err)
 	}
 	return c, nil
 }

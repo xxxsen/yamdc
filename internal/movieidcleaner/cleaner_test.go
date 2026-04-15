@@ -80,6 +80,17 @@ func TestCleanerClean(t *testing.T) {
 	}
 }
 
+func TestNormalizeHyphenPostProcessor(t *testing.T) {
+	cl, err := NewCleaner(loadTestRuleSet(t))
+	require.NoError(t, err)
+
+	res, err := cl.Clean("ABC_123.mp4")
+	require.NoError(t, err)
+	require.Equal(t, StatusSuccess, res.Status)
+	require.Equal(t, "ABC-123", res.Normalized)
+	require.NotContains(t, res.Normalized, "_")
+}
+
 func TestCleanerNoMatch(t *testing.T) {
 	cl, err := NewCleaner(loadTestRuleSet(t))
 	require.NoError(t, err)

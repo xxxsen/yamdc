@@ -1,10 +1,13 @@
 package aiengine
 
-import "github.com/xxxsen/yamdc/internal/client"
+import (
+	"errors"
+	"fmt"
 
-var (
-	m = make(map[string]AIEngineCreator)
+	"github.com/xxxsen/yamdc/internal/client"
 )
+
+var m = make(map[string]Creator)
 
 type CreateOption func(*createConfig)
 
@@ -37,15 +40,18 @@ func ResolveCreateConfig(opts ...CreateOption) CreateConfig {
 	}
 }
 
-type AIEngineCreator func(args interface{}, opts ...CreateOption) (IAIEngine, error)
+type Creator func(args interface{}, opts ...CreateOption) (IAIEngine, error)
+
+var errUnknownEngine = errors.New("unknown ai engine")
 
 func Create(name string, args interface{}, opts ...CreateOption) (IAIEngine, error) {
 	if creator, ok := m[name]; ok {
 		return creator(args, opts...)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("engine %q: %w", name, errUnknownEngine)
 }
-func Register(name string, creator AIEngineCreator) {
+
+func Register(name string, creator Creator) {
 	if _, ok := m[name]; ok {
 		panic("ai engine already registered")
 	}

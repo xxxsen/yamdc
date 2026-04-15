@@ -2,9 +2,11 @@ package decoder
 
 import "strconv"
 
-type StringParseFunc func(v string) string
-type StringListParseFunc func(v []string) []string
-type NumberParseFunc func(v string) int64
+type (
+	StringParseFunc     func(v string) string
+	StringListParseFunc func(v []string) []string
+	NumberParseFunc     func(v string) int64
+)
 
 type config struct {
 	OnNumberParse              StringParseFunc

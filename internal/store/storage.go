@@ -2,11 +2,14 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/hasher"
 )
+
+var errStorageNil = errors.New("storage is nil")
 
 type DataRewriteFunc func(ctx context.Context, data []byte) ([]byte, error)
 
@@ -22,9 +25,12 @@ func PutDataTo(ctx context.Context, storage IStorage, key string, value []byte) 
 
 func PutDataWithExpireTo(ctx context.Context, storage IStorage, key string, value []byte, expire time.Duration) error {
 	if storage == nil {
-		return fmt.Errorf("storage is nil")
+		return errStorageNil
 	}
-	return storage.PutData(ctx, key, value, expire)
+	if err := storage.PutData(ctx, key, value, expire); err != nil {
+		return fmt.Errorf("put data failed: %w", err)
+	}
+	return nil
 }
 
 func AnonymousPutDataTo(ctx context.Context, storage IStorage, value []byte) (string, error) {
@@ -40,12 +46,22 @@ func AnonymousPutDataTo(ctx context.Context, storage IStorage, value []byte) (st
 
 func GetDataFrom(ctx context.Context, storage IStorage, key string) ([]byte, error) {
 	if storage == nil {
-		return nil, fmt.Errorf("storage is nil")
+		return nil, errStorageNil
 	}
-	return storage.GetData(ctx, key)
+	data, err := storage.GetData(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("get data failed: %w", err)
+	}
+	return data, nil
 }
 
-func LoadDataFrom(ctx context.Context, storage IStorage, key string, expire time.Duration, cb func() ([]byte, error)) ([]byte, error) {
+func LoadDataFrom(
+	ctx context.Context,
+	storage IStorage,
+	key string,
+	expire time.Duration,
+	cb func() ([]byte, error),
+) ([]byte, error) {
 	if v, err := GetDataFrom(ctx, storage, key); err == nil {
 		return v, nil
 	}
@@ -61,12 +77,21 @@ func LoadDataFrom(ctx context.Context, storage IStorage, key string, expire time
 
 func IsDataExistIn(ctx context.Context, storage IStorage, key string) (bool, error) {
 	if storage == nil {
-		return false, fmt.Errorf("storage is nil")
+		return false, errStorageNil
 	}
-	return storage.IsDataExist(ctx, key)
+	ok, err := storage.IsDataExist(ctx, key)
+	if err != nil {
+		return false, fmt.Errorf("check data existence failed: %w", err)
+	}
+	return ok, nil
 }
 
-func AnonymousDataRewriteWithStorage(ctx context.Context, storage IStorage, key string, fn DataRewriteFunc) (string, error) {
+func AnonymousDataRewriteWithStorage(
+	ctx context.Context,
+	storage IStorage,
+	key string,
+	fn DataRewriteFunc,
+) (string, error) {
 	raw, err := GetDataFrom(ctx, storage, key)
 	if err != nil {
 		return key, err

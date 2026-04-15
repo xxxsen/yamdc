@@ -22,13 +22,13 @@ type precheckFalsePlugin struct {
 	api.DefaultPlugin
 }
 
-func (p *precheckFalsePlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
+func (p *precheckFalsePlugin) OnPrecheckRequest(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
 
 func TestDebuggerUsesSnapshotCreators(t *testing.T) {
 	oldCtx := factory.NewRegisterContext()
-	oldCtx.Register("old", func(args interface{}) (api.IPlugin, error) {
+	oldCtx.Register("old", func(_ interface{}) (api.IPlugin, error) {
 		return &precheckFalsePlugin{}, nil
 	})
 	factory.Swap(oldCtx)
@@ -36,7 +36,7 @@ func TestDebuggerUsesSnapshotCreators(t *testing.T) {
 	debugger := NewDebugger(debuggerTestClient{}, store.NewMemStorage(), nil, []string{"old"}, nil)
 
 	newCtx := factory.NewRegisterContext()
-	newCtx.Register("new", func(args interface{}) (api.IPlugin, error) {
+	newCtx.Register("new", func(_ interface{}) (api.IPlugin, error) {
 		return &precheckFalsePlugin{}, nil
 	})
 	factory.Swap(newCtx)

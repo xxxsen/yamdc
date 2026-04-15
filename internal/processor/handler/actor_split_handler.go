@@ -8,12 +8,9 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 )
 
-var (
-	defaultExtractActorRegexp = regexp.MustCompile(`\s*(.+?)\s*\(\s*(.+?)\s*\)`)
-)
+var defaultExtractActorRegexp = regexp.MustCompile(`\s*(.+?)\s*\(\s*(.+?)\s*\)`)
 
-type actorSplitHandler struct {
-}
+type actorSplitHandler struct{}
 
 func (h *actorSplitHandler) cleanActor(actor string) string {
 	actor = strings.TrimSpace(actor)
@@ -38,8 +35,8 @@ func (h *actorSplitHandler) tryExtractActor(actor string) ([]string, bool) {
 	return rs, true
 }
 
-func (h *actorSplitHandler) Handle(ctx context.Context, fc *model.FileContext) error {
-	//如果演员名包含括号别名, 尝试将其拆分出来, example: Actor A (Alias B)
+func (h *actorSplitHandler) Handle(_ context.Context, fc *model.FileContext) error {
+	// 如果演员名包含括号别名, 尝试将其拆分出来, example: Actor A (Alias B)
 	actorlist := make([]string, 0, len(fc.Meta.Actors))
 	for _, actor := range fc.Meta.Actors {
 		actor = h.cleanActor(actor)
@@ -55,5 +52,5 @@ func (h *actorSplitHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HActorSpliter, HandlerToCreator(&actorSplitHandler{}))
+	Register(HActorSpliter, ToCreator(&actorSplitHandler{}))
 }

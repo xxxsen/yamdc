@@ -1,10 +1,16 @@
 package number
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
+)
+
+var (
+	errEmptyNumberStr  = errors.New("empty number str")
+	errContainsExtName = errors.New("should not contain extname")
 )
 
 type suffixInfoResolveFunc func(info *Number, normalizedSuffix string) bool
@@ -122,23 +128,23 @@ func ParseWithFileName(f string) (*Number, error) {
 
 func Parse(str string) (*Number, error) {
 	if len(str) == 0 {
-		return nil, fmt.Errorf("empty number str")
+		return nil, errEmptyNumberStr
 	}
 	if strings.Contains(str, ".") {
-		return nil, fmt.Errorf("should not contain extname, str:%s", str)
+		return nil, fmt.Errorf("should not contain extname, str:%s: %w", str, errContainsExtName)
 	}
-	number := strings.ToUpper(str) //默认所有的影片 ID 都转为大写
+	number := strings.ToUpper(str) // 默认所有的影片 ID 都转为大写
 	rs := &Number{
-		numberId:          "",
+		numberID:          "",
 		isChineseSubtitle: false,
 		isMultiCD:         false,
 		multiCDIndex:      0,
 	}
-	//部分影片 ID 需要进行改写, 改写逻辑提到外面去, number 只做解析用
+	// 部分影片 ID 需要进行改写, 改写逻辑提到外面去, number 只做解析用
 
-	//提取后缀信息并对影片 ID 进行裁剪
+	// 提取后缀信息并对影片 ID 进行裁剪
 	number = resolveSuffixInfo(rs, number)
-	rs.numberId = number
+	rs.numberID = number
 	return rs, nil
 }
 

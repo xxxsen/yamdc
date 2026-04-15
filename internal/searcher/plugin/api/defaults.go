@@ -2,46 +2,50 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 
 	"github.com/xxxsen/yamdc/internal/model"
 )
 
-type DefaultPlugin struct {
-}
+var errNoImpl = errors.New("no impl")
 
-func (p *DefaultPlugin) OnGetHosts(ctx context.Context) []string {
+type DefaultPlugin struct{}
+
+func (p *DefaultPlugin) OnGetHosts(_ context.Context) []string {
 	return []string{}
 }
 
-func (p *DefaultPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckRequest(_ context.Context, _ string) (bool, error) {
 	return true, nil
 }
 
-func (p *DefaultPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
-	return nil, fmt.Errorf("no impl")
+func (p *DefaultPlugin) OnMakeHTTPRequest(_ context.Context, _ string) (*http.Request, error) {
+	return nil, errNoImpl
 }
 
-func (p *DefaultPlugin) OnDecorateRequest(ctx context.Context, req *http.Request) error {
+func (p *DefaultPlugin) OnDecorateRequest(_ context.Context, _ *http.Request) error {
 	return nil
 }
 
-func (p *DefaultPlugin) OnPrecheckResponse(ctx context.Context, req *http.Request, rsp *http.Response) (bool, error) {
+func (p *DefaultPlugin) OnPrecheckResponse(_ context.Context, _ *http.Request, rsp *http.Response) (bool, error) {
 	if rsp.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (p *DefaultPlugin) OnHandleHTTPRequest(ctx context.Context, invoker HTTPInvoker, req *http.Request) (*http.Response, error) {
+func (p *DefaultPlugin) OnHandleHTTPRequest(ctx context.Context, invoker HTTPInvoker, req *http.Request) (
+	*http.Response,
+	error,
+) {
 	return invoker(ctx, req)
 }
 
-func (p *DefaultPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
-	return nil, false, fmt.Errorf("no impl")
+func (p *DefaultPlugin) OnDecodeHTTPData(_ context.Context, _ []byte) (*model.MovieMeta, bool, error) {
+	return nil, false, errNoImpl
 }
 
-func (p *DefaultPlugin) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
+func (p *DefaultPlugin) OnDecorateMediaRequest(_ context.Context, _ *http.Request) error {
 	return nil
 }

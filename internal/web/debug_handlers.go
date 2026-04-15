@@ -1,8 +1,8 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +45,10 @@ func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
 	}
 	result, err := a.cleaner.Explain(req.Input)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("movieid cleaner explain failed", zap.String("input", req.Input), zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("movieid cleaner explain failed",
+			zap.String("input", req.Input),
+			zap.Error(err),
+		)
 		writeFail(c.Writer, errCodeMovieIDCleanerExplainFailed, err.Error())
 		return
 	}
@@ -55,7 +58,7 @@ func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
 		zap.String("number_id", result.Final.NumberID),
 		zap.String("status", string(result.Final.Status)),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, "ok", result)
 }
 
 func (a *API) handleSearcherDebugPlugins(c *gin.Context) {
@@ -63,7 +66,7 @@ func (a *API) handleSearcherDebugPlugins(c *gin.Context) {
 		writeFail(c.Writer, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", a.debugger.Plugins())
+	writeSuccess(c.Writer, "ok", a.debugger.Plugins())
 }
 
 func (a *API) handleSearcherDebugSearch(c *gin.Context) {
@@ -94,7 +97,7 @@ func (a *API) handleSearcherDebugSearch(c *gin.Context) {
 		zap.String("matched_plugin", result.MatchedPlugin),
 		zap.Strings("used_plugins", result.UsedPlugins),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, "ok", result)
 }
 
 func (a *API) handlePluginEditorCompile(c *gin.Context) {
@@ -118,7 +121,7 @@ func (a *API) handlePluginEditorCompile(c *gin.Context) {
 		writeFail(c.Writer, errCodePluginEditorCompileFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
@@ -147,7 +150,7 @@ func (a *API) handlePluginEditorImport(c *gin.Context) {
 		writeFail(c.Writer, errCodePluginEditorImportFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data: map[string]interface{}{
@@ -156,14 +159,20 @@ func (a *API) handlePluginEditorImport(c *gin.Context) {
 	})
 }
 
-func (a *API) handlePluginEditorRequest(c *gin.Context) {
+type pluginEditorDraftNumberFunc func(
+	ctx context.Context, draft *plugyaml.PluginSpec, number string,
+) (interface{}, error)
+
+func (a *API) handlePluginEditorDraftNumberOp(
+	c *gin.Context, opName string, failCode int, fn pluginEditorDraftNumberFunc,
+) {
 	if a.editor == nil {
 		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
 		return
 	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor request decode failed", zap.Error(err))
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor "+opName+" decode failed", zap.Error(err))
 		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
@@ -176,92 +185,41 @@ func (a *API) handlePluginEditorRequest(c *gin.Context) {
 		writeFail(c.Writer, errCodeInputRequired, "number is required")
 		return
 	}
-	result, err := a.editor.RequestDebug(c.Request.Context(), req.Draft, req.Number)
+	result, err := fn(c.Request.Context(), req.Draft, req.Number)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor request debug failed",
+		logutil.GetLogger(c.Request.Context()).Warn("plugin editor "+opName+" failed",
 			zap.String("number", req.Number),
 			zap.Error(err),
 		)
-		writeFail(c.Writer, errCodePluginEditorRequestFailed, err.Error())
+		writeFail(c.Writer, failCode, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data:     result,
 	})
+}
+
+func (a *API) handlePluginEditorRequest(c *gin.Context) {
+	a.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed,
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+			return a.editor.RequestDebug(ctx, draft, number)
+		})
 }
 
 func (a *API) handlePluginEditorScrape(c *gin.Context) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
-		return
-	}
-	var req pluginEditorRequest
-	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor scrape decode failed", zap.Error(err))
-		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
-		return
-	}
-	if req.Draft == nil {
-		writeFail(c.Writer, errCodeInputRequired, "draft is required")
-		return
-	}
-	req.Number = strings.TrimSpace(req.Number)
-	if req.Number == "" {
-		writeFail(c.Writer, errCodeInputRequired, "number is required")
-		return
-	}
-	result, err := a.editor.ScrapeDebug(c.Request.Context(), req.Draft, req.Number)
-	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor scrape debug failed",
-			zap.String("number", req.Number),
-			zap.Error(err),
-		)
-		writeFail(c.Writer, errCodePluginEditorScrapeFailed, err.Error())
-		return
-	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
-		OK:       true,
-		Warnings: []string{},
-		Data:     result,
-	})
+	a.handlePluginEditorDraftNumberOp(c, "scrape", errCodePluginEditorScrapeFailed,
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+			return a.editor.ScrapeDebug(ctx, draft, number)
+		})
 }
 
 func (a *API) handlePluginEditorWorkflow(c *gin.Context) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
-		return
-	}
-	var req pluginEditorRequest
-	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor workflow decode failed", zap.Error(err))
-		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
-		return
-	}
-	if req.Draft == nil {
-		writeFail(c.Writer, errCodeInputRequired, "draft is required")
-		return
-	}
-	req.Number = strings.TrimSpace(req.Number)
-	if req.Number == "" {
-		writeFail(c.Writer, errCodeInputRequired, "number is required")
-		return
-	}
-	result, err := a.editor.WorkflowDebug(c.Request.Context(), req.Draft, req.Number)
-	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("plugin editor workflow debug failed",
-			zap.String("number", req.Number),
-			zap.Error(err),
-		)
-		writeFail(c.Writer, errCodePluginEditorWorkflowFailed, err.Error())
-		return
-	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
-		OK:       true,
-		Warnings: []string{},
-		Data:     result,
-	})
+	a.handlePluginEditorDraftNumberOp(c, "workflow", errCodePluginEditorWorkflowFailed,
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+			return a.editor.WorkflowDebug(ctx, draft, number)
+		})
 }
 
 func (a *API) handlePluginEditorCase(c *gin.Context) {
@@ -292,7 +250,7 @@ func (a *API) handlePluginEditorCase(c *gin.Context) {
 		writeFail(c.Writer, errCodePluginEditorCaseFailed, err.Error())
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", pluginEditorResponse{
+	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
 		Data: map[string]interface{}{
@@ -306,7 +264,7 @@ func (a *API) handleHandlerDebugHandlers(c *gin.Context) {
 		writeFail(c.Writer, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
 		return
 	}
-	writeSuccess(c.Writer, http.StatusOK, "ok", a.handlers.Handlers())
+	writeSuccess(c.Writer, "ok", a.handlers.Handlers())
 }
 
 func (a *API) handleHandlerDebugRun(c *gin.Context) {
@@ -337,5 +295,5 @@ func (a *API) handleHandlerDebugRun(c *gin.Context) {
 		zap.String("number_id", result.NumberID),
 		zap.String("result_error", result.Error),
 	)
-	writeSuccess(c.Writer, http.StatusOK, "ok", result)
+	writeSuccess(c.Writer, "ok", result)
 }

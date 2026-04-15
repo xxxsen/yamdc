@@ -7,7 +7,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 )
 
-func BuildConflictKey(numberText string, fileExt string, fileName string) string {
+func BuildConflictKey(numberText, fileExt, fileName string) string {
 	numberText = strings.TrimSpace(numberText)
 	if numberText == "" {
 		return ""

@@ -33,7 +33,7 @@ func (p *translaterHandler) buildKey(data string) string {
 	return fmt.Sprintf("yamdc:translate:%s", hasher.ToMD5(data))
 }
 
-func (p *translaterHandler) translateSingle(ctx context.Context, name string, in string, lang string, out *string) error {
+func (p *translaterHandler) translateSingle(ctx context.Context, name, in, lang string, out *string) error {
 	if len(in) == 0 {
 		return nil
 	}
@@ -47,11 +47,10 @@ func (p *translaterHandler) translateSingle(ctx context.Context, name string, in
 	res, err := func() ([]byte, error) {
 		res, err := p.translator.Translate(ctx, in, "auto", "zh")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("translate failed: %w", err)
 		}
 		return []byte(res), nil
 	}()
-
 	if err != nil {
 		return fmt.Errorf("translate failed, name:%s, data:%s, err:%w", name, in, err)
 	}
@@ -69,33 +68,42 @@ func (p *translaterHandler) isNeedTranslate(lang string) bool {
 	return true
 }
 
-func (p *translaterHandler) translateArray(ctx context.Context, name string, in []string, lang string, out *[]string) error {
+func (p *translaterHandler) translateArray(
+	ctx context.Context,
+	name string,
+	in []string,
+	lang string,
+	out *[]string,
+) {
 	if !p.isNeedTranslate(lang) {
-		return nil
+		return
 	}
 	rs := make([]string, 0, len(in)*2)
 	rs = append(rs, in...)
 	for _, item := range in {
 		var res string
 		if err := p.translateSingle(ctx, "dispatch-"+name+"-translate", item, lang, &res); err != nil {
-			logutil.GetLogger(ctx).Error("translate array failed", zap.Error(err), zap.String("name", name), zap.String("translate_item", item))
+			logutil.GetLogger(ctx).Error("translate array failed",
+				zap.Error(err),
+				zap.String("name", name),
+				zap.String("translate_item", item),
+			)
 			continue
 		}
 		rs = append(rs, res)
 	}
 	*out = rs
-	return nil
 }
 
 func (p *translaterHandler) Handle(ctx context.Context, fc *model.FileContext) error {
 	if p.translator == nil || p.storage == nil {
 		return nil
 	}
-	var errs []error
+	errs := make([]error, 0, 4)
 	errs = append(errs, p.translateSingle(ctx, "title", fc.Meta.Title, fc.Meta.TitleLang, &fc.Meta.TitleTranslated))
 	errs = append(errs, p.translateSingle(ctx, "plot", fc.Meta.Plot, fc.Meta.PlotLang, &fc.Meta.PlotTranslated))
-	errs = append(errs, p.translateArray(ctx, "genere", fc.Meta.Genres, fc.Meta.GenresLang, &fc.Meta.Genres))
-	errs = append(errs, p.translateArray(ctx, "actor", fc.Meta.Actors, fc.Meta.ActorsLang, &fc.Meta.Actors))
+	p.translateArray(ctx, "genere", fc.Meta.Genres, fc.Meta.GenresLang, &fc.Meta.Genres)
+	p.translateArray(ctx, "actor", fc.Meta.Actors, fc.Meta.ActorsLang, &fc.Meta.Actors)
 
 	for _, err := range errs {
 		if err != nil {
@@ -106,7 +114,7 @@ func (p *translaterHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HTranslater, func(args interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HTranslater, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
 		return &translaterHandler{
 			storage:    deps.Storage,
 			translator: deps.Translator,

@@ -11,7 +11,7 @@ import (
 
 func newTestSQLite(t *testing.T) *SQLite {
 	t.Helper()
-	db, err := NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	db, err := NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
@@ -61,7 +61,7 @@ func TestJobRepositoryLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	got, err = repo.GetByID(ctx, result.Items[0].ID)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrJobNotFound)
 	require.Nil(t, got)
 }
 
@@ -134,7 +134,7 @@ func TestLogAndScrapeDataRepository(t *testing.T) {
 	require.Len(t, logs, 0)
 
 	item, err = scrapeRepo.GetByJobID(ctx, 1)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrScrapeDataNotFound)
 	require.Nil(t, item)
 }
 

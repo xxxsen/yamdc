@@ -13,7 +13,7 @@ type httpClientMock struct {
 }
 
 func (m *httpClientMock) Do(req *http.Request) (*http.Response, error) {
-	return m.client.Do(req)
+	return m.client.Do(req) //nolint:gosec // URL is configured by operator
 }
 
 func TestOllamaCompleteSuccess(t *testing.T) {
@@ -57,7 +57,7 @@ func TestOllamaCompleteSuccess(t *testing.T) {
 }
 
 func TestOllamaCompleteHTTPError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -71,7 +71,7 @@ func TestOllamaCompleteHTTPError(t *testing.T) {
 }
 
 func TestOllamaCompleteResponseError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(Response{
 			Error: "some error",
 		})
@@ -87,7 +87,7 @@ func TestOllamaCompleteResponseError(t *testing.T) {
 }
 
 func TestOllamaCompleteEmptyResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(Response{
 			Response: "",
 			Done:     true,

@@ -13,7 +13,7 @@ import (
 func TestLoadRulesetScoreTXTFileSkipsBlankLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cases.txt")
-	require.NoError(t, os.WriteFile(path, []byte("\nabc.com@aaa-0030.mp4\n\nzzz@zzzz.mp4\n"), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte("\nabc.com@aaa-0030.mp4\n\nzzz@zzzz.mp4\n"), 0o600))
 
 	out, err := loadRulesetScoreTXTFile(path)
 	require.NoError(t, err)
@@ -23,9 +23,9 @@ func TestLoadRulesetScoreTXTFileSkipsBlankLines(t *testing.T) {
 
 func TestLoadRulesetScoreCaseDirScansTXT(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("two\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.json"), []byte("{}"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("two\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignore.json"), []byte("{}"), 0o600))
 
 	out, err := loadRulesetScoreCaseFile(dir)
 	require.NoError(t, err)
@@ -45,12 +45,12 @@ func TestBuildScoredMovieIDKeepsFileExt(t *testing.T) {
 func TestScoreRulesetBundleOutputsConfidence(t *testing.T) {
 	rulesetDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(rulesetDir, "ruleset"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(rulesetDir, "manifest.yaml"), []byte("entry: ruleset\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(rulesetDir, "manifest.yaml"), []byte("entry: ruleset\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(rulesetDir, "ruleset", "001-base.yaml"), []byte(`
 version: v1
 options:
   case_mode: upper
-`), 0o644))
+`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(rulesetDir, "ruleset", "006-matchers.yaml"), []byte(`
 version: v1
 matchers:
@@ -58,10 +58,10 @@ matchers:
     pattern: '(?i)FILM[-_\\s]?([0-9]{3,})'
     normalize_template: 'FILM-$1'
     score: 100
-`), 0o644))
+`), 0o600))
 
 	casePath := filepath.Join(t.TempDir(), "cases.txt")
-	require.NoError(t, os.WriteFile(casePath, []byte("abc.com@film-123.mp4\nzzz@unknown.mp4\n"), 0o644))
+	require.NoError(t, os.WriteFile(casePath, []byte("abc.com@film-123.mp4\nzzz@unknown.mp4\n"), 0o600))
 
 	out, err := scoreRulesetBundle(rulesetDir, casePath)
 	require.NoError(t, err)

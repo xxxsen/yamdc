@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/glebarez/go-sqlite"
+	_ "github.com/glebarez/go-sqlite" // register sqlite driver
 )
 
 //go:embed migrations/*.sql
@@ -21,31 +21,31 @@ type SQLite struct {
 	db *sql.DB
 }
 
-func NewSQLite(path string) (*SQLite, error) {
+func NewSQLite(ctx context.Context, path string) (*SQLite, error) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create db dir %s failed: %w", dir, err)
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open sqlite db %s failed: %w", path, err)
 	}
-	configureSQLite(db)
+	configureSQLite(ctx, db)
 	repo := &SQLite{db: db}
-	if err := repo.init(context.Background()); err != nil {
+	if err := repo.init(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return repo, nil
 }
 
-func configureSQLite(db *sql.DB) {
+func configureSQLite(ctx context.Context, db *sql.DB) {
 	if db == nil {
 		return
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	_, _ = db.Exec(`PRAGMA busy_timeout = 5000`)
+	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`)
 }
 
 func (s *SQLite) DB() *sql.DB {
@@ -56,7 +56,10 @@ func (s *SQLite) Close() error {
 	if s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close sqlite db failed: %w", err)
+	}
+	return nil
 }
 
 func (s *SQLite) init(ctx context.Context) error {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,42 @@ import (
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	errUnsupportedVersion              = errors.New("unsupported version")
+	errNameRequired                    = errors.New("name is required")
+	errInvalidPluginType               = errors.New("invalid plugin type")
+	errHostsRequired                   = errors.New("hosts is required")
+	errRequestAndMultiRequestExclusive = errors.New("request and multi_request are mutually exclusive")
+	errTwoStepRequiresSearchSelect     = errors.New("two-step requires workflow.search_select")
+	errRequestOrMultiRequestRequired   = errors.New("request or multi_request is required")
+	errInvalidFetchType                = errors.New("invalid fetch_type")
+	errRequestMethodRequired           = errors.New("request method is required")
+	errRequestPathOrURLRequired        = errors.New("request path or url is required")
+	errRequestPathAndURLExclusive      = errors.New("request path and url are mutually exclusive")
+	errUnsupportedRequestMethod        = errors.New("unsupported request method")
+	errUnsupportedBodyKind             = errors.New("unsupported body kind")
+	errSearchSelectRequiresSelector    = errors.New("search_select requires at least 1 selector")
+	errSearchSelectNextRequestRequired = errors.New("search_select next_request is required")
+	errUnsupportedSelectorKind         = errors.New("unsupported selector kind")
+	errMultiRequestCandidatesRequired  = errors.New("multi_request candidates is required")
+	errMultiRequestRequestRequired     = errors.New("multi_request request is required")
+	errScrapeRequired                  = errors.New("scrape is required")
+	errUnsupportedScrapeFormat         = errors.New("unsupported scrape format")
+	errScrapeFieldsRequired            = errors.New("scrape fields is required")
+	errFieldSelectorRequired           = errors.New("field selector is required")
+	errFieldSelectorKindUnsupported    = errors.New("field selector kind unsupported")
+	errRequestNil                      = errors.New("request is nil")
+	errStatusCodeNotAccepted           = errors.New("status code not accepted")
+	errStatusCodeNotFound              = errors.New("status code not found")
+	errSelectorCountMismatch           = errors.New("selector result count mismatch")
+	errSearchSelectCountMismatch       = errors.New("search_select matched count mismatch")
+	errNoSearchSelectMatched           = errors.New("no search_select result matched")
+	errNoMultiRequestMatched           = errors.New("no multi_request matched")
+	errUnsupportedParser               = errors.New("unsupported parser")
+	errUnsupportedListParser           = errors.New("unsupported list parser")
+	errUnsupportedCharset              = errors.New("unsupported charset")
 )
 
 const (
@@ -127,7 +164,7 @@ type compiledPostprocess struct {
 	switchConfig *SwitchConfigSpec
 }
 
-type YAMLSearchPlugin struct {
+type SearchPlugin struct {
 	spec *compiledPlugin
 }
 
@@ -150,37 +187,45 @@ func NewFromBytes(data []byte) (pluginapi.IPlugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &YAMLSearchPlugin{spec: spec}, nil
+	return &SearchPlugin{spec: spec}, nil
 }
 
-func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
+func validatePluginSpec(raw *PluginSpec) (string, error) {
 	if raw.Version != 1 {
-		return nil, fmt.Errorf("unsupported version:%d", raw.Version)
+		return "", fmt.Errorf("%w: %d", errUnsupportedVersion, raw.Version)
 	}
 	if raw.Name == "" {
-		return nil, fmt.Errorf("name is required")
+		return "", errNameRequired
 	}
 	if raw.Type != typeOneStep && raw.Type != typeTwoStep {
-		return nil, fmt.Errorf("invalid type:%s", raw.Type)
+		return "", fmt.Errorf("%w: %s", errInvalidPluginType, raw.Type)
 	}
 	if len(raw.Hosts) == 0 {
-		return nil, fmt.Errorf("hosts is required")
+		return "", errHostsRequired
 	}
 	if raw.Request != nil && raw.MultiRequest != nil {
-		return nil, fmt.Errorf("request and multi_request are mutually exclusive")
+		return "", errRequestAndMultiRequestExclusive
 	}
 	if raw.Type == typeTwoStep && (raw.Workflow == nil || raw.Workflow.SearchSelect == nil) {
-		return nil, fmt.Errorf("two-step requires workflow.search_select")
+		return "", errTwoStepRequiresSearchSelect
 	}
 	if raw.Request == nil && raw.MultiRequest == nil {
-		return nil, fmt.Errorf("request or multi_request is required")
+		return "", errRequestOrMultiRequestRequired
 	}
 	ft := raw.FetchType
 	if ft == "" {
 		ft = fetchTypeGoHTTP
 	}
 	if ft != fetchTypeGoHTTP && ft != fetchTypeBrowser {
-		return nil, fmt.Errorf("invalid fetch_type:%s, must be %q or %q", ft, fetchTypeGoHTTP, fetchTypeBrowser)
+		return "", fmt.Errorf("%w: %s", errInvalidFetchType, ft)
+	}
+	return ft, nil
+}
+
+func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
+	ft, err := validatePluginSpec(raw)
+	if err != nil {
+		return nil, err
 	}
 	out := &compiledPlugin{
 		version:    raw.Version,
@@ -189,7 +234,6 @@ func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
 		fetchType:  ft,
 		hosts:      append([]string(nil), raw.Hosts...),
 	}
-	var err error
 	if out.precheck, err = compilePrecheck(raw.Precheck); err != nil {
 		return nil, err
 	}
@@ -219,7 +263,7 @@ func compilePlugin(raw *PluginSpec) (*compiledPlugin, error) {
 
 func compilePrecheck(raw *PrecheckSpec) (*compiledPrecheck, error) {
 	if raw == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil spec means no precheck configured
 	}
 	out := &compiledPrecheck{
 		numberPatterns: append([]string(nil), raw.NumberPatterns...),
@@ -235,29 +279,38 @@ func compilePrecheck(raw *PrecheckSpec) (*compiledPrecheck, error) {
 	return out, nil
 }
 
+func compileTemplateMap(raw map[string]string) (map[string]*template, error) {
+	out := make(map[string]*template, len(raw))
+	for k, v := range raw {
+		t, err := compileTemplate(v)
+		if err != nil {
+			return nil, err
+		}
+		out[k] = t
+	}
+	return out, nil
+}
+
 func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 	if raw == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil spec means no request configured
 	}
 	if raw.Method == "" {
-		return nil, fmt.Errorf("request method is required")
+		return nil, errRequestMethodRequired
 	}
 	if raw.Path == "" && raw.URL == "" {
-		return nil, fmt.Errorf("request path or url is required")
+		return nil, errRequestPathOrURLRequired
 	}
 	if raw.Path != "" && raw.URL != "" {
-		return nil, fmt.Errorf("request path and url are mutually exclusive")
+		return nil, errRequestPathAndURLExclusive
 	}
 	out := &compiledRequest{
 		method:              strings.ToUpper(raw.Method),
-		query:               make(map[string]*template, len(raw.Query)),
-		headers:             make(map[string]*template, len(raw.Headers)),
-		cookies:             make(map[string]*template, len(raw.Cookies)),
 		acceptStatusCodes:   append([]int(nil), raw.AcceptStatusCodes...),
 		notFoundStatusCodes: append([]int(nil), raw.NotFoundStatusCodes...),
 	}
 	if out.method != http.MethodGet && out.method != http.MethodPost {
-		return nil, fmt.Errorf("unsupported request method:%s", out.method)
+		return nil, fmt.Errorf("%w: %s", errUnsupportedRequestMethod, out.method)
 	}
 	var err error
 	if raw.Path != "" {
@@ -270,33 +323,19 @@ func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 			return nil, err
 		}
 	}
-	for k, v := range raw.Query {
-		t, err := compileTemplate(v)
-		if err != nil {
-			return nil, err
-		}
-		out.query[k] = t
+	if out.query, err = compileTemplateMap(raw.Query); err != nil {
+		return nil, err
 	}
-	for k, v := range raw.Headers {
-		t, err := compileTemplate(v)
-		if err != nil {
-			return nil, err
-		}
-		out.headers[k] = t
+	if out.headers, err = compileTemplateMap(raw.Headers); err != nil {
+		return nil, err
 	}
-	for k, v := range raw.Cookies {
-		t, err := compileTemplate(v)
-		if err != nil {
-			return nil, err
-		}
-		out.cookies[k] = t
+	if out.cookies, err = compileTemplateMap(raw.Cookies); err != nil {
+		return nil, err
 	}
 	if raw.Body != nil {
-		body, err := compileRequestBody(raw.Body)
-		if err != nil {
+		if out.body, err = compileRequestBody(raw.Body); err != nil {
 			return nil, err
 		}
-		out.body = body
 	}
 	if raw.Response != nil {
 		out.decodeCharset = strings.ToLower(strings.TrimSpace(raw.Response.DecodeCharset))
@@ -315,7 +354,7 @@ func compileRequestBody(raw *RequestBodySpec) (*compiledRequestBody, error) {
 	switch raw.Kind {
 	case bodyKindForm, bodyKindJSON, bodyKindRaw:
 	default:
-		return nil, fmt.Errorf("unsupported body kind:%s", raw.Kind)
+		return nil, fmt.Errorf("%w: %s", errUnsupportedBodyKind, raw.Kind)
 	}
 	for k, v := range raw.Values {
 		t, err := compileTemplate(v)
@@ -336,20 +375,20 @@ func compileRequestBody(raw *RequestBodySpec) (*compiledRequestBody, error) {
 
 func compileWorkflow(raw *WorkflowSpec) (*compiledSearchSelectWorkflow, error) {
 	if raw == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil spec means no workflow configured
 	}
 	if raw.SearchSelect != nil {
 		return compileSearchSelect(raw.SearchSelect)
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // no search_select means no workflow
 }
 
 func compileSearchSelect(raw *SearchSelectWorkflowSpec) (*compiledSearchSelectWorkflow, error) {
 	if len(raw.Selectors) < 1 {
-		return nil, fmt.Errorf("search_select requires at least 1 selector")
+		return nil, errSearchSelectRequiresSelector
 	}
 	if raw.NextRequest == nil {
-		return nil, fmt.Errorf("search_select next_request is required")
+		return nil, errSearchSelectNextRequestRequired
 	}
 	nextReq, err := compileRequest(raw.NextRequest)
 	if err != nil {
@@ -371,7 +410,7 @@ func compileSearchSelect(raw *SearchSelectWorkflowSpec) (*compiledSearchSelectWo
 	}
 	for _, item := range raw.Selectors {
 		if item.Kind != "xpath" {
-			return nil, fmt.Errorf("unsupported selector kind:%s", item.Kind)
+			return nil, fmt.Errorf("%w: %s", errUnsupportedSelectorKind, item.Kind)
 		}
 		out.selectors = append(out.selectors, &compiledSelectorList{
 			name: item.Name,
@@ -393,10 +432,10 @@ func compileSearchSelect(raw *SearchSelectWorkflowSpec) (*compiledSearchSelectWo
 
 func compileMultiRequest(raw *MultiRequestSpec) (*compiledMultiRequest, error) {
 	if len(raw.Candidates) == 0 {
-		return nil, fmt.Errorf("multi_request candidates is required")
+		return nil, errMultiRequestCandidatesRequired
 	}
 	if raw.Request == nil {
-		return nil, fmt.Errorf("multi_request request is required")
+		return nil, errMultiRequestRequestRequired
 	}
 	req, err := compileRequest(raw.Request)
 	if err != nil {
@@ -423,29 +462,32 @@ func compileMultiRequest(raw *MultiRequestSpec) (*compiledMultiRequest, error) {
 
 func compileScrape(raw *ScrapeSpec) (*compiledScrape, error) {
 	if raw == nil {
-		return nil, fmt.Errorf("scrape is required")
+		return nil, errScrapeRequired
 	}
 	if raw.Format != formatHTML && raw.Format != formatJSON {
-		return nil, fmt.Errorf("unsupported scrape format:%s", raw.Format)
+		return nil, fmt.Errorf("%w: %s", errUnsupportedScrapeFormat, raw.Format)
 	}
 	if len(raw.Fields) == 0 {
-		return nil, fmt.Errorf("scrape fields is required")
+		return nil, errScrapeFieldsRequired
 	}
 	out := &compiledScrape{format: raw.Format}
-	ordered := []string{"number", "title", "plot", "actors", "release_date", "duration", "studio", "label", "director", "series", "genres", "cover", "poster", "sample_images"}
+	ordered := []string{
+		"number", "title", "plot", "actors", "release_date", "duration", "studio", "label", "director",
+		"series", "genres", "cover", "poster", "sample_images",
+	}
 	for _, name := range ordered {
 		spec, ok := raw.Fields[name]
 		if !ok {
 			continue
 		}
 		if spec.Selector == nil {
-			return nil, fmt.Errorf("field %s selector is required", name)
+			return nil, fmt.Errorf("field %s: %w", name, errFieldSelectorRequired)
 		}
 		if raw.Format == formatHTML && spec.Selector.Kind != "xpath" {
-			return nil, fmt.Errorf("field %s selector kind unsupported:%s", name, spec.Selector.Kind)
+			return nil, fmt.Errorf("field %s %w: %s", name, errFieldSelectorKindUnsupported, spec.Selector.Kind)
 		}
 		if raw.Format == formatJSON && spec.Selector.Kind != "jsonpath" {
-			return nil, fmt.Errorf("field %s selector kind unsupported:%s", name, spec.Selector.Kind)
+			return nil, fmt.Errorf("field %s %w: %s", name, errFieldSelectorKindUnsupported, spec.Selector.Kind)
 		}
 		out.fields = append(out.fields, &compiledField{
 			name: name,
@@ -463,7 +505,7 @@ func compileScrape(raw *ScrapeSpec) (*compiledScrape, error) {
 
 func compilePostprocess(raw *PostprocessSpec) (*compiledPostprocess, error) {
 	if raw == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil spec means no postprocess configured
 	}
 	out := &compiledPostprocess{
 		assign:       make(map[string]*template, len(raw.Assign)),
@@ -480,11 +522,11 @@ func compilePostprocess(raw *PostprocessSpec) (*compiledPostprocess, error) {
 	return out, nil
 }
 
-func (p *YAMLSearchPlugin) OnGetHosts(ctx context.Context) []string {
+func (p *SearchPlugin) OnGetHosts(_ context.Context) []string {
 	return append([]string(nil), p.spec.hosts...)
 }
 
-func (p *YAMLSearchPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
+func (p *SearchPlugin) OnPrecheckRequest(ctx context.Context, number string) (bool, error) {
 	if p.spec.precheck == nil {
 		return true, nil
 	}
@@ -516,14 +558,18 @@ func (p *YAMLSearchPlugin) OnPrecheckRequest(ctx context.Context, number string)
 	return true, nil
 }
 
-func (p *YAMLSearchPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
+func (p *SearchPlugin) OnMakeHTTPRequest(ctx context.Context, number string) (*http.Request, error) {
 	host := pluginapi.MustSelectDomain(p.spec.hosts)
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
 	if p.spec.request == nil {
 		if p.spec.multiRequest == nil {
-			return nil, fmt.Errorf("request is nil")
+			return nil, errRequestNil
 		}
-		return http.NewRequestWithContext(ctx, http.MethodGet, host, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, host, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create placeholder request: %w", err)
+		}
+		return req, nil
 	}
 	return p.buildRequest(ctx, p.spec.request, &evalContext{
 		number: number,
@@ -532,11 +578,14 @@ func (p *YAMLSearchPlugin) OnMakeHTTPRequest(ctx context.Context, number string)
 	})
 }
 
-func (p *YAMLSearchPlugin) OnDecorateRequest(ctx context.Context, req *http.Request) error {
+func (p *SearchPlugin) OnDecorateRequest(_ context.Context, _ *http.Request) error {
 	return nil
 }
 
-func (p *YAMLSearchPlugin) OnHandleHTTPRequest(ctx context.Context, invoker pluginapi.HTTPInvoker, req *http.Request) (*http.Response, error) {
+func (p *SearchPlugin) OnHandleHTTPRequest(ctx context.Context, invoker pluginapi.HTTPInvoker, req *http.Request) (
+	*http.Response,
+	error,
+) {
 	evalCtx := &evalContext{
 		number: ctxNumber(ctx),
 		host:   currentHost(ctx, p.spec.hosts),
@@ -558,7 +607,7 @@ func (p *YAMLSearchPlugin) OnHandleHTTPRequest(ctx context.Context, invoker plug
 	return p.spec.workflow.handleRequest(ctx, p, invoker, req, evalCtx)
 }
 
-func (p *YAMLSearchPlugin) OnPrecheckResponse(ctx context.Context, req *http.Request, rsp *http.Response) (bool, error) {
+func (p *SearchPlugin) OnPrecheckResponse(_ context.Context, _ *http.Request, rsp *http.Response) (bool, error) {
 	finalReq := p.spec.finalRequest()
 	if finalReq == nil {
 		if rsp.StatusCode == http.StatusNotFound {
@@ -579,10 +628,10 @@ func (p *YAMLSearchPlugin) OnPrecheckResponse(ctx context.Context, req *http.Req
 			return true, nil
 		}
 	}
-	return false, fmt.Errorf("status code:%d not in accept list", rsp.StatusCode)
+	return false, fmt.Errorf("status code %d: %w", rsp.StatusCode, errStatusCodeNotAccepted)
 }
 
-func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
+func (p *SearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*model.MovieMeta, bool, error) {
 	finalReq := p.spec.finalRequest()
 	decoded, err := decodeBytes(data, finalReq.decodeCharset)
 	if err != nil {
@@ -593,7 +642,7 @@ func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*
 	case formatHTML:
 		node, err := htmlquery.Parse(bytes.NewReader(decoded))
 		if err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("parse html failed: %w", err)
 		}
 		mv, err = p.decodeHTML(ctx, node)
 		if err != nil {
@@ -605,7 +654,7 @@ func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*
 			return nil, false, err
 		}
 	default:
-		return nil, false, fmt.Errorf("unsupported scrape format:%s", p.spec.scrape.format)
+		return nil, false, fmt.Errorf("%w: %s", errUnsupportedScrapeFormat, p.spec.scrape.format)
 	}
 	if mv == nil {
 		return nil, false, nil
@@ -614,7 +663,7 @@ func (p *YAMLSearchPlugin) OnDecodeHTTPData(ctx context.Context, data []byte) (*
 	return mv, true, nil
 }
 
-func (p *YAMLSearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
+func (p *SearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http.Request) error {
 	baseReq := p.spec.finalRequest()
 	if baseReq == nil {
 		return nil
@@ -647,7 +696,13 @@ func (p *YAMLSearchPlugin) OnDecorateMediaRequest(ctx context.Context, req *http
 	return nil
 }
 
-func (w *compiledSearchSelectWorkflow) handleRequest(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, req *http.Request, evalCtx *evalContext) (*http.Response, error) {
+func (w *compiledSearchSelectWorkflow) handleRequest(
+	ctx context.Context,
+	plg *SearchPlugin,
+	invoker pluginapi.HTTPInvoker,
+	req *http.Request,
+	evalCtx *evalContext,
+) (*http.Response, error) {
 	rsp, err := invoker(ctx, req)
 	if err != nil {
 		return nil, err
@@ -655,25 +710,20 @@ func (w *compiledSearchSelectWorkflow) handleRequest(ctx context.Context, plg *Y
 	return w.handleResponse(ctx, plg, invoker, rsp, evalCtx, plg.spec.request.decodeCharset)
 }
 
-func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, rsp *http.Response, evalCtx *evalContext, decodeCharset string) (*http.Response, error) {
-	body, node, err := readResponseBody(rsp, decodeCharset)
-	if err != nil {
-		return nil, err
-	}
+func checkBaseResponseStatus(plg *SearchPlugin, statusCode int) error {
 	if pReq := plg.spec.request; pReq != nil {
-		if err := checkAcceptedStatus(pReq, rsp.StatusCode); err != nil {
-			return nil, err
-		}
-	} else if pReq := plg.spec.multiRequest; pReq != nil {
-		if err := checkAcceptedStatus(pReq.request, rsp.StatusCode); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, err
+		return checkAcceptedStatus(pReq, statusCode)
 	}
-	results := make(map[string][]string, len(w.selectors))
+	if pReq := plg.spec.multiRequest; pReq != nil {
+		return checkAcceptedStatus(pReq.request, statusCode)
+	}
+	return nil
+}
+
+func collectSelectorResults(node *html.Node, selectors []*compiledSelectorList) (map[string][]string, int, error) {
+	results := make(map[string][]string, len(selectors))
 	expectedLen := -1
-	for _, sel := range w.selectors {
+	for _, sel := range selectors {
 		items := decoder.DecodeList(node, sel.expr)
 		results[sel.name] = items
 		if expectedLen == -1 {
@@ -681,9 +731,15 @@ func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *
 			continue
 		}
 		if expectedLen != len(items) {
-			return nil, fmt.Errorf("selector result count mismatch")
+			return results, expectedLen, errSelectorCountMismatch
 		}
 	}
+	return results, expectedLen, nil
+}
+
+func (w *compiledSearchSelectWorkflow) matchItems(
+	evalCtx *evalContext, results map[string][]string, body string, node *html.Node, expectedLen int,
+) ([]*evalContext, error) {
 	matched := make([]*evalContext, 0, expectedLen)
 	for i := 0; i < expectedLen; i++ {
 		itemCtx := &evalContext{
@@ -708,18 +764,16 @@ func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			continue
+		if ok {
+			matched = append(matched, itemCtx)
 		}
-		matched = append(matched, itemCtx)
 	}
-	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
-		return nil, fmt.Errorf("search_select matched count mismatch, got:%d expect:%d", len(matched), w.match.expectCount)
-	}
-	if len(matched) == 0 {
-		return nil, fmt.Errorf("no search_select result matched")
-	}
-	itemCtx := matched[0]
+	return matched, nil
+}
+
+func (w *compiledSearchSelectWorkflow) followNextRequest(
+	ctx context.Context, plg *SearchPlugin, invoker pluginapi.HTTPInvoker, itemCtx *evalContext,
+) (*http.Response, error) {
 	value, err := w.ret.Render(itemCtx)
 	if err != nil {
 		return nil, err
@@ -742,7 +796,44 @@ func (w *compiledSearchSelectWorkflow) handleResponse(ctx context.Context, plg *
 	return nextRsp, nil
 }
 
-func (w *compiledMultiRequest) handle(ctx context.Context, plg *YAMLSearchPlugin, invoker pluginapi.HTTPInvoker, evalCtx *evalContext) (*http.Response, error) {
+func (w *compiledSearchSelectWorkflow) handleResponse(
+	ctx context.Context,
+	plg *SearchPlugin,
+	invoker pluginapi.HTTPInvoker,
+	rsp *http.Response,
+	evalCtx *evalContext,
+	decodeCharset string,
+) (*http.Response, error) {
+	body, node, err := readResponseBody(rsp, decodeCharset)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkBaseResponseStatus(plg, rsp.StatusCode); err != nil {
+		return nil, err
+	}
+	results, expectedLen, err := collectSelectorResults(node, w.selectors)
+	if err != nil {
+		return nil, err
+	}
+	matched, err := w.matchItems(evalCtx, results, body, node, expectedLen)
+	if err != nil {
+		return nil, err
+	}
+	if w.match != nil && w.match.expectCount > 0 && len(matched) != w.match.expectCount {
+		return nil, fmt.Errorf("got %d expect %d: %w", len(matched), w.match.expectCount, errSearchSelectCountMismatch)
+	}
+	if len(matched) == 0 {
+		return nil, errNoSearchSelectMatched
+	}
+	return w.followNextRequest(ctx, plg, invoker, matched[0])
+}
+
+func (w *compiledMultiRequest) handle(
+	ctx context.Context,
+	plg *SearchPlugin,
+	invoker pluginapi.HTTPInvoker,
+	evalCtx *evalContext,
+) (*http.Response, error) {
 	seen := map[string]struct{}{}
 	for _, candidateTmpl := range w.candidates {
 		candidate, err := candidateTmpl.Render(evalCtx)
@@ -784,71 +875,80 @@ func (w *compiledMultiRequest) handle(ctx context.Context, plg *YAMLSearchPlugin
 		rsp.Body = io.NopCloser(bytes.NewReader([]byte(body)))
 		return rsp, nil
 	}
-	return nil, fmt.Errorf("no multi_request matched")
+	return nil, errNoMultiRequestMatched
 }
 
-func (p *YAMLSearchPlugin) buildRequest(ctx context.Context, spec *compiledRequest, evalCtx *evalContext) (*http.Request, error) {
-	if evalCtx.host == "" {
-		evalCtx.host = currentHost(ctx, p.spec.hosts)
-	}
-	targetURL := ""
-	var err error
+func resolveRequestURL(spec *compiledRequest, evalCtx *evalContext) (string, error) {
 	if spec.rawURL != nil {
-		targetURL, err = spec.rawURL.Render(evalCtx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		path, err := spec.path.Render(evalCtx)
-		if err != nil {
-			return nil, err
-		}
-		targetURL = buildURL(evalCtx.host, path)
+		return spec.rawURL.Render(evalCtx)
 	}
-	var body io.Reader
-	switch {
-	case spec.body == nil:
-	case spec.body.kind == bodyKindForm:
-		vals := url.Values{}
-		for key, tmpl := range spec.body.values {
-			rendered, err := tmpl.Render(evalCtx)
-			if err != nil {
-				return nil, err
-			}
-			vals.Set(key, rendered)
-		}
-		body = strings.NewReader(vals.Encode())
-	case spec.body.kind == bodyKindJSON:
-		payload := map[string]string{}
-		for key, tmpl := range spec.body.values {
-			rendered, err := tmpl.Render(evalCtx)
-			if err != nil {
-				return nil, err
-			}
-			payload[key] = rendered
-		}
-		raw, err := json.Marshal(payload)
-		if err != nil {
-			return nil, err
-		}
-		body = bytes.NewReader(raw)
-	case spec.body.kind == bodyKindRaw:
-		if spec.body.content != nil {
-			rendered, err := spec.body.content.Render(evalCtx)
-			if err != nil {
-				return nil, err
-			}
-			body = strings.NewReader(rendered)
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, spec.method, targetURL, body)
+	path, err := spec.path.Render(evalCtx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	for key, tmpl := range spec.query {
+	return buildURL(evalCtx.host, path), nil
+}
+
+func buildRequestBodyReader(spec *compiledRequest, evalCtx *evalContext) (io.Reader, error) {
+	if spec.body == nil {
+		return nil, nil //nolint:nilnil // nil body means no request body
+	}
+	switch spec.body.kind {
+	case bodyKindForm:
+		return renderFormBody(spec.body, evalCtx)
+	case bodyKindJSON:
+		return renderJSONBody(spec.body, evalCtx)
+	case bodyKindRaw:
+		return renderRawBody(spec.body, evalCtx)
+	default:
+		return nil, nil //nolint:nilnil // unknown body kind
+	}
+}
+
+func renderFormBody(body *compiledRequestBody, evalCtx *evalContext) (io.Reader, error) {
+	vals := url.Values{}
+	for key, tmpl := range body.values {
 		rendered, err := tmpl.Render(evalCtx)
 		if err != nil {
 			return nil, err
+		}
+		vals.Set(key, rendered)
+	}
+	return strings.NewReader(vals.Encode()), nil
+}
+
+func renderJSONBody(body *compiledRequestBody, evalCtx *evalContext) (io.Reader, error) {
+	payload := map[string]string{}
+	for key, tmpl := range body.values {
+		rendered, err := tmpl.Render(evalCtx)
+		if err != nil {
+			return nil, err
+		}
+		payload[key] = rendered
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal json body: %w", err)
+	}
+	return bytes.NewReader(raw), nil
+}
+
+func renderRawBody(body *compiledRequestBody, evalCtx *evalContext) (io.Reader, error) {
+	if body.content == nil {
+		return nil, nil //nolint:nilnil // nil body for raw without content
+	}
+	rendered, err := body.content.Render(evalCtx)
+	if err != nil {
+		return nil, err
+	}
+	return strings.NewReader(rendered), nil
+}
+
+func applyRequestParams(req *http.Request, spec *compiledRequest, evalCtx *evalContext) error {
+	for key, tmpl := range spec.query {
+		rendered, err := tmpl.Render(evalCtx)
+		if err != nil {
+			return err
 		}
 		q := req.URL.Query()
 		q.Set(key, rendered)
@@ -857,49 +957,83 @@ func (p *YAMLSearchPlugin) buildRequest(ctx context.Context, spec *compiledReque
 	for key, tmpl := range spec.headers {
 		rendered, err := tmpl.Render(evalCtx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		req.Header.Set(key, rendered)
 	}
 	for key, tmpl := range spec.cookies {
 		rendered, err := tmpl.Render(evalCtx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		req.AddCookie(&http.Cookie{Name: key, Value: rendered})
 	}
-	if spec.body != nil {
-		switch spec.body.kind {
-		case bodyKindForm:
-			if req.Header.Get("Content-Type") == "" {
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			}
-		case bodyKindJSON:
-			if req.Header.Get("Content-Type") == "" {
-				req.Header.Set("Content-Type", "application/json")
+	return nil
+}
+
+func setBodyContentType(req *http.Request, spec *compiledRequest) {
+	if spec.body == nil {
+		return
+	}
+	switch spec.body.kind {
+	case bodyKindForm:
+		if req.Header.Get("Content-Type") == "" {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	case bodyKindJSON:
+		if req.Header.Get("Content-Type") == "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+	}
+}
+
+func (p *SearchPlugin) applyBrowserContext(req *http.Request, spec *compiledRequest) *http.Request {
+	if p.spec.fetchType != fetchTypeBrowser {
+		return req
+	}
+	params := &browser.Params{}
+	if spec.browser != nil {
+		params.WaitSelector = spec.browser.waitSelector
+		params.WaitTimeout = spec.browser.waitTimeout
+	}
+	if len(spec.headers) > 0 {
+		params.Headers = make(http.Header, len(spec.headers))
+		for key := range spec.headers {
+			if v := req.Header.Get(key); v != "" {
+				params.Headers.Set(key, v)
 			}
 		}
 	}
-	if p.spec.fetchType == fetchTypeBrowser {
-		params := &browser.Params{}
-		if spec.browser != nil {
-			params.WaitSelector = spec.browser.waitSelector
-			params.WaitTimeout = spec.browser.waitTimeout
-		}
-		if len(spec.headers) > 0 {
-			params.Headers = make(http.Header, len(spec.headers))
-			for key := range spec.headers {
-				if v := req.Header.Get(key); v != "" {
-					params.Headers.Set(key, v)
-				}
-			}
-		}
-		req = req.WithContext(browser.WithParams(req.Context(), params))
+	return req.WithContext(browser.WithParams(req.Context(), params))
+}
+
+func (p *SearchPlugin) buildRequest(
+	ctx context.Context, spec *compiledRequest, evalCtx *evalContext,
+) (*http.Request, error) {
+	if evalCtx.host == "" {
+		evalCtx.host = currentHost(ctx, p.spec.hosts)
 	}
+	targetURL, err := resolveRequestURL(spec, evalCtx)
+	if err != nil {
+		return nil, err
+	}
+	body, err := buildRequestBodyReader(spec, evalCtx)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, spec.method, targetURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("create http request: %w", err)
+	}
+	if err := applyRequestParams(req, spec, evalCtx); err != nil {
+		return nil, err
+	}
+	setBodyContentType(req, spec)
+	req = p.applyBrowserContext(req, spec)
 	return req, nil
 }
 
-func (p *YAMLSearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*model.MovieMeta, error) {
+func (p *SearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*model.MovieMeta, error) {
 	mv := &model.MovieMeta{
 		Cover:  &model.File{},
 		Poster: &model.File{},
@@ -910,7 +1044,7 @@ func (p *YAMLSearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*mo
 			values := decoder.DecodeList(node, field.selector.expr)
 			values = applyListTransforms(values, field.transforms)
 			if field.required && len(values) == 0 {
-				return nil, nil
+				return nil, nil //nolint:nilnil // nil signals "not found" to caller
 			}
 			if err := assignListField(ctx, mv, field.name, values, field.parser); err != nil {
 				return nil, err
@@ -919,7 +1053,7 @@ func (p *YAMLSearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*mo
 			value := decoder.DecodeSingle(node, field.selector.expr)
 			value = applyStringTransforms(value, field.transforms)
 			if field.required && strings.TrimSpace(value) == "" {
-				return nil, nil
+				return nil, nil //nolint:nilnil // nil signals "not found" to caller
 			}
 			if err := assignStringField(ctx, mv, field.name, value, field.parser); err != nil {
 				return nil, err
@@ -929,7 +1063,7 @@ func (p *YAMLSearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*mo
 	return mv, nil
 }
 
-func (p *YAMLSearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.MovieMeta, error) {
+func (p *SearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.MovieMeta, error) {
 	var doc any
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("decode json data failed, err:%w", err)
@@ -947,7 +1081,7 @@ func (p *YAMLSearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.
 		case "actors", "genres", "sample_images":
 			values = applyListTransforms(values, field.transforms)
 			if field.required && len(values) == 0 {
-				return nil, nil
+				return nil, nil //nolint:nilnil // nil signals "not found" to caller
 			}
 			if err := assignListField(ctx, mv, field.name, values, field.parser); err != nil {
 				return nil, err
@@ -959,7 +1093,7 @@ func (p *YAMLSearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.
 			}
 			value = applyStringTransforms(value, field.transforms)
 			if field.required && strings.TrimSpace(value) == "" {
-				return nil, nil
+				return nil, nil //nolint:nilnil // nil signals "not found" to caller
 			}
 			if err := assignStringField(ctx, mv, field.name, value, field.parser); err != nil {
 				return nil, err
@@ -969,54 +1103,65 @@ func (p *YAMLSearchPlugin) decodeJSON(ctx context.Context, data []byte) (*model.
 	return mv, nil
 }
 
-func assignStringField(ctx context.Context, mv *model.MovieMeta, field, value string, parserSpec ParserSpec) error {
-	switch parserSpec.Kind {
-	case "", "string":
-		switch field {
-		case "number":
-			mv.Number = value
-		case "title":
-			mv.Title = value
-		case "plot":
-			mv.Plot = value
-		case "studio":
-			mv.Studio = value
-		case "label":
-			mv.Label = value
-		case "director":
-			mv.Director = value
-		case "series":
-			mv.Series = value
-		case "cover":
-			mv.Cover.Name = value
-		case "poster":
-			mv.Poster.Name = value
-		}
-	case "date_only":
-		mv.ReleaseDate = parser.DateOnlyReleaseDateParser(ctx)(value)
+func assignStringFieldByName(mv *model.MovieMeta, field, value string) {
+	switch field {
+	case "number":
+		mv.Number = value
+	case "title":
+		mv.Title = value
+	case "plot":
+		mv.Plot = value
+	case "studio":
+		mv.Studio = value
+	case "label":
+		mv.Label = value
+	case "director":
+		mv.Director = value
+	case "series":
+		mv.Series = value
+	case "cover":
+		mv.Cover.Name = value
+	case "poster":
+		mv.Poster.Name = value
+	}
+}
+
+func parseDurationMMSS(value string) int64 {
+	value = strings.TrimSpace(value)
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return 0
+	}
+	minutes, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil {
+		return 0
+	}
+	sec, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return minutes*60 + sec
+}
+
+func parseDurationByKind(ctx context.Context, kind, value string) int64 {
+	switch kind {
 	case "duration_default":
-		mv.Duration = parser.DefaultDurationParser(ctx)(value)
+		return parser.DefaultDurationParser(ctx)(value)
 	case "duration_hhmmss":
-		mv.Duration = parser.DefaultHHMMSSDurationParser(ctx)(value)
+		return parser.DefaultHHMMSSDurationParser(ctx)(value)
 	case "duration_mm":
-		mv.Duration = parser.DefaultMMDurationParser(ctx)(value)
+		return parser.DefaultMMDurationParser(ctx)(value)
 	case "duration_human":
-		mv.Duration = parser.HumanDurationToSecond(value)
+		return parser.HumanDurationToSecond(value)
 	case "duration_mmss":
-		value = strings.TrimSpace(value)
-		parts := strings.Split(value, ":")
-		if len(parts) != 2 {
-			return nil
-		}
-		min, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
-		if err != nil {
-			return nil
-		}
-		sec, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
-		if err != nil {
-			return nil
-		}
-		mv.Duration = min*60 + sec
+		return parseDurationMMSS(value)
+	default:
+		return 0
+	}
+}
+
+func assignDateField(mv *model.MovieMeta, field string, parserSpec ParserSpec, value string) error {
+	switch parserSpec.Kind {
 	case "time_format":
 		t, err := timeParse(parserSpec.Layout, value)
 		if err != nil {
@@ -1029,13 +1174,29 @@ func assignStringField(ctx context.Context, mv *model.MovieMeta, field, value st
 		if field == "release_date" {
 			mv.ReleaseDate = softTimeParse(parserSpec.Layout, value)
 		}
-	default:
-		return fmt.Errorf("unsupported parser:%s", parserSpec.Kind)
 	}
 	return nil
 }
 
-func assignListField(ctx context.Context, mv *model.MovieMeta, field string, values []string, parserSpec ParserSpec) error {
+func assignStringField(ctx context.Context, mv *model.MovieMeta, field, value string, parserSpec ParserSpec) error {
+	switch parserSpec.Kind {
+	case "", "string":
+		assignStringFieldByName(mv, field, value)
+	case "date_only":
+		mv.ReleaseDate = parser.DateOnlyReleaseDateParser(ctx)(value)
+	case "duration_default", "duration_hhmmss", "duration_mm", "duration_human", "duration_mmss":
+		mv.Duration = parseDurationByKind(ctx, parserSpec.Kind, value)
+	case "time_format", "date_layout_soft":
+		return assignDateField(mv, field, parserSpec, value)
+	default:
+		return fmt.Errorf("%w: %s", errUnsupportedParser, parserSpec.Kind)
+	}
+	return nil
+}
+
+func assignListField(
+	_ context.Context, mv *model.MovieMeta, field string, values []string, parserSpec ParserSpec,
+) error {
 	switch parserSpec.Kind {
 	case "", "string_list":
 		switch field {
@@ -1049,7 +1210,7 @@ func assignListField(ctx context.Context, mv *model.MovieMeta, field string, val
 			}
 		}
 	default:
-		return fmt.Errorf("unsupported list parser:%s", parserSpec.Kind)
+		return fmt.Errorf("%w: %s", errUnsupportedListParser, parserSpec.Kind)
 	}
 	return nil
 }
@@ -1096,59 +1257,62 @@ func applyStringTransforms(value string, transforms []*TransformSpec) string {
 	return out
 }
 
-func applyListTransforms(values []string, transforms []*TransformSpec) []string {
-	out := append([]string(nil), values...)
-	for _, item := range transforms {
-		switch item.Kind {
-		case "remove_empty":
-			filtered := make([]string, 0, len(out))
-			for _, value := range out {
-				if strings.TrimSpace(value) == "" {
-					continue
-				}
+func applyOneListTransform(out []string, item *TransformSpec) []string {
+	switch item.Kind {
+	case "remove_empty":
+		filtered := make([]string, 0, len(out))
+		for _, value := range out {
+			if strings.TrimSpace(value) != "" {
 				filtered = append(filtered, value)
 			}
-			out = filtered
-		case "dedupe":
-			seen := make(map[string]struct{}, len(out))
-			deduped := make([]string, 0, len(out))
-			for _, value := range out {
-				if _, ok := seen[value]; ok {
-					continue
-				}
-				seen[value] = struct{}{}
-				deduped = append(deduped, value)
+		}
+		return filtered
+	case "dedupe":
+		seen := make(map[string]struct{}, len(out))
+		deduped := make([]string, 0, len(out))
+		for _, value := range out {
+			if _, ok := seen[value]; ok {
+				continue
 			}
-			out = deduped
-		case "map_trim":
-			for i, value := range out {
-				out[i] = strings.TrimSpace(value)
-			}
-		case "replace":
-			for i, value := range out {
-				out[i] = strings.ReplaceAll(value, item.Old, item.New)
-			}
-		case "split":
-			split := make([]string, 0, len(out))
-			for _, value := range out {
-				parts := strings.Split(value, item.Sep)
-				split = append(split, parts...)
-			}
-			out = split
-		case "to_upper":
-			for i, value := range out {
-				out[i] = strings.ToUpper(value)
-			}
-		case "to_lower":
-			for i, value := range out {
-				out[i] = strings.ToLower(value)
-			}
+			seen[value] = struct{}{}
+			deduped = append(deduped, value)
+		}
+		return deduped
+	case "map_trim":
+		for i, value := range out {
+			out[i] = strings.TrimSpace(value)
+		}
+	case "replace":
+		for i, value := range out {
+			out[i] = strings.ReplaceAll(value, item.Old, item.New)
+		}
+	case "split":
+		split := make([]string, 0, len(out))
+		for _, value := range out {
+			split = append(split, strings.Split(value, item.Sep)...)
+		}
+		return split
+	case "to_upper":
+		for i, value := range out {
+			out[i] = strings.ToUpper(value)
+		}
+	case "to_lower":
+		for i, value := range out {
+			out[i] = strings.ToLower(value)
 		}
 	}
 	return out
 }
 
-func (p *YAMLSearchPlugin) applyPostprocess(ctx context.Context, mv *model.MovieMeta) {
+func applyListTransforms(values []string, transforms []*TransformSpec) []string {
+	out := append([]string(nil), values...)
+	for _, item := range transforms {
+		out = applyOneListTransform(out, item)
+	}
+	return out
+}
+
+func (p *SearchPlugin) applyPostprocess(ctx context.Context, mv *model.MovieMeta) {
 	if p.spec.postprocess == nil {
 		return
 	}
@@ -1185,12 +1349,12 @@ func (p *YAMLSearchPlugin) applyPostprocess(ctx context.Context, mv *model.Movie
 func checkAcceptedStatus(spec *compiledRequest, code int) error {
 	for _, item := range spec.notFoundStatusCodes {
 		if code == item {
-			return fmt.Errorf("status code:%d is not found", code)
+			return fmt.Errorf("status code %d: %w", code, errStatusCodeNotFound)
 		}
 	}
 	if len(spec.acceptStatusCodes) == 0 {
 		if code != http.StatusOK {
-			return fmt.Errorf("status code:%d not accepted", code)
+			return fmt.Errorf("status code %d: %w", code, errStatusCodeNotAccepted)
 		}
 		return nil
 	}
@@ -1199,14 +1363,14 @@ func checkAcceptedStatus(spec *compiledRequest, code int) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("status code:%d not accepted", code)
+	return fmt.Errorf("status code %d: %w", code, errStatusCodeNotAccepted)
 }
 
 func readResponseBody(rsp *http.Response, charset string) (string, *html.Node, error) {
 	defer func() { _ = rsp.Body.Close() }()
 	raw, err := client.ReadHTTPData(rsp)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("read response body: %w", err)
 	}
 	decoded, err := decodeBytes(raw, charset)
 	if err != nil {
@@ -1214,7 +1378,7 @@ func readResponseBody(rsp *http.Response, charset string) (string, *html.Node, e
 	}
 	node, err := htmlquery.Parse(bytes.NewReader(decoded))
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("parse html: %w", err)
 	}
 	return string(decoded), node, nil
 }
@@ -1225,9 +1389,13 @@ func decodeBytes(data []byte, charset string) ([]byte, error) {
 		return data, nil
 	case "euc-jp":
 		reader := transform.NewReader(bytes.NewReader(data), japanese.EUCJP.NewDecoder())
-		return io.ReadAll(reader)
+		out, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, fmt.Errorf("decode euc-jp: %w", err)
+		}
+		return out, nil
 	default:
-		return nil, fmt.Errorf("unsupported charset:%s", charset)
+		return nil, fmt.Errorf("%w: %s", errUnsupportedCharset, charset)
 	}
 }
 
@@ -1300,13 +1468,13 @@ func currentHost(ctx context.Context, hosts []string) string {
 }
 
 func ctxNumber(ctx context.Context) string {
-	return meta.GetNumberId(ctx)
+	return meta.GetNumberID(ctx)
 }
 
 func regexpMatch(pattern, value string) (bool, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("compile regexp: %w", err)
 	}
 	return re.MatchString(value), nil
 }
@@ -1314,7 +1482,7 @@ func regexpMatch(pattern, value string) (bool, error) {
 func timeParse(layout, value string) (int64, error) {
 	t, err := time.Parse(layout, strings.TrimSpace(value))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parse time %q: %w", value, err)
 	}
 	return t.UnixMilli(), nil
 }

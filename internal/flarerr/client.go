@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,8 +17,12 @@ import (
 	"go.uber.org/zap"
 )
 
-//基于flaresolverr实现
+var (
+	errFlareOnlyGET        = errors.New("flare request only supports GET method")
+	errFlareResponseStatus = errors.New("flare response status error")
+)
 
+// 基于flaresolverr实现
 const (
 	defaultByPassClientTimeout = 40 * time.Second
 )
@@ -37,12 +42,12 @@ type solverClient struct {
 
 func (b *solverClient) convertRequest(oreq *http.Request) (*flareRequest, error) {
 	if oreq.Method != http.MethodGet {
-		return nil, fmt.Errorf("flare request only support GET method, got %s", oreq.Method)
+		return nil, fmt.Errorf("%w, got %s", errFlareOnlyGET, oreq.Method)
 	}
 
 	req := &flareRequest{
 		Cmd:        "request.get",
-		Url:        oreq.URL.String(),
+		URL:        oreq.URL.String(),
 		MaxTimeout: int(b.timeout.Milliseconds()),
 	}
 
@@ -60,7 +65,7 @@ func (b *solverClient) AddHost(host string) error {
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
 		uri, err := url.Parse(host)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse host url: %w", err)
 		}
 		host = uri.Host
 	}
@@ -74,9 +79,10 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 		return nil, err
 	}
 	body, _ := json.Marshal(fr)
+	//nolint:gosec,noctx // internal solver endpoint with controlled URL
 	resp, err := http.Post(b.endpoint+"/v1", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("post to flare solver: %w", err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -84,10 +90,10 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 
 	var frResp flareResponse
 	if err := json.NewDecoder(resp.Body).Decode(&frResp); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode flare response: %w", err)
 	}
 	if frResp.Status != "ok" {
-		return nil, fmt.Errorf("flare response status error: %s, message:%s", frResp.Status, frResp.Message)
+		return nil, fmt.Errorf("%w: %s, message: %s", errFlareResponseStatus, frResp.Status, frResp.Message)
 	}
 	// 返回一个伪造的 http.Response
 	return &http.Response{
@@ -101,16 +107,17 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 	}, nil
 }
 
-func (b *solverClient) testHost(impl client.IHTTPClient, endpoint string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func (b *solverClient) testHost(ctx context.Context, impl client.IHTTPClient, endpoint string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	//nolint:gosec // internal solver connectivity test
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("create test request: %w", err)
 	}
 	rsp, err := impl.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute test request: %w", err)
 	}
 	defer func() {
 		_ = rsp.Body.Close()
@@ -119,18 +126,24 @@ func (b *solverClient) testHost(impl client.IHTTPClient, endpoint string) error 
 }
 
 func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
-	if !b.tested { //测试通过后续就不再测试了
-		if err := b.testHost(b.impl, b.endpoint); err != nil {
+	if !b.tested { // 测试通过后续就不再测试了
+		if err := b.testHost(req.Context(), b.impl, b.endpoint); err != nil {
 			return nil, fmt.Errorf("test solver host failed, endpoint:%s, err:%w", b.endpoint, err)
 		}
 		b.tested = true
 	}
 
 	if b.isNeedByPass(req) {
-		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect", zap.String("req", req.URL.String()))
+		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect",
+			zap.String("req", req.URL.String()),
+		)
 		return b.handleByPassRequest(req)
 	}
-	return b.impl.Do(req)
+	rsp, err := b.impl.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("solver passthrough request: %w", err)
+	}
+	return rsp, nil
 }
 
 func New(impl client.IHTTPClient, endpoint string) (ICloudflareSolverClient, error) {

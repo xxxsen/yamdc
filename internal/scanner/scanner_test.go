@@ -34,7 +34,7 @@ func (c *blockingCleaner) Explain(input string) (*movieidcleaner.ExplainResult, 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {
 	ctx := context.Background()
 	scanDir := t.TempDir()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, sqlite.Close())
@@ -44,7 +44,7 @@ func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T
 	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
 
 	liveFile := filepath.Join(scanDir, "LIVE-001.mp4")
-	require.NoError(t, os.WriteFile(liveFile, []byte("x"), 0644))
+	require.NoError(t, os.WriteFile(liveFile, []byte("x"), 0o600))
 
 	require.NoError(t, repo.UpsertScannedJob(ctx, repository.UpsertJobInput{
 		FileName: "STALE-001.mp4",
@@ -91,7 +91,7 @@ func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T
 	require.Len(t, liveJobs.Items, 2)
 
 	staleJob, err := repo.GetByID(ctx, staleID)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, repository.ErrJobNotFound)
 	require.Nil(t, staleJob)
 
 	reviewJob, err := repo.GetByID(ctx, reviewID)
@@ -104,14 +104,14 @@ func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T
 func TestScanRejectsReentryWhileRunning(t *testing.T) {
 	ctx := context.Background()
 	scanDir := t.TempDir()
-	sqlite, err := repository.NewSQLite(filepath.Join(t.TempDir(), "app.db"))
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, sqlite.Close())
 	})
 
 	filePath := filepath.Join(scanDir, "HEYZO-0040.mp4")
-	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
 
 	cleaner := &blockingCleaner{
 		started: make(chan struct{}),

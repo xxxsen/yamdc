@@ -23,12 +23,27 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	errInvalidDir         = errors.New("invalid dir")
+	errNoSearcherFound    = errors.New("no searcher found")
+	errNoStorageFound     = errors.New("no storage found")
+	errInvalidNaming      = errors.New("invalid naming")
+	errSearchItemNotFound = errors.New("search item not found")
+	errNoTitle            = errors.New("no title")
+	errNoNumberFound      = errors.New("no number found")
+	errInvalidCover       = errors.New("invalid cover")
+	errInvalidPoster      = errors.New("invalid poster")
+)
+
 const (
 	defaultImageExtName   = ".jpg"
 	defaultExtraFanartDir = "extrafanart"
 )
 
-var defaultMediaSuffix = []string{".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi", ".mkv", ".rmvb", ".ts", ".mov", ".rm", ".strm"}
+var defaultMediaSuffix = []string{
+	".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi",
+	".mkv", ".rmvb", ".ts", ".mov", ".rm", ".strm",
+}
 
 type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
 
@@ -43,16 +58,16 @@ func New(opts ...Option) (*Capture, error) {
 		opt(c)
 	}
 	if len(c.SaveDir) == 0 || len(c.ScanDir) == 0 {
-		return nil, fmt.Errorf("invalid dir")
+		return nil, errInvalidDir
 	}
 	if c.Searcher == nil {
-		return nil, fmt.Errorf("no searcher found")
+		return nil, errNoSearcherFound
 	}
 	if c.Processor == nil {
 		c.Processor = processor.DefaultProcessor
 	}
 	if c.Storage == nil {
-		return nil, fmt.Errorf("no storage found")
+		return nil, errNoStorageFound
 	}
 	if c.MovieIDCleaner == nil {
 		c.MovieIDCleaner = movieidcleaner.NewPassthroughCleaner()
@@ -66,7 +81,7 @@ func New(opts ...Option) (*Capture, error) {
 	return &Capture{c: c, extMap: extMap}, nil
 }
 
-func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredNumber string) error {
+func (c *Capture) resolveFileInfo(fc *model.FileContext, file, preferredNumber string) error {
 	fc.FileName = filepath.Base(file)
 	fc.FileExt = filepath.Ext(file)
 	fileNoExt := strings.TrimSpace(preferredNumber)
@@ -85,7 +100,7 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file string, preferredN
 			fileNoExt = cleaned.Normalized
 		}
 	}
-	//影片 ID 解析
+	// 影片 ID 解析
 	info, err := number.Parse(fileNoExt)
 	if err != nil {
 		return fmt.Errorf("parse number failed, err:%w", err)
@@ -132,7 +147,7 @@ func (c *Capture) readFileList() ([]*model.FileContext, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk scan dir failed: %w", err)
 	}
 	return fcs, nil
 }
@@ -226,7 +241,10 @@ func (c *Capture) processFileList(ctx context.Context, fcs []*model.FileContext)
 			logutil.GetLogger(ctx).Error("process file failed", zap.Error(err), zap.String("file", item.FullFilePath))
 			continue
 		}
-		logutil.GetLogger(ctx).Info("process file succ", zap.String("file", item.FullFilePath), zap.Duration("cost", time.Since(start)))
+		logutil.GetLogger(ctx).Info("process file succ",
+			zap.String("file", item.FullFilePath),
+			zap.Duration("cost", time.Since(start)),
+		)
 	}
 	return outErr
 }
@@ -259,7 +277,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	}
 	naming := replacer.ReplaceByMap(c.c.Naming, m)
 	if len(naming) == 0 {
-		return fmt.Errorf("invalid naming")
+		return errInvalidNaming
 	}
 	fc.SaveDir = filepath.Join(c.c.SaveDir, naming)
 	return nil
@@ -271,52 +289,52 @@ func (c *Capture) doSearch(ctx context.Context, fc *model.FileContext) error {
 		return fmt.Errorf("search number failed, number:%s, err:%w", fc.Number.GetNumberID(), err)
 	}
 	if !ok {
-		return fmt.Errorf("search item not found")
+		return errSearchItemNotFound
 	}
 	if meta.Number != fc.Number.GetNumberID() {
-		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore", zap.String("search", meta.Number), zap.String("file", fc.Number.GetNumberID()))
+		logutil.GetLogger(ctx).Warn("number not match, may be re-generated, ignore",
+			zap.String("search", meta.Number),
+			zap.String("file", fc.Number.GetNumberID()),
+		)
 	}
 	fc.Meta = meta
 	return nil
 }
 
 func (c *Capture) doProcess(ctx context.Context, fc *model.FileContext) error {
-	//执行处理流程, 用于补齐数据或者数据转换
+	// 执行处理流程, 用于补齐数据或者数据转换
 	if err := c.c.Processor.Process(ctx, fc); err != nil {
-		//process 不作为关键路径, 一个meta能否可用取决于后续的verify逻辑
+		// process 不作为关键路径, 一个meta能否可用取决于后续的verify逻辑
 		logutil.GetLogger(ctx).Error("process meta failed, go next", zap.Error(err))
 	}
 	return nil
 }
 
-func (c *Capture) doNaming(ctx context.Context, fc *model.FileContext) error {
-	//构建保存目录地址
+func (c *Capture) doNaming(_ context.Context, fc *model.FileContext) error {
+	// 构建保存目录地址
 	if err := c.resolveSaveDir(fc); err != nil {
 		return fmt.Errorf("resolve save dir failed, err:%w", err)
 	}
-	//创建必要的目录
-	if err := os.MkdirAll(fc.SaveDir, 0755); err != nil {
+	// 创建必要的目录
+	if err := os.MkdirAll(fc.SaveDir, 0o755); err != nil {
 		return fmt.Errorf("make save dir failed, err:%w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(fc.SaveDir, defaultExtraFanartDir), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(fc.SaveDir, defaultExtraFanartDir), 0o755); err != nil {
 		return fmt.Errorf("make fanart dir failed, err:%w", err)
 	}
-	//数据重命名
-	if err := c.renameMetaField(fc); err != nil {
-		return fmt.Errorf("rename meta field failed, err:%w", err)
-	}
+	c.renameMetaField(fc)
 	return nil
 }
 
 func (c *Capture) doSaveData(ctx context.Context, fc *model.FileContext) error {
-	//保存元数据并将影片移入指定目录
+	// 保存元数据并将影片移入指定目录
 	if err := c.saveMediaData(ctx, fc); err != nil {
 		return fmt.Errorf("save meta data failed, err:%w", err)
 	}
 	return nil
 }
 
-func (c *Capture) doExport(ctx context.Context, fc *model.FileContext) error {
+func (c *Capture) doExport(_ context.Context, fc *model.FileContext) error {
 	// 导出jellyfin需要的nfo信息
 	if err := c.exportNFOData(fc); err != nil {
 		return fmt.Errorf("export nfo data failed, err:%w", err)
@@ -324,24 +342,24 @@ func (c *Capture) doExport(ctx context.Context, fc *model.FileContext) error {
 	return nil
 }
 
-func (c *Capture) doMetaVerify(ctx context.Context, fc *model.FileContext) error {
-	//全部处理完后必须要保证当前的元数据至少有title, number, cover, title
+func (c *Capture) doMetaVerify(_ context.Context, fc *model.FileContext) error {
+	// 全部处理完后必须要保证当前的元数据至少有title, number, cover, title
 	if len(fc.Meta.Title) == 0 {
-		return fmt.Errorf("no title")
+		return errNoTitle
 	}
 	if len(fc.Meta.Number) == 0 {
-		return fmt.Errorf("no number found")
+		return errNoNumberFound
 	}
 	if fc.Meta.Cover == nil || len(fc.Meta.Cover.Name) == 0 || len(fc.Meta.Cover.Key) == 0 {
-		return fmt.Errorf("invalid cover")
+		return errInvalidCover
 	}
 	if fc.Meta.Poster == nil || len(fc.Meta.Poster.Name) == 0 || len(fc.Meta.Poster.Key) == 0 {
-		return fmt.Errorf("invalid poster")
+		return errInvalidPoster
 	}
 	return nil
 }
 
-func (c *Capture) doDataDiscard(ctx context.Context, fc *model.FileContext) error {
+func (c *Capture) doDataDiscard(_ context.Context, fc *model.FileContext) error {
 	if c.c.DiscardTranslatedTitle {
 		fc.Meta.TitleTranslated = ""
 	}
@@ -391,17 +409,16 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 	return nil
 }
 
-func (c *Capture) renameMetaField(fc *model.FileContext) error {
+func (c *Capture) renameMetaField(fc *model.FileContext) {
 	if fc.Meta.Cover != nil {
 		fc.Meta.Cover.Name = fmt.Sprintf("%s-fanart%s", fc.SaveFileBase, defaultImageExtName)
 	}
 	if fc.Meta.Poster != nil {
 		fc.Meta.Poster.Name = fmt.Sprintf("%s-poster%s", fc.SaveFileBase, defaultImageExtName)
 	}
-	for idx, item := range fc.Meta.SampleImages { //TODO:这里需要构建子目录, 看看有没有更好的做法
+	for idx, item := range fc.Meta.SampleImages { // TODO:这里需要构建子目录, 看看有没有更好的做法
 		item.Name = fmt.Sprintf("%s/%s-sample-%d%s", defaultExtraFanartDir, fc.SaveFileBase, idx, defaultImageExtName)
 	}
-	return nil
 }
 
 func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) error {
@@ -415,17 +432,21 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 	images = append(images, fc.Meta.SampleImages...)
 	for _, image := range images {
 		target := filepath.Join(fc.SaveDir, image.Name)
-		logger := logutil.GetLogger(ctx).With(zap.String("image", image.Name), zap.String("key", image.Key), zap.String("target", target))
+		logger := logutil.GetLogger(ctx).With(
+			zap.String("image", image.Name),
+			zap.String("key", image.Key),
+			zap.String("target", target),
+		)
 
 		data, err := c.c.Storage.GetData(ctx, image.Key)
 		if err != nil {
 			logger.Error("read image data failed", zap.Error(err))
-			return err
+			return fmt.Errorf("read image data for %s failed: %w", image.Name, err)
 		}
 
-		if err := os.WriteFile(target, data, 0644); err != nil {
+		if err := os.WriteFile(target, data, 0o600); err != nil {
 			logger.Error("write image failed", zap.Error(err))
-			return err
+			return fmt.Errorf("write image %s failed: %w", target, err)
 		}
 		logger.Debug("write image succ")
 	}
@@ -436,7 +457,7 @@ func (c *Capture) saveMediaData(ctx context.Context, fc *model.FileContext) erro
 	return nil
 }
 
-func (c *Capture) moveMovie(fc *model.FileContext, src string, dst string) error {
+func (c *Capture) moveMovie(fc *model.FileContext, src, dst string) error {
 	if c.c.LinkMode {
 		return c.moveMovieByLink(fc, src, dst)
 	}
@@ -449,8 +470,9 @@ func (c *Capture) moveMovieByLink(_ *model.FileContext, src, dst string) error {
 		if errors.Is(err, os.ErrExist) {
 			return nil
 		}
+		return fmt.Errorf("symlink %s to %s failed: %w", src, dst, err)
 	}
-	return err
+	return nil
 }
 
 func (c *Capture) moveMovieDirect(_ *model.FileContext, src, dst string) error {
@@ -458,10 +480,7 @@ func (c *Capture) moveMovieDirect(_ *model.FileContext, src, dst string) error {
 }
 
 func (c *Capture) exportNFOData(fc *model.FileContext) error {
-	mov, err := convertMetaToMovieNFO(fc.Meta)
-	if err != nil {
-		return fmt.Errorf("convert meta to movie nfo failed, err:%w", err)
-	}
+	mov := convertMetaToMovieNFO(fc.Meta)
 	save := filepath.Join(fc.SaveDir, fc.SaveFileBase+".nfo")
 	if err := nfo.WriteMovieToFile(save, mov); err != nil {
 		return fmt.Errorf("write movie nfo failed, err:%w", err)

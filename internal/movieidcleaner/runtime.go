@@ -1,6 +1,9 @@
 package movieidcleaner
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 type ISwapableCleaner interface {
 	Swap(Cleaner)
@@ -22,14 +25,22 @@ func (r *RuntimeCleaner) Clean(input string) (*Result, error) {
 	r.mu.RLock()
 	inner := r.inner
 	r.mu.RUnlock()
-	return inner.Clean(input)
+	res, err := inner.Clean(input)
+	if err != nil {
+		return nil, fmt.Errorf("runtime clean failed: %w", err)
+	}
+	return res, nil
 }
 
 func (r *RuntimeCleaner) Explain(input string) (*ExplainResult, error) {
 	r.mu.RLock()
 	inner := r.inner
 	r.mu.RUnlock()
-	return inner.Explain(input)
+	res, err := inner.Explain(input)
+	if err != nil {
+		return nil, fmt.Errorf("runtime explain failed: %w", err)
+	}
+	return res, nil
 }
 
 func (r *RuntimeCleaner) Swap(inner Cleaner) {

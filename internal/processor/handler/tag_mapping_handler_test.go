@@ -62,7 +62,7 @@ func createTestTagMappingConfig(t *testing.T) string {
 	data, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 
-	err = os.WriteFile(filePath, data, 0644)
+	err = os.WriteFile(filePath, data, 0o600)
 	require.NoError(t, err)
 
 	return filePath

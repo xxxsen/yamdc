@@ -2,6 +2,7 @@ package searcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -19,6 +20,12 @@ import (
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
+var (
+	errInputRequired       = errors.New("input is required")
+	errDebugPluginNotFound = errors.New("plugin not found")
+	errNotDefaultSearcher  = errors.New("searcher is not default searcher")
+)
+
 type DebugSearchOptions struct {
 	Input      string   `json:"input"`
 	Plugins    []string `json:"plugins"`
@@ -27,21 +34,21 @@ type DebugSearchOptions struct {
 }
 
 type DebugSearchResult struct {
-	Input          string                        `json:"input"`
-	NumberID       string                        `json:"number_id"`
-	RequestedInput string                        `json:"requested_input"`
-	UsedPlugins    []string                      `json:"used_plugins"`
-	MatchedPlugin  string                        `json:"matched_plugin"`
-	Found          bool                          `json:"found"`
-	Category       string                        `json:"category"`
-	Uncensor       bool                          `json:"uncensor"`
-	CleanerResult  *movieidcleaner.Result        `json:"cleaner_result,omitempty"`
-	Meta           *model.MovieMeta              `json:"meta,omitempty"`
-	PluginResults  []PluginDebugResult           `json:"plugin_results"`
-	AvailableTools SearcherDebugPluginCollection `json:"available_tools"`
+	Input          string                 `json:"input"`
+	NumberID       string                 `json:"number_id"`
+	RequestedInput string                 `json:"requested_input"`
+	UsedPlugins    []string               `json:"used_plugins"`
+	MatchedPlugin  string                 `json:"matched_plugin"`
+	Found          bool                   `json:"found"`
+	Category       string                 `json:"category"`
+	Uncensor       bool                   `json:"uncensor"`
+	CleanerResult  *movieidcleaner.Result `json:"cleaner_result,omitempty"`
+	Meta           *model.MovieMeta       `json:"meta,omitempty"`
+	PluginResults  []PluginDebugResult    `json:"plugin_results"`
+	AvailableTools DebugPluginCollection  `json:"available_tools"`
 }
 
-type SearcherDebugPluginCollection struct {
+type DebugPluginCollection struct {
 	Available []string            `json:"available"`
 	Default   []string            `json:"default"`
 	Category  map[string][]string `json:"category"`
@@ -74,7 +81,13 @@ type Debugger struct {
 	creators        map[string]factory.CreatorFunc
 }
 
-func NewDebugger(cli client.IHTTPClient, storage store.IStorage, cleaner movieidcleaner.Cleaner, defaultPlugins []string, categoryPlugins map[string][]string) *Debugger {
+func NewDebugger(
+	cli client.IHTTPClient,
+	storage store.IStorage,
+	cleaner movieidcleaner.Cleaner,
+	defaultPlugins []string,
+	categoryPlugins map[string][]string,
+) *Debugger {
 	d := &Debugger{
 		cli:     cli,
 		storage: storage,
@@ -88,7 +101,11 @@ func (d *Debugger) SwapPlugins(defaultPlugins []string, categoryPlugins map[stri
 	d.SwapState(defaultPlugins, categoryPlugins, factory.Snapshot())
 }
 
-func (d *Debugger) SwapState(defaultPlugins []string, categoryPlugins map[string][]string, creators map[string]factory.CreatorFunc) {
+func (d *Debugger) SwapState(
+	defaultPlugins []string,
+	categoryPlugins map[string][]string,
+	creators map[string]factory.CreatorFunc,
+) {
 	cp := make(map[string][]string, len(categoryPlugins))
 	for key, items := range categoryPlugins {
 		cp[strings.ToUpper(strings.TrimSpace(key))] = append([]string(nil), items...)
@@ -104,7 +121,7 @@ func (d *Debugger) SwapState(defaultPlugins []string, categoryPlugins map[string
 	d.mu.Unlock()
 }
 
-func (d *Debugger) Plugins() SearcherDebugPluginCollection {
+func (d *Debugger) Plugins() DebugPluginCollection {
 	d.mu.RLock()
 	defaultPlugins := append([]string(nil), d.defaultPlugins...)
 	categoryPlugins := cloneStringMap(d.categoryPlugins)
@@ -112,7 +129,7 @@ func (d *Debugger) Plugins() SearcherDebugPluginCollection {
 	d.mu.RUnlock()
 	available := collectVisiblePlugins(defaultPlugins, categoryPlugins, creators)
 	sort.Strings(defaultPlugins)
-	return SearcherDebugPluginCollection{
+	return DebugPluginCollection{
 		Available: available,
 		Default:   defaultPlugins,
 		Category:  categoryPlugins,
@@ -122,46 +139,18 @@ func (d *Debugger) Plugins() SearcherDebugPluginCollection {
 func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*DebugSearchResult, error) {
 	input := strings.TrimSpace(opts.Input)
 	if input == "" {
-		return nil, fmt.Errorf("input is required")
+		return nil, errInputRequired
 	}
-	useCleaner := true
-	if !opts.UseCleaner {
-		useCleaner = false
-	}
+
 	result := &DebugSearchResult{
 		Input:          input,
 		RequestedInput: input,
 		AvailableTools: d.Plugins(),
 	}
 
-	var num *number.Number
-	var err error
-	if useCleaner && d.cleaner != nil {
-		cleanRes, cleanErr := d.cleaner.Clean(input)
-		if cleanErr != nil {
-			return nil, cleanErr
-		}
-		result.CleanerResult = cleanRes
-		if cleanRes != nil && strings.TrimSpace(cleanRes.Normalized) != "" {
-			num, err = number.Parse(cleanRes.Normalized)
-			if err != nil {
-				return nil, err
-			}
-			if cleanRes.CategoryMatched {
-				num.SetExternalFieldCategory(cleanRes.Category)
-				result.Category = cleanRes.Category
-			}
-			if cleanRes.UncensorMatched {
-				num.SetExternalFieldUncensor(cleanRes.Uncensor)
-				result.Uncensor = cleanRes.Uncensor
-			}
-		}
-	}
-	if num == nil {
-		num, err = number.Parse(input)
-		if err != nil {
-			return nil, err
-		}
+	num, err := d.resolveNumber(input, opts.UseCleaner, result)
+	if err != nil {
+		return nil, err
 	}
 	result.NumberID = num.GetNumberID()
 
@@ -187,7 +176,52 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 	return result, nil
 }
 
-func collectVisiblePlugins(defaultPlugins []string, categoryPlugins map[string][]string, creators map[string]factory.CreatorFunc) []string {
+func (d *Debugger) resolveNumber(input string, useCleaner bool, result *DebugSearchResult) (*number.Number, error) {
+	if useCleaner && d.cleaner != nil {
+		num, err := d.tryCleanInput(input, result)
+		if err != nil {
+			return nil, err
+		}
+		if num != nil {
+			return num, nil
+		}
+	}
+	num, err := number.Parse(input)
+	if err != nil {
+		return nil, fmt.Errorf("parse number: %w", err)
+	}
+	return num, nil
+}
+
+func (d *Debugger) tryCleanInput(input string, result *DebugSearchResult) (*number.Number, error) {
+	cleanRes, cleanErr := d.cleaner.Clean(input)
+	if cleanErr != nil {
+		return nil, fmt.Errorf("clean input: %w", cleanErr)
+	}
+	result.CleanerResult = cleanRes
+	if cleanRes == nil || strings.TrimSpace(cleanRes.Normalized) == "" {
+		return nil, nil //nolint:nilnil // nil signals fallback to raw parse
+	}
+	num, err := number.Parse(cleanRes.Normalized)
+	if err != nil {
+		return nil, fmt.Errorf("parse cleaned number: %w", err)
+	}
+	if cleanRes.CategoryMatched {
+		num.SetExternalFieldCategory(cleanRes.Category)
+		result.Category = cleanRes.Category
+	}
+	if cleanRes.UncensorMatched {
+		num.SetExternalFieldUncensor(cleanRes.Uncensor)
+		result.Uncensor = cleanRes.Uncensor
+	}
+	return num, nil
+}
+
+func collectVisiblePlugins(
+	defaultPlugins []string,
+	categoryPlugins map[string][]string,
+	creators map[string]factory.CreatorFunc,
+) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(defaultPlugins))
 	for _, name := range defaultPlugins {
@@ -241,12 +275,15 @@ func (d *Debugger) resolvePlugins(num *number.Number) []string {
 	return defaultPlugins
 }
 
-func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number, skipAssets bool) (*PluginDebugResult, error) {
+func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.Number, skipAssets bool) (
+	*PluginDebugResult,
+	error,
+) {
 	d.mu.RLock()
 	creator, ok := d.creators[name]
 	d.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("plugin:%s not found", name)
+		return nil, fmt.Errorf("plugin:%s: %w", name, errDebugPluginNotFound)
 	}
 	plg, err := creator(struct{}{})
 	if err != nil {
@@ -258,7 +295,7 @@ func (d *Debugger) debugOnePlugin(ctx context.Context, name string, num *number.
 	}
 	def, ok := searcher.(*DefaultSearcher)
 	if !ok {
-		return nil, fmt.Errorf("searcher %s is not default searcher", name)
+		return nil, fmt.Errorf("searcher %s: %w", name, errNotDefaultSearcher)
 	}
 	return def.debugSearch(ctx, num, skipAssets), nil
 }
@@ -274,24 +311,43 @@ func cloneCreators(in map[string]factory.CreatorFunc) map[string]factory.Creator
 func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number, skipAssets bool) *PluginDebugResult {
 	trace := &PluginDebugResult{Plugin: p.name}
 	ctx = pluginapi.InitContainer(ctx)
-	ctx = meta.SetNumberId(ctx, num.GetNumberID())
+	ctx = meta.SetNumberID(ctx, num.GetNumberID())
 
+	req, ok := p.debugPrecheck(ctx, num, trace)
+	if !ok {
+		return trace
+	}
+
+	rsp, ok := p.debugHTTPRoundTrip(ctx, req, trace)
+	if !ok {
+		return trace
+	}
+
+	return p.debugDecodeAndFinalize(ctx, req, rsp, skipAssets, trace)
+}
+
+func (p *DefaultSearcher) debugPrecheck(
+	ctx context.Context, num *number.Number, trace *PluginDebugResult,
+) (*http.Request, bool) {
 	ok, err := p.plg.OnPrecheckRequest(ctx, num.GetNumberID())
 	if err != nil {
 		trace.Error = err.Error()
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "precheck", OK: false, Message: err.Error()})
-		return trace
+		return nil, false
 	}
-	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "precheck", OK: ok, Message: boolMessage(ok, "precheck passed", "precheck skipped current plugin")})
+	trace.Steps = append(trace.Steps, PluginDebugStep{
+		Stage: "precheck", OK: ok,
+		Message: boolMessage(ok, "precheck passed", "precheck skipped current plugin"),
+	})
 	if !ok {
-		return trace
+		return nil, false
 	}
 
 	req, err := p.plg.OnMakeHTTPRequest(ctx, num.GetNumberID())
 	if err != nil {
 		trace.Error = err.Error()
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "make_request", OK: false, Message: err.Error()})
-		return trace
+		return nil, false
 	}
 	trace.Steps = append(trace.Steps, PluginDebugStep{
 		Stage:   "make_request",
@@ -299,67 +355,97 @@ func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number, s
 		Message: "request created",
 		URL:     requestURL(req),
 	})
+	return req, true
+}
 
-	invoker := func(callCtx context.Context, req *http.Request) (*http.Response, error) {
+func (p *DefaultSearcher) debugTracingInvoker(_ context.Context, trace *PluginDebugResult) pluginapi.HTTPInvoker {
+	return func(callCtx context.Context, innerReq *http.Request) (*http.Response, error) {
 		start := time.Now()
-		rsp, invokeErr := p.invokeHTTPRequest(callCtx, req)
+		rsp, invokeErr := p.invokeHTTPRequest(callCtx, innerReq)
 		step := PluginDebugStep{
-			Stage:      "request",
-			OK:         invokeErr == nil,
-			URL:        requestURL(req),
-			DurationMS: time.Since(start).Milliseconds(),
+			Stage: "request", OK: invokeErr == nil,
+			URL: requestURL(innerReq), DurationMS: time.Since(start).Milliseconds(),
 		}
 		if rsp != nil {
 			step.StatusCode = rsp.StatusCode
 		}
+		step.Message = boolMessage(invokeErr == nil, "request finished", "")
 		if invokeErr != nil {
 			step.Message = invokeErr.Error()
-		} else {
-			step.Message = "request finished"
 		}
 		trace.Steps = append(trace.Steps, step)
 		return rsp, invokeErr
 	}
+}
 
-	rsp, err := p.plg.OnHandleHTTPRequest(ctx, invoker, req)
+func (p *DefaultSearcher) debugValidateResponse(
+	ctx context.Context, req *http.Request, rsp *http.Response, trace *PluginDebugResult,
+) bool {
+	ok, err := p.plg.OnPrecheckResponse(ctx, req, rsp)
 	if err != nil {
 		trace.Error = err.Error()
-		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "handle_http", OK: false, Message: err.Error()})
-		return trace
-	}
-	if rsp == nil {
-		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "handle_http", OK: false, Message: "plugin returned nil response"})
-		return trace
-	}
-
-	ok, err = p.plg.OnPrecheckResponse(ctx, req, rsp)
-	if err != nil {
-		trace.Error = err.Error()
-		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "precheck_response", OK: false, Message: err.Error(), StatusCode: rsp.StatusCode})
-		return trace
+		trace.Steps = append(trace.Steps,
+			PluginDebugStep{Stage: "precheck_response", OK: false, Message: err.Error(), StatusCode: rsp.StatusCode})
+		return false
 	}
 	trace.Steps = append(trace.Steps, PluginDebugStep{
-		Stage:      "precheck_response",
-		OK:         ok,
+		Stage: "precheck_response", OK: ok,
 		Message:    boolMessage(ok, "response accepted", "response rejected"),
-		StatusCode: rsp.StatusCode,
-		URL:        requestURL(req),
+		StatusCode: rsp.StatusCode, URL: requestURL(req),
 	})
 	if !ok {
 		_ = rsp.Body.Close()
-		return trace
+		return false
 	}
 	if rsp.StatusCode != http.StatusOK {
 		trace.Steps = append(trace.Steps, PluginDebugStep{
-			Stage:      "response_status",
-			OK:         false,
-			Message:    fmt.Sprintf("invalid http status code:%d", rsp.StatusCode),
-			StatusCode: rsp.StatusCode,
+			Stage: "response_status", OK: false,
+			Message: fmt.Sprintf("invalid http status code:%d", rsp.StatusCode), StatusCode: rsp.StatusCode,
 		})
 		_ = rsp.Body.Close()
-		return trace
+		return false
 	}
+	return true
+}
 
+func (p *DefaultSearcher) debugHTTPRoundTrip(
+	ctx context.Context, req *http.Request, trace *PluginDebugResult,
+) (*http.Response, bool) {
+	rsp, err := p.plg.OnHandleHTTPRequest(ctx, p.debugTracingInvoker(ctx, trace), req)
+	if err != nil {
+		trace.Error = err.Error()
+		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "handle_http", OK: false, Message: err.Error()})
+		return nil, false
+	}
+	if rsp == nil {
+		trace.Steps = append(trace.Steps,
+			PluginDebugStep{Stage: "handle_http", OK: false, Message: "plugin returned nil response"})
+		return nil, false
+	}
+	if !p.debugValidateResponse(ctx, req, rsp, trace) {
+		return nil, false
+	}
+	return rsp, true
+}
+
+func (p *DefaultSearcher) debugStoreAssets(
+	ctx context.Context, metaInfo *model.MovieMeta, skipAssets bool, trace *PluginDebugResult,
+) {
+	if skipAssets {
+		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "store_assets", OK: true, Message: "asset fetch skipped"})
+		return
+	}
+	p.storeImageData(ctx, metaInfo)
+	trace.Steps = append(trace.Steps, PluginDebugStep{
+		Stage: "store_assets", OK: metaHasAssets(metaInfo),
+		Message: fmt.Sprintf("cover=%t poster=%t sample_images=%d",
+			hasFileKey(metaInfo.Cover), hasFileKey(metaInfo.Poster), countSampleKeys(metaInfo.SampleImages)),
+	})
+}
+
+func (p *DefaultSearcher) debugDecodeAndFinalize(
+	ctx context.Context, req *http.Request, rsp *http.Response, skipAssets bool, trace *PluginDebugResult,
+) *PluginDebugResult {
 	data, err := client.ReadHTTPData(rsp)
 	_ = rsp.Body.Close()
 	if err != nil {
@@ -367,43 +453,29 @@ func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number, s
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "read_body", OK: false, Message: err.Error()})
 		return trace
 	}
-	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "read_body", OK: true, Message: fmt.Sprintf("response bytes: %d", len(data))})
-
+	trace.Steps = append(trace.Steps,
+		PluginDebugStep{Stage: "read_body", OK: true, Message: fmt.Sprintf("response bytes: %d", len(data))})
 	metaInfo, decodeSucc, err := p.plg.OnDecodeHTTPData(ctx, data)
 	if err != nil {
 		trace.Error = err.Error()
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "decode", OK: false, Message: err.Error()})
 		return trace
 	}
-	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "decode", OK: decodeSucc, Message: boolMessage(decodeSucc, "decode success", "decode returned no result")})
+	trace.Steps = append(trace.Steps, PluginDebugStep{
+		Stage: "decode", OK: decodeSucc,
+		Message: boolMessage(decodeSucc, "decode success", "decode returned no result"),
+	})
 	if !decodeSucc || metaInfo == nil {
 		return trace
 	}
-
 	p.fixMeta(ctx, req, metaInfo)
 	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "fix_meta", OK: true, Message: "meta normalized"})
-
-	if skipAssets {
-		trace.Steps = append(trace.Steps, PluginDebugStep{
-			Stage:   "store_assets",
-			OK:      true,
-			Message: "asset fetch skipped",
-		})
-	} else {
-		p.storeImageData(ctx, metaInfo)
-		trace.Steps = append(trace.Steps, PluginDebugStep{
-			Stage:   "store_assets",
-			OK:      metaHasAssets(metaInfo),
-			Message: fmt.Sprintf("cover=%t poster=%t sample_images=%d", hasFileKey(metaInfo.Cover), hasFileKey(metaInfo.Poster), countSampleKeys(metaInfo.SampleImages)),
-		})
-	}
-
+	p.debugStoreAssets(ctx, metaInfo, skipAssets, trace)
 	if err := p.verifyMeta(metaInfo); err != nil {
 		trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "verify_meta", OK: false, Message: err.Error()})
 		return trace
 	}
 	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "verify_meta", OK: true, Message: "meta verified"})
-
 	metaInfo.ExtInfo.ScrapeInfo.Source = p.name
 	metaInfo.ExtInfo.ScrapeInfo.DateTs = time.Now().UnixMilli()
 	trace.Steps = append(trace.Steps, PluginDebugStep{Stage: "result", OK: true, Message: "plugin returned meta"})
@@ -483,7 +555,7 @@ func metaHasAssets(meta *model.MovieMeta) bool {
 	return hasFileKey(meta.Cover) || hasFileKey(meta.Poster) || countSampleKeys(meta.SampleImages) > 0
 }
 
-func boolMessage(ok bool, trueText string, falseText string) string {
+func boolMessage(ok bool, trueText, falseText string) string {
 	if ok {
 		return trueText
 	}
