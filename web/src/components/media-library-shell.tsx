@@ -135,7 +135,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const refreshStatus = useEffectEvent(async () => {
     try {
       const next = await getMediaLibraryStatus();
-      setConfigured(Boolean(next.configured));
+      setConfigured(next.configured);
       const nextSyncRunning = next.sync.status === "running";
       setSyncRunning(nextSyncRunning);
       if (nextSyncRunning) {

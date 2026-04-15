@@ -255,7 +255,7 @@ function ResponseDetailBlock({
   if (!response) {
     return <div className="ruleset-debug-empty">{emptyLabel}</div>;
   }
-  const contentType = response.headers["content-type"]?.[0] || response.headers["Content-Type"]?.[0] || "";
+  const contentType = response.headers["content-type"][0] || response.headers["Content-Type"][0] || "";
   const headerMap = Object.fromEntries(Object.entries(response.headers).map(([key, values]) => [key, values.join(", ")]));
   const headerCount = Object.keys(headerMap).length;
   const body = response.body || response.body_preview;

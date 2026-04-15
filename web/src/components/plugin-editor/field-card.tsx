@@ -109,7 +109,7 @@ export function FieldCard(props: {
         <div className="plugin-editor-field plugin-editor-field-wide">
           <span>Transforms</span>
           <div className="plugin-editor-transform-list">
-            {(field.transforms ?? []).map((transform) => (
+            {field.transforms.map((transform) => (
               <div key={transform.id} className="plugin-editor-transform-card">
                 <div className="plugin-editor-transform-actions">
                   <button

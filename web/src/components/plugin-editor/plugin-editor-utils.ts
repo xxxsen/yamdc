@@ -1,6 +1,7 @@
 import type React from "react";
 import type {
   PluginEditorDraft,
+  PluginEditorField,
   PluginEditorTransform,
 } from "@/lib/api";
 
@@ -111,19 +112,19 @@ export function jsonKeyCount(value: string): number {
     return 0;
   }
   try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(trimmed);
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
       return 0;
     }
-    return Object.keys(parsed).length;
+    return Object.keys(parsed as Record<string, unknown>).length;
   } catch {
     return 0;
   }
 }
 
-export function parseJSON<T>(value: string, label: string): T {
+export function parseJSON(value: string, label: string): unknown {
   try {
-    return JSON.parse(value) as T;
+    return JSON.parse(value);
   } catch {
     throw new Error(`${label} 不是有效的 JSON。`);
   }
@@ -153,11 +154,10 @@ export function handleEditorTextareaKeyDown(event: React.KeyboardEvent<HTMLTextA
   }
   event.preventDefault();
   const textarea = event.currentTarget;
-  const start = textarea.selectionStart ?? 0;
-  const end = textarea.selectionEnd ?? 0;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
   const nextValue = `${textarea.value.slice(0, start)}\t${textarea.value.slice(end)}`;
-  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-  nativeSetter?.call(textarea, nextValue);
+  Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set?.call(textarea, nextValue);
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   requestAnimationFrame(() => {
     textarea.selectionStart = start + 1;
@@ -333,6 +333,19 @@ export function stringifyRequestBody(body: RequestBodyDraft | null | undefined):
   return JSON.stringify(body.values ?? {}, null, 2);
 }
 
+function jsonRecordValueToString(value: unknown): string {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 function buildRequestBody(kind: string, value: string, label: string): NonNullable<PluginEditorDraft["request"]>["body"] {
   const trimmed = value.trim();
   if (!trimmed || trimmed === "null") {
@@ -344,9 +357,12 @@ function buildRequestBody(kind: string, value: string, label: string): NonNullab
       content: value,
     };
   }
-  const parsed = parseJSON<Record<string, unknown>>(value, label);
-  const values = Object.entries(parsed ?? {}).reduce<Record<string, string>>((acc, [key, item]) => {
-    acc[key] = item == null ? "" : String(item);
+  const parsed = parseJSON(value, label);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { kind: kind || "json", values: {} };
+  }
+  const values = Object.entries(parsed as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, item]) => {
+    acc[key] = jsonRecordValueToString(item);
     return acc;
   }, {});
   return {
@@ -356,9 +372,12 @@ function buildRequestBody(kind: string, value: string, label: string): NonNullab
 }
 
 function parseStringRecord(value: string, label: string): Record<string, string> {
-  const parsed = parseJSON<Record<string, unknown>>(normalizeJSONObjectText(value), label);
-  return Object.entries(parsed ?? {}).reduce<Record<string, string>>((acc, [key, item]) => {
-    acc[key] = item == null ? "" : String(item);
+  const parsed = parseJSON(normalizeJSONObjectText(value), label);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
+  }
+  return Object.entries(parsed as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, item]) => {
+    acc[key] = jsonRecordValueToString(item);
     return acc;
   }, {});
 }
@@ -398,7 +417,7 @@ export function buildDraft(state: EditorState): PluginEditorDraft {
   if (hosts.length === 0) {
     throw new Error("至少需要一个 host。");
   }
-  const fields = state.fields.reduce<Record<string, import("@/lib/api").PluginEditorField>>((acc, field) => {
+  const fields = state.fields.reduce<Record<string, PluginEditorField>>((acc, field) => {
     const name = field.name.trim();
     if (!name) {
       return acc;
@@ -482,7 +501,7 @@ export function buildDraft(state: EditorState): PluginEditorDraft {
   const assign = pairsToRecord(state.postAssign);
   const defaults = buildDefaults(state);
   const switchConfig = buildSwitchConfig(state);
-  if ((assign && Object.keys(assign).length > 0) || defaults || switchConfig) {
+  if (Object.keys(assign).length > 0 || defaults || switchConfig) {
     draft.postprocess = {
       assign,
       defaults,
@@ -516,13 +535,13 @@ function requestFormStateFromDraft(req: PluginEditorDraft["request"]): RequestFo
 
 export function stateFromDraft(draft: PluginEditorDraft): EditorState {
   const next = defaultState();
-  next.name = draft.name ?? next.name;
-  next.type = draft.type ?? next.type;
+  next.name = draft.name;
+  next.type = draft.type;
   next.fetchType = draft.fetch_type === "browser" ? "browser" : "go-http";
-  next.hostsText = (draft.hosts ?? []).join("\n");
+  next.hostsText = draft.hosts.join("\n");
   next.precheckPatternsText = (draft.precheck?.number_patterns ?? []).join("\n");
   next.precheckVariables = recordToPairs(draft.precheck?.variables);
-  next.scrapeFormat = draft.scrape?.format ?? next.scrapeFormat;
+  next.scrapeFormat = draft.scrape.format;
   next.fields = draftToFields(draft);
   next.postAssign = recordToPairs(draft.postprocess?.assign);
   next.postTitleLang = draft.postprocess?.defaults?.title_lang ?? next.postTitleLang;
@@ -549,9 +568,9 @@ export function stateFromDraft(draft: PluginEditorDraft): EditorState {
     next.workflowSelectors =
       searchSelect.selectors?.map((item, index) => ({
         id: `selector-${index + 1}`,
-        name: item.name ?? "",
-        kind: item.kind ?? "xpath",
-        expr: item.expr ?? "",
+        name: item.name,
+        kind: item.kind,
+        expr: item.expr,
       })) ?? next.workflowSelectors;
     next.workflowItemVariables = recordToPairs(searchSelect.item_variables);
     next.workflowMatchMode = searchSelect.match?.mode ?? "and";
@@ -631,8 +650,8 @@ function normalizeLegacyRequestForm(
       acceptStatusText: nested.acceptStatusText || "200",
       notFoundStatusText: nested.notFoundStatusText || "404",
       decodeCharset: nested.decodeCharset || "",
-      browserWaitSelector: nested.browserWaitSelector ?? "",
-      browserWaitTimeout: nested.browserWaitTimeout ?? "",
+      browserWaitSelector: nested.browserWaitSelector,
+      browserWaitTimeout: nested.browserWaitTimeout,
     };
   }
   // Fall back to legacy flat fields
@@ -673,23 +692,26 @@ function normalizeKVSource(items: KVPairForm[] | undefined, raw: string | undefi
     return [];
   }
   try {
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return Object.entries(parsed ?? {}).map(([key, value], index) => ({
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.entries(parsed as Record<string, string>).map(([key, value], index) => ({
       id: `kv-${seed}-${index + 1}`,
       key,
-      value: String(value ?? ""),
+      value,
     }));
   } catch {
     return [];
   }
 }
 
-function parseLegacyObject<T>(raw: string | undefined): T | null {
+function parseLegacyObject(raw: string | undefined): unknown {
   if (!raw || !raw.trim() || raw.trim() === "null") {
     return null;
   }
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -712,8 +734,12 @@ function parseLegacyTransforms(raw: string | undefined, fieldIndex: number): Tra
 
 export function normalizeEditorState(state: EditorState): EditorState {
   const legacyState = state as LegacyEditorState;
-  const legacyDefaults = parseLegacyObject<NonNullable<NonNullable<PluginEditorDraft["postprocess"]>["defaults"]>>(legacyState.postDefaultsJSON);
-  const legacySwitchConfig = parseLegacyObject<NonNullable<NonNullable<PluginEditorDraft["postprocess"]>["switch_config"]>>(legacyState.postSwitchJSON);
+  const legacyDefaults = parseLegacyObject(legacyState.postDefaultsJSON) as NonNullable<
+    NonNullable<PluginEditorDraft["postprocess"]>["defaults"]
+  > | null;
+  const legacySwitchConfig = parseLegacyObject(legacyState.postSwitchJSON) as NonNullable<
+    NonNullable<PluginEditorDraft["postprocess"]>["switch_config"]
+  > | null;
 
   return {
     ...state,
@@ -721,19 +747,18 @@ export function normalizeEditorState(state: EditorState): EditorState {
     request: normalizeLegacyRequestForm(legacyState, "request"),
     multiRequest: normalizeLegacyRequestForm(legacyState, "multiRequest"),
     workflowNextRequest: normalizeLegacyRequestForm(legacyState, "workflowNext"),
-    fields: (state.fields ?? []).map((field, index) => {
+    fields: state.fields.map((field, index) => {
       const legacy = field as FieldForm & { transformsJSON?: string };
-      const transforms =
-        field.transforms && Array.isArray(field.transforms)
-          ? field.transforms
-          : parseLegacyTransforms(legacy.transformsJSON, index);
+      const transforms = Array.isArray(field.transforms)
+        ? field.transforms
+        : parseLegacyTransforms(legacy.transformsJSON, index);
       return applyFieldMeta({
         ...field,
         transforms,
       });
     }),
     workflowSelectors:
-      state.workflowSelectors && Array.isArray(state.workflowSelectors) && state.workflowSelectors.length > 0
+      Array.isArray(state.workflowSelectors) && state.workflowSelectors.length > 0
         ? state.workflowSelectors
         : defaultState().workflowSelectors,
     precheckVariables: normalizeKVSource(state.precheckVariables, legacyState.precheckVariablesJSON, "precheck-variable"),
@@ -780,7 +805,7 @@ export function buildSwitchConfig(state: EditorState): NonNullable<NonNullable<P
 // ---------------------------------------------------------------------------
 
 export function draftToFields(draft: PluginEditorDraft): FieldForm[] {
-  const entries = Object.entries(draft.scrape?.fields ?? {});
+  const entries = Object.entries(draft.scrape.fields);
   if (entries.length === 0) {
     return [DEFAULT_FIELD];
   }

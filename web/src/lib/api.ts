@@ -562,7 +562,7 @@ async function readAPIResponse<T>(resp: Response, fallbackMessage: string): Prom
     let serverMessage = "";
     try {
       const body = (await resp.json()) as { message?: string };
-      serverMessage = body?.message ?? "";
+      serverMessage = body.message ?? "";
     } catch {
       // non-JSON error response (e.g. HTML 502 page)
     }
@@ -858,7 +858,7 @@ function normalizeLibraryDetail(detail: LibraryDetail): LibraryDetail {
     ...detail,
     item: normalizeLibraryListItem(detail.item),
     meta: normalizeLibraryMeta(detail.meta),
-    variants: (detail.variants ?? []).map((variant) => ({
+    variants: (Array.isArray(detail.variants) ? detail.variants : []).map((variant) => ({
       ...variant,
       meta: normalizeLibraryMeta(variant.meta),
       files: Array.isArray(variant.files) ? variant.files : [],
@@ -879,7 +879,7 @@ function normalizeMediaLibraryDetail(detail: MediaLibraryDetail): MediaLibraryDe
     ...detail,
     item: normalizeMediaLibraryItem(detail.item),
     meta: normalizeLibraryMeta(detail.meta),
-    variants: (detail.variants ?? []).map((variant) => ({
+    variants: (Array.isArray(detail.variants) ? detail.variants : []).map((variant) => ({
       ...variant,
       meta: normalizeLibraryMeta(variant.meta),
       files: Array.isArray(variant.files) ? variant.files : [],
@@ -1099,7 +1099,7 @@ export async function uploadReviewAsset(id: number, target: "cover" | "poster" |
     });
     const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
     logUploadDebug("api", "upload-review-asset-response", {
-      id, target, ok: true, durationMs, key: data.data?.key ?? null,
+      id, target, ok: true, durationMs, key: data.data.key,
     });
     return data.data;
   } catch (error) {

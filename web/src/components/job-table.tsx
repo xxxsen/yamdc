@@ -36,7 +36,7 @@ export function JobTable({ initialData }: Props) {
   const messageTone = /失败|failed|error/i.test(message) ? "danger" : "info";
 
   const counts = useMemo(() => {
-    return allJobs.reduce<Record<string, number>>((acc, item) => {
+    return allJobs.reduce<Partial<Record<string, number>>>((acc, item) => {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
     }, {});

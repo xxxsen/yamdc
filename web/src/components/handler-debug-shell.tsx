@@ -479,7 +479,7 @@ export function HandlerDebugShell() {
                     <div className="handler-debug-pic-grid">
                       {(result.before_meta.sample_images ?? []).length ? (
                         result.before_meta.sample_images?.map((item) =>
-                          item?.key ? <Image key={`before-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "before sample"} width={220} height={140} unoptimized /> : null,
+                          item.key ? <Image key={`before-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "before sample"} width={220} height={140} unoptimized /> : null,
                         )
                       ) : (
                         <div className="ruleset-debug-empty">No Image</div>
@@ -488,7 +488,7 @@ export function HandlerDebugShell() {
                     <div className="handler-debug-pic-grid">
                       {(result.after_meta.sample_images ?? []).length ? (
                         result.after_meta.sample_images?.map((item) =>
-                          item?.key ? <Image key={`after-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "after sample"} width={220} height={140} unoptimized /> : null,
+                          item.key ? <Image key={`after-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "after sample"} width={220} height={140} unoptimized /> : null,
                         )
                       ) : (
                         <div className="ruleset-debug-empty">No Image</div>
@@ -503,7 +503,7 @@ export function HandlerDebugShell() {
             ) : (
             <div className="ruleset-debug-empty">运行后会按 Before / After 展示图片资源差异。</div>
             )
-          ) : result?.steps?.length ? (
+          ) : result?.steps.length ? (
             <div className="handler-debug-step-list">
               {result.steps.map((step, index) => (
                 <article key={`${step.handler_id}-${index}`} className={`handler-debug-step-card ${step.error ? "handler-debug-step-card-error" : ""}`}>
