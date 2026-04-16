@@ -6102,6 +6102,121 @@ textarea.input {
   margin-top: 0;
 }
 
+/* ── Body mode toggle (Source / Preview) ── */
+
+.body-mode-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(105, 79, 51, 0.14);
+  border-radius: 6px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.body-mode-btn {
+  all: unset;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.body-mode-btn:hover {
+  background: rgba(105, 79, 51, 0.06);
+}
+
+.body-mode-btn-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.body-mode-btn-active:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── HTML Inspector tree ── */
+
+.html-inspector-panel {
+  position: relative;
+}
+
+.html-inspector-tree {
+  font: 12px/1.8 "SFMono-Regular", "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono", monospace;
+  max-height: min(52vh, 720px);
+  overflow: auto;
+  padding: 4px 0;
+  background: #fff;
+  border: 1px solid rgba(105, 79, 51, 0.10);
+  border-radius: 8px;
+}
+
+.dom-tree-line {
+  white-space: nowrap;
+  padding: 0 12px 0 0;
+  cursor: default;
+}
+
+.dom-tree-line:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.dom-tree-toggle {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  font-size: 9px;
+  line-height: inherit;
+  cursor: pointer;
+  user-select: none;
+  color: #727272;
+  vertical-align: baseline;
+}
+
+.dom-tree-spacer {
+  display: inline-block;
+  width: 14px;
+}
+
+.dom-tag { color: #881280; }
+.dom-attr-name { color: #994500; }
+.dom-attr-value { color: #1a1aa6; }
+.dom-text { color: #222; }
+.dom-comment { color: #236e25; }
+.dom-ellipsis { color: #888; }
+
+/* ── XPath context menu ── */
+
+.xpath-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid rgba(105, 79, 51, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.xpath-context-menu-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #3f3328;
+}
+
+.xpath-context-menu-item:hover {
+  background: rgba(105, 79, 51, 0.06);
+}
+
 .plugin-editor-workflow-selector-list,
 .plugin-editor-workflow-item-list {
   display: grid;

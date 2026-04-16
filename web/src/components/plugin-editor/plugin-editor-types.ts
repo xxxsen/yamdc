@@ -5,6 +5,13 @@ export type EditorSection = "basic" | "request" | "scrape" | "postprocess";
 export type RunAction = "compile" | "request" | "workflow" | "scrape";
 export type ToastState = { message: string; tone: "info" | "danger" | "warning" } | null;
 
+export type XPathMenuState = {
+  x: number;
+  y: number;
+  xpath: string;
+  fullXpath: string;
+} | null;
+
 export type FieldForm = {
   id: string;
   name: string;
