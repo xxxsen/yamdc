@@ -88,58 +88,97 @@ export function WorkflowOutputPanel({ result }: { result: PluginEditorWorkflowDe
   return (
     <div className="plugin-editor-output-section plugin-editor-output-section-fill">
       {result.error ? <div className="plugin-editor-output-error">{result.error}</div> : null}
-      <WorkflowDebugPreview result={result} />
-      <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-json-fill">{JSON.stringify(result, null, 2)}</pre>
+      <WorkflowAccordion result={result} />
     </div>
   );
 }
 
-function WorkflowDebugPreview({ result }: { result: PluginEditorWorkflowDebugResult }) {
+function WorkflowAccordion({ result }: { result: PluginEditorWorkflowDebugResult }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const toggle = (key: string) => setExpandedKey((prev) => (prev === key ? null : key));
+
+  const [detailOpen, setDetailOpen] = useState<Record<string, Set<string>>>({});
+  const isOpen = (stepKey: string, name: string) => {
+    const s = detailOpen[stepKey] as Set<string> | undefined;
+    return s ? s.has(name) : false;
+  };
+  const onToggle = (stepKey: string, name: string, open: boolean) => {
+    setDetailOpen((prev) => {
+      const s = new Set(prev[stepKey]);
+      if (open) s.add(name);
+      else s.delete(name);
+      return { ...prev, [stepKey]: s };
+    });
+  };
+
+  const stepsJsonKey = "__steps_json__";
+
   return (
-    <div className="plugin-editor-timeline">
-      {result.steps.map((step, index) => (
-        <article key={`${step.stage}-${index}`} className="plugin-editor-timeline-step">
-          <div className="plugin-editor-timeline-head">
-            <strong>{step.stage}</strong>
-            <span>{step.summary}</span>
-          </div>
-          {step.candidate ? <div className="plugin-editor-timeline-detail">candidate: {step.candidate}</div> : null}
-          {step.selected_value ? <div className="plugin-editor-timeline-detail">selected: {step.selected_value}</div> : null}
-          {step.items?.length ? <div className="plugin-editor-timeline-detail">matched items: {step.items.filter((item) => item.matched).length}/{step.items.length}</div> : null}
-          {step.request ? (
-            <details className="plugin-editor-output-detail-block">
-              <summary>Request</summary>
-              <RequestDetailBlock request={step.request} emptyLabel="暂无请求数据。" />
-            </details>
-          ) : null}
-          {step.response ? (
-            <details className="plugin-editor-output-detail-block">
-              <summary>Response</summary>
-              <ResponseDetailBlock response={step.response} emptyLabel="暂无响应数据。" />
-            </details>
-          ) : null}
-          {step.selectors && Object.keys(step.selectors).length ? (
-            <details className="plugin-editor-output-detail-block">
-              <summary>Selectors</summary>
-              <SelectorDebugPanel selectors={step.selectors} />
-            </details>
-          ) : null}
-          {step.items?.length ? (
-            <details className="plugin-editor-output-detail-block">
-              <summary>Matched Items</summary>
-              <WorkflowItemsPanel items={step.items} />
-            </details>
-          ) : null}
-        </article>
-      ))}
+    <div className="wf-accordion">
+      {result.steps.map((step, index) => {
+        const key = `${step.stage}-${index}`;
+        const isExpanded = expandedKey === key;
+        return (
+          <section key={key} className={`wf-accordion-section${isExpanded ? " wf-accordion-section-expanded" : ""}`}>
+            <button type="button" className="wf-accordion-head" onClick={() => toggle(key)}>
+              <span className="wf-accordion-arrow">{isExpanded ? "\u25BC" : "\u25B6"}</span>
+              <strong>{step.stage}</strong>
+              <span className="wf-accordion-summary">{step.summary}</span>
+            </button>
+            {isExpanded && (
+              <div className="wf-accordion-body">
+                {step.candidate ? <div className="plugin-editor-timeline-detail">candidate: {step.candidate}</div> : null}
+                {step.selected_value ? <div className="plugin-editor-timeline-detail">selected: {step.selected_value}</div> : null}
+                {step.items?.length ? <div className="plugin-editor-timeline-detail">matched items: {step.items.filter((item) => item.matched).length}/{step.items.length}</div> : null}
+                {step.request ? (
+                  <details className="plugin-editor-output-detail-block" open={isOpen(key, "request")} onToggle={(e) => onToggle(key, "request", (e.currentTarget as HTMLDetailsElement).open)}>
+                    <summary>Request</summary>
+                    <RequestDetailBlock request={step.request} emptyLabel="暂无请求数据。" defaultHeadersOpen={false} />
+                  </details>
+                ) : null}
+                {step.response ? (
+                  <details className="plugin-editor-output-detail-block" open={isOpen(key, "response")} onToggle={(e) => onToggle(key, "response", (e.currentTarget as HTMLDetailsElement).open)}>
+                    <summary>Response</summary>
+                    <ResponseDetailBlock response={step.response} emptyLabel="暂无响应数据。" defaultHeadersOpen={false} />
+                  </details>
+                ) : null}
+                {step.selectors && Object.keys(step.selectors).length ? (
+                  <details className="plugin-editor-output-detail-block" open={isOpen(key, "selectors")} onToggle={(e) => onToggle(key, "selectors", (e.currentTarget as HTMLDetailsElement).open)}>
+                    <summary>Selectors</summary>
+                    <SelectorDebugPanel selectors={step.selectors} />
+                  </details>
+                ) : null}
+                {step.items?.length ? (
+                  <details className="plugin-editor-output-detail-block" open={isOpen(key, "items")} onToggle={(e) => onToggle(key, "items", (e.currentTarget as HTMLDetailsElement).open)}>
+                    <summary>Matched Items</summary>
+                    <WorkflowItemsPanel items={step.items} />
+                  </details>
+                ) : null}
+              </div>
+            )}
+          </section>
+        );
+      })}
       {result.error ? (
-        <article className="plugin-editor-timeline-step plugin-editor-timeline-step-error">
-          <div className="plugin-editor-timeline-head">
+        <section className="wf-accordion-section wf-accordion-section-error">
+          <div className="wf-accordion-head wf-accordion-head-static">
             <strong>error</strong>
-            <span>{result.error}</span>
+            <span className="wf-accordion-summary">{result.error}</span>
           </div>
-        </article>
+        </section>
       ) : null}
+      <section className={`wf-accordion-section${expandedKey === stepsJsonKey ? " wf-accordion-section-expanded" : ""}`}>
+        <button type="button" className="wf-accordion-head" onClick={() => toggle(stepsJsonKey)}>
+          <span className="wf-accordion-arrow">{expandedKey === stepsJsonKey ? "\u25BC" : "\u25B6"}</span>
+          <strong>Steps JSON</strong>
+          <span className="wf-accordion-summary">{result.steps.length} steps</span>
+        </button>
+        {expandedKey === stepsJsonKey && (
+          <div className="wf-accordion-body">
+            <pre className="searcher-debug-json plugin-editor-json-scroll">{JSON.stringify(result, null, 2)}</pre>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -730,9 +769,11 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
 function RequestDetailBlock({
   request,
   emptyLabel,
+  defaultHeadersOpen = true,
 }: {
   request?: PluginEditorRequestDebugResult["request"] | null;
   emptyLabel: string;
+  defaultHeadersOpen?: boolean;
 }) {
   if (!request) {
     return <div className="ruleset-debug-empty">{emptyLabel}</div>;
@@ -740,7 +781,7 @@ function RequestDetailBlock({
   const headerCount = Object.keys(request.headers).length;
   return (
     <div className="plugin-editor-output-detail">
-      <details className="plugin-editor-output-detail-block" open>
+      <details className="plugin-editor-output-detail-block" {...(defaultHeadersOpen ? { open: true } : {})}>
         <summary className="plugin-editor-output-detail-summary">
           <span>Headers</span>
           <span className={`plugin-editor-request-json-count ${headerCount > 0 ? "" : "plugin-editor-request-json-count-hidden"}`}>{headerCount}</span>
@@ -756,10 +797,12 @@ function ResponseDetailBlock({
   response,
   emptyLabel,
   extra,
+  defaultHeadersOpen = true,
 }: {
   response?: PluginEditorRequestDebugResult["response"] | null;
   emptyLabel: string;
   extra?: ReactNode;
+  defaultHeadersOpen?: boolean;
 }) {
   if (!response) {
     return <div className="ruleset-debug-empty">{emptyLabel}</div>;
@@ -773,7 +816,7 @@ function ResponseDetailBlock({
 
   return (
     <div className="plugin-editor-output-detail">
-      <details className="plugin-editor-output-detail-block" open>
+      <details className="plugin-editor-output-detail-block" {...(defaultHeadersOpen ? { open: true } : {})}>
         <summary className="plugin-editor-output-detail-summary">
           <span>Headers</span>
           <span className={`plugin-editor-request-json-count ${headerCount > 0 ? "" : "plugin-editor-request-json-count-hidden"}`}>{headerCount}</span>

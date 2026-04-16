@@ -5978,39 +5978,6 @@ textarea.input {
   grid-column: 1 / -1;
 }
 
-.plugin-editor-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 0 0 auto;
-  min-height: auto;
-  max-height: none;
-  overflow: visible;
-  padding-right: 0;
-}
-
-.plugin-editor-timeline-step {
-  border-radius: 16px;
-  padding: 14px;
-  background: rgba(255, 248, 236, 0.92);
-  border: 1px solid rgba(105, 79, 51, 0.12);
-  display: grid;
-  gap: 8px;
-}
-
-.plugin-editor-timeline-step-error {
-  background: rgba(254, 226, 226, 0.88);
-  border-color: rgba(220, 38, 38, 0.22);
-}
-
-.plugin-editor-timeline-step-error .plugin-editor-timeline-head strong {
-  color: #dc2626;
-}
-
-.plugin-editor-timeline-step-error .plugin-editor-timeline-head span {
-  color: #991b1b;
-}
-
 .plugin-editor-output-error {
   padding: 12px 16px;
   border-radius: 14px;
@@ -6022,15 +5989,6 @@ textarea.input {
   word-break: break-word;
 }
 
-.plugin-editor-timeline-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.plugin-editor-timeline-head span,
 .plugin-editor-timeline-detail {
   color: var(--muted);
   font-size: 13px;
@@ -6038,6 +5996,104 @@ textarea.input {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* ── Workflow accordion ── */
+
+.wf-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wf-accordion-section {
+  flex-shrink: 0;
+  border: 1px solid rgba(105, 79, 51, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 248, 236, 0.92);
+  overflow: hidden;
+}
+
+.wf-accordion-section-expanded {
+  flex: 1 1 0;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-accordion-head {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  user-select: none;
+}
+
+.wf-accordion-head:hover {
+  background: rgba(105, 79, 51, 0.06);
+}
+
+.wf-accordion-head-static {
+  cursor: default;
+}
+
+.wf-accordion-head-static:hover {
+  background: transparent;
+}
+
+.wf-accordion-arrow {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--muted);
+  width: 12px;
+  text-align: center;
+}
+
+.wf-accordion-summary {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.wf-accordion-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+}
+
+.wf-accordion-body > * + * {
+  margin-top: 10px;
+}
+
+.wf-accordion-body > .searcher-debug-json {
+  max-height: none;
+  height: 100%;
+}
+
+.wf-accordion-section-error {
+  background: rgba(254, 226, 226, 0.88);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+.wf-accordion-section-error .wf-accordion-head strong {
+  color: #dc2626;
+}
+
+.wf-accordion-section-error .wf-accordion-summary {
+  color: #991b1b;
 }
 
 .plugin-editor-header-list {
