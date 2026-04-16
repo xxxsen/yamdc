@@ -679,9 +679,21 @@ function useBodySearch(body: string, doc: Document | null, mode: "source" | "ins
   const currentMatchNode: Node | null = mode === "inspector" && inspectorNodes.length > 0 ? (inspectorNodes[safeIdx] ?? null) : null;
 
   const xpathMatchSet = useMemo<ReadonlySet<Node>>(() => (xpathNodes.length > 0 ? new Set(xpathNodes) : EMPTY_NODE_SET), [xpathNodes]);
-  const forceExpandSet = useMemo<ReadonlySet<Node>>(() => ancestorSet(inspectorNodes), [inspectorNodes]);
+  const forceExpandSetRaw = useMemo<ReadonlySet<Node>>(() => ancestorSet(inspectorNodes), [inspectorNodes]);
 
-  const handleSearch = useCallback((s: string) => { setSearch(s); setMatchIdx(0); }, []);
+  const [stickyForceExpand, setStickyForceExpand] = useState<ReadonlySet<Node>>(EMPTY_NODE_SET);
+  const [prevRaw, setPrevRaw] = useState<ReadonlySet<Node>>(EMPTY_NODE_SET);
+  if (forceExpandSetRaw !== prevRaw) {
+    setPrevRaw(forceExpandSetRaw);
+    if (forceExpandSetRaw.size > 0) setStickyForceExpand(forceExpandSetRaw);
+  }
+  const forceExpandSet = forceExpandSetRaw.size > 0 ? forceExpandSetRaw : stickyForceExpand;
+
+  const handleSearch = useCallback((s: string) => {
+    setSearch(s);
+    setMatchIdx(0);
+    if (!s.trim()) setStickyForceExpand(EMPTY_NODE_SET);
+  }, []);
   const handleKind = useCallback((k: "text" | "xpath") => { setKind(k); setMatchIdx(0); }, []);
 
   return { search, kind, matchIdx: safeIdx, matchCount, xpathMatchSet, forceExpandSet, currentMatchNode, handleSearch, handleKind, setMatchIdx };
