@@ -259,6 +259,7 @@ describe("stateFromDraft: required field handling", () => {
 
   it("handles fetch_type correctly", () => {
     expect(stateFromDraft(makeMinimalDraft({ fetch_type: "browser" })).fetchType).toBe("browser");
+    expect(stateFromDraft(makeMinimalDraft({ fetch_type: "flaresolverr" })).fetchType).toBe("flaresolverr");
     expect(stateFromDraft(makeMinimalDraft({ fetch_type: undefined })).fetchType).toBe("go-http");
     expect(stateFromDraft(makeMinimalDraft()).fetchType).toBe("go-http");
   });
@@ -315,6 +316,13 @@ describe("normalizeEditorState: condition simplification", () => {
     state.fetchType = "browser";
     const normalized = normalizeEditorState(state);
     expect(normalized.fetchType).toBe("browser");
+  });
+
+  it("preserves flaresolverr fetchType", () => {
+    const state = defaultState();
+    state.fetchType = "flaresolverr";
+    const normalized = normalizeEditorState(state);
+    expect(normalized.fetchType).toBe("flaresolverr");
   });
 
   it("falls back to go-http for empty fetchType", () => {

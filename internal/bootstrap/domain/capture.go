@@ -15,6 +15,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/face"
+	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/searcher"
@@ -58,9 +59,12 @@ func (rt *CaptureRuntime) Close() {
 }
 
 func BuildCaptureRuntime(ctx context.Context, cfg CaptureRuntimeConfig) (*CaptureRuntime, error) {
-	cli, err := bootinfra.BuildHTTPClient(ctx, cfg.HTTPClient, cfg.FlareSolverr)
+	cli, err := bootinfra.BuildHTTPClient(ctx, cfg.HTTPClient)
 	if err != nil {
 		return nil, fmt.Errorf("build http client: %w", err)
+	}
+	if cfg.FlareSolverr != nil {
+		cli = flarerr.NewHTTPClient(cli, cfg.FlareSolverr.Host)
 	}
 	nav := browser.NewNavigator(&browser.Config{
 		RemoteURL: cfg.BrowserRemoteURL,

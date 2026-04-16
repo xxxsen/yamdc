@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -133,4 +134,51 @@ func TestFetchType_Browser(t *testing.T) {
 	t.Cleanup(func() { _ = nav.Close() })
 	cli := browser.NewHTTPClient(baseCli, nav)
 	doSearch(t, browserData, cli, numberID)
+}
+
+func toFlaresolverrYAML(t *testing.T, goHTTPData []byte) []byte {
+	t.Helper()
+	var raw map[string]interface{}
+	require.NoError(t, yaml.Unmarshal(goHTTPData, &raw))
+
+	raw["fetch_type"] = "flaresolverr"
+	raw["name"] = fmt.Sprintf("%s-flaresolverr", raw["name"])
+
+	out, err := yaml.Marshal(raw)
+	require.NoError(t, err)
+	return out
+}
+
+// TestFetchType_Flaresolverr converts a go-http plugin to flaresolverr mode
+// and verifies the full search pipeline works.
+//
+// Environment variables:
+//
+//	YAMDC_FLARESOLVERR_TEST=1              required to enable
+//	YAMDC_FLARESOLVERR_ENDPOINT            optional, defaults to http://127.0.0.1:8191
+//	FETCH_TYPE_TEST_URL                    remote YAML plugin URL
+//	FETCH_TYPE_TEST_NUMBER                 movie number to search
+func TestFetchType_Flaresolverr(t *testing.T) {
+	if os.Getenv("YAMDC_FLARESOLVERR_TEST") == "" {
+		t.Skip("set YAMDC_FLARESOLVERR_TEST=1 to run FlareSolverr integration tests")
+	}
+	yamlURL, numberID, _ := fetchTestEnv(t)
+	goHTTPData := fetchRemoteYAML(t, yamlURL)
+	flareData := toFlaresolverrYAML(t, goHTTPData)
+	t.Logf("Loaded %d bytes from %s, converted to flaresolverr YAML (%d bytes)",
+		len(goHTTPData), yamlURL, len(flareData))
+	t.Logf("Flaresolverr YAML:\n%s", string(flareData))
+
+	endpoint := os.Getenv("YAMDC_FLARESOLVERR_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:8191"
+	}
+
+	baseCli := client.MustNewClient()
+	flareCli := flarerr.NewHTTPClient(baseCli, endpoint)
+	nav := browser.NewNavigator(&browser.Config{})
+	cli := browser.NewHTTPClient(flareCli, nav)
+	t.Cleanup(func() { _ = nav.Close() })
+
+	doSearch(t, flareData, cli, numberID)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/enum"
+	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	"github.com/xxxsen/yamdc/internal/searcher/parser"
@@ -72,8 +73,9 @@ const (
 )
 
 const (
-	fetchTypeGoHTTP  = "go-http"
-	fetchTypeBrowser = "browser"
+	fetchTypeGoHTTP       = "go-http"
+	fetchTypeBrowser      = "browser"
+	fetchTypeFlaresolverr = "flaresolverr"
 )
 
 type compiledPlugin struct {
@@ -217,7 +219,7 @@ func validatePluginSpec(raw *PluginSpec) (string, error) {
 	if ft == "" {
 		ft = fetchTypeGoHTTP
 	}
-	if ft != fetchTypeGoHTTP && ft != fetchTypeBrowser {
+	if ft != fetchTypeGoHTTP && ft != fetchTypeBrowser && ft != fetchTypeFlaresolverr {
 		return "", fmt.Errorf("%w: %s", errInvalidFetchType, ft)
 	}
 	return ft, nil
@@ -991,10 +993,18 @@ func setBodyContentType(req *http.Request, spec *compiledRequest) {
 
 const defaultWaitStable = 5 * time.Second
 
-func (p *SearchPlugin) applyBrowserContext(req *http.Request, spec *compiledRequest) *http.Request {
-	if p.spec.fetchType != fetchTypeBrowser {
+func (p *SearchPlugin) applyFetchTypeContext(req *http.Request, spec *compiledRequest) *http.Request {
+	switch p.spec.fetchType {
+	case fetchTypeBrowser:
+		return applyBrowserParams(req, spec)
+	case fetchTypeFlaresolverr:
+		return req.WithContext(flarerr.WithParams(req.Context(), &flarerr.Params{}))
+	default:
 		return req
 	}
+}
+
+func applyBrowserParams(req *http.Request, spec *compiledRequest) *http.Request {
 	params := &browser.Params{}
 	if spec.browser != nil {
 		params.WaitSelector = spec.browser.waitSelector
@@ -1037,7 +1047,7 @@ func (p *SearchPlugin) buildRequest(
 		return nil, err
 	}
 	setBodyContentType(req, spec)
-	req = p.applyBrowserContext(req, spec)
+	req = p.applyFetchTypeContext(req, spec)
 	return req, nil
 }
 
