@@ -22,8 +22,9 @@ func TestWithParams_GetParams(t *testing.T) {
 		{
 			name: "round-trip params",
 			params: &Params{
-				WaitSelector: "//div",
-				WaitTimeout:  5 * time.Second,
+				WaitSelector:       "//div",
+				WaitTimeout:        5 * time.Second,
+				WaitStableDuration: 3 * time.Second,
 				Cookies: []*http.Cookie{
 					{Name: "a", Value: "1"},
 				},
@@ -44,6 +45,7 @@ func TestWithParams_GetParams(t *testing.T) {
 				require.NotNil(t, got)
 				assert.Equal(t, tc.params.WaitSelector, got.WaitSelector)
 				assert.Equal(t, tc.params.WaitTimeout, got.WaitTimeout)
+				assert.Equal(t, tc.params.WaitStableDuration, got.WaitStableDuration)
 				assert.Equal(t, tc.params.Cookies, got.Cookies)
 				assert.Equal(t, tc.params.Headers, got.Headers)
 			}

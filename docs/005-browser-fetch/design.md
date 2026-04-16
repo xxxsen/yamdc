@@ -27,11 +27,31 @@
 request:
   browser:
     wait_selector: "//div[@class='result']"   # XPath，等待该元素出现
-    wait_timeout: 30                           # 超时秒数
+    wait_timeout: 30                           # 整体超时秒数（默认 60）
+    wait_stable: 5                             # idle 后额外等待秒数（默认 5，仅无 selector 时生效）
 ```
 
-- **有 wait_selector**：导航后等待指定 XPath 元素出现，超时则报错
-- **无 wait_selector**：导航后等待 `NetworkAlmostIdle`（网络请求基本停止）后返回
+| 字段 | 说明 |
+|------|------|
+| `wait_selector` | XPath 表达式。非空时导航后等待该元素出现；为空时走 idle + stable 路径 |
+| `wait_timeout` | **整体硬上限**，Navigate + 等待元素/idle + stable 全部受此约束。默认 60 秒 |
+| `wait_stable` | 仅当 `wait_selector` 为空时生效。NetworkAlmostIdle 后额外等待的秒数，给页面更多渲染时间。到时间即返回，不检查 DOM 是否真正稳定。默认 5 秒 |
+
+**两种等待路径：**
+
+- **有 wait_selector**：在 `wait_timeout` 内等待指定 XPath 元素出现，超时报错。`wait_stable` 不生效
+- **无 wait_selector**：在 `wait_timeout` 内等待 `NetworkAlmostIdle`，idle 后再等待 `wait_stable` 秒。idle 阶段超时报错；stable 阶段超时直接返回当前页面内容（不报错）
+
+**时序示意（无 selector）：**
+
+```
+├── Navigate ──── NetworkAlmostIdle ──── post-idle delay ──── 返回 HTML ──┤
+│◄──────────────── wait_timeout (硬上限) ────────────────────────────────►│
+│                                       │◄── wait_stable ──►│            │
+│                                       │   (idle 后固定延迟)            │
+```
+
+> **建议**：对于有反爬/JS challenge 的站点（如 Cloudflare），优先配置 `wait_selector` 指向页面关键内容元素，可靠性远高于 idle + stable 路径。
 
 不同 request 可以指定不同的 wait 参数（如搜索页无需等待特定元素，详情页需要）。
 
@@ -91,7 +111,7 @@ workflow:
       url: "${value}"
       browser:
         wait_selector: //div[@class="detail"]
-        wait_timeout: 15
+        wait_timeout: 30
 scrape:
   format: html
   fields:
@@ -173,10 +193,11 @@ browser Navigate  ──提取cookies──▶  httpClientWrap.jar
 // internal/browser/context.go
 
 type Params struct {
-    WaitSelector string           // XPath，为空则等待 NetworkAlmostIdle
-    WaitTimeout  time.Duration    // 等待超时，0 使用默认 60s
-    Cookies      []*http.Cookie   // 注入到浏览器的 cookies
-    Headers      http.Header      // 注入到浏览器的 headers（仅用户配置）
+    WaitSelector       string         // XPath，为空则走 idle + stable 路径
+    WaitTimeout        time.Duration  // 整体超时，0 使用默认 60s
+    WaitStableDuration time.Duration  // idle 后额外等待时长，受 WaitTimeout 约束
+    Cookies            []*http.Cookie // 注入到浏览器的 cookies
+    Headers            http.Header    // 注入到浏览器的 headers（仅用户配置）
 }
 ```
 
@@ -241,10 +262,22 @@ type Config struct {
 
 ### 6.3 页面等待策略
 
+两条路径共享 `page.Timeout(WaitTimeout)` 作为整体硬上限。
+
 | 条件 | 行为 |
 |------|------|
-| `WaitSelector` 非空 | `page.Navigate(url)` → `page.ElementX(selector)` |
-| `WaitSelector` 为空 | `page.WaitNavigation(NetworkAlmostIdle)` → `page.Navigate(url)` |
+| `WaitSelector` 非空 | `Navigate(url)` → `ElementX(selector)`。整体受 `WaitTimeout` 约束 |
+| `WaitSelector` 为空 | `Navigate(url)` → 等待 `NetworkAlmostIdle` → JS setTimeout 等待 `WaitStableDuration`。idle 超时报错；stable 超时静默返回当前内容 |
+
+**idle + stable 路径细节：**
+
+1. 用 `page.Timeout(WaitTimeout)` 包裹整个操作
+2. 调用 `page.WaitNavigation(NetworkAlmostIdle)` + `page.Navigate(url)` + `wait()`
+3. 用 `page.Eval("() => 0")` 探测 idle 是否在超时前达成（未达成 → 硬失败）
+4. 用 `page.Eval("() => new Promise(r => setTimeout(r, ms))")` 做固定延迟等待，而非 `page.WaitStable()`。区别：`WaitStable(d)` 要求 DOM 连续 d 秒无变化才返回，对有广告/动态内容的页面会反复重试直到超时；JS setTimeout 固定等 d 秒即返回，行为可预期
+5. stable 阶段的错误被忽略（best-effort）
+
+**YAML 插件默认值：** 当 `fetch_type=browser` 且无 `wait_selector` 且未显式配置 `wait_stable` 时，`applyBrowserContext` 自动填充 `WaitStableDuration = 5s`。
 
 ### 6.4 生命周期管理
 
@@ -290,12 +323,12 @@ chrome --remote-debugging-port=9222
 位于 Request 区域的高级选项中，仅在 `Fetch Type = browser` 时显示：
 
 ```
-┌──────────────────────────────────┐
-│ ▼ Browser Rendering              │
-│                                  │
-│  Wait XPath   [//div[@class=...]]│
-│  Wait Timeout [30              ] │
-└──────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│ ▼ Browser Rendering                                   │
+│                                                       │
+│  Wait XPath    [//div[@class=...]]                    │
+│  Wait Timeout  [30              ]  Wait Stable [5   ] │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### 7.3 数据模型
@@ -306,7 +339,8 @@ fetchType: string;             // "go-http" | "browser"
 
 // RequestFormState（每个 request 独立）
 browserWaitSelector: string;   // XPath
-browserWaitTimeout: string;    // 秒数
+browserWaitTimeout: string;    // 整体超时秒数
+browserWaitStable: string;     // idle 后额外等待秒数
 
 // PluginEditorDraft
 fetch_type?: string;           // 仅 "browser" 时输出，空/go-http 时 undefined
@@ -315,6 +349,7 @@ fetch_type?: string;           // 仅 "browser" 时输出，空/go-http 时 unde
 interface PluginEditorBrowserSpec {
   wait_selector?: string;
   wait_timeout?: number;
+  wait_stable?: number;
 }
 ```
 

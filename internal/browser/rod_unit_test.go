@@ -359,12 +359,23 @@ func TestNavigateWithIdle(t *testing.T) {
 	b := getTestBrowser(t)
 	srv := newTestServer(t)
 
-	page, err := stealth.Page(b)
-	require.NoError(t, err)
-	defer func() { _ = page.Close() }()
+	t.Run("without wait stable", func(t *testing.T) {
+		page, err := stealth.Page(b)
+		require.NoError(t, err)
+		defer func() { _ = page.Close() }()
 
-	err = navigateWithIdle(page, srv.URL)
-	assert.NoError(t, err)
+		err = navigateWithIdle(page, srv.URL, &Params{})
+		assert.NoError(t, err)
+	})
+
+	t.Run("with wait stable", func(t *testing.T) {
+		page, err := stealth.Page(b)
+		require.NoError(t, err)
+		defer func() { _ = page.Close() }()
+
+		err = navigateWithIdle(page, srv.URL, &Params{WaitStableDuration: 500 * time.Millisecond})
+		assert.NoError(t, err)
+	})
 }
 
 // ---------- prepareStealthPage ----------
@@ -793,7 +804,7 @@ func TestNavigateWithIdle_ClosedPage(t *testing.T) {
 	require.NoError(t, err)
 	_ = page.Close()
 
-	err = navigateWithIdle(page, "http://example.com")
+	err = navigateWithIdle(page, "http://example.com", &Params{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "navigate to")
 }

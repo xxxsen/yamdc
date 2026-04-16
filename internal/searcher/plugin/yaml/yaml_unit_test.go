@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/model"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
@@ -1684,6 +1686,98 @@ scrape:
 	req, err := plg.buildRequest(ctx, plg.spec.request, &evalContext{number: "ABC", host: "https://example.com"})
 	require.NoError(t, err)
 	assert.NotNil(t, req)
+	params := browser.GetParams(req.Context())
+	require.NotNil(t, params)
+	assert.Equal(t, ".content", params.WaitSelector)
+	assert.Equal(t, 5*time.Second, params.WaitTimeout)
+	assert.Equal(t, time.Duration(0), params.WaitStableDuration)
+}
+
+func TestApplyBrowserContext_WaitStable_Explicit(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+fetch_type: browser
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /search/${number}
+  browser:
+    wait_stable: 10
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	req, err := plg.buildRequest(ctx, plg.spec.request, &evalContext{number: "ABC", host: "https://example.com"})
+	require.NoError(t, err)
+	params := browser.GetParams(req.Context())
+	require.NotNil(t, params)
+	assert.Equal(t, 10*time.Second, params.WaitStableDuration)
+}
+
+func TestApplyBrowserContext_WaitStable_DefaultWhenNoSelector(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+fetch_type: browser
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /search/${number}
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	req, err := plg.buildRequest(ctx, plg.spec.request, &evalContext{number: "ABC", host: "https://example.com"})
+	require.NoError(t, err)
+	params := browser.GetParams(req.Context())
+	require.NotNil(t, params)
+	assert.Equal(t, "", params.WaitSelector)
+	assert.Equal(t, defaultWaitStable, params.WaitStableDuration)
+}
+
+func TestApplyBrowserContext_WaitStable_NotAppliedWithSelector(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+fetch_type: browser
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /search/${number}
+  browser:
+    wait_selector: "//div"
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	req, err := plg.buildRequest(ctx, plg.spec.request, &evalContext{number: "ABC", host: "https://example.com"})
+	require.NoError(t, err)
+	params := browser.GetParams(req.Context())
+	require.NotNil(t, params)
+	assert.Equal(t, "//div", params.WaitSelector)
+	assert.Equal(t, time.Duration(0), params.WaitStableDuration)
 }
 
 // --- template edge cases ---

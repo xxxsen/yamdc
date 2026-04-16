@@ -65,6 +65,7 @@ export const DEFAULT_REQUEST_FORM_STATE: RequestFormState = {
   decodeCharset: "",
   browserWaitSelector: "",
   browserWaitTimeout: "",
+  browserWaitStable: "",
 };
 
 export const DEFAULT_FIELD: FieldForm = {

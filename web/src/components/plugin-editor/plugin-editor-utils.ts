@@ -387,7 +387,7 @@ function parseStringRecord(value: string, label: string): Record<string, string>
 // ---------------------------------------------------------------------------
 
 export function buildRequestFromFormState(req: RequestFormState, label = "request"): NonNullable<PluginEditorDraft["request"]> {
-  const hasWaitParams = req.browserWaitSelector.trim() || req.browserWaitTimeout.trim();
+  const hasWaitParams = req.browserWaitSelector.trim() || req.browserWaitTimeout.trim() || req.browserWaitStable.trim();
   return {
     method: req.method.trim() || "GET",
     path: req.path.trim() || undefined,
@@ -403,6 +403,7 @@ export function buildRequestFromFormState(req: RequestFormState, label = "reques
       ? {
           wait_selector: req.browserWaitSelector.trim() || undefined,
           wait_timeout: parseInt(req.browserWaitTimeout) || undefined,
+          wait_stable: parseInt(req.browserWaitStable) || undefined,
         }
       : undefined,
   };
@@ -530,6 +531,7 @@ function requestFormStateFromDraft(req: PluginEditorDraft["request"]): RequestFo
     decodeCharset: req?.response?.decode_charset ?? "",
     browserWaitSelector: req?.browser?.wait_selector ?? "",
     browserWaitTimeout: req?.browser?.wait_timeout ? String(req.browser.wait_timeout) : "",
+    browserWaitStable: req?.browser?.wait_stable ? String(req.browser.wait_stable) : "",
   };
 }
 
@@ -652,6 +654,7 @@ function normalizeLegacyRequestForm(
       decodeCharset: nested.decodeCharset || "",
       browserWaitSelector: nested.browserWaitSelector,
       browserWaitTimeout: nested.browserWaitTimeout,
+      browserWaitStable: nested.browserWaitStable,
     };
   }
   // Fall back to legacy flat fields
@@ -681,6 +684,7 @@ function normalizeLegacyRequestForm(
     decodeCharset: decodeCharset || "",
     browserWaitSelector: "",
     browserWaitTimeout: "",
+    browserWaitStable: "",
   };
 }
 

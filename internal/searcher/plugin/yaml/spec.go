@@ -58,6 +58,7 @@ type RequestSpec struct {
 type BrowserSpec struct {
 	WaitSelector string `yaml:"wait_selector" json:"wait_selector"`
 	WaitTimeout  int    `yaml:"wait_timeout" json:"wait_timeout"`
+	WaitStable   int    `yaml:"wait_stable" json:"wait_stable"`
 }
 
 type RequestBodySpec struct {

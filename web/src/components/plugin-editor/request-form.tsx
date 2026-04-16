@@ -52,6 +52,10 @@ export function RequestForm(props: {
           <span>Wait Timeout (s)</span>
           <input className="input" type="number" value={state.browserWaitTimeout} onChange={(event) => patchField("browserWaitTimeout", event.target.value)} placeholder="默认 60" />
         </label>
+        <label className="plugin-editor-field-inline plugin-editor-request-inline-field-xl">
+          <span>Wait Stable (s)</span>
+          <input className="input" type="number" value={state.browserWaitStable} onChange={(event) => patchField("browserWaitStable", event.target.value)} placeholder="默认 5" />
+        </label>
       </div>
     </details>
   ) : null;
