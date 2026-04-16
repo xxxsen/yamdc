@@ -5906,6 +5906,16 @@ textarea.input {
   gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
+}
+
+.plugin-editor-output-detail > * {
+  flex-shrink: 0;
+}
+
+.plugin-editor-output-detail > .plugin-editor-body-block {
+  flex: 1 1 0;
+  min-height: 100px;
 }
 
 .plugin-editor-summary-grid {
@@ -6041,10 +6051,12 @@ textarea.input {
 }
 
 .plugin-editor-body-panel {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   max-height: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .plugin-editor-json-scroll {
@@ -6091,15 +6103,54 @@ textarea.input {
 }
 
 .plugin-editor-body-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   overflow: hidden;
 }
 
-.plugin-editor-body-block[open] > * + * {
-  margin-top: 12px;
+.plugin-editor-body-block > * + * {
+  margin-top: 0;
+}
+
+.plugin-editor-body-block > .plugin-editor-output-detail-summary {
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.plugin-editor-body-inner {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.plugin-editor-body-inner > .body-search-bar {
+  flex-shrink: 0;
+}
+
+.plugin-editor-body-inner > .plugin-editor-body-panel {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.plugin-editor-body-inner > .html-inspector-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .plugin-editor-body-panel .searcher-debug-json {
   margin-top: 0;
+}
+
+.plugin-editor-body-block .plugin-editor-json-scroll {
+  max-height: none;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 /* ── Body mode toggle (Source / Preview) ── */
@@ -6151,6 +6202,12 @@ textarea.input {
   background: #fff;
   border: 1px solid rgba(105, 79, 51, 0.10);
   border-radius: 8px;
+}
+
+.plugin-editor-body-block .html-inspector-tree {
+  max-height: none;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .dom-tree-line {

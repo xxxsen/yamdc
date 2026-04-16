@@ -697,8 +697,8 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
   const activeTextSearch = bs.kind === "text" ? bs.search.trim() : "";
 
   return (
-    <details className="plugin-editor-output-detail-block plugin-editor-body-block" open>
-      <summary className="plugin-editor-output-detail-summary">
+    <div className="plugin-editor-output-detail-block plugin-editor-body-block">
+      <div className="plugin-editor-output-detail-summary">
         <span>Body</span>
         {htmlMode && (
           <span className="body-mode-toggle">
@@ -706,22 +706,24 @@ function BodyPanel(props: { body: string; contentType: string; emptyLabel: strin
             <button type="button" className={`body-mode-btn${mode === "inspector" ? " body-mode-btn-active" : ""}`} onClick={() => setMode("inspector")}>Inspector</button>
           </span>
         )}
-      </summary>
-      {htmlMode && (
-        <BodySearchBar search={bs.search} onSearch={bs.handleSearch} kind={bs.kind} onKindChange={bs.handleKind} matchCount={bs.matchCount} matchIndex={bs.matchIdx} onNav={bs.setMatchIdx} />
-      )}
-      {mode === "source" || !htmlMode ? (
-        <div className="plugin-editor-body-panel">
-          {activeTextSearch ? (
-            <HighlightedSource body={props.body} search={activeTextSearch} matchIndex={bs.matchIdx} />
-          ) : (
-            <pre className="searcher-debug-json plugin-editor-json-scroll">{props.body}</pre>
-          )}
-        </div>
-      ) : (
-        doc ? <HtmlInspectorPanel doc={doc} matchedNodes={bs.xpathMatchSet} forceExpand={bs.forceExpandSet} textSearch={activeTextSearch} currentNode={bs.currentMatchNode} /> : null
-      )}
-    </details>
+      </div>
+      <div className="plugin-editor-body-inner">
+        {htmlMode && (
+          <BodySearchBar search={bs.search} onSearch={bs.handleSearch} kind={bs.kind} onKindChange={bs.handleKind} matchCount={bs.matchCount} matchIndex={bs.matchIdx} onNav={bs.setMatchIdx} />
+        )}
+        {mode === "source" || !htmlMode ? (
+          <div className="plugin-editor-body-panel">
+            {activeTextSearch ? (
+              <HighlightedSource body={props.body} search={activeTextSearch} matchIndex={bs.matchIdx} />
+            ) : (
+              <pre className="searcher-debug-json plugin-editor-json-scroll">{props.body}</pre>
+            )}
+          </div>
+        ) : (
+          doc ? <HtmlInspectorPanel doc={doc} matchedNodes={bs.xpathMatchSet} forceExpand={bs.forceExpandSet} textSearch={activeTextSearch} currentNode={bs.currentMatchNode} /> : null
+        )}
+      </div>
+    </div>
   );
 }
 
