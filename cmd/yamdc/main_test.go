@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
+	bootrt "github.com/xxxsen/yamdc/internal/bootstrap/runtime"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
@@ -22,7 +24,7 @@ func TestPrecheckCaptureDirDoesNotRequireLibraryDir(t *testing.T) {
 		ScanDir: filepath.Join(tmp, "scan"),
 		SaveDir: filepath.Join(tmp, "save"),
 	}
-	require.NoError(t, precheckCaptureDir(c))
+	require.NoError(t, config.ValidateForCapture(c))
 }
 
 func TestPrecheckServerDirRequiresLibraryDir(t *testing.T) {
@@ -32,7 +34,7 @@ func TestPrecheckServerDirRequiresLibraryDir(t *testing.T) {
 		ScanDir: filepath.Join(tmp, "scan"),
 		SaveDir: filepath.Join(tmp, "save"),
 	}
-	require.EqualError(t, precheckServerDir(c), "no library dir")
+	require.EqualError(t, config.ValidateForServer(c), "no library dir")
 }
 
 func TestBuildMovieIDCleanerReturnsNonNilManagerOnSuccess(t *testing.T) {
@@ -48,24 +50,20 @@ options:
   case_mode: upper
 `), 0o600))
 
-	c := &config.Config{
-		DataDir: dataDir,
-		MovieIDRulesetConfig: config.MovieIDRulesetConfig{
-			SourceType: movieidcleaner.SourceTypeLocal,
-			Location:   ruleDir,
-		},
-	}
-	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
+	cleaner, manager, err := domain.BuildMovieIDCleaner(
+		context.Background(), client.MustNewClient(),
+		dataDir, movieidcleaner.SourceTypeLocal, ruleDir,
+	)
 	require.NoError(t, err)
 	require.NotNil(t, cleaner)
 	require.NotNil(t, manager)
 }
 
 func TestBuildMovieIDCleanerAllowsMissingSource(t *testing.T) {
-	c := &config.Config{
-		DataDir: t.TempDir(),
-	}
-	cleaner, manager, err := buildMovieIDCleaner(context.Background(), client.MustNewClient(), c)
+	cleaner, manager, err := domain.BuildMovieIDCleaner(
+		context.Background(), client.MustNewClient(),
+		t.TempDir(), "", "",
+	)
 	require.NoError(t, err)
 	require.NotNil(t, cleaner)
 	require.Nil(t, manager)
@@ -76,32 +74,25 @@ func TestBuildMovieIDCleanerAllowsMissingSource(t *testing.T) {
 }
 
 func TestPrepareSearcherPluginsAllowsBlankRemoteLocation(t *testing.T) {
-	c := &config.Config{
-		DataDir: t.TempDir(),
-		SearcherPluginConfig: config.SearcherPluginConfig{
-			Sources: []config.SearcherPluginSource{
-				{SourceType: "remote", Location: ""},
-			},
-		},
+	sources := []domain.PluginSource{
+		{SourceType: "remote", Location: ""},
 	}
-	manager, err := prepareSearcherPlugins(context.Background(), client.MustNewClient(), c)
-	require.ErrorIs(t, err, errNoPluginSources)
+	manager, err := domain.PrepareSearcherPlugins(
+		context.Background(), client.MustNewClient(),
+		t.TempDir(), sources, nil,
+	)
+	require.ErrorIs(t, err, domain.ErrNoPluginSources)
 	require.Nil(t, manager)
 }
 
 func TestBuildTranslatorSelectsConfiguredOrderAndDedupes(t *testing.T) {
-	c := &config.Config{
-		TranslateConfig: config.TranslateConfig{
-			Enable:   true,
-			Engine:   "ai",
-			Fallback: []string{"google", "ai"},
-			EngineConfig: config.TranslateEngineConfig{
-				Google: config.GoogleTranslateEngineConfig{Enable: true},
-				AI:     config.AITranslateEngineConfig{Enable: true},
-			},
-		},
+	cfg := bootrt.TranslatorConfig{
+		Engine:   "ai",
+		Fallback: []string{"google", "ai"},
+		Google:   bootrt.GoogleTranslatorConfig{Enable: true},
+		AI:       bootrt.AITranslatorConfig{Enable: true},
 	}
-	tr, err := buildTranslator(context.Background(), c, nil)
+	tr, err := bootrt.BuildTranslator(context.Background(), cfg, nil)
 	require.NoError(t, err)
 	require.NotNil(t, tr)
 	require.Equal(t, "G:[ai,google]", tr.Name())
@@ -161,21 +152,22 @@ chains:
 
 	registerCtx := pluginyaml.BuildRegisterContext(latest.Plugins)
 	creators := registerCtx.Snapshot()
-	cfg := &config.Config{
-		SwitchConfig: config.SwitchConfig{
-			EnableSearchMetaCache: false,
-		},
-	}
-	searchers, err := buildSearcherWithCreators(context.Background(), client.MustNewClient(), store.NewMemStorage(), cfg, latest.DefaultPlugins, nil, creators)
+	searchers, err := domain.BuildSearcherWithCreators(
+		context.Background(), client.MustNewClient(), store.NewMemStorage(),
+		false, latest.DefaultPlugins, nil, creators,
+	)
 	require.NoError(t, err)
 	require.Len(t, searchers, 2)
 
-	categorySearchers, err := buildCatSearcherWithCreators(context.Background(), client.MustNewClient(), store.NewMemStorage(), cfg, []config.CategoryPlugin{
-		{
-			Name:    "SOURCE_A",
-			Plugins: latest.CategoryChains["SOURCE_A"],
-		},
-	}, nil, creators)
+	categorySearchers, err := domain.BuildCatSearcherWithCreators(
+		context.Background(), client.MustNewClient(), store.NewMemStorage(),
+		false, []domain.CategoryPlugin{
+			{
+				Name:    "SOURCE_A",
+				Plugins: latest.CategoryChains["SOURCE_A"],
+			},
+		}, nil, creators,
+	)
 	require.NoError(t, err)
 	require.Len(t, categorySearchers["SOURCE_A"], 1)
 }

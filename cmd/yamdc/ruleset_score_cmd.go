@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 )
 
@@ -61,9 +62,9 @@ func scoreRulesetBundle(ruleset, casefile string) (*rulesetScoreOutput, error) {
 	if casefile == "" {
 		return nil, errCasefileRequired
 	}
-	resolved, err := resolveRuleSourcePath(".", ruleset)
+	resolved, err := domain.ResolveRuleSourcePath(".", ruleset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve ruleset path: %w", err)
 	}
 	rs, err := movieidcleaner.LoadRuleSetFromPath(resolved)
 	if err != nil {
