@@ -103,30 +103,49 @@ func navigatePage(page *rod.Page, rawURL string, params *Params) error {
 	if params.WaitSelector != "" {
 		return navigateWithSelector(page, rawURL, params)
 	}
-	return navigateWithIdle(page, rawURL)
+	return navigateWithIdle(page, rawURL, params)
+}
+
+func pageTimeout(params *Params) time.Duration {
+	if params.WaitTimeout > 0 {
+		return params.WaitTimeout
+	}
+	return defaultPageTimeout
 }
 
 func navigateWithSelector(page *rod.Page, rawURL string, params *Params) error {
-	if err := page.Navigate(rawURL); err != nil {
+	timedPage := page.Timeout(pageTimeout(params))
+	if err := timedPage.Navigate(rawURL); err != nil {
 		return fmt.Errorf("navigate to %s failed: %w", rawURL, err)
 	}
-	waitTimeout := defaultPageTimeout
-	if params.WaitTimeout > 0 {
-		waitTimeout = params.WaitTimeout
-	}
-	waitPage := page.Timeout(waitTimeout)
-	if _, err := waitPage.ElementX(params.WaitSelector); err != nil {
+	if _, err := timedPage.ElementX(params.WaitSelector); err != nil {
 		return fmt.Errorf("wait xpath %q failed: %w", params.WaitSelector, err)
 	}
 	return nil
 }
 
-func navigateWithIdle(page *rod.Page, rawURL string) error {
-	wait := page.WaitNavigation(proto.PageLifecycleEventNameNetworkAlmostIdle)
-	if err := page.Navigate(rawURL); err != nil {
+func navigateWithIdle(page *rod.Page, rawURL string, params *Params) error {
+	timedPage := page.Timeout(pageTimeout(params))
+	wait := timedPage.WaitNavigation(proto.PageLifecycleEventNameNetworkAlmostIdle)
+	if err := timedPage.Navigate(rawURL); err != nil {
 		return fmt.Errorf("navigate to %s failed: %w", rawURL, err)
 	}
 	wait()
+	// Verify idle was reached (not just overall timeout expiring).
+	if _, err := timedPage.Eval("() => 0"); err != nil {
+		return fmt.Errorf("navigate to %s idle timeout: %w", rawURL, err)
+	}
+	// Best-effort post-idle delay: give the page extra time to finish
+	// rendering. Uses a JS setTimeout so it is bounded by wait_timeout.
+	// Unlike WaitStable (which retries until DOM is unchanged for d,
+	// potentially consuming the entire remaining timeout on dynamic
+	// pages), this always completes in at most wait_stable seconds.
+	if params.WaitStableDuration > 0 {
+		_, _ = timedPage.Eval(fmt.Sprintf(
+			"() => new Promise(r => setTimeout(r, %d))",
+			params.WaitStableDuration.Milliseconds(),
+		))
+	}
 	return nil
 }
 

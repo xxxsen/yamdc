@@ -306,6 +306,7 @@ describe("normalizeEditorState legacy migrations", () => {
     expect(result.request.decodeCharset).toBe("utf-8");
     expect(result.request.browserWaitSelector).toBe("");
     expect(result.request.browserWaitTimeout).toBe("");
+    expect(result.request.browserWaitStable).toBe("");
   });
 
   it("normalizes nested request bodyJSON for raw kind when empty", () => {
@@ -328,9 +329,11 @@ describe("normalizeEditorState legacy migrations", () => {
     const state = defaultState();
     state.request.browserWaitSelector = "#content";
     state.request.browserWaitTimeout = "5000";
+    state.request.browserWaitStable = "3";
     const result = normalizeEditorState(state);
     expect(result.request.browserWaitSelector).toBe("#content");
     expect(result.request.browserWaitTimeout).toBe("5000");
+    expect(result.request.browserWaitStable).toBe("3");
   });
 
   it("defaults fetchType to go-http when empty", () => {
@@ -375,9 +378,11 @@ describe("normalizeEditorState legacy migrations", () => {
     const state = defaultState();
     Reflect.deleteProperty(state.request, "browserWaitSelector");
     Reflect.deleteProperty(state.request, "browserWaitTimeout");
+    Reflect.deleteProperty(state.request, "browserWaitStable");
     const result = normalizeEditorState(state);
     expect(result.request.browserWaitSelector).toBeUndefined();
     expect(result.request.browserWaitTimeout).toBeUndefined();
+    expect(result.request.browserWaitStable).toBeUndefined();
   });
 
   it("migrates legacy precheckVariablesJSON", () => {
@@ -863,14 +868,14 @@ describe("buildRequestFromFormState edge cases", () => {
     const req = defaultState().request;
     req.browserWaitSelector = " #x ";
     req.browserWaitTimeout = "";
-    expect(buildRequestFromFormState(req).browser).toEqual({ wait_selector: "#x", wait_timeout: undefined });
+    expect(buildRequestFromFormState(req).browser).toEqual({ wait_selector: "#x", wait_timeout: undefined, wait_stable: undefined });
   });
 
   it("includes browser wait with timeout only", () => {
     const req = defaultState().request;
     req.browserWaitSelector = "";
     req.browserWaitTimeout = "5000";
-    expect(buildRequestFromFormState(req).browser).toEqual({ wait_selector: undefined, wait_timeout: 5000 });
+    expect(buildRequestFromFormState(req).browser).toEqual({ wait_selector: undefined, wait_timeout: 5000, wait_stable: undefined });
   });
 
   it("omits wait_timeout when timeout is not numeric", () => {
@@ -878,6 +883,19 @@ describe("buildRequestFromFormState edge cases", () => {
     req.browserWaitSelector = "s";
     req.browserWaitTimeout = "not-a-number";
     expect(buildRequestFromFormState(req).browser?.wait_timeout).toBeUndefined();
+  });
+
+  it("includes browser wait_stable when set", () => {
+    const req = defaultState().request;
+    req.browserWaitStable = "10";
+    expect(buildRequestFromFormState(req).browser).toEqual({ wait_selector: undefined, wait_timeout: undefined, wait_stable: 10 });
+  });
+
+  it("omits wait_stable when not numeric", () => {
+    const req = defaultState().request;
+    req.browserWaitSelector = "s";
+    req.browserWaitStable = "abc";
+    expect(buildRequestFromFormState(req).browser?.wait_stable).toBeUndefined();
   });
 
   it("throws with custom label for invalid query JSON", () => {

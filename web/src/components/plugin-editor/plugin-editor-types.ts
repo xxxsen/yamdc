@@ -3,7 +3,7 @@ import type { PluginEditorDraft } from "@/lib/api";
 export type EditorTab = "compile" | "basic" | "request" | "response" | "workflow" | "scrape" | "draft";
 export type EditorSection = "basic" | "request" | "scrape" | "postprocess";
 export type RunAction = "compile" | "request" | "workflow" | "scrape";
-export type ToastState = { message: string; tone: "info" | "danger" } | null;
+export type ToastState = { message: string; tone: "info" | "danger" | "warning" } | null;
 
 export type FieldForm = {
   id: string;
@@ -65,6 +65,7 @@ export type RequestFormState = {
   decodeCharset: string;
   browserWaitSelector: string;
   browserWaitTimeout: string;
+  browserWaitStable: string;
 };
 
 export type EditorState = {

@@ -7,10 +7,11 @@ import (
 )
 
 type Params struct {
-	WaitSelector string
-	WaitTimeout  time.Duration
-	Cookies      []*http.Cookie
-	Headers      http.Header
+	WaitSelector        string
+	WaitTimeout         time.Duration
+	WaitStableDuration  time.Duration
+	Cookies             []*http.Cookie
+	Headers             http.Header
 }
 
 type ctxKey struct{}

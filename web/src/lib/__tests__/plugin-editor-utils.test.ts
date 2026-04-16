@@ -363,6 +363,7 @@ describe("buildRequestFromFormState", () => {
       decodeCharset: "",
       browserWaitSelector: "",
       browserWaitTimeout: "",
+      browserWaitStable: "",
     });
     expect(req.method).toBe("POST");
     expect(req.path).toBe("/api/test");
@@ -388,6 +389,7 @@ describe("buildRequestFromFormState", () => {
       decodeCharset: "euc-jp",
       browserWaitSelector: "",
       browserWaitTimeout: "",
+      browserWaitStable: "",
     });
     expect(req.path).toBeUndefined();
     expect(req.url).toBe("https://example.com/${number}");

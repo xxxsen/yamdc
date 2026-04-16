@@ -335,6 +335,7 @@ export interface PluginEditorParser {
 export interface PluginEditorBrowserSpec {
   wait_selector?: string;
   wait_timeout?: number;
+  wait_stable?: number;
 }
 
 export interface PluginEditorSelector {

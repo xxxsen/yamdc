@@ -108,7 +108,7 @@ export function PluginEditorShell() {
     if (!toast) {
       return;
     }
-    const timer = window.setTimeout(() => setToast(null), 2200);
+    const timer = window.setTimeout(() => setToast(null), toast.tone === "warning" ? 5000 : 2200);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -402,6 +402,9 @@ export function PluginEditorShell() {
       }
       setScrapeResult(scrapeDebug.data);
       setTab(state.workflowEnabled ? "scrape" : "basic");
+      if (state.fetchType === "browser" && !state.request.browserWaitSelector.trim()) {
+        setToast({ message: "提示：browser 模式下建议配置 Wait XPath，否则可能因为页面未完全加载导致抓取失败。", tone: "warning" });
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "插件调试失败");
     } finally {
@@ -1065,7 +1068,7 @@ export function PluginEditorShell() {
       {exampleOpen ? <ExampleModal onClose={() => setExampleOpen(false)} /> : null}
 
       {toast ? (
-        <div className="file-list-toast" data-tone={toast.tone === "danger" ? "danger" : undefined}>
+        <div className="file-list-toast" data-tone={toast.tone !== "info" ? toast.tone : undefined}>
           {toast.message}
         </div>
       ) : null}

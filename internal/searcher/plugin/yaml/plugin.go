@@ -98,6 +98,7 @@ type compiledPrecheck struct {
 type compiledBrowser struct {
 	waitSelector string
 	waitTimeout  time.Duration
+	waitStable   time.Duration
 }
 
 type compiledRequest struct {
@@ -344,6 +345,7 @@ func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 		out.browser = &compiledBrowser{
 			waitSelector: raw.Browser.WaitSelector,
 			waitTimeout:  time.Duration(raw.Browser.WaitTimeout) * time.Second,
+			waitStable:   time.Duration(raw.Browser.WaitStable) * time.Second,
 		}
 	}
 	return out, nil
@@ -987,6 +989,8 @@ func setBodyContentType(req *http.Request, spec *compiledRequest) {
 	}
 }
 
+const defaultWaitStable = 5 * time.Second
+
 func (p *SearchPlugin) applyBrowserContext(req *http.Request, spec *compiledRequest) *http.Request {
 	if p.spec.fetchType != fetchTypeBrowser {
 		return req
@@ -995,6 +999,10 @@ func (p *SearchPlugin) applyBrowserContext(req *http.Request, spec *compiledRequ
 	if spec.browser != nil {
 		params.WaitSelector = spec.browser.waitSelector
 		params.WaitTimeout = spec.browser.waitTimeout
+		params.WaitStableDuration = spec.browser.waitStable
+	}
+	if params.WaitSelector == "" && params.WaitStableDuration == 0 {
+		params.WaitStableDuration = defaultWaitStable
 	}
 	if len(spec.headers) > 0 {
 		params.Headers = make(http.Header, len(spec.headers))

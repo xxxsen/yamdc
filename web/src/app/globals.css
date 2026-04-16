@@ -688,6 +688,12 @@ textarea.input {
   color: var(--danger);
 }
 
+.file-list-toast[data-tone="warning"] {
+  border-color: rgba(159, 106, 20, 0.16);
+  background: rgba(159, 106, 20, 0.08);
+  color: var(--warn);
+}
+
 .app-toast {
   position: fixed;
   z-index: 80;
