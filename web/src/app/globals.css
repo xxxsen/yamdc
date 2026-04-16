@@ -6187,6 +6187,86 @@ textarea.input {
 .dom-comment { color: #236e25; }
 .dom-ellipsis { color: #888; }
 
+.dom-tree-match {
+  background: rgba(255, 213, 79, 0.32);
+}
+
+.dom-tree-match-current {
+  background: rgba(255, 152, 0, 0.45);
+  outline: 1px solid rgba(255, 152, 0, 0.7);
+  border-radius: 2px;
+}
+
+/* ── Body search bar ── */
+
+.body-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.body-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(105, 79, 51, 0.16);
+  border-radius: 6px;
+  background: #fff;
+  outline: none;
+}
+
+.body-search-input:focus {
+  border-color: var(--accent);
+}
+
+.body-search-kind {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid rgba(105, 79, 51, 0.16);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.body-search-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.body-search-nav {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.body-search-nav:hover {
+  background: rgba(105, 79, 51, 0.08);
+}
+
+/* ── Text search highlights ── */
+
+.body-search-hit {
+  background: rgba(255, 213, 79, 0.4);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.body-search-current {
+  background: rgba(255, 152, 0, 0.55);
+}
+
 /* ── XPath context menu ── */
 
 .xpath-context-menu {
