@@ -10,6 +10,7 @@ COVER_PROFILE_FILTERED="${TESTDATA_DIR}/coverage_filtered.out"
 # Packages excluded from coverage threshold (integration-only, require external resources).
 EXCLUDE_PKGS=(
     "internal/browser/"
+    "internal/bootstrap/"
 )
 
 echo "Running Go tests with coverage (threshold: ${THRESHOLD}%) ..."

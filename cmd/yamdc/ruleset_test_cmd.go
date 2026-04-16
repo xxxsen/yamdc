@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 )
 
@@ -54,7 +55,7 @@ func verifyRulesetBundle(ruleset, casefile string) bundleVerifyResult {
 	if ruleset == "" {
 		return bundleVerifyResult{Pass: false, Errmsg: "ruleset is required"}
 	}
-	resolved, err := resolveRuleSourcePath(".", ruleset)
+	resolved, err := domain.ResolveRuleSourcePath(".", ruleset)
 	if err != nil {
 		return bundleVerifyResult{Pass: false, Errmsg: err.Error()}
 	}
