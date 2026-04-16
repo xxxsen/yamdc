@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -135,15 +137,9 @@ func Execute(ctx context.Context, sc *StartContext, actions []InitAction) error 
 	if err != nil {
 		return fmt.Errorf("action validation failed: %w", err)
 	}
-	if sc.Infra.Logger != nil {
-		names := make([]string, len(sorted))
-		for i, a := range sorted {
-			names[i] = a.Name
-		}
-		sc.Infra.Logger.Info("bootstrap action execution order",
-			zap.Strings("actions", names),
-		)
-	}
+	// 日志需要额外输出
+	log.Printf("bootstrap action execution order, actions:%s",
+		lo.Map(sorted, func(act InitAction, _ int) string { return act.Name }))
 	for _, action := range sorted {
 		start := time.Now()
 		if err := action.Run(ctx, sc); err != nil {
