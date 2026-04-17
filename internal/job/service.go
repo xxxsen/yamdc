@@ -954,9 +954,16 @@ func (s *Service) claim(jobID int64) bool {
 	return true
 }
 
-// waitQueuedJobs blocks until all jobs pushed into the internal worker queue
+// WaitQueuedJobs blocks until all jobs pushed into the internal worker queue
 // have been fully processed (including post-status-update DB writes and the
-// `finish` cleanup). Safe to call from tests to synchronize async work.
-func (s *Service) waitQueuedJobs() {
+// `finish` cleanup). 目前主要用于测试: 在关闭底层 sqlite / 清理 tempdir 之前
+// 同步等待 worker goroutine 完成所有异步写入, 避免 journal 文件残留导致
+// "directory not empty" 等 flaky 失败。
+//
+// 注意 worker 是常驻 goroutine (消费内部 channel, 与单个 ctx 无绑定关系),
+// 因此 "cancel 某个 ctx 自动收尾" 的心智模型并不适用。生产侧若要 graceful
+// shutdown, 应在确保不会再有新任务入队 (关闭入口 / 停止调用 Run / Import 等)
+// 之后调用本方法, 以排空已入队但未处理的任务。
+func (s *Service) WaitQueuedJobs() {
 	s.workWG.Wait()
 }

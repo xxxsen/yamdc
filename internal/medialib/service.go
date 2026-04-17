@@ -40,6 +40,7 @@ type Service struct {
 	mu          sync.Mutex
 	syncRunning bool
 	moveRunning bool
+	bgWG        sync.WaitGroup
 }
 
 type ListItemsOptions struct {
@@ -241,7 +242,9 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 		return errSyncAlreadyRunning
 	}
 	logger.Info("media library sync triggered")
+	s.bgWG.Add(1)
 	go func() {
+		defer s.bgWG.Done()
 		_ = s.runFullSync(context.WithoutCancel(ctx), "manual")
 	}()
 	return nil
@@ -295,7 +298,9 @@ func (s *Service) TriggerMove(ctx context.Context) error {
 		return errMoveAlreadyRunning
 	}
 	logger.Info("move to media library triggered")
+	s.bgWG.Add(1)
 	go func() {
+		defer s.bgWG.Done()
 		_ = s.runMove(context.WithoutCancel(ctx))
 	}()
 	return nil
@@ -785,6 +790,14 @@ func (s *Service) isSyncRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.syncRunning
+}
+
+// WaitBackground 阻塞直到通过 TriggerFullSync / TriggerMove 启动的后台
+// goroutine 全部返回。目前主要用于测试: 在关闭底层 sqlite / 清理 tempdir
+// 之前同步等待, 避免异步 DB 写入与清理竞争。生产侧若需要 graceful shutdown,
+// 也可直接调用本方法等后台任务收尾。
+func (s *Service) WaitBackground() {
+	s.bgWG.Wait()
 }
 
 func releaseYear(value string) string {

@@ -23,7 +23,11 @@ func newTestMediaService(t *testing.T) *Service {
 	t.Cleanup(func() {
 		require.NoError(t, sqlite.Close())
 	})
-	return NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+	svc := NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+	// 按 LIFO, 先等待后台同步/移动 goroutine 返回再关闭 sqlite/tempdir,
+	// 避免异步 DB 写入与 tempdir 清理竞争。
+	t.Cleanup(func() { svc.WaitBackground() })
+	return svc
 }
 
 func newTestMediaServiceWithDirs(t *testing.T, libraryDir, saveDir string) *Service {
@@ -31,7 +35,9 @@ func newTestMediaServiceWithDirs(t *testing.T, libraryDir, saveDir string) *Serv
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlite.Close() })
-	return NewService(sqlite.DB(), libraryDir, saveDir)
+	svc := NewService(sqlite.DB(), libraryDir, saveDir)
+	t.Cleanup(func() { svc.WaitBackground() })
+	return svc
 }
 
 func withCapturedLogs(t *testing.T) (string, func()) {

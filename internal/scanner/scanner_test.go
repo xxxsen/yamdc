@@ -215,8 +215,9 @@ func TestStartHonorsNonPositiveIntervalAndExitsOnCancel(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond, "first background scan should upsert the media file")
 
 	cancel()
-	// Start runs in a goroutine; allow time for it to observe ctx cancellation after any in-flight Scan.
-	time.Sleep(500 * time.Millisecond)
+	// 等待 Start 启动的后台 goroutine 退出, 避免尚在 Scan 中的 DB 写入
+	// 与 sqlite.Close/tempdir 清理产生竞争。
+	svc.Wait()
 }
 
 func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
@@ -250,6 +251,9 @@ func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond, "periodic scan should pick up new file size")
 
 	cancel()
+	// 等待后台 goroutine 退出, 避免 periodic Scan 的 DB 写入与
+	// sqlite.Close/tempdir 清理竞争。
+	svc.Wait()
 }
 
 func TestNewRegistersExtraMediaExtensionsCaseInsensitive(t *testing.T) {
