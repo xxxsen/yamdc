@@ -33,6 +33,10 @@ var (
 	ErrJobAlreadyRunning = errors.New("job is already running")
 	ErrJobConflict       = errors.New("job conflict")
 	ErrNoConflict        = errors.New("no job conflict")
+	// ErrServiceStopped 由 Stop() 之后的 Run/Rerun 返回, 表示 worker 已关闭
+	// 不再接受新任务。调用方 (graceful shutdown 链或重复 Stop) 可以用
+	// errors.Is 识别后静默忽略。
+	ErrServiceStopped = errors.New("job service is stopped")
 )
 
 // job 包内继续用小写别名, 行为/值与导出版本完全一致, 仅命名风格差异。
@@ -41,6 +45,7 @@ var (
 	errJobAlreadyRunning       = ErrJobAlreadyRunning
 	errConflict                = ErrJobConflict
 	errNoConflict              = ErrNoConflict
+	errServiceStopped          = ErrServiceStopped
 	errJobNumberEditNotAllowed = errors.New("job number can only be edited in init or failed status")
 	errJobStatusNotDeletable   = errors.New("job status does not allow delete")
 	errJobCurrentlyRunning     = errors.New("job is currently running")
@@ -59,8 +64,13 @@ type Service struct {
 
 	mu      sync.Mutex
 	running map[int64]struct{}
+	closed  bool // 由 Stop 置位, 之后 reserveEnqueue 拒绝新任务。
 	queue   chan queuedJob
-	workWG  sync.WaitGroup
+	// enqueueWG 计数"已经通过 closed 检查、但尚未把 queuedJob 送进 channel"
+	// 的生产者 goroutine。Stop 需要在 close(s.queue) 之前 Wait 这个 WG,
+	// 否则会触发 send on closed channel 的 panic。
+	enqueueWG sync.WaitGroup
+	workWG    sync.WaitGroup
 }
 
 type queuedJob struct {
@@ -315,9 +325,11 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		return fmt.Errorf("%s: %s: %w", conflict.Reason, conflict.Target, errConflict)
 	}
 
-	if !s.claim(jobID) {
-		return errJobAlreadyRunning
+	release, err := s.reserveEnqueue(jobID)
+	if err != nil {
+		return err
 	}
+	defer release()
 
 	ok, err := s.jobRepo.UpdateStatus(ctx, jobID, allowed, jobdef.StatusProcessing, "")
 	if err != nil {
@@ -334,6 +346,64 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		jobID: jobID,
 	}
 	return nil
+}
+
+// reserveEnqueue 原子地完成 "closed 检查 + claim + enqueueWG.Add(1)":
+//   - 若服务已 Stop, 返回 errServiceStopped;
+//   - 若同 jobID 已在 running, 返回 errJobAlreadyRunning;
+//   - 否则占位 running, 把自己登记到 enqueueWG, 返回一个 release 回调。
+//
+// 调用方拿到 release 后用 defer 调一次, 用来从 enqueueWG 里退出。release
+// 只关心 enqueueWG; running 的清理仍沿用 finish(jobID) —— 成功路径由 worker
+// 在 runOne 末尾 finish, 失败路径由 start 自己 finish。
+func (s *Service) reserveEnqueue(jobID int64) (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, errServiceStopped
+	}
+	if _, exists := s.running[jobID]; exists {
+		return nil, errJobAlreadyRunning
+	}
+	s.running[jobID] = struct{}{}
+	s.enqueueWG.Add(1)
+	return s.enqueueWG.Done, nil
+}
+
+// Stop 显式关闭 worker:
+//  1. 在锁内置 closed=true, 之后所有 reserveEnqueue 都会返回 ErrServiceStopped;
+//  2. 等待 enqueueWG 清零 —— 已经通过 closed 检查、正在 channel send 路径上的
+//     生产者 goroutine 必须先完成 send, close(queue) 才安全;
+//  3. close(s.queue), 让 runWorker 的 for-range 自然收尾;
+//  4. 等待 workWG 清零, 保证所有 runOne 都处理完毕。
+//
+// 第 4 步受 ctx 约束: 若 ctx 先 Done, Stop 返回 ctx.Err() wrapping, 但后台 worker
+// 仍会在当前 runOne 结束后自然退出(Go 不支持强制终止 goroutine)。
+//
+// Stop 是幂等的: 重复调用除第一次外直接返回 nil。
+func (s *Service) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.enqueueWG.Wait()
+	close(s.queue)
+
+	done := make(chan struct{})
+	go func() {
+		s.workWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("stop job service: %w", ctx.Err())
+	}
 }
 
 func (s *Service) runWorker() {
@@ -839,14 +909,13 @@ func (s *Service) claim(jobID int64) bool {
 
 // WaitQueuedJobs blocks until all jobs pushed into the internal worker queue
 // have been fully processed (including post-status-update DB writes and the
-// `finish` cleanup). 目前主要用于测试: 在关闭底层 sqlite / 清理 tempdir 之前
+// `finish` cleanup). 仅用于测试: 在关闭底层 sqlite / 清理 tempdir 之前
 // 同步等待 worker goroutine 完成所有异步写入, 避免 journal 文件残留导致
 // "directory not empty" 等 flaky 失败。
 //
-// 注意 worker 是常驻 goroutine (消费内部 channel, 与单个 ctx 无绑定关系),
-// 因此 "cancel 某个 ctx 自动收尾" 的心智模型并不适用。生产侧若要 graceful
-// shutdown, 应在确保不会再有新任务入队 (关闭入口 / 停止调用 Run / Import 等)
-// 之后调用本方法, 以排空已入队但未处理的任务。
+// 生产侧的 graceful shutdown 走 Stop(ctx), 该方法会先阻止新入队再排空 worker;
+// 测试要么也用 Stop (+ 预期 runOne 不再被调度), 要么用 WaitQueuedJobs 做一次
+// "只等不关" 的屏障, 保持与 Stop 互补。
 func (s *Service) WaitQueuedJobs() {
 	s.workWG.Wait()
 }

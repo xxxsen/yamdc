@@ -3,10 +3,12 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -2662,4 +2664,226 @@ func TestFailJobNonProcessingStatusNoTransition(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, logs)
 	assert.Equal(t, "should not transition", logs[0].Message)
+}
+
+// gatedSearcher 在每次 Search 进入时自增 started 计数, 并阻塞直到 release 被 close;
+// 适合用来在测试里拦住 worker 观察 Stop 的等待行为。
+type gatedSearcher struct {
+	started atomic.Int32
+	release chan struct{}
+	meta    *model.MovieMeta
+}
+
+func (s *gatedSearcher) Name() string                  { return "gated-test" }
+func (s *gatedSearcher) Check(_ context.Context) error { return nil }
+func (s *gatedSearcher) Search(ctx context.Context, n *number.Number) (*model.MovieMeta, bool, error) {
+	s.started.Add(1)
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+		return nil, false, fmt.Errorf("gated search cancelled: %w", ctx.Err())
+	}
+	meta := *s.meta
+	meta.Number = n.GetNumberID()
+	return &meta, true, nil
+}
+
+func newGatedCapture(t *testing.T, searcher *gatedSearcher) *capture.Capture {
+	t.Helper()
+	capt, err := capture.New(
+		capture.WithScanDir(t.TempDir()),
+		capture.WithSaveDir(t.TempDir()),
+		capture.WithSeacher(searcher),
+		capture.WithProcessor(processor.IProcessor(&noopProcessor{})),
+		capture.WithStorage(store.NewMemStorage()),
+	)
+	require.NoError(t, err)
+	return capt
+}
+
+func insertRunnableJob(t *testing.T, repo *repository.JobRepository, number string) int64 {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), number+".mp4")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
+	return insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file),
+		FileExt:               filepath.Ext(file),
+		RelPath:               filepath.Base(file),
+		AbsPath:               file,
+		Number:                number,
+		RawNumber:             number,
+		CleanedNumber:         number,
+		NumberSource:          "manual",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+}
+
+// --- Stop: 正常 case: Stop 后 Run 被拒绝, DB 状态不变, running 集合为空 ---
+
+func TestServiceStopRejectsNewRun(t *testing.T) {
+	svc, repo := newTestService(t)
+	jobID := insertRunnableJob(t, repo, "STOP-REJECT")
+
+	require.NoError(t, svc.Stop(context.Background()))
+
+	err := svc.Run(context.Background(), jobID)
+	require.ErrorIs(t, err, ErrServiceStopped)
+
+	got, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, jobdef.StatusInit, got.Status,
+		"Run rejected by Stop must not flip status to processing")
+
+	svc.mu.Lock()
+	_, running := svc.running[jobID]
+	svc.mu.Unlock()
+	assert.False(t, running, "rejected Run must not leak into running map")
+}
+
+// --- Stop: 正常 case: Stop 是幂等的 ---
+
+func TestServiceStopIsIdempotent(t *testing.T) {
+	svc, _ := newTestService(t)
+	require.NoError(t, svc.Stop(context.Background()))
+	require.NoError(t, svc.Stop(context.Background()))
+	require.NoError(t, svc.Stop(context.Background()))
+}
+
+// --- Stop: 正常 case: Stop 等到 in-flight job 完成才返回 ---
+
+func TestServiceStopWaitsForInFlightJob(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	gate := &gatedSearcher{
+		release: make(chan struct{}),
+		meta: &model.MovieMeta{
+			Title:   "Gated",
+			Cover:   &model.File{Name: "cover.jpg", Key: "cover"},
+			Poster:  &model.File{Name: "poster.jpg", Key: "poster"},
+			ExtInfo: model.ExtInfo{ScrapeInfo: model.ScrapeInfo{Source: "gated"}},
+		},
+	}
+	svc.capture = newGatedCapture(t, gate)
+
+	jobID := insertRunnableJob(t, repo, "STOP-WAIT")
+	require.NoError(t, svc.Run(context.Background(), jobID))
+	require.Eventually(t, func() bool { return gate.started.Load() >= 1 },
+		2*time.Second, 10*time.Millisecond, "worker must enter Search before Stop")
+
+	stopDone := make(chan error, 1)
+	go func() { stopDone <- svc.Stop(context.Background()) }()
+
+	select {
+	case err := <-stopDone:
+		t.Fatalf("Stop returned before in-flight job completed: err=%v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	close(gate.release)
+
+	select {
+	case err := <-stopDone:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not return within 3s after gate released")
+	}
+
+	got, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, jobdef.StatusReviewing, got.Status,
+		"in-flight job must be allowed to finish and transition to reviewing")
+}
+
+// --- Stop: 异常 case: ctx 已取消时 Stop 返回 ctx.Err, 但 worker 仍会自然完成 ---
+
+func TestServiceStopReturnsCtxErrorButWorkerStillCompletes(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	gate := &gatedSearcher{
+		release: make(chan struct{}),
+		meta: &model.MovieMeta{
+			Title:   "Gated",
+			Cover:   &model.File{Name: "c.jpg", Key: "c"},
+			Poster:  &model.File{Name: "p.jpg", Key: "p"},
+			ExtInfo: model.ExtInfo{ScrapeInfo: model.ScrapeInfo{Source: "gated"}},
+		},
+	}
+	svc.capture = newGatedCapture(t, gate)
+
+	jobID := insertRunnableJob(t, repo, "STOP-CTX")
+	require.NoError(t, svc.Run(context.Background(), jobID))
+	require.Eventually(t, func() bool { return gate.started.Load() >= 1 },
+		2*time.Second, 10*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := svc.Stop(ctx)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, context.Canceled),
+		"Stop with cancelled ctx must wrap ctx.Err; got: %v", err)
+
+	// ctx 已取消让 Stop 先返回, 但 worker 仍在 gate 里 → 释放后必须能自然退出。
+	close(gate.release)
+	svc.WaitQueuedJobs()
+	got, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, jobdef.StatusReviewing, got.Status,
+		"worker must continue in background even after Stop returned ctx.Err")
+}
+
+// --- Stop: 边缘 case: 并发 Run + Stop 不 panic, 不残留 running 条目 ---
+
+func TestServiceStopConcurrentRunNoPanic(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	// 用会立刻失败的 searcher: 并发路径里即便 worker 真消费到了任务, 也只会
+	// 走 failJob 分支, 不会因为 nil capture 触发 panic, 干扰我们观察 race。
+	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
+		err: fmt.Errorf("race-test: searcher short-circuit"),
+	})
+
+	const n = 20
+	jobIDs := make([]int64, 0, n)
+	for i := 0; i < n; i++ {
+		jobIDs = append(jobIDs, insertRunnableJob(t, repo, fmt.Sprintf("RACE-%03d", i)))
+	}
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, id := range jobIDs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			// 结果不重要: 要么成功入队, 要么返回 ErrServiceStopped。关键是不 panic。
+			_ = svc.Run(context.Background(), id)
+		}()
+	}
+	// 再起一个 Stop goroutine 一起开跑。
+	stopDone := make(chan error, 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-start
+		stopDone <- svc.Stop(context.Background())
+	}()
+
+	require.NotPanics(t, func() {
+		close(start)
+		wg.Wait()
+	})
+	require.NoError(t, <-stopDone)
+
+	// Stop 返回后再 Run 必须一律被拒。
+	err := svc.Run(context.Background(), jobIDs[0])
+	require.ErrorIs(t, err, ErrServiceStopped)
+
+	// 所有成功入队的任务都已 finish, running 必须为空。
+	svc.mu.Lock()
+	runningCount := len(svc.running)
+	svc.mu.Unlock()
+	assert.Equal(t, 0, runningCount,
+		"after Stop drains, running map must be empty; leaked=%d", runningCount)
 }

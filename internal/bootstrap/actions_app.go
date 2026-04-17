@@ -76,9 +76,11 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		sc.App.MediaSvc.WaitBackground()
 		return nil
 	})
-	sc.Cleanup.Add("wait_job_worker", func(context.Context) error {
-		sc.App.JobSvc.WaitQueuedJobs()
-		return nil
+	// 3.4: 用 Stop(ctx) 替代 WaitQueuedJobs(): 除了等排空, 还主动拒绝
+	// cleanup 阶段 (HTTP 已 shutdown, 但 recover/其它 goroutine 理论上可能
+	// 还在 Run) 的新入队请求, 避免 close(queue) 与 Run 的 channel send 竞争。
+	sc.Cleanup.Add("stop_job_worker", func(ctx context.Context) error {
+		return sc.App.JobSvc.Stop(ctx)
 	})
 	editorSvc, err := plugineditor.NewService(sc.Infra.HTTPClient)
 	if err != nil {
