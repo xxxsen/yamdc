@@ -52,6 +52,7 @@ type Service struct {
 	mu      sync.Mutex
 	running map[int64]struct{}
 	queue   chan queuedJob
+	workWG  sync.WaitGroup
 }
 
 type queuedJob struct {
@@ -541,6 +542,7 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		s.finish(jobID)
 		return errJobStatusNotRunnable
 	}
+	s.workWG.Add(1)
 	s.queue <- queuedJob{
 		ctx:   context.WithoutCancel(ctx),
 		jobID: jobID,
@@ -551,6 +553,7 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 func (s *Service) runWorker() {
 	for item := range s.queue {
 		s.runOne(item.ctx, item.jobID)
+		s.workWG.Done()
 	}
 }
 
@@ -949,4 +952,11 @@ func (s *Service) claim(jobID int64) bool {
 	}
 	s.running[jobID] = struct{}{}
 	return true
+}
+
+// waitQueuedJobs blocks until all jobs pushed into the internal worker queue
+// have been fully processed (including post-status-update DB writes and the
+// `finish` cleanup). Safe to call from tests to synchronize async work.
+func (s *Service) waitQueuedJobs() {
+	s.workWG.Wait()
 }
