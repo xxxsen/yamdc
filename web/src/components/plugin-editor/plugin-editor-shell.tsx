@@ -598,6 +598,7 @@ export function PluginEditorShell() {
                     <select className="input" value={state.fetchType} onChange={(event) => patch("fetchType", event.target.value)}>
                       <option value="go-http">go-http</option>
                       <option value="browser">browser</option>
+                      <option value="flaresolverr">flaresolverr</option>
                     </select>
                   </label>
                 </div>

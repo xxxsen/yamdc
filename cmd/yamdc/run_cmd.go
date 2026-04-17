@@ -151,8 +151,7 @@ func toCaptureRuntimeConfig(c *config.Config) domain.CaptureRuntimeConfig {
 	var flareCfg *infra.FlareSolverrConfig
 	if c.FlareSolverrConfig.Enable {
 		flareCfg = &infra.FlareSolverrConfig{
-			Host:    c.FlareSolverrConfig.Host,
-			Domains: c.FlareSolverrConfig.Domains,
+			Host: c.FlareSolverrConfig.Host,
 		}
 	}
 	deps := make([]infra.DependencySpec, 0, len(c.Dependencies))

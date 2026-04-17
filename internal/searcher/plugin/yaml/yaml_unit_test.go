@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/browser"
+	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/model"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
@@ -1649,13 +1650,90 @@ func TestApplyRequestParams(t *testing.T) {
 	assert.True(t, found)
 }
 
-// --- applyBrowserContext ---
+// --- applyFetchTypeContext ---
 
-func TestApplyBrowserContext(t *testing.T) {
+func TestApplyFetchTypeContext_GoHTTP(t *testing.T) {
 	plg := mustCompilePlugin(t, minimalOneStepYAML())
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
-	result := plg.applyBrowserContext(req, plg.spec.request)
+	result := plg.applyFetchTypeContext(req, plg.spec.request)
 	assert.Equal(t, req, result)
+}
+
+func TestApplyFetchTypeContext_Flaresolverr(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test-flare
+type: one-step
+fetch_type: flaresolverr
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /search/${number}
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	assert.Equal(t, fetchTypeFlaresolverr, plg.spec.fetchType)
+	ctx := pluginapi.InitContainer(context.Background())
+	req, err := plg.buildRequest(ctx, plg.spec.request, &evalContext{number: "ABC", host: "https://example.com"})
+	require.NoError(t, err)
+	assert.NotNil(t, req)
+
+	bp := browser.GetParams(req.Context())
+	assert.Nil(t, bp, "browser params should not be set for flaresolverr")
+
+	fp := flarerr.GetParams(req.Context())
+	assert.NotNil(t, fp, "flarerr params should be set for flaresolverr fetch_type")
+}
+
+func TestValidate_FlaresolverrFetchType(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test-flare
+type: one-step
+fetch_type: flaresolverr
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /x
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	assert.Equal(t, fetchTypeFlaresolverr, plg.spec.fetchType)
+}
+
+func TestValidate_InvalidFetchType(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+fetch_type: unknown
+hosts: ["https://example.com"]
+request:
+  method: GET
+  path: /x
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	_, err := NewFromBytes([]byte(yamlStr))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errInvalidFetchType)
 }
 
 func TestApplyBrowserContext_BrowserFetchType(t *testing.T) {

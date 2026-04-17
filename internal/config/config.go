@@ -70,9 +70,8 @@ type PluginConfig struct {
 }
 
 type FlareSolverrConfig struct {
-	Enable  bool            `json:"enable"`
-	Host    string          `json:"host"`
-	Domains map[string]bool `json:"domains"` // 需要使用flaresolverr的域名列表
+	Enable bool   `json:"enable"`
+	Host   string `json:"host"`
 }
 
 type TagMappingConfig struct {
@@ -159,11 +158,8 @@ func defaultConfig() *Config {
 			},
 		},
 		FlareSolverrConfig: FlareSolverrConfig{
-			Enable: false, // 默认不启用, 毕竟还要额外配置
+			Enable: false,
 			Host:   "http://127.0.0.1:8191",
-			Domains: map[string]bool{
-				"www.javlibrary.com": true,
-			},
 		},
 		TagMappingConfig: TagMappingConfig{
 			Enable:   false, // 默认不启用, 毕竟还要额外配置

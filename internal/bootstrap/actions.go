@@ -17,6 +17,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/bootstrap/server"
 	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/config"
+	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
@@ -195,16 +196,6 @@ func toHTTPClientConfig(c *config.Config) infra.HTTPClientConfig {
 	}
 }
 
-func toFlareSolverrConfig(c *config.Config) *infra.FlareSolverrConfig {
-	if !c.FlareSolverrConfig.Enable {
-		return nil
-	}
-	return &infra.FlareSolverrConfig{
-		Host:    c.FlareSolverrConfig.Host,
-		Domains: c.FlareSolverrConfig.Domains,
-	}
-}
-
 func toDependencySpecs(deps []config.Dependency) []infra.DependencySpec {
 	out := make([]infra.DependencySpec, 0, len(deps))
 	for _, d := range deps {
@@ -321,7 +312,7 @@ func precheckDirsServerAction(_ context.Context, sc *StartContext) error {
 
 func buildHTTPClientAction(ctx context.Context, sc *StartContext) error {
 	c := sc.Infra.Config
-	cli, err := infra.BuildHTTPClient(ctx, toHTTPClientConfig(c), toFlareSolverrConfig(c))
+	cli, err := infra.BuildHTTPClient(ctx, toHTTPClientConfig(c))
 	if err != nil {
 		return fmt.Errorf("build http client: %w", err)
 	}
@@ -330,6 +321,12 @@ func buildHTTPClientAction(ctx context.Context, sc *StartContext) error {
 }
 
 func buildBrowserClientAction(_ context.Context, sc *StartContext) error {
+	if sc.Infra.Config.FlareSolverrConfig.Enable {
+		sc.Infra.HTTPClient = flarerr.NewHTTPClient(
+			sc.Infra.HTTPClient,
+			sc.Infra.Config.FlareSolverrConfig.Host,
+		)
+	}
 	nav := browser.NewNavigator(&browser.Config{
 		RemoteURL: sc.Infra.Config.BrowserConfig.RemoteURL,
 		DataDir:   sc.Infra.Config.DataDir,

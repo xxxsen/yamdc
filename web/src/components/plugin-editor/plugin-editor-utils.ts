@@ -449,7 +449,7 @@ export function buildDraft(state: EditorState): PluginEditorDraft {
     version: 1,
     name: state.name.trim(),
     type: state.type,
-    fetch_type: state.fetchType === "browser" ? "browser" : undefined,
+    fetch_type: state.fetchType !== "go-http" ? state.fetchType : undefined,
     hosts,
     request: buildRequestFromFormState(state.request, "request"),
     scrape: {
@@ -539,7 +539,7 @@ export function stateFromDraft(draft: PluginEditorDraft): EditorState {
   const next = defaultState();
   next.name = draft.name;
   next.type = draft.type;
-  next.fetchType = draft.fetch_type === "browser" ? "browser" : "go-http";
+  next.fetchType = draft.fetch_type || "go-http";
   next.hostsText = draft.hosts.join("\n");
   next.precheckPatternsText = (draft.precheck?.number_patterns ?? []).join("\n");
   next.precheckVariables = recordToPairs(draft.precheck?.variables);

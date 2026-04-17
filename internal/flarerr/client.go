@@ -2,19 +2,13 @@ package flarerr
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
-
-	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/client"
-	"go.uber.org/zap"
 )
 
 var (
@@ -22,65 +16,43 @@ var (
 	errFlareResponseStatus = errors.New("flare response status error")
 )
 
-// 基于flaresolverr实现
 const (
 	defaultByPassClientTimeout = 40 * time.Second
 )
 
-type ICloudflareSolverClient interface {
-	AddHost(host string) error
-	client.IHTTPClient
+type solveResult struct {
+	StatusCode int
+	HTML       []byte
+	Cookies    []*http.Cookie
 }
 
-type solverClient struct {
-	impl      client.IHTTPClient
-	endpoint  string
-	timeout   time.Duration
-	byPastMap map[string]struct{}
-	tested    bool
-}
-
-func (b *solverClient) convertRequest(oreq *http.Request) (*flareRequest, error) {
-	if oreq.Method != http.MethodGet {
-		return nil, fmt.Errorf("%w, got %s", errFlareOnlyGET, oreq.Method)
+func (r *solveResult) toHTTPResponse(req *http.Request) *http.Response {
+	return &http.Response{
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		StatusCode:    r.StatusCode,
+		Header:        make(http.Header),
+		ContentLength: int64(len(r.HTML)),
+		Body:          io.NopCloser(bytes.NewReader(r.HTML)),
+		Request:       req,
 	}
+}
 
-	req := &flareRequest{
+// solveRequest posts the given HTTP request to a FlareSolverr endpoint and
+// returns a solveResult containing the rendered HTML and any cookies.
+func solveRequest(endpoint string, timeout time.Duration, req *http.Request) (*solveResult, error) {
+	if req.Method != http.MethodGet {
+		return nil, fmt.Errorf("%w, got %s", errFlareOnlyGET, req.Method)
+	}
+	fr := &flareRequest{
 		Cmd:        "request.get",
-		URL:        oreq.URL.String(),
-		MaxTimeout: int(b.timeout.Milliseconds()),
-	}
-
-	return req, nil
-}
-
-func (b *solverClient) isNeedByPass(req *http.Request) bool {
-	if _, ok := b.byPastMap[req.Host]; ok {
-		return true
-	}
-	return false
-}
-
-func (b *solverClient) AddHost(host string) error {
-	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
-		uri, err := url.Parse(host)
-		if err != nil {
-			return fmt.Errorf("parse host url: %w", err)
-		}
-		host = uri.Host
-	}
-	b.byPastMap[host] = struct{}{}
-	return nil
-}
-
-func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, error) {
-	fr, err := b.convertRequest(req)
-	if err != nil {
-		return nil, err
+		URL:        req.URL.String(),
+		MaxTimeout: int(timeout.Milliseconds()),
 	}
 	body, _ := json.Marshal(fr)
 	//nolint:gosec,noctx // internal solver endpoint with controlled URL
-	resp, err := http.Post(b.endpoint+"/v1", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(endpoint+"/v1", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("post to flare solver: %w", err)
 	}
@@ -95,74 +67,27 @@ func (b *solverClient) handleByPassRequest(req *http.Request) (*http.Response, e
 	if frResp.Status != "ok" {
 		return nil, fmt.Errorf("%w: %s, message: %s", errFlareResponseStatus, frResp.Status, frResp.Message)
 	}
-	// 返回一个伪造的 http.Response
-	return &http.Response{
-		Proto:      "HTTP/1.1",
-		ProtoMajor: 1,
-		ProtoMinor: 1,
+	cookies := make([]*http.Cookie, 0, len(frResp.Solution.Cookies))
+	for _, fc := range frResp.Solution.Cookies {
+		cookies = append(cookies, &http.Cookie{
+			Name:     fc.Name,
+			Value:    fc.Value,
+			Path:     fc.Path,
+			Domain:   fc.Domain,
+			Secure:   fc.Secure,
+			HttpOnly: fc.HTTPOnly,
+		})
+	}
+	return &solveResult{
 		StatusCode: frResp.Solution.Status,
-		Body:       io.NopCloser(bytes.NewReader([]byte(frResp.Solution.Response))),
-		Header:     make(http.Header),
-		Request:    req,
+		HTML:       []byte(frResp.Solution.Response),
+		Cookies:    cookies,
 	}, nil
 }
 
-func (b *solverClient) testHost(ctx context.Context, impl client.IHTTPClient, endpoint string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	//nolint:gosec // internal solver connectivity test
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("create test request: %w", err)
-	}
-	rsp, err := impl.Do(req)
-	if err != nil {
-		return fmt.Errorf("execute test request: %w", err)
-	}
-	defer func() {
-		_ = rsp.Body.Close()
-	}()
-	return nil
-}
-
-func (b *solverClient) Do(req *http.Request) (*http.Response, error) {
-	if !b.tested { // 测试通过后续就不再测试了
-		if err := b.testHost(req.Context(), b.impl, b.endpoint); err != nil {
-			return nil, fmt.Errorf("test solver host failed, endpoint:%s, err:%w", b.endpoint, err)
-		}
-		b.tested = true
-	}
-
-	if b.isNeedByPass(req) {
-		logutil.GetLogger(req.Context()).Debug("use solver client for http request to by pass cloudflare protect",
-			zap.String("req", req.URL.String()),
-		)
-		return b.handleByPassRequest(req)
-	}
-	rsp, err := b.impl.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("solver passthrough request: %w", err)
-	}
-	return rsp, nil
-}
-
-func New(impl client.IHTTPClient, endpoint string) (ICloudflareSolverClient, error) {
+func normalizeEndpoint(endpoint string) string {
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-		endpoint = "http://" + endpoint
+		return "http://" + endpoint
 	}
-	bc := &solverClient{
-		impl:      impl,
-		endpoint:  endpoint,
-		timeout:   defaultByPassClientTimeout,
-		byPastMap: make(map[string]struct{}),
-	}
-	return bc, nil
-}
-
-func MustAddToSolverList(c ICloudflareSolverClient, hosts ...string) {
-	for _, host := range hosts {
-		if err := c.AddHost(host); err != nil {
-			panic(fmt.Sprintf("add host:%s to bypass list failed, err:%v", host, err))
-		}
-	}
+	return endpoint
 }
