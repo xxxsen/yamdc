@@ -14,12 +14,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 )
 
-type errReader struct{}
-
-func (e *errReader) Read(_ []byte) (int, error) {
-	return 0, errors.New("read error")
-}
-
 func TestEncodeNumberID(t *testing.T) {
 	c := &chineseTitleTranslateOptimizer{}
 	tests := []struct {
