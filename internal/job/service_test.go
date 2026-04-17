@@ -1,13 +1,9 @@
 package job
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,14 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/capture"
-	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
-	"go.uber.org/zap"
 )
 
 func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository) {
@@ -115,33 +109,6 @@ func TestServiceDeleteRemovesFileAndSoftDeletesJob(t *testing.T) {
 	got, err := repo.GetByID(context.Background(), jobID)
 	require.ErrorIs(t, err, repository.ErrJobNotFound)
 	require.Nil(t, got)
-}
-
-func TestServiceSaveReviewDataRequiresReviewing(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "C.mp4"), jobdef.StatusInit)
-
-	err := svc.SaveReviewData(context.Background(), jobID, `{"title":"ok"}`)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "reviewing")
-}
-
-func TestServiceSaveReviewDataRejectsInvalidJSON(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "D.mp4"), jobdef.StatusReviewing)
-
-	err := svc.SaveReviewData(context.Background(), jobID, `{`)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid review json")
-}
-
-func TestServiceImportRequiresReviewing(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "E.mp4"), jobdef.StatusInit)
-
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "reviewing")
 }
 
 func TestServiceRecover(t *testing.T) {
@@ -766,24 +733,12 @@ func TestServiceApplyConflictsIgnoresDoneAndDeletedJobs(t *testing.T) {
 	require.Equal(t, "", page[1].ConflictTarget)
 }
 
-func makeTestJPEG(w, h int) []byte {
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			img.Set(x, y, color.RGBA{R: 255, G: 0, B: 0, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, nil)
-	return buf.Bytes()
-}
-
 func setupReviewingJobWithScrapeData(
 	t *testing.T,
 	svc *Service,
 	repo *repository.JobRepository,
 	meta *model.MovieMeta,
-) (int64, *repository.ScrapeDataRepository) { //nolint:unparam
+) (int64, *repository.ScrapeDataRepository) {
 	t.Helper()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "REVIEW-001.mp4")
@@ -1210,15 +1165,6 @@ func TestServiceGetScrapeDataNotFound(t *testing.T) {
 	require.Error(t, err)
 }
 
-// ---------- SetImportGuard ----------
-
-func TestServiceSetImportGuard(t *testing.T) {
-	svc, _ := newTestService(t)
-	assert.Nil(t, svc.importGuard)
-	svc.SetImportGuard(func(_ context.Context) error { return nil })
-	assert.NotNil(t, svc.importGuard)
-}
-
 // ---------- ListLogs ----------
 
 func TestServiceListLogs(t *testing.T) {
@@ -1250,27 +1196,6 @@ func TestAddJobLogNilSvc(_ *testing.T) {
 func TestAddJobLogNilLogRepo(_ *testing.T) {
 	svc := &Service{}
 	svc.addJobLog(context.Background(), 1, "info", "stage", "msg", "detail")
-}
-
-// ---------- SaveReviewData ----------
-
-func TestServiceSaveReviewDataSuccess(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "T", Number: "SRD-001"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	err := svc.SaveReviewData(context.Background(), jobID, `{"title":"Updated","number":"SRD-001"}`)
-	require.NoError(t, err)
-
-	data, err := svc.scrapeRepo.GetByJobID(context.Background(), jobID)
-	require.NoError(t, err)
-	assert.Contains(t, data.ReviewData, "Updated")
-}
-
-func TestServiceSaveReviewDataJobNotFound(t *testing.T) {
-	svc, _ := newTestService(t)
-	err := svc.SaveReviewData(context.Background(), 99999, `{"title":"ok"}`)
-	require.Error(t, err)
 }
 
 // ---------- UpdateNumber ----------
@@ -1343,179 +1268,41 @@ func TestServiceUpdateNumberFailedStatusAllowed(t *testing.T) {
 	assert.Equal(t, "FIXED-NUM", updated.Number)
 }
 
-// ---------- loadReviewingMeta ----------
-
-func testLogger() *zap.Logger {
-	return zap.NewNop()
-}
-
-func TestLoadReviewingMetaJobNotFound(t *testing.T) {
-	svc, _ := newTestService(t)
-	_, err := svc.loadReviewingMeta(context.Background(), testLogger(), 99999)
-	require.Error(t, err)
-}
-
-func TestLoadReviewingMetaNotReviewingStatus(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "A.mp4"), jobdef.StatusInit)
-	_, err := svc.loadReviewingMeta(context.Background(), testLogger(), jobID)
-	require.ErrorIs(t, err, errJobNotReviewing)
-}
-
-func TestLoadReviewingMetaScrapeDataNotFound(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "A.mp4"), jobdef.StatusReviewing)
-	_, err := svc.loadReviewingMeta(context.Background(), testLogger(), jobID)
-	require.ErrorIs(t, err, repository.ErrScrapeDataNotFound)
-}
-
-func TestLoadReviewingMetaUsesReviewDataWhenPresent(t *testing.T) {
+// TestGetBlockingConflictExcludesSelf 对应 3.2.b 的"排除自己"单元用例。
+func TestGetBlockingConflictExcludesSelf(t *testing.T) {
 	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "Original", Number: "LRM-001"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
 
-	require.NoError(t, svc.scrapeRepo.SaveReviewData(context.Background(), jobID, `{"title":"Reviewed","number":"LRM-001"}`))
-
-	result, err := svc.loadReviewingMeta(context.Background(), testLogger(), jobID)
-	require.NoError(t, err)
-	assert.Equal(t, "Reviewed", result.Title)
-}
-
-func TestLoadReviewingMetaUsesRawDataWhenNoReview(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "RawOnly", Number: "LRM-002"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	result, err := svc.loadReviewingMeta(context.Background(), testLogger(), jobID)
-	require.NoError(t, err)
-	assert.Equal(t, "RawOnly", result.Title)
-}
-
-// ---------- CropPosterFromCover ----------
-
-func TestServiceCropPosterFromCover(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	coverData := makeTestJPEG(200, 300)
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), svc.storage, coverData)
-	require.NoError(t, err)
-
-	meta := &model.MovieMeta{
-		Title:  "Crop Test",
-		Number: "CROP-001",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-	}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	poster, err := svc.CropPosterFromCover(context.Background(), jobID, 10, 10, 50, 80)
-	require.NoError(t, err)
-	require.NotNil(t, poster)
-	assert.Equal(t, "./poster.jpg", poster.Name)
-	assert.NotEmpty(t, poster.Key)
-
-	posterData, err := store.GetDataFrom(context.Background(), svc.storage, poster.Key)
-	require.NoError(t, err)
-	img, err := imgutil.LoadImage(posterData)
-	require.NoError(t, err)
-	assert.Equal(t, 50, img.Bounds().Dx())
-	assert.Equal(t, 80, img.Bounds().Dy())
-}
-
-func TestServiceCropPosterFromCoverNoCover(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "NoCover", Number: "NC-001"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	_, err := svc.CropPosterFromCover(context.Background(), jobID, 0, 0, 10, 10)
-	require.ErrorIs(t, err, errCoverNotFound)
-}
-
-func TestServiceCropPosterFromCoverOutOfBounds(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	coverData := makeTestJPEG(100, 100)
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), svc.storage, coverData)
-	require.NoError(t, err)
-
-	meta := &model.MovieMeta{
-		Title:  "OOB Test",
-		Number: "OOB-001",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-	}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	_, err = svc.CropPosterFromCover(context.Background(), jobID, 0, 0, 200, 200)
-	require.ErrorIs(t, err, errCropRectOutOfBounds)
-}
-
-func TestServiceCropPosterFromCoverNotReviewing(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "X.mp4"), jobdef.StatusInit)
-	_, err := svc.CropPosterFromCover(context.Background(), jobID, 0, 0, 10, 10)
-	require.ErrorIs(t, err, errJobNotReviewing)
-}
-
-// ---------- Import ----------
-
-func TestServiceImportJobNotFound(t *testing.T) {
-	svc, _ := newTestService(t)
-	err := svc.Import(context.Background(), 99999)
-	require.Error(t, err)
-}
-
-func TestServiceImportAlreadyRunning(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "IMP.mp4"), jobdef.StatusReviewing)
-	svc.running[jobID] = struct{}{}
-	err := svc.Import(context.Background(), jobID)
-	require.ErrorIs(t, err, errJobAlreadyRunning)
-}
-
-func TestServiceImportBlockedByGuard(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-G"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	guardErr := fmt.Errorf("guard blocked")
-	svc.SetImportGuard(func(_ context.Context) error { return guardErr })
-
-	err := svc.Import(context.Background(), jobID)
-	require.ErrorIs(t, err, guardErr)
-}
-
-func TestServiceImportBlockedByConflict(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	dir := t.TempDir()
-
-	file1 := filepath.Join(dir, "a@IMP-CNF.mp4")
-	file2 := filepath.Join(dir, "b@IMP-CNF.mp4")
-	require.NoError(t, os.WriteFile(file1, []byte("x"), 0o600))
-	require.NoError(t, os.WriteFile(file2, []byte("x"), 0o600))
-
-	insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file1), FileExt: ".mp4", RelPath: filepath.Base(file1), AbsPath: file1,
-		Number: "IMP-CNF", RawNumber: "a@IMP-CNF", CleanedNumber: "IMP-CNF",
-		NumberSource: "cleaner", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusInit)
-
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-CNF"}
-	raw, _ := json.Marshal(meta)
-
-	jobID2 := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file2), FileExt: ".mp4", RelPath: filepath.Base(file2), AbsPath: file2,
-		Number: "IMP-CNF", RawNumber: "b@IMP-CNF", CleanedNumber: "IMP-CNF",
-		NumberSource: "cleaner", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName: "lone@IMP-SELF.mp4", FileExt: ".mp4",
+		RelPath: "lone@IMP-SELF.mp4", AbsPath: "/tmp/lone@IMP-SELF.mp4",
+		Number: "IMP-SELF", CleanedNumber: "IMP-SELF",
+		NumberSource: "cleaner", NumberCleanStatus: "success", NumberCleanConfidence: "high",
 	}, jobdef.StatusReviewing)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID2, "test", string(raw)))
+	j, err := repo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
 
-	err := svc.Import(context.Background(), jobID2)
-	require.Error(t, err)
-	require.ErrorIs(t, err, errConflict)
+	conflict, err := svc.getBlockingConflict(context.Background(), j)
+	require.ErrorIs(t, err, errNoConflict)
+	require.Nil(t, conflict)
 }
 
-func TestServiceImportNoScrapeData(t *testing.T) {
-	svc, repo := newTestService(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "IMP-NSD.mp4"), jobdef.StatusReviewing)
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
+// TestIsBlockingImportStatus 覆盖状态判定的各个分支。未知状态走保守阻塞,
+// 未来新增"活跃"状态忘了登记时, 至少不会静默放行 Import。
+func TestIsBlockingImportStatus(t *testing.T) {
+	cases := map[jobdef.Status]bool{
+		jobdef.StatusInit:       false,
+		jobdef.StatusProcessing: true,
+		jobdef.StatusReviewing:  true,
+		jobdef.StatusDone:       false,
+		jobdef.StatusFailed:     false,
+		jobdef.Status(""):       true,
+		jobdef.Status("weird"):  true,
+	}
+	for status, expected := range cases {
+		t.Run(string(status), func(t *testing.T) {
+			assert.Equal(t, expected, isBlockingImportStatus(status))
+		})
+	}
 }
 
 // ---------- Delete ----------
@@ -1934,150 +1721,6 @@ func TestClassifyDirEntriesNoExtFilter(t *testing.T) {
 
 // ---------- matchExplicitCandidates with sync ----------
 
-// ---------- Import full success path ----------
-
-func TestServiceImportSuccess(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	storage := svc.storage
-	coverData := makeTestJPEG(200, 300)
-	posterData := makeTestJPEG(100, 150)
-
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), storage, coverData)
-	require.NoError(t, err)
-	posterKey, err := store.AnonymousPutDataTo(context.Background(), storage, posterData)
-	require.NoError(t, err)
-
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{
-		Title:  "Import Title",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-OK-001.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-OK-001", RawNumber: "IMP-OK-001", CleanedNumber: "IMP-OK-001",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{
-		Title:  "Import Title",
-		Number: "IMP-OK-001",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	require.NoError(t, svc.Import(context.Background(), jobID))
-
-	j, err := repo.GetByID(context.Background(), jobID)
-	require.NoError(t, err)
-	require.Equal(t, jobdef.StatusDone, j.Status)
-
-	data, err := svc.scrapeRepo.GetByJobID(context.Background(), jobID)
-	require.NoError(t, err)
-	assert.Equal(t, "imported", data.Status)
-}
-
-func TestServiceImportWithReviewData(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	storage := svc.storage
-	coverData := makeTestJPEG(200, 300)
-	posterData := makeTestJPEG(100, 150)
-
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), storage, coverData)
-	require.NoError(t, err)
-	posterKey, err := store.AnonymousPutDataTo(context.Background(), storage, posterData)
-	require.NoError(t, err)
-
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{
-		Title:  "Import Title",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-RV-001.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-RV-001", RawNumber: "IMP-RV-001", CleanedNumber: "IMP-RV-001",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	rawMeta := &model.MovieMeta{
-		Title: "Original", Number: "IMP-RV-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	raw, _ := json.Marshal(rawMeta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	reviewMeta := &model.MovieMeta{
-		Title: "Reviewed", Number: "IMP-RV-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	reviewRaw, _ := json.Marshal(reviewMeta)
-	require.NoError(t, svc.scrapeRepo.SaveReviewData(context.Background(), jobID, string(reviewRaw)))
-
-	require.NoError(t, svc.Import(context.Background(), jobID))
-
-	j, err := repo.GetByID(context.Background(), jobID)
-	require.NoError(t, err)
-	require.Equal(t, jobdef.StatusDone, j.Status)
-}
-
-func TestServiceImportWithGuardPassing(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	storage := svc.storage
-	coverData := makeTestJPEG(200, 300)
-	posterData := makeTestJPEG(100, 150)
-
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), storage, coverData)
-	require.NoError(t, err)
-	posterKey, err := store.AnonymousPutDataTo(context.Background(), storage, posterData)
-	require.NoError(t, err)
-
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{
-		Title:  "T",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-	svc.SetImportGuard(func(_ context.Context) error { return nil })
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-GD-001.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-GD-001", RawNumber: "IMP-GD-001", CleanedNumber: "IMP-GD-001",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{
-		Title: "T", Number: "IMP-GD-001",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	require.NoError(t, svc.Import(context.Background(), jobID))
-	j, err := repo.GetByID(context.Background(), jobID)
-	require.NoError(t, err)
-	require.Equal(t, jobdef.StatusDone, j.Status)
-}
-
 // ---------- Delete with scrape data and logs ----------
 
 func TestServiceDeleteCleansScrapeAndLogs(t *testing.T) {
@@ -2280,35 +1923,6 @@ func TestServiceUpdateNumberDetectsConflict(t *testing.T) {
 	assert.NotEmpty(t, updated.ConflictReason)
 }
 
-// ---------- Import with invalid JSON in scrape data ----------
-
-func TestServiceImportInvalidJSON(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	file := filepath.Join(t.TempDir(), "IMP-BAD-JSON.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-BAD-JSON", RawNumber: "IMP-BAD-JSON", CleanedNumber: "IMP-BAD-JSON",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", `{invalid-json`))
-
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse final meta failed")
-}
-
-// ---------- cropAndStorePoster with bad cover key ----------
-
-func TestCropAndStorePosterLoadFailed(t *testing.T) {
-	svc, _ := newTestService(t)
-	_, err := svc.cropAndStorePoster(context.Background(), "nonexistent-key", 0, 0, 10, 10)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "load cover failed")
-}
-
 // ---------- GetConflict with single item (no conflict) ----------
 
 func TestGetConflictSingleJob(t *testing.T) {
@@ -2326,87 +1940,6 @@ func TestGetConflictSingleJob(t *testing.T) {
 	conflict, err := svc.GetConflict(context.Background(), j)
 	require.ErrorIs(t, err, errNoConflict)
 	assert.Nil(t, conflict)
-}
-
-// ---------- matchExplicitCandidates ----------
-
-// ---------- cropAndStorePoster with decode failure ----------
-
-func TestCropAndStorePosterDecodeFailed(t *testing.T) {
-	svc, _ := newTestService(t)
-	err := store.PutDataTo(context.Background(), svc.storage, "bad-image", []byte("not-an-image"))
-	require.NoError(t, err)
-	_, err = svc.cropAndStorePoster(context.Background(), "bad-image", 0, 0, 10, 10)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "decode cover failed")
-}
-
-// ---------- loadReviewingMeta with invalid JSON in scrape data ----------
-
-func TestLoadReviewingMetaInvalidJSON(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	file := filepath.Join(t.TempDir(), "BADJSON.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "BADJSON", RawNumber: "BADJSON", CleanedNumber: "BADJSON",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", `{bad json!!!`))
-
-	_, err := svc.loadReviewingMeta(context.Background(), testLogger(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse review meta failed")
-}
-
-// ---------- performImport with source not found ----------
-
-func TestServiceImportSourceNotFound(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{meta: &model.MovieMeta{Title: "T"}})
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: "GONE.mp4", FileExt: ".mp4", RelPath: "GONE.mp4", AbsPath: "/nonexistent/GONE.mp4",
-		Number: "GONE", RawNumber: "GONE", CleanedNumber: "GONE",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{Title: "T", Number: "GONE"}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
-
-// ---------- performImport with ImportMeta failure (missing cover/poster) ----------
-
-func TestServiceImportMetaVerifyFailed(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	storage := svc.storage
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{Title: "T"}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-VERIFY.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-VERIFY", RawNumber: "IMP-VERIFY", CleanedNumber: "IMP-VERIFY",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-VERIFY"}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "import meta")
 }
 
 // ---------- UpdateNumber with source path error ----------
@@ -2487,19 +2020,6 @@ func TestServiceStartUpdateStatusFails(t *testing.T) {
 	}())
 }
 
-// ---------- SaveReviewData success (already tested above but ensure coverage) ----------
-
-func TestServiceSaveReviewDataValidJSON(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	meta := &model.MovieMeta{Title: "T", Number: "SRD-OK"}
-	jobID, _ := setupReviewingJobWithScrapeData(t, svc, repo, meta)
-
-	validJSON := `{"title":"Updated Title","number":"SRD-OK","actors":["Alice"]}`
-	require.NoError(t, svc.SaveReviewData(context.Background(), jobID, validJSON))
-}
-
-// ---------- matchExplicitCandidates ----------
-
 // ---------- Error paths via closed DB ----------
 
 func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam
@@ -2560,18 +2080,6 @@ func TestServiceRerunDBError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestServiceSaveReviewDataDBError(t *testing.T) {
-	svc, _, jobID := newTestServiceWithClosedDB(t)
-	err := svc.SaveReviewData(context.Background(), jobID, `{"title":"ok"}`)
-	require.Error(t, err)
-}
-
-func TestServiceImportDBError(t *testing.T) {
-	svc, _, jobID := newTestServiceWithClosedDB(t)
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-}
-
 func TestServiceUpdateNumberDBError(t *testing.T) {
 	svc, _, jobID := newTestServiceWithClosedDB(t)
 	_, err := svc.UpdateNumber(context.Background(), jobID, "X")
@@ -2603,12 +2111,6 @@ func TestServiceApplyConflictsDBError(t *testing.T) {
 	err := svc.ApplyConflicts(context.Background(), []jobdef.Job{
 		{Status: jobdef.StatusInit, Number: "X", FileExt: ".mp4", FileName: "X.mp4"},
 	})
-	require.Error(t, err)
-}
-
-func TestServiceCropPosterFromCoverDBError(t *testing.T) {
-	svc, _, jobID := newTestServiceWithClosedDB(t)
-	_, err := svc.CropPosterFromCover(context.Background(), jobID, 0, 0, 10, 10)
 	require.Error(t, err)
 }
 
@@ -2685,39 +2187,6 @@ func TestServiceDeleteLogDeleteError(t *testing.T) {
 	err := svc.Delete(context.Background(), jobID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "delete job logs")
-}
-
-func TestServiceImportValidatePreconditionsConflictError(t *testing.T) {
-	svc, _, sqlite := newTestServiceWithRawDB(t)
-	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{meta: &model.MovieMeta{Title: "T"}})
-
-	file := filepath.Join(t.TempDir(), "IMP-VPC.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
-
-	jobRepo := repository.NewJobRepository(sqlite.DB())
-	jobID := insertJobWithInput(t, jobRepo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-VPC", RawNumber: "IMP-VPC", CleanedNumber: "IMP-VPC",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{Title: "T", Number: "IMP-VPC"}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	breakJobTable(t, sqlite)
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-}
-
-func TestServiceSaveReviewDataScrapeError(t *testing.T) {
-	svc, repo, sqlite := newTestServiceWithRawDB(t)
-	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "SRD-ERR.mp4"), jobdef.StatusReviewing)
-
-	breakScrapeTable(t, sqlite)
-	err := svc.SaveReviewData(context.Background(), jobID, `{"title":"ok"}`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "save review data")
 }
 
 func TestServiceStartUpdateStatusError(t *testing.T) {
@@ -2817,34 +2286,6 @@ func TestPrepareJobExecutionResolveFileContextError(t *testing.T) {
 	assert.Contains(t, j.ErrorMsg, "resolve file failed")
 }
 
-// ---------- performImport ResolveFileContext error ----------
-
-func TestServiceImportResolveFileContextError(t *testing.T) {
-	svc, repo := newTestServiceWithSQLite(t)
-	storage := svc.storage
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{Title: "T"}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "BAD.NUM.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "BAD.NUM", RawNumber: "BAD.NUM", CleanedNumber: "BAD.NUM",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{Title: "T", Number: "BAD.NUM"}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve file context")
-}
-
 // ---------- executeScrapeAndFinalize with upsert error ----------
 
 func TestExecuteScrapeAndFinalizeUpsertError(t *testing.T) {
@@ -2874,49 +2315,6 @@ func TestExecuteScrapeAndFinalizeUpsertError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, jobdef.StatusFailed, j.Status)
 	assert.Contains(t, j.ErrorMsg, "save scrape data failed")
-}
-
-// ---------- Import SaveFinalData error ----------
-
-func TestServiceImportMarkDoneError(t *testing.T) {
-	svc, repo, sqlite := newTestServiceWithRawDB(t)
-	storage := svc.storage
-	coverData := makeTestJPEG(200, 300)
-	posterData := makeTestJPEG(100, 150)
-
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), storage, coverData)
-	require.NoError(t, err)
-	posterKey, err := store.AnonymousPutDataTo(context.Background(), storage, posterData)
-	require.NoError(t, err)
-
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{
-		Title:  "T",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-MDE.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-MDE", RawNumber: "IMP-MDE", CleanedNumber: "IMP-MDE",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{
-		Title: "T", Number: "IMP-MDE",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	breakJobTable(t, sqlite)
-	err = svc.Import(context.Background(), jobID)
-	require.Error(t, err)
 }
 
 // ---------- Delete os.Remove error (non IsNotExist) ----------
@@ -2974,56 +2372,6 @@ func TestExecuteScrapeAndFinalizeUpdateStatusError(t *testing.T) {
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "pre", "{}"))
 	breakJobTable(t, sqlite)
 	svc.executeScrapeAndFinalize(context.Background(), jobID, j, sourcePath, fc)
-}
-
-// ---------- CropPosterFromCover with marshal/save error ----------
-
-func TestCropPosterFromCoverSaveError(t *testing.T) {
-	svc, repo, sqlite := newTestServiceWithRawDB(t)
-	coverData := makeTestJPEG(200, 300)
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), svc.storage, coverData)
-	require.NoError(t, err)
-
-	dir := t.TempDir()
-	file := filepath.Join(dir, "CROP-SAVE.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "CROP-SAVE", RawNumber: "CROP-SAVE", CleanedNumber: "CROP-SAVE",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{Title: "T", Number: "CROP-SAVE", Cover: &model.File{Name: "cover.jpg", Key: coverKey}}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	_, err = sqlite.DB().Exec(`DROP TABLE yamdc_scrape_data_tab;
-		CREATE TABLE yamdc_scrape_data_tab (
-			id INTEGER PRIMARY KEY,
-			job_id INTEGER NOT NULL,
-			source TEXT NOT NULL DEFAULT '',
-			version INTEGER NOT NULL DEFAULT 0,
-			raw_data TEXT NOT NULL DEFAULT '',
-			review_data TEXT NOT NULL DEFAULT '',
-			final_data TEXT NOT NULL DEFAULT '',
-			status TEXT NOT NULL DEFAULT '',
-			created_at INTEGER NOT NULL DEFAULT 0,
-			updated_at INTEGER NOT NULL DEFAULT 0
-		)`)
-	require.NoError(t, err)
-	_, err = sqlite.DB().Exec(`INSERT INTO yamdc_scrape_data_tab (id, job_id, source, version, raw_data, review_data, final_data, status, created_at, updated_at)
-		VALUES (1, ?, 'test', 1, ?, '', '', 'draft', 0, 0)`, jobID, string(raw))
-	require.NoError(t, err)
-
-	_, err = sqlite.DB().Exec(`DROP TABLE yamdc_scrape_data_tab;
-		CREATE TABLE yamdc_scrape_data_tab (
-			id INTEGER PRIMARY KEY,
-			job_id INTEGER NOT NULL UNIQUE
-		)`)
-	require.NoError(t, err)
-
-	_, err = svc.CropPosterFromCover(context.Background(), jobID, 10, 10, 50, 80)
-	require.Error(t, err)
 }
 
 // ---------- UpdateNumber with bad number format (covers ResolveFileContext error in UpdateNumber) ----------
@@ -3118,26 +2466,6 @@ func TestServiceStartGetConflictError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// ---------- Import via scrapeRepo GetByJobID error ----------
-
-func TestServiceImportScrapeDataGetError(t *testing.T) {
-	svc, repo, sqlite := newTestServiceWithRawDB(t)
-
-	file := filepath.Join(t.TempDir(), "IMP-SGE.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-SGE", RawNumber: "IMP-SGE", CleanedNumber: "IMP-SGE",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
-	}, jobdef.StatusReviewing)
-	_ = jobID
-
-	breakScrapeTable(t, sqlite)
-	err := svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get scrape data")
-}
-
 // ---------- Delete SoftDelete error ----------
 
 func TestServiceDeleteSoftDeleteDBError(t *testing.T) {
@@ -3212,55 +2540,6 @@ func TestServiceUpdateNumberUpdateDBError(t *testing.T) {
 	_, err = svc.UpdateNumber(context.Background(), jobID, "NEWNUM")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "persist updated job number")
-}
-
-// ---------- Import with SaveFinalData error via trigger ----------
-
-func TestServiceImportSaveFinalDataTriggerError(t *testing.T) {
-	svc, repo, sqlite := newTestServiceWithRawDB(t)
-	storage := svc.storage
-	coverData := makeTestJPEG(200, 300)
-	posterData := makeTestJPEG(100, 150)
-
-	coverKey, err := store.AnonymousPutDataTo(context.Background(), storage, coverData)
-	require.NoError(t, err)
-	posterKey, err := store.AnonymousPutDataTo(context.Background(), storage, posterData)
-	require.NoError(t, err)
-
-	searcher := &loggingTestSearcher{meta: &model.MovieMeta{
-		Title:  "T",
-		Cover:  &model.File{Name: "cover.jpg", Key: coverKey},
-		Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}}
-	capt := newTestCaptureWithStorage(t, searcher, storage)
-	svc.capture = capt
-
-	dir := capt.ScanDir()
-	file := filepath.Join(dir, "IMP-TRG.mp4")
-	require.NoError(t, os.WriteFile(file, []byte("movie"), 0o600))
-
-	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName: filepath.Base(file), FileExt: ".mp4", RelPath: filepath.Base(file), AbsPath: file,
-		Number: "IMP-TRG", RawNumber: "IMP-TRG", CleanedNumber: "IMP-TRG",
-		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 5,
-	}, jobdef.StatusReviewing)
-
-	meta := &model.MovieMeta{
-		Title: "T", Number: "IMP-TRG",
-		Cover: &model.File{Name: "cover.jpg", Key: coverKey}, Poster: &model.File{Name: "poster.jpg", Key: posterKey},
-	}
-	raw, _ := json.Marshal(meta)
-	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "test", string(raw)))
-
-	_, err = sqlite.DB().Exec(`CREATE TRIGGER prevent_final_data BEFORE UPDATE ON yamdc_scrape_data_tab
-		WHEN NEW.final_data != '' BEGIN
-			SELECT RAISE(ABORT, 'final data update blocked');
-		END`)
-	require.NoError(t, err)
-
-	err = svc.Import(context.Background(), jobID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "save final data")
 }
 
 // ---------- UpdateNumber with old DB persist error ----------

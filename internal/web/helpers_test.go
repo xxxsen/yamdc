@@ -24,6 +24,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/review"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
@@ -137,6 +138,18 @@ func newTestJobService(
 		svc.WaitQueuedJobs()
 	})
 	return svc
+}
+
+// newTestReviewService 构造一个以 jobSvc 作为协调器的 review.Service, 用于
+// 覆盖 web 层 /api/review/... 系列 handler。jobSvc 仍然承担 Claim/Finish/
+// Log 等底层协作, review.Service 承接 SaveReviewData / Import / Crop 等流程。
+func newTestReviewService(
+	jobSvc *job.Service,
+	jobRepo *repository.JobRepository,
+	scrapeRepo *repository.ScrapeDataRepository,
+	storage store.IStorage,
+) *review.Service {
+	return review.NewService(jobSvc, jobRepo, scrapeRepo, nil, storage)
 }
 
 func createTestJob(t *testing.T, jobRepo *repository.JobRepository, num string) *jobdef.Job {

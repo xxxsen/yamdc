@@ -219,7 +219,7 @@ func (a *API) handleReviewSave(c *gin.Context) {
 		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
-	if err := a.jobSvc.SaveReviewData(c.Request.Context(), id, req.ReviewData); err != nil {
+	if err := a.reviewSvc.SaveReviewData(c.Request.Context(), id, req.ReviewData); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review data save failed", zap.Int64("job_id", id), zap.Error(err))
 		writeFail(c.Writer, errCodeReviewSaveFailed, err.Error())
 		return
@@ -233,7 +233,7 @@ func (a *API) handleReviewImport(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := a.jobSvc.Import(c.Request.Context(), id); err != nil {
+	if err := a.reviewSvc.Import(c.Request.Context(), id); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review import failed", zap.Int64("job_id", id), zap.Error(err))
 		writeFail(c.Writer, errCodeReviewImportFailed, err.Error())
 		return
@@ -266,7 +266,7 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 		writeFail(c.Writer, errCodeInvalidCropRectangle, "invalid crop rectangle")
 		return
 	}
-	poster, err := a.jobSvc.CropPosterFromCover(c.Request.Context(), id, req.X, req.Y, req.Width, req.Height)
+	poster, err := a.reviewSvc.CropPosterFromCover(c.Request.Context(), id, req.X, req.Y, req.Width, req.Height)
 	if err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review poster crop failed",
 			zap.Int64("job_id", id),
@@ -368,7 +368,7 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeReviewMarshalJSONFailed, "marshal review json failed")
 		return
 	}
-	if err := a.jobSvc.SaveReviewData(c.Request.Context(), id, string(reviewData)); err != nil {
+	if err := a.reviewSvc.SaveReviewData(c.Request.Context(), id, string(reviewData)); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review asset upload save failed",
 			zap.Int64("job_id", id), zap.String("target", target),
 			zap.String("file_name", fileName), zap.String("asset_key", key), zap.Error(err))

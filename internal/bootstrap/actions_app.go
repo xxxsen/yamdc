@@ -10,6 +10,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/review"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
 	"github.com/xxxsen/yamdc/internal/web"
@@ -51,10 +52,18 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		sc.App.JobRepo, sc.App.LogRepo, sc.App.ScrapeRepo,
 		sc.Domain.Capture, sc.Infra.CacheStore,
 	)
+	// 3.2 reviewing 工作流独立: SaveReviewData / CropPosterFromCover / Import
+	// 都挂在 review.Service 上, 它复用 job.Service 的 Claim/Finish/AddJobLog/
+	// ResolveJobSourcePath/GetBlockingConflict 做协作, 依赖方向单向 (review → job)。
+	sc.App.ReviewSvc = review.NewService(
+		sc.App.JobSvc,
+		sc.App.JobRepo, sc.App.ScrapeRepo,
+		sc.Domain.Capture, sc.Infra.CacheStore,
+	)
 	sc.App.MediaSvc = medialib.NewService(
 		sc.App.AppDB.DB(), c.LibraryDir, c.SaveDir,
 	)
-	sc.App.JobSvc.SetImportGuard(func(_ context.Context) error {
+	sc.App.ReviewSvc.SetImportGuard(func(_ context.Context) error {
 		if sc.App.MediaSvc.IsMoveRunning() {
 			return ErrMoveToMediaLibRunning
 		}
@@ -79,6 +88,7 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		sc.App.JobRepo,
 		sc.App.ScanSvc,
 		sc.App.JobSvc,
+		sc.App.ReviewSvc,
 		c.SaveDir,
 		sc.App.MediaSvc,
 		sc.Infra.CacheStore,

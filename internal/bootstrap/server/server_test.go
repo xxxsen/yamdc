@@ -13,14 +13,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/review"
 	"github.com/xxxsen/yamdc/internal/web"
 )
+
+// stubReviewSvc 返回一个构造时不会 panic 的 review.Service。内部 coordinator
+// 等依赖均为 nil, 一旦对它调用任何对外方法 (SaveReviewData / Import /
+// CropPosterFromCover) 就会立即 panic (nil pointer deref in Claim / jobRepo 等)。
+// 本文件的测试只走健康检查 / listen failure 路径, 不会触发任何 /api/review/*
+// 路由或 review 方法, 用它满足 web.NewAPI 的"必需非 nil" 契约即可;
+// 若后续新增用例真的要打 review 接口, 必须换成 newTestReviewService 这类
+// 带真实依赖的构造器。
+func stubReviewSvc() *review.Service {
+	return review.NewService(nil, nil, nil, nil, nil)
+}
 
 // --- 正常 case: ctx 取消后 ServeHTTP 以 graceful shutdown 方式退出 ---
 
 func TestServeHTTPGracefulShutdownOnCtxCancel(t *testing.T) {
 	t.Setenv("YAMDC_SERVER_ADDR", pickFreeAddr(t))
-	api := web.NewAPI(nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil)
+	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -52,7 +64,7 @@ func TestServeHTTPListenAndServeFailure(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 
 	t.Setenv("YAMDC_SERVER_ADDR", addr)
-	api := web.NewAPI(nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil)
+	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -75,7 +87,7 @@ func TestServeHTTPListenAndServeFailure(t *testing.T) {
 
 func TestServeHTTPCtxAlreadyCanceled(t *testing.T) {
 	t.Setenv("YAMDC_SERVER_ADDR", pickFreeAddr(t))
-	api := web.NewAPI(nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil)
+	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
