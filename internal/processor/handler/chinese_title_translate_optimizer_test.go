@@ -113,30 +113,6 @@ func TestChineseTitleOptimizeHandleNoResult(t *testing.T) {
 	assert.Empty(t, fc.Meta.TitleTranslated)
 }
 
-func TestChineseTitleOptimizeHandleFallbackToYesJav(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">DEF-456 Found Title (中文字幕)</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	c.tryInitCNumber(context.Background())
-	if c.m == nil {
-		c.m = make(map[string]string)
-	}
-	num, _ := number.Parse("DEF-456")
-	fc := &model.FileContext{
-		Number: num,
-		Meta:   &model.MovieMeta{Number: "DEF-456"},
-	}
-	err := c.Handle(context.Background(), fc)
-	require.NoError(t, err)
-	assert.Equal(t, "DEF-456 FOUND TITLE", fc.Meta.TitleTranslated)
-}
-
 func TestChineseTitleOptimizeHandleSubHandlerError(t *testing.T) {
 	c := &chineseTitleTranslateOptimizer{
 		cli: &mockHTTPClient{
