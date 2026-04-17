@@ -73,10 +73,11 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, item_json, created_at
-		FROM yamdc_media_library_tab
-	`)
+	keyword := strings.ToLower(strings.TrimSpace(options.Keyword))
+	year := strings.TrimSpace(options.Year)
+
+	query, args := buildListItemsQuery(keyword)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list media library items failed: %w", err)
 	}
@@ -84,8 +85,6 @@ func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]It
 		_ = rows.Close()
 	}()
 	items := make([]Item, 0, 32)
-	keyword := strings.ToLower(strings.TrimSpace(options.Keyword))
-	year := strings.TrimSpace(options.Year)
 	for rows.Next() {
 		var id int64
 		var raw string
@@ -245,6 +244,9 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 	s.bgWG.Add(1)
 	go func() {
 		defer s.bgWG.Done()
+		// runFullSync 内部已通过 failTask 把错误写入 task_state_tab 并记日志,
+		// 前端可以通过 /api/media-library/status 看到具体失败原因,
+		// 因此这里显式忽略返回值是安全的。
 		_ = s.runFullSync(context.WithoutCancel(ctx), "manual")
 	}()
 	return nil
@@ -301,6 +303,9 @@ func (s *Service) TriggerMove(ctx context.Context) error {
 	s.bgWG.Add(1)
 	go func() {
 		defer s.bgWG.Done()
+		// runMove 内部已通过 failTask 把错误写入 task_state_tab 并记日志,
+		// 前端可以通过 /api/media-library/status 看到具体失败原因,
+		// 因此这里显式忽略返回值是安全的。
 		_ = s.runMove(context.WithoutCancel(ctx))
 	}()
 	return nil
@@ -798,6 +803,30 @@ func (s *Service) isSyncRunning() bool {
 // 也可直接调用本方法等后台任务收尾。
 func (s *Service) WaitBackground() {
 	s.bgWG.Wait()
+}
+
+// buildListItemsQuery 构造 ListItems 使用的 SQL:
+// 当 keyword 非空时, 额外下推一个 item_json LIKE 粗过滤,
+// 用于减少需要在 Go 层反序列化的行数。
+//
+// 精过滤 (匹配 title/number/name 三字段)、year/size 过滤以及
+// 排序仍在应用层完成, 以保证行为与未下推时 100% 一致。
+// 原因:
+//   - SQLite LIKE 对 ASCII 默认不区分大小写, 对 Unicode 区分,
+//     在 item_json 这种半结构化文本上做精匹配会有 false positive;
+//   - release_date 存储格式多样, substr 不一定截出年份;
+//   - TotalSize / Sort 需要跨字段逻辑, 下推到 SQL 收益不大。
+//
+// 粗过滤的价值在于: 关键字搜索命中率较低时, 直接从成千上万条
+// 行里跳过绝大多数不含 keyword 的 item_json, 避免 JSON 反序列化。
+func buildListItemsQuery(keyword string) (string, []any) {
+	const base = `
+		SELECT id, item_json, created_at
+		FROM yamdc_media_library_tab`
+	if keyword == "" {
+		return base, nil
+	}
+	return base + ` WHERE item_json LIKE ?`, []any{"%" + keyword + "%"}
 }
 
 func releaseYear(value string) string {

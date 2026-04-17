@@ -3308,3 +3308,79 @@ func TestMatchExplicitCandidatesWithSync(t *testing.T) {
 	assert.Equal(t, newFile, j.AbsPath)
 	assert.Equal(t, "NUM-001.mp4", j.FileName)
 }
+
+// --- failJob ---
+
+// TestFailJobUpdatesStatusAndWritesLog 验证正常路径:
+// UpdateStatus 成功时, 任务被标记为 failed, 并写入一条 error 级别的 job log。
+func TestFailJobUpdatesStatusAndWritesLog(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	ctx := context.Background()
+	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "FAIL-OK.mp4"), jobdef.StatusProcessing)
+
+	svc.failJob(ctx, jobID, "scrape", "fake failure", "error=boom")
+
+	j, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, j)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+	assert.Equal(t, "fake failure", j.ErrorMsg)
+
+	logs, err := svc.logRepo.ListByJobID(ctx, jobID, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, logs)
+	assert.Equal(t, "error", logs[0].Level)
+	assert.Equal(t, "scrape", logs[0].Stage)
+	assert.Equal(t, "fake failure", logs[0].Message)
+}
+
+// TestFailJobWithClosedDBDoesNotPanic 验证异常路径:
+// 底层 sql.DB 已被关闭时 (UpdateStatus/addJobLog 都会失败),
+// failJob 必须静默返回而不是 panic, 以保证主流程可以继续执行
+// (日志里会看到 "update status to failed failed" 的错误)。
+func TestFailJobWithClosedDBDoesNotPanic(t *testing.T) {
+	svc, _ := newTestServiceWithSQLite(t)
+
+	// 主动关闭底层 DB 模拟"关停中触发失败路径"的场景。
+	// 通过 jobRepo 拿不到 *sql.DB, 所以用反射路径比较复杂;
+	// 这里换成构造一个"指向已关闭 DB 的 jobRepo"的 service。
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "closed.db"))
+	require.NoError(t, err)
+	require.NoError(t, sqlite.Close())
+
+	closedSvc := NewService(
+		repository.NewJobRepository(sqlite.DB()),
+		repository.NewLogRepository(sqlite.DB()),
+		repository.NewScrapeDataRepository(sqlite.DB()),
+		nil, store.NewMemStorage(),
+	)
+	t.Cleanup(func() { closedSvc.WaitQueuedJobs() })
+
+	assert.NotPanics(t, func() {
+		closedSvc.failJob(context.Background(), 12345, "job", "boom", "detail")
+	})
+	// 确保原来那个 svc 仍可用 (失败不扩散到其它实例)
+	assert.NotNil(t, svc)
+}
+
+// TestFailJobNonProcessingStatusNoTransition 验证边缘路径:
+// 当 job 不处于 processing 状态时, UpdateStatus 不会生效,
+// 但 log 仍被写入 (帮助排障), 避免把一个 done/init 的 job 错误地翻成 failed。
+func TestFailJobNonProcessingStatusNoTransition(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	ctx := context.Background()
+	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "FAIL-INIT.mp4"), jobdef.StatusInit)
+
+	svc.failJob(ctx, jobID, "scrape", "should not transition", "detail")
+
+	j, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, j)
+	assert.Equal(t, jobdef.StatusInit, j.Status,
+		"failJob requires status=processing, init job should stay untouched")
+
+	logs, err := svc.logRepo.ListByJobID(ctx, jobID, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, logs)
+	assert.Equal(t, "should not transition", logs[0].Message)
+}

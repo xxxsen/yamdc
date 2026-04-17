@@ -70,6 +70,18 @@ func newGinContextWithParams(method, target string, body io.Reader, params gin.P
 	return c, rec
 }
 
+// newGinContextWithCanceledCtx 构造一个 request ctx 已被取消的 gin.Context,
+// 用于验证 handler 对上游取消信号的响应。rec 由调用方传入以便断言。
+func newGinContextWithCanceledCtx(t *testing.T, method, target string, rec *httptest.ResponseRecorder) (*gin.Context, context.CancelFunc) {
+	t.Helper()
+	c, _ := gin.CreateTestContext(rec)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequestWithContext(ctx, method, target, nil)
+	c.Request = req
+	return c, cancel
+}
+
 func decodeResponse(t *testing.T, rec *httptest.ResponseRecorder) responseBody {
 	t.Helper()
 	var out responseBody

@@ -1573,3 +1573,73 @@ func TestListItemsSortCombinations(t *testing.T) {
 		assert.Len(t, items, 2, "sort=%s order=%s", tc.sort, tc.order)
 	}
 }
+
+// --- buildListItemsQuery ---
+
+// TestBuildListItemsQueryNoKeyword 验证正常 case:
+// 无 keyword 时不附加 WHERE, 行为等价于全表扫描。
+func TestBuildListItemsQueryNoKeyword(t *testing.T) {
+	q, args := buildListItemsQuery("")
+	assert.NotContains(t, q, "WHERE")
+	assert.Contains(t, q, "FROM yamdc_media_library_tab")
+	assert.Empty(t, args)
+}
+
+// TestBuildListItemsQueryWithKeyword 验证正常 case:
+// 有 keyword 时附加 item_json LIKE 粗过滤, 参数用 %keyword% 包裹。
+func TestBuildListItemsQueryWithKeyword(t *testing.T) {
+	q, args := buildListItemsQuery("alpha")
+	assert.Contains(t, q, "WHERE item_json LIKE ?")
+	require.Len(t, args, 1)
+	assert.Equal(t, "%alpha%", args[0])
+}
+
+// TestBuildListItemsQueryWithSpecialChars 验证边缘 case:
+// LIKE 元字符 (% _ \) 本身会被当作通配符匹配更多行,
+// 但这只影响"粗过滤的漏斗效率", 不影响最终结果,
+// 因为 Go 层的精过滤会兜底筛除。
+// 此处仅固化当前实现的行为: 特殊字符被透传, 不做转义。
+func TestBuildListItemsQueryWithSpecialChars(t *testing.T) {
+	q, args := buildListItemsQuery("100%_off")
+	assert.Contains(t, q, "WHERE item_json LIKE ?")
+	require.Len(t, args, 1)
+	assert.Equal(t, "%100%_off%", args[0])
+}
+
+// TestListItemsKeywordConsistencyAfterPushdown 用实际 DB 验证:
+// 下推粗过滤前后, ListItems 返回的集合应保持完全一致。
+// 这是 1.4 优化的"行为不变"契约。
+func TestListItemsKeywordConsistencyAfterPushdown(t *testing.T) {
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	items := []Item{
+		// 关键字只出现在 title
+		{RelPath: "a", Title: "Alpha Series", Number: "X-1"},
+		// 关键字只出现在 number
+		{RelPath: "b", Title: "Other", Number: "ALPHA-2"},
+		// 关键字只出现在 name
+		{RelPath: "c", Title: "Other", Number: "X-3", Name: "alpha-file.mp4"},
+		// 不含关键字
+		{RelPath: "d", Title: "Beta", Number: "Y-4", Name: "beta.mp4"},
+	}
+	for i := range items {
+		items[i].ID = int64(i + 1)
+		require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: items[i]}))
+	}
+
+	got, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "alpha"})
+	require.NoError(t, err)
+	require.Len(t, got, 3, "应同时匹配 title/number/name 三种字段")
+
+	paths := make(map[string]struct{}, len(got))
+	for _, it := range got {
+		paths[it.RelPath] = struct{}{}
+	}
+	for _, want := range []string{"a", "b", "c"} {
+		_, ok := paths[want]
+		assert.True(t, ok, "missing expected rel_path=%s", want)
+	}
+	_, unexpected := paths["d"]
+	assert.False(t, unexpected, "beta should not appear when keyword=alpha")
+}

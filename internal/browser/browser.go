@@ -35,8 +35,7 @@ type httpClientWrap struct {
 }
 
 func NewHTTPClient(impl client.IHTTPClient, navigator INavigator) client.IHTTPClient {
-	jar, _ := cookiejar.New(nil)
-	return &httpClientWrap{impl: impl, navigator: navigator, jar: jar}
+	return &httpClientWrap{impl: impl, navigator: navigator, jar: client.MustCookieJar()}
 }
 
 func (c *httpClientWrap) Do(req *http.Request) (*http.Response, error) {

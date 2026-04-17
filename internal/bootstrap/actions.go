@@ -555,6 +555,17 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		}
 		return nil
 	})
+	// 按 LIFO 注册: 这两个 wait 会在 app_db/cache_store 关闭前执行,
+	// 避免后台 goroutine 的 DB 写入撞上 sql.DB.Close() 导致的
+	// "database is closed" 错误。
+	sc.Cleanup.Add("wait_media_background", func(context.Context) error {
+		sc.App.MediaSvc.WaitBackground()
+		return nil
+	})
+	sc.Cleanup.Add("wait_job_worker", func(context.Context) error {
+		sc.App.JobSvc.WaitQueuedJobs()
+		return nil
+	})
 	editorSvc, err := plugineditor.NewService(sc.Infra.HTTPClient)
 	if err != nil {
 		return fmt.Errorf("init plugin editor service failed, err:%w", err)
@@ -570,8 +581,24 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		sc.Domain.SearcherDebugger,
 		sc.Domain.HandlerDebugger,
 		editorSvc,
+		buildHealthCheck(sc.App.AppDB),
 	)
 	return nil
+}
+
+var errAppDBNotInitialized = errors.New("app db not initialized")
+
+func buildHealthCheck(appDB *repository.SQLite) web.HealthCheckFunc {
+	if appDB == nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		db := appDB.DB()
+		if db == nil {
+			return errAppDBNotInitialized
+		}
+		return db.PingContext(ctx)
+	}
 }
 
 func recoverJobsAction(ctx context.Context, sc *StartContext) error {
@@ -588,9 +615,9 @@ func startMediaServiceAction(ctx context.Context, sc *StartContext) error {
 
 // --- server action wrapper ---
 
-func serveHTTPAction(_ context.Context, sc *StartContext) error {
+func serveHTTPAction(ctx context.Context, sc *StartContext) error {
 	if err := server.ServeHTTP(
-		sc.App.API, sc.Infra.Logger,
+		ctx, sc.App.API, sc.Infra.Logger,
 		sc.Infra.Config.ScanDir, sc.Infra.Config.DataDir,
 	); err != nil {
 		return fmt.Errorf("serve http: %w", err)

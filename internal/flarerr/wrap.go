@@ -23,12 +23,11 @@ type httpClientWrap struct {
 // context are automatically routed through the FlareSolverr endpoint.
 // Non-flagged requests pass through to impl with cookie injection.
 func NewHTTPClient(impl client.IHTTPClient, endpoint string) client.IHTTPClient {
-	jar, _ := cookiejar.New(nil)
 	return &httpClientWrap{
 		impl:     impl,
 		endpoint: normalizeEndpoint(endpoint),
 		timeout:  defaultByPassClientTimeout,
-		jar:      jar,
+		jar:      client.MustCookieJar(),
 	}
 }
 

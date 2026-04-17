@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/xxxsen/yamdc/internal/bootstrap"
@@ -28,13 +31,18 @@ func newServerCmd() *cobra.Command {
 }
 
 func runServer(c *config.Config) error {
+	// signal-driven ctx 会在收到 SIGINT/SIGTERM 时被取消, 触发
+	// serveHTTPAction 里的 http.Server.Shutdown + 后续 RunCleanup
+	// 里的 job/medialib wait + sqlite close, 实现 graceful 退出。
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	sc := bootstrap.NewStartContext(c)
 	defer func() {
 		if err := sc.RunCleanup(context.Background()); err != nil && sc.Infra.Logger != nil {
 			sc.Infra.Logger.Error("cleanup start context failed", zap.Error(err))
 		}
 	}()
-	if err := bootstrap.Execute(context.Background(), sc, bootstrap.NewServerActions()); err != nil {
+	if err := bootstrap.Execute(ctx, sc, bootstrap.NewServerActions()); err != nil {
 		return fmt.Errorf("server bootstrap failed: %w", err)
 	}
 	return nil

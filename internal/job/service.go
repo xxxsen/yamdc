@@ -934,7 +934,18 @@ func buildConflict(items []jobdef.Job) *Conflict {
 }
 
 func (s *Service) failJob(ctx context.Context, jobID int64, stage, message, detail string) {
-	_, _ = s.jobRepo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, message)
+	if _, err := s.jobRepo.UpdateStatus(
+		ctx, jobID,
+		[]jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, message,
+	); err != nil {
+		// 即使状态更新失败, 仍要继续写 job log, 否则排障时看不到失败原因。
+		logutil.GetLogger(ctx).Error("fail job: update status to failed failed",
+			zap.Int64("job_id", jobID),
+			zap.String("stage", stage),
+			zap.String("message", message),
+			zap.Error(err),
+		)
+	}
 	s.addJobLog(ctx, jobID, "error", stage, message, detail)
 }
 
