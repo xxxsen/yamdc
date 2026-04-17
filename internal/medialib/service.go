@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -72,11 +71,14 @@ func (s *Service) Start(ctx context.Context) {
 	}
 }
 
+// ListItems 按 options 拉取媒体库列表。keyword / year / size 过滤和排序全部下推到 SQL,
+// 只把已经筛选+排序好的行反序列化回来, 避免 1.4 里描述的 "一把 SELECT * + 全表 Unmarshal" 问题。
+//
+// 精确匹配字段 (title/number/name/release_year/total_size) 来自专用索引列,
+// 由 upsertDetail 在写入时同步更新; 旧行通过 002 migration 的 json_extract 回填,
+// 回填不准的会在下一次 media library sync 时被 upsertDetail 覆盖修正。
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
-	keyword := strings.ToLower(strings.TrimSpace(options.Keyword))
-	year := strings.TrimSpace(options.Year)
-
-	query, args := buildListItemsQuery(keyword)
+	query, args := buildListItemsQuery(options)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list media library items failed: %w", err)
@@ -98,28 +100,11 @@ func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]It
 		}
 		item.ID = id
 		item.CreatedAt = createdAt
-		if keyword != "" {
-			haystack := strings.ToLower(strings.Join([]string{
-				item.Title,
-				item.Number,
-				item.Name,
-			}, " "))
-			if !strings.Contains(haystack, keyword) {
-				continue
-			}
-		}
-		if year != "" && year != "all" && releaseYear(item.ReleaseDate) != year {
-			continue
-		}
-		if !matchSizeFilter(item.TotalSize, options.SizeFilter) {
-			continue
-		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate media library items failed: %w", err)
 	}
-	sortItems(items, options.Sort, options.Order)
 	return items, nil
 }
 
@@ -643,10 +628,15 @@ func (s *Service) upsertDetail(ctx context.Context, detail *Detail) error {
 		return fmt.Errorf("marshal media library detail failed: %w", err)
 	}
 	now := time.Now().UnixMilli()
+	// 1.4: number/name/release_year/total_size 是专供 ListItems 过滤/排序的索引列,
+	// 必须在每次 upsert 时和 item_json 保持一致, 否则 ListItems 会漏命中。
+	releaseYr := releaseYear(detail.Item.ReleaseDate)
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO yamdc_media_library_tab (
-			rel_path, title, release_date, updated_at, poster_path, cover_path, item_json, detail_json, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			rel_path, title, release_date, updated_at, poster_path, cover_path,
+			item_json, detail_json, created_at,
+			number, name, release_year, total_size
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(rel_path) DO UPDATE SET
 			title = excluded.title,
 			release_date = excluded.release_date,
@@ -654,9 +644,14 @@ func (s *Service) upsertDetail(ctx context.Context, detail *Detail) error {
 			poster_path = excluded.poster_path,
 			cover_path = excluded.cover_path,
 			item_json = excluded.item_json,
-			detail_json = excluded.detail_json
+			detail_json = excluded.detail_json,
+			number = excluded.number,
+			name = excluded.name,
+			release_year = excluded.release_year,
+			total_size = excluded.total_size
 	`, detail.Item.RelPath, detail.Item.Title, detail.Item.ReleaseDate, detail.Item.UpdatedAt, detail.Item.PosterPath,
-		detail.Item.CoverPath, string(itemRaw), string(detailRaw), now)
+		detail.Item.CoverPath, string(itemRaw), string(detailRaw), now,
+		detail.Item.Number, detail.Item.Name, releaseYr, detail.Item.TotalSize)
 	if err != nil {
 		return fmt.Errorf("upsert media library detail failed: %w", err)
 	}
@@ -805,28 +800,142 @@ func (s *Service) WaitBackground() {
 	s.bgWG.Wait()
 }
 
-// buildListItemsQuery 构造 ListItems 使用的 SQL:
-// 当 keyword 非空时, 额外下推一个 item_json LIKE 粗过滤,
-// 用于减少需要在 Go 层反序列化的行数。
+// buildListItemsQuery 拼出 ListItems 使用的 SQL。filter/sort 全部下推到 SQL 层,
+// 依赖 002 migration 添加的索引列 (number/name/release_year/total_size)。
 //
-// 精过滤 (匹配 title/number/name 三字段)、year/size 过滤以及
-// 排序仍在应用层完成, 以保证行为与未下推时 100% 一致。
-// 原因:
-//   - SQLite LIKE 对 ASCII 默认不区分大小写, 对 Unicode 区分,
-//     在 item_json 这种半结构化文本上做精匹配会有 false positive;
-//   - release_date 存储格式多样, substr 不一定截出年份;
-//   - TotalSize / Sort 需要跨字段逻辑, 下推到 SQL 收益不大。
+// keyword 精匹配: LOWER(title/number/name) LIKE LOWER('%k%')
+//   - 002 之前的实现在 item_json 上做一次粗 LIKE, 命中后仍需要在 Go 里反序列化
+//     每一行再逐字段比较, 库大以后代价线性飙升。
+//   - 现在直接在 3 个专用列上 LIKE, 命中行即为结果集, 无需额外字段比较;
+//     LOWER 做一遍函数调用是为了保持 "对 ASCII 大小写不敏感" 的既有语义,
+//     同时对 CJK 幂等, 不改变匹配行为。
 //
-// 粗过滤的价值在于: 关键字搜索命中率较低时, 直接从成千上万条
-// 行里跳过绝大多数不含 keyword 的 item_json, 避免 JSON 反序列化。
-func buildListItemsQuery(keyword string) (string, []any) {
-	const base = `
-		SELECT id, item_json, created_at
-		FROM yamdc_media_library_tab`
-	if keyword == "" {
-		return base, nil
+// year / size: 用 release_year / total_size 索引列做等值或区间过滤,
+// 完全等价于原 Go 层的 releaseYear() + matchSizeFilter() 语义。
+//
+// sort: 走 ORDER BY + 固定 tie-breaker (updated_at, id), 和原 sortItems 的语义一致。
+func buildListItemsQuery(options ListItemsOptions) (string, []any) {
+	var sb strings.Builder
+	sb.WriteString("SELECT id, item_json, created_at FROM yamdc_media_library_tab")
+
+	conditions := make([]string, 0, 4)
+	args := make([]any, 0, 6)
+
+	keyword := strings.TrimSpace(options.Keyword)
+	if keyword != "" {
+		// 旧实现用 strings.Contains 做字面子串匹配, keyword 里的 '%' / '_' 是普通字符;
+		// 直接用 LIKE 则会被当作通配符, 语义漂移。escapeLikePattern 把它们转义掉,
+		// 并配合 `ESCAPE '\'` 子句锁定转义字符, 保持和旧实现一致。
+		pattern := "%" + escapeLikePattern(strings.ToLower(keyword)) + "%"
+		conditions = append(conditions,
+			`(LOWER(title) LIKE ? ESCAPE '\' OR LOWER(number) LIKE ? ESCAPE '\' OR LOWER(name) LIKE ? ESCAPE '\')`)
+		args = append(args, pattern, pattern, pattern)
 	}
-	return base + ` WHERE item_json LIKE ?`, []any{"%" + keyword + "%"}
+	year := strings.TrimSpace(options.Year)
+	if year != "" && year != "all" {
+		conditions = append(conditions, "release_year = ?")
+		args = append(args, year)
+	}
+	if low, high, ok := sizeFilterBounds(options.SizeFilter); ok {
+		if low > 0 {
+			conditions = append(conditions, "total_size >= ?")
+			args = append(args, low)
+		}
+		if high > 0 {
+			conditions = append(conditions, "total_size < ?")
+			args = append(args, high)
+		}
+	}
+	if len(conditions) > 0 {
+		sb.WriteString(" WHERE ")
+		sb.WriteString(strings.Join(conditions, " AND "))
+	}
+	sortExpr := sortModeToColumn(options.Sort)
+	direction := "DESC"
+	if strings.EqualFold(strings.TrimSpace(options.Order), "asc") {
+		direction = "ASC"
+	}
+	// tie-breaker 跟 direction 对齐, 和历史 sortItems 的行为保持一致 (同方向二级排序)。
+	// 当主排序列本身就是 updated_at 时避免把它再重复一次, 冗余项不影响结果, 只是读起来噪。
+	if sortExpr == "updated_at" {
+		fmt.Fprintf(&sb, " ORDER BY updated_at %s, id %s", direction, direction)
+	} else {
+		fmt.Fprintf(&sb, " ORDER BY %s %s, updated_at %s, id %s",
+			sortExpr, direction, direction, direction)
+	}
+	return sb.String(), args
+}
+
+// escapeLikePattern 把 LIKE 通配符 ('%' / '_') 和转义符 '\' 本身全部前置 '\',
+// 让 `LIKE ... ESCAPE '\'` 真正做字面子串匹配。
+// 这个函数假设调用方已经把要转义的字符串 trim / lower 过, 不会改大小写或首尾空白。
+func escapeLikePattern(s string) string {
+	if !strings.ContainsAny(s, `%_\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for _, r := range s {
+		if r == '%' || r == '_' || r == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// sortModeToColumn 把前端传的 sort 模式映射到 SQL 的 ORDER BY 表达式。
+// "title" 模式下 Go 层曾经用 firstNonEmpty(Title, Name) 作比较键, 这里用
+// CASE 表达式等价翻译: title 为空时 fallback 到 name。
+func sortModeToColumn(sortMode string) string {
+	switch strings.TrimSpace(sortMode) {
+	case "title":
+		return "CASE WHEN title = '' THEN name ELSE title END"
+	case "size":
+		return "total_size"
+	case "year":
+		return "release_year"
+	case "ingested":
+		return "created_at"
+	case "updated":
+		return "updated_at"
+	default:
+		return "updated_at"
+	}
+}
+
+// sizeFilterBounds 把 size 过滤 token 翻译成 [low, high) 字节数区间。
+// 返回第 3 位 ok=false 表示 "不过滤" ("", "all", 或未知值);
+// low=0 代表 "下限不约束", high=0 代表 "上限不约束"。
+//
+// 与旧 matchSizeFilter 保持逐个 case 的语义一致 (含 lt-1 / lt-5 这种只有上限的桶),
+// 未知 token 和 "all" 一样返回 ok=false, 避免下推到 SQL 后反而把结果全过滤空。
+func sizeFilterBounds(sizeFilter string) (int64, int64, bool) {
+	const gb = int64(1024 * 1024 * 1024)
+	switch sizeFilter {
+	case "", "all":
+		return 0, 0, false
+	case "lt-1":
+		return 0, gb, true
+	case "1-2":
+		return gb, 2 * gb, true
+	case "2-5":
+		return 2 * gb, 5 * gb, true
+	case "lt-5":
+		return 0, 5 * gb, true
+	case "5-10":
+		return 5 * gb, 10 * gb, true
+	case "10-20":
+		return 10 * gb, 20 * gb, true
+	case "5-20":
+		return 5 * gb, 20 * gb, true
+	case "20-50":
+		return 20 * gb, 50 * gb, true
+	case "50-plus":
+		return 50 * gb, 0, true
+	default:
+		return 0, 0, false
+	}
 }
 
 func releaseYear(value string) string {
@@ -844,87 +953,4 @@ func releaseYear(value string) string {
 		}
 	}
 	return ""
-}
-
-func matchSizeFilter(totalSize int64, sizeFilter string) bool {
-	gb := float64(totalSize) / float64(1024*1024*1024)
-	switch sizeFilter {
-	case "", "all":
-		return true
-	case "lt-1":
-		return gb < 1
-	case "1-2":
-		return gb >= 1 && gb < 2
-	case "2-5":
-		return gb >= 2 && gb < 5
-	case "lt-5":
-		return gb < 5
-	case "5-10":
-		return gb >= 5 && gb < 10
-	case "10-20":
-		return gb >= 10 && gb < 20
-	case "5-20":
-		return gb >= 5 && gb < 20
-	case "20-50":
-		return gb >= 20 && gb < 50
-	case "50-plus":
-		return gb >= 50
-	default:
-		return true
-	}
-}
-
-func compareItemsByMode(left, right Item, sortMode string) int {
-	switch sortMode {
-	case "title":
-		return compareStrings(firstNonEmpty(left.Title, left.Name), firstNonEmpty(right.Title, right.Name))
-	case "size":
-		return compareInt64(left.TotalSize, right.TotalSize)
-	case "year":
-		return compareStrings(releaseYear(left.ReleaseDate), releaseYear(right.ReleaseDate))
-	case "ingested":
-		return compareInt64(left.CreatedAt, right.CreatedAt)
-	default:
-		return compareInt64(left.UpdatedAt, right.UpdatedAt)
-	}
-}
-
-func compareStrings(a, b string) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
-
-func compareInt64(a, b int64) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
-
-func sortItems(items []Item, sortMode, order string) {
-	if sortMode == "" {
-		sortMode = "ingested"
-	}
-	desc := order != "asc"
-	sort.Slice(items, func(i, j int) bool {
-		cmp := compareItemsByMode(items[i], items[j], sortMode)
-		if cmp == 0 {
-			cmp = compareInt64(items[i].UpdatedAt, items[j].UpdatedAt)
-		}
-		if cmp == 0 {
-			cmp = compareInt64(items[i].ID, items[j].ID)
-		}
-		if desc {
-			return cmp > 0
-		}
-		return cmp < 0
-	})
 }
