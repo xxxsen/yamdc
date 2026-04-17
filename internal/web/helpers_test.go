@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -108,6 +109,24 @@ func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *
 	return sqlite, jobRepo, logRepo, scrapeRepo
 }
 
+// newTestJobService 创建 job.Service 并注册清理逻辑, 等待 worker goroutine
+// 在 sqlite 关闭/tempdir 清理之前写完所有异步日志, 避免与 t.TempDir()
+// 的 RemoveAll 产生 "directory not empty" 竞态。
+func newTestJobService(
+	t *testing.T,
+	jobRepo *repository.JobRepository,
+	logRepo *repository.LogRepository,
+	scrapeRepo *repository.ScrapeDataRepository,
+	storage store.IStorage,
+) *job.Service {
+	t.Helper()
+	svc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, storage)
+	t.Cleanup(func() {
+		svc.WaitQueuedJobs()
+	})
+	return svc
+}
+
 func createTestJob(t *testing.T, jobRepo *repository.JobRepository, num string) *jobdef.Job {
 	t.Helper()
 	err := jobRepo.UpsertScannedJob(context.Background(), repository.UpsertJobInput{
@@ -140,7 +159,11 @@ func setupMediaLibDB(t *testing.T) *medialib.Service {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlite.Close() })
 	libraryDir := t.TempDir()
-	return medialib.NewService(sqlite.DB(), libraryDir, "")
+	svc := medialib.NewService(sqlite.DB(), libraryDir, "")
+	// 按 LIFO, 先等待后台 sync/move goroutine 返回再关闭 sqlite/tempdir,
+	// 避免 TriggerFullSync / TriggerMove 启动的异步 DB 写入与清理竞争。
+	t.Cleanup(func() { svc.WaitBackground() })
+	return svc
 }
 
 func createValidJPEG(t *testing.T, width, height int) []byte {

@@ -14,12 +14,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 )
 
-type errReader struct{}
-
-func (e *errReader) Read(_ []byte) (int, error) {
-	return 0, errors.New("read error")
-}
-
 func TestEncodeNumberID(t *testing.T) {
 	c := &chineseTitleTranslateOptimizer{}
 	tests := []struct {
@@ -35,41 +29,6 @@ func TestEncodeNumberID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, c.encodeNumberID(tt.input))
-		})
-	}
-}
-
-func TestCleanSearchTitle(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{}
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "with brackets prefix",
-			input:    "[Something] ABC-123 Nice Title (中文字幕)",
-			expected: "ABC-123 Nice Title",
-		},
-		{
-			name:     "without brackets",
-			input:    "ABC-123 Nice Title",
-			expected: "ABC-123 Nice Title",
-		},
-		{
-			name:     "empty",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "no match",
-			input:    "random text",
-			expected: "",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, c.cleanSearchTitle(tt.input))
 		})
 	}
 }
@@ -103,128 +62,6 @@ func TestReadTitleFromCNumberUninitialized(t *testing.T) {
 	_, ok, err := c.readTitleFromCNumber(context.Background(), "ABC-123")
 	require.NoError(t, err)
 	assert.False(t, ok)
-}
-
-func TestReadTitleFromYesJavHTTPError(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{err: errors.New("network error")},
-	}
-	_, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	assert.Error(t, err)
-	assert.False(t, ok)
-}
-
-func TestReadTitleFromYesJavNoMatch(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">UNRELATED CONTENT</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.False(t, ok)
-	assert.Empty(t, title)
-}
-
-func TestReadTitleFromYesJavMatch(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">ABC-123 Nice Title (中文字幕)</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, "ABC-123 NICE TITLE", title)
-}
-
-func TestReadTitleFromYesJavMismatchNumberID(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">XYZ-999 Wrong Number (中文字幕)</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.False(t, ok)
-	assert.Empty(t, title)
-}
-
-func TestReadTitleFromYesJavNoChinese(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">ABC-123 Title Without Chinese Marker</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.False(t, ok)
-	assert.Empty(t, title)
-}
-
-func TestReadTitleFromYesJavBodyReadError(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(&errReader{}),
-			},
-		},
-	}
-	_, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	assert.Error(t, err)
-	assert.False(t, ok)
-}
-
-func TestReadTitleFromYesJavEmptyContent(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">   </a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.False(t, ok)
-	assert.Empty(t, title)
-}
-
-func TestReadTitleFromYesJavMultipleLinks(t *testing.T) {
-	html := `<html><body><font size="+0.5">
-		<a target="_blank">XYZ-999 Wrong (中文字幕)</a>
-		<a target="_blank">ABC-123 Correct Title (中文字幕)</a>
-	</font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	title, ok, err := c.readTitleFromYesJav(context.Background(), "ABC-123")
-	require.NoError(t, err)
-	assert.True(t, ok)
-	assert.Contains(t, title, "ABC-123")
 }
 
 func TestChineseTitleOptimizeHandleWithCNumber(t *testing.T) {
@@ -268,30 +105,6 @@ func TestChineseTitleOptimizeHandleNoResult(t *testing.T) {
 	err := c.Handle(context.Background(), fc)
 	require.NoError(t, err)
 	assert.Empty(t, fc.Meta.TitleTranslated)
-}
-
-func TestChineseTitleOptimizeHandleFallbackToYesJav(t *testing.T) {
-	html := `<html><body><font size="+0.5"><a target="_blank">DEF-456 Found Title (中文字幕)</a></font></body></html>`
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(html)),
-			},
-		},
-	}
-	c.tryInitCNumber(context.Background())
-	if c.m == nil {
-		c.m = make(map[string]string)
-	}
-	num, _ := number.Parse("DEF-456")
-	fc := &model.FileContext{
-		Number: num,
-		Meta:   &model.MovieMeta{Number: "DEF-456"},
-	}
-	err := c.Handle(context.Background(), fc)
-	require.NoError(t, err)
-	assert.Equal(t, "DEF-456 FOUND TITLE", fc.Meta.TitleTranslated)
 }
 
 func TestChineseTitleOptimizeHandleSubHandlerError(t *testing.T) {

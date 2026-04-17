@@ -39,7 +39,16 @@ func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository
 	jobRepo := repository.NewJobRepository(sqlite.DB())
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
-	return NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage()), jobRepo
+	svc := NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	// Cleanup 注册顺序: 先 sqlite.Close, 再 WaitQueuedJobs。按 LIFO 执行时会先
+	// 等待所有通过 queue 分发到 worker 的异步任务完成 (包括状态更新之后的
+	// addJobLog 与 finish), 然后再关闭 sqlite, 最后 testing 框架清理 tempdir。
+	// 否则 worker 仍在写 DB 时就关闭 sqlite/删除 tempdir, 会残留 journal 文件
+	// 导致 "directory not empty" 的 flaky 失败。
+	t.Cleanup(func() {
+		svc.WaitQueuedJobs()
+	})
+	return svc, jobRepo
 }
 
 func newTestService(t *testing.T) (*Service, *repository.JobRepository) {

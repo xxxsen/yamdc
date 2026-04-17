@@ -33,6 +33,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	scaning bool
+	loopWG  sync.WaitGroup
 }
 
 func New(
@@ -60,7 +61,9 @@ func (s *Service) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
+	s.loopWG.Add(1)
 	go func() {
+		defer s.loopWG.Done()
 		_ = s.Scan(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -73,6 +76,16 @@ func (s *Service) Start(ctx context.Context, interval time.Duration) {
 			}
 		}
 	}()
+}
+
+// Wait 阻塞直到所有通过 Start 启动的后台扫描循环退出。
+// 调用方必须先 cancel 传入 Start 的 ctx, 否则 goroutine 永远不会退出,
+// Wait 将永久阻塞 —— 切勿在未 cancel 的情况下把 Wait 直接放进 t.Cleanup。
+// 目前主要用于测试: 在关闭底层 sqlite / 清理 tempdir 之前, 同步等待
+// 后台 goroutine 写完 DB, 避免 journal 文件残留导致 flaky 失败。
+// 生产侧若需要 graceful shutdown, 也可在 ctx 取消后调用本方法收尾。
+func (s *Service) Wait() {
+	s.loopWG.Wait()
 }
 
 func (s *Service) buildScanEntry(path string, info fs.FileInfo) (repository.UpsertJobInput, error) {

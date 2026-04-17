@@ -5,28 +5,17 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/resource"
-
-	"github.com/antchfx/htmlquery"
-	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
 )
-
-const (
-	defaultYesJav100QueryLinkTplt = "https://www.yesjav.com/search.asp?q=%s&"
-)
-
-var defaultYesJav100TitleExtractRegexp = regexp.MustCompile(`(?:\[.*?\]\s*)?([A-Z]+-\d+\s+[^()]+)`)
 
 type chineseTitleTranslateOptimizer struct {
 	once sync.Once
@@ -72,71 +61,12 @@ func (c *chineseTitleTranslateOptimizer) encodeNumberID(numberid string) string 
 	return encodedid
 }
 
-func (c *chineseTitleTranslateOptimizer) cleanSearchTitle(title string) string {
-	sts := defaultYesJav100TitleExtractRegexp.FindStringSubmatch(title)
-	if len(sts) <= 1 {
-		return ""
-	}
-	return strings.TrimSpace(sts[1])
-}
-
-func (c *chineseTitleTranslateOptimizer) readTitleFromYesJav(
-	ctx context.Context, numberid string,
-) (string, bool, error) {
-	// 本质上yesjav100 也是个刮削源, 在这里做这些逻辑还是有点奇怪
-	numberid = strings.ToUpper(numberid)
-	encodedid := c.encodeNumberID(numberid)
-
-	link := fmt.Sprintf(defaultYesJav100QueryLinkTplt, encodedid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
-	if err != nil {
-		return "", false, fmt.Errorf("create request: %w", err)
-	}
-	rsp, err := c.cli.Do(req)
-	if err != nil {
-		return "", false, fmt.Errorf("execute request: %w", err)
-	}
-	defer func() {
-		_ = rsp.Body.Close()
-	}()
-	raw, err := client.ReadHTTPData(rsp)
-	if err != nil {
-		return "", false, fmt.Errorf("read response data: %w", err)
-	}
-	node, err := htmlquery.Parse(bytes.NewReader(raw))
-	if err != nil {
-		return "", false, fmt.Errorf("parse html failed: %w", err)
-	}
-	items := htmlquery.Find(node, `//font[@size="+0.5"]//a[@target="_blank"]`)
-	var searchedTitle string
-	for _, item := range items {
-		res := strings.ToUpper(strings.TrimSpace(htmlquery.InnerText(item)))
-		if len(res) == 0 {
-			continue
-		}
-		if !strings.Contains(res, numberid) {
-			continue
-		}
-		if !strings.Contains(res, "(中文字幕)") {
-			continue
-		}
-		searchedTitle = res
-		break
-	}
-	searchedTitle = c.cleanSearchTitle(searchedTitle)
-	if len(searchedTitle) == 0 {
-		return "", false, nil
-	}
-	return searchedTitle, true, nil
-}
-
 func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.FileContext) error {
 	hlist := []struct {
 		name    string
 		handler func(ctx context.Context, numberid string) (string, bool, error)
 	}{
 		{"c_number", c.readTitleFromCNumber},
-		{"yesjav100", c.readTitleFromYesJav},
 	}
 	for _, h := range hlist {
 		newTitle, ok, err := h.handler(ctx, fc.Number.GetNumberID())

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/glebarez/go-sqlite" // register sqlite driver
@@ -28,6 +29,7 @@ type sqliteStore struct {
 	db              *sql.DB
 	cleanupInterval time.Duration
 	cleanupCancel   context.CancelFunc
+	cleanupWG       sync.WaitGroup
 }
 
 func (s *sqliteStore) init(ctx context.Context) error {
@@ -53,7 +55,9 @@ func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
 	}
 	loopCtx, cancel := context.WithCancel(ctx)
 	s.cleanupCancel = cancel
+	s.cleanupWG.Add(1)
 	go func() { //nolint:gosec // background cleanup goroutine
+		defer s.cleanupWG.Done()
 		ticker := time.NewTicker(s.cleanupInterval)
 		defer ticker.Stop()
 		for {
@@ -196,6 +200,10 @@ func (s *sqliteStore) Close() error {
 		s.cleanupCancel()
 		s.cleanupCancel = nil
 	}
+	// 等待 cleanup goroutine 完全退出再关闭 db, 避免 goroutine 仍在执行
+	// cleanupExpired 时 db.Close 导致的 "database is closed" 错误, 以及
+	// 与测试 tempdir 清理的 journal 文件竞争。
+	s.cleanupWG.Wait()
 	if s.db == nil {
 		return nil
 	}

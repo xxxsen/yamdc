@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/scanner"
@@ -98,7 +97,7 @@ func TestHandleScanWithFile(t *testing.T) {
 
 func TestHandleListJobs(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	createTestJob(t, jobRepo, "LIST-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -131,7 +130,7 @@ func TestHandleListJobs(t *testing.T) {
 
 func TestHandleJobRun(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RUN-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -165,7 +164,7 @@ func TestHandleJobRun(t *testing.T) {
 
 func TestHandleJobRerun(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RERUN-001")
 	// Move to failed so it can be rerun.
 	_, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusFailed, "test fail")
@@ -202,7 +201,7 @@ func TestHandleJobRerun(t *testing.T) {
 
 func TestHandleJobLogs(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "LOGS-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -230,7 +229,7 @@ func TestHandleJobLogs(t *testing.T) {
 
 func TestHandleJobUpdateNumber(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "UPD-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -260,7 +259,7 @@ func TestHandleJobUpdateNumber(t *testing.T) {
 
 func TestHandleJobDelete(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "DEL-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -288,7 +287,7 @@ func TestHandleJobDelete(t *testing.T) {
 
 func TestHandleReviewGet(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVGET-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -316,7 +315,7 @@ func TestHandleReviewGet(t *testing.T) {
 
 func TestHandleReviewSave(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVSAVE-001")
 	// Move to reviewing status.
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
@@ -352,7 +351,7 @@ func TestHandleReviewSave(t *testing.T) {
 
 func TestHandleReviewImport(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVIMP-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -380,7 +379,7 @@ func TestHandleReviewImport(t *testing.T) {
 
 func TestHandleReviewPosterCrop(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVCROP-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -415,7 +414,7 @@ func TestHandleReviewPosterCrop(t *testing.T) {
 func TestHandleReviewAsset(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, store: memStore}
@@ -457,7 +456,7 @@ func TestHandleReviewAsset(t *testing.T) {
 func TestHandleReviewAssetSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-002")
 
 	// Set up reviewing state with scrape data.
@@ -499,7 +498,7 @@ func TestReadUploadImageData(t *testing.T) {
 func TestLoadReviewMeta(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "LOADMETA-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, store: memStore}
@@ -550,7 +549,7 @@ func TestHandleScanError(t *testing.T) {
 
 func TestHandleJobRunError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodPost, "/api/jobs/99999/run", nil, gin.Params{{Key: "id", Value: "99999"}})
 	api.handleJobRun(c)
@@ -560,7 +559,7 @@ func TestHandleJobRunError(t *testing.T) {
 
 func TestHandleJobRerunError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RERUNERR-001")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodPost, fmt.Sprintf("/api/jobs/%d/rerun", j.ID), nil, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
@@ -571,7 +570,7 @@ func TestHandleJobRerunError(t *testing.T) {
 
 func TestHandleJobLogsError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "LOGSERR-001")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodGet, fmt.Sprintf("/api/jobs/%d/logs", j.ID), nil, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
@@ -582,7 +581,7 @@ func TestHandleJobLogsError(t *testing.T) {
 
 func TestHandleJobUpdateNumberSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "UPDNUM-001")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodPatch, fmt.Sprintf("/api/jobs/%d/number", j.ID), strings.NewReader(`{"number":"NEW-001"}`), gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
@@ -593,7 +592,7 @@ func TestHandleJobUpdateNumberSuccess(t *testing.T) {
 
 func TestHandleJobDeleteError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodDelete, "/api/jobs/99999", nil, gin.Params{{Key: "id", Value: "99999"}})
 	api.handleJobDelete(c)
@@ -603,7 +602,7 @@ func TestHandleJobDeleteError(t *testing.T) {
 
 func TestHandleReviewGetSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVGET-OK")
 	require.NoError(t, scrapeRepo.UpsertRawData(context.Background(), j.ID, "test", `{"number":"RVGET-OK","title":"ok"}`))
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -615,7 +614,7 @@ func TestHandleReviewGetSuccess(t *testing.T) {
 
 func TestHandleReviewSaveError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVSAVEERR-001")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodPut, fmt.Sprintf("/api/review/jobs/%d", j.ID), strings.NewReader(`{"review_data":"{\"number\":\"x\"}"}`), gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
@@ -626,7 +625,7 @@ func TestHandleReviewSaveError(t *testing.T) {
 
 func TestHandleReviewImportSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVIMP-OK")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -662,7 +661,7 @@ func TestReadUploadImageDataNotImage(t *testing.T) {
 func TestLoadReviewMetaNilScrapeData(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "LOADMETA-NIL")
 	require.NoError(t, scrapeRepo.UpsertRawData(context.Background(), j.ID, "test", `{"number":"x"}`))
 	require.NoError(t, scrapeRepo.SaveReviewData(context.Background(), j.ID, ""))
@@ -678,7 +677,7 @@ func TestLoadReviewMetaNilScrapeData(t *testing.T) {
 func TestHandleReviewPosterCropSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVCROP-OK")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -705,7 +704,7 @@ func TestHandleReviewPosterCropSuccess(t *testing.T) {
 
 func TestHandleReviewSaveReadBodyError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVBODY-001")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -720,7 +719,7 @@ func TestHandleReviewSaveReadBodyError(t *testing.T) {
 
 func TestHandleReviewPosterCropReadBodyError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVCROPBODY-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -732,7 +731,7 @@ func TestHandleReviewPosterCropReadBodyError(t *testing.T) {
 
 func TestHandleJobUpdateNumberReadBodyError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "UPDNUMBODY-001")
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
@@ -745,7 +744,7 @@ func TestHandleJobUpdateNumberReadBodyError(t *testing.T) {
 func TestHandleReviewAssetStoreFail(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	failStore := &failingStore{}
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVASSETFAIL-001")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -768,7 +767,7 @@ func TestHandleReviewAssetStoreFail(t *testing.T) {
 
 func TestHandleListJobsApplyConflictsError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	createTestJob(t, jobRepo, "CONF-001")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 
@@ -795,7 +794,7 @@ func TestHandleListJobsApplyConflictsError(t *testing.T) {
 
 func TestHandleJobLogsSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "LOGSOK-001")
 	require.NoError(t, logRepo.Add(context.Background(), j.ID, "info", "test", "hello", "detail"))
 
@@ -808,7 +807,7 @@ func TestHandleJobLogsSuccess(t *testing.T) {
 
 func TestHandleJobUpdateNumberError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "UPDNUMERR-001")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -822,7 +821,7 @@ func TestHandleJobUpdateNumberError(t *testing.T) {
 
 func TestHandleReviewImportNotReviewing(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "RVIMP-NOTREV")
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodPost, "/test", nil, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
@@ -834,7 +833,7 @@ func TestHandleReviewImportNotReviewing(t *testing.T) {
 func TestHandleReviewAssetMarshalAndSave(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-MS")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -858,7 +857,7 @@ func TestHandleReviewAssetMarshalAndSave(t *testing.T) {
 func TestHandleReviewAssetFanart(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-FAN")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
@@ -882,7 +881,7 @@ func TestHandleReviewAssetFanart(t *testing.T) {
 func TestHandleReviewAssetSaveReviewError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-SAVERR")
 	rawMeta := `{"number":"RVASSET-SAVERR","title":"test","cover":{"name":"c.jpg","key":"k"}}`
 	require.NoError(t, scrapeRepo.UpsertRawData(context.Background(), j.ID, "test", rawMeta))
@@ -902,7 +901,7 @@ func TestHandleReviewAssetSaveReviewError(t *testing.T) {
 
 func TestHandleListJobsDBError(t *testing.T) {
 	jobRepo, logRepo, scrapeRepo := setupClosedJobDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContext(http.MethodGet, "/api/jobs", nil)
 	api.handleListJobs(c)
@@ -912,7 +911,7 @@ func TestHandleListJobsDBError(t *testing.T) {
 
 func TestHandleJobLogsDBError(t *testing.T) {
 	jobRepo, logRepo, scrapeRepo := setupClosedJobDB(t)
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodGet, "/test", nil, gin.Params{{Key: "id", Value: "1"}})
 	api.handleJobLogs(c)
@@ -923,7 +922,7 @@ func TestHandleJobLogsDBError(t *testing.T) {
 func TestHandleListJobsApplyConflictsDBError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "CONFDB-001")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusFailed, "")
 	require.NoError(t, err)
@@ -940,7 +939,7 @@ func TestHandleListJobsApplyConflictsDBError(t *testing.T) {
 func TestLoadReviewMetaScrapeDataNil(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
-	jobSvc := job.NewService(jobRepo, logRepo, scrapeRepo, nil, memStore)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "LOADMETA-NILSD")
 	require.NoError(t, scrapeRepo.UpsertRawData(context.Background(), j.ID, "test", `{"number":"x"}`))
 
