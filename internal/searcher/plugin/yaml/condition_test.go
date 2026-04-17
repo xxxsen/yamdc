@@ -1,12 +1,16 @@
 package yaml
 
 import (
+	"context"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/antchfx/htmlquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
+	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 )
 
 func TestCompileConditionGroup_InvalidCondition(t *testing.T) {
@@ -395,3 +399,411 @@ func TestConditionGroupEval_Or_ErrorInSecond(t *testing.T) {
 	_, err = g.Eval(&evalContext{}, nil)
 	require.Error(t, err)
 }
+
+func TestCompileConditionGroup(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    *ConditionGroupSpec
+		wantErr bool
+		wantNil bool
+	}{
+		{name: "nil_spec", spec: nil, wantNil: true},
+		{name: "invalid_mode", spec: &ConditionGroupSpec{Mode: "bad", Conditions: []string{"x"}}, wantErr: true},
+		{name: "empty_conditions", spec: &ConditionGroupSpec{Mode: "and"}, wantErr: true},
+		{name: "valid_and", spec: &ConditionGroupSpec{
+			Mode:       "and",
+			Conditions: []string{`contains("a", "a")`},
+		}},
+		{name: "valid_or", spec: &ConditionGroupSpec{
+			Mode:       "or",
+			Conditions: []string{`equals("a", "b")`},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g, err := compileConditionGroup(tt.spec)
+			switch {
+			case tt.wantErr:
+				require.Error(t, err)
+			case tt.wantNil:
+				require.NoError(t, err)
+				require.Nil(t, g)
+			default:
+				require.NoError(t, err)
+				require.NotNil(t, g)
+			}
+		})
+	}
+}
+
+func TestConditionEval(t *testing.T) {
+	ctx := &evalContext{number: "ABC-123"}
+	tests := []struct {
+		name   string
+		raw    string
+		expect bool
+	}{
+		{name: "contains_true", raw: `contains("ABC-123", "ABC")`, expect: true},
+		{name: "contains_false", raw: `contains("ABC-123", "XYZ")`, expect: false},
+		{name: "equals_true", raw: `equals("a", "a")`, expect: true},
+		{name: "equals_false", raw: `equals("a", "b")`, expect: false},
+		{name: "starts_with_true", raw: `starts_with("ABC-123", "ABC")`, expect: true},
+		{name: "starts_with_false", raw: `starts_with("ABC-123", "XYZ")`, expect: false},
+		{name: "ends_with_true", raw: `ends_with("ABC-123", "123")`, expect: true},
+		{name: "ends_with_false", raw: `ends_with("ABC-123", "XYZ")`, expect: false},
+		{name: "regex_match_true", raw: `regex_match("ABC-123", "^ABC")`, expect: true},
+		{name: "regex_match_false", raw: `regex_match("ABC-123", "^XYZ")`, expect: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond, err := compileCondition(tt.raw)
+			require.NoError(t, err)
+			result, err := cond.Eval(ctx, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expect, result)
+		})
+	}
+}
+
+func TestConditionEval_SelectorExists(t *testing.T) {
+	cond, err := compileCondition(`selector_exists(xpath("//div[@class='test']"))`)
+	require.NoError(t, err)
+	ctx := &evalContext{body: `<html><body><div class="test">ok</div></body></html>`}
+	result, err := cond.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.True(t, result)
+
+	ctx = &evalContext{body: `<html><body></body></html>`}
+	result, err = cond.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.False(t, result)
+
+	ctx = &evalContext{body: ""}
+	result, err = cond.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.False(t, result)
+}
+
+func TestCompileCondition_Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{name: "not_a_call", raw: "not_a_call"},
+		{name: "unknown_function", raw: `unknown_fn("a", "b")`},
+		{name: "contains_1_arg", raw: `contains("a")`},
+		{name: "contains_non_string", raw: `contains(a, b)`},
+		{name: "regex_match_bad_pattern", raw: `regex_match("abc", "[invalid")`},
+		{name: "regex_match_non_string_first", raw: `regex_match(abc, "pattern")`},
+		{name: "regex_match_non_quoted_pattern", raw: `regex_match("abc", pattern)`},
+		{name: "regex_match_1_arg", raw: `regex_match("abc")`},
+		{name: "selector_exists_0_args", raw: `selector_exists()`},
+		{name: "selector_exists_bad_arg", raw: `selector_exists("bad")`},
+		{name: "selector_exists_non_xpath", raw: `selector_exists(css("selector"))`},
+		{name: "selector_exists_unquoted", raw: `selector_exists(xpath(unquoted))`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := compileCondition(tt.raw)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestConditionGroupEval_And(t *testing.T) {
+	g, err := compileConditionGroup(&ConditionGroupSpec{
+		Mode:       "and",
+		Conditions: []string{`contains("abc", "a")`, `contains("abc", "b")`},
+	})
+	require.NoError(t, err)
+	ctx := &evalContext{}
+	ok, err := g.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestConditionGroupEval_Or(t *testing.T) {
+	g, err := compileConditionGroup(&ConditionGroupSpec{
+		Mode:       "or",
+		Conditions: []string{`contains("abc", "x")`, `contains("abc", "b")`},
+	})
+	require.NoError(t, err)
+	ctx := &evalContext{}
+	ok, err := g.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	g2, err := compileConditionGroup(&ConditionGroupSpec{
+		Mode:       "or",
+		Conditions: []string{`contains("abc", "x")`, `contains("abc", "y")`},
+	})
+	require.NoError(t, err)
+	ok, err = g2.Eval(ctx, nil)
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestConditionGroupEval_Nil(t *testing.T) {
+	var g *compiledConditionGroup
+	ok, err := g.Eval(&evalContext{}, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+// --- jsonpath tests ---
+
+func TestConditionGroup_OrMode(t *testing.T) {
+	spec := &ConditionGroupSpec{
+		Mode:       "or",
+		Conditions: []string{`equals("a", "b")`, `equals("c", "c")`},
+	}
+	group, err := compileConditionGroup(spec)
+	require.NoError(t, err)
+	ok, err := group.Eval(&evalContext{}, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestConditionGroup_OrMode_AllFalse(t *testing.T) {
+	spec := &ConditionGroupSpec{
+		Mode:       "or",
+		Conditions: []string{`equals("a", "b")`, `equals("c", "d")`},
+	}
+	group, err := compileConditionGroup(spec)
+	require.NoError(t, err)
+	ok, err := group.Eval(&evalContext{}, nil)
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestConditionErrors(t *testing.T) {
+	_, err := compileConditionGroup(&ConditionGroupSpec{Mode: "bad"})
+	assert.Error(t, err)
+
+	_, err = compileConditionGroup(&ConditionGroupSpec{Mode: "and"})
+	assert.Error(t, err)
+
+	_, err = compileCondition("not_a_call")
+	assert.Error(t, err)
+
+	_, err = compileCondition(`unknown_func("a", "b")`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`contains("a")`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`regex_match("a")`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`regex_match("a", unquoted)`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`selector_exists("bad")`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`selector_exists(xpath("a"), xpath("b"))`)
+	assert.Error(t, err)
+
+	_, err = compileCondition(`contains("a", unquoted)`)
+	assert.Error(t, err)
+}
+
+func TestEvalSelectorExists_WithBody(t *testing.T) {
+	sel, err := compileSelectorLiteral(`xpath("//div")`)
+	require.NoError(t, err)
+	args := []compiledConditionArg{{kind: "selector", selector: sel}}
+	ctx := &evalContext{body: `<html><body><div>found</div></body></html>`}
+	ok, err := evalSelectorExists(args, ctx, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ctx2 := &evalContext{body: ""}
+	ok, err = evalSelectorExists(args, ctx2, nil)
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+// --- splitArgs edge cases ---
+
+func TestConditionEval_StartsWithEndsWith(t *testing.T) {
+	cond, err := compileCondition(`starts_with("${number}", "ABC")`)
+	require.NoError(t, err)
+	ok, err := cond.Eval(&evalContext{number: "ABC-123"}, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	cond2, err := compileCondition(`ends_with("${number}", "123")`)
+	require.NoError(t, err)
+	ok, err = cond2.Eval(&evalContext{number: "ABC-123"}, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+// --- readResponseBody ---
+
+func TestEvalTwoStringCondition_AllBranches(t *testing.T) {
+	tests := []struct {
+		name     string
+		condName string
+		left     string
+		right    string
+		expect   bool
+	}{
+		{name: "contains_true", condName: "contains", left: "hello world", right: "world", expect: true},
+		{name: "contains_false", condName: "contains", left: "hello", right: "world", expect: false},
+		{name: "equals_true", condName: "equals", left: "abc", right: "abc", expect: true},
+		{name: "equals_false", condName: "equals", left: "abc", right: "def", expect: false},
+		{name: "starts_with_true", condName: "starts_with", left: "abc", right: "ab", expect: true},
+		{name: "starts_with_false", condName: "starts_with", left: "abc", right: "bc", expect: false},
+		{name: "ends_with_true", condName: "ends_with", left: "abc", right: "bc", expect: true},
+		{name: "ends_with_false", condName: "ends_with", left: "abc", right: "ab", expect: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			leftTmpl, _ := compileTemplate(tc.left)
+			rightTmpl, _ := compileTemplate(tc.right)
+			args := []compiledConditionArg{
+				{kind: "string", template: leftTmpl},
+				{kind: "string", template: rightTmpl},
+			}
+			ok, err := evalTwoStringCondition(tc.condName, args, &evalContext{})
+			require.NoError(t, err)
+			assert.Equal(t, tc.expect, ok)
+		})
+	}
+}
+
+// --- SyncBundle / BuildRegisterContext ---
+
+func TestConditionEval_RegexMatch(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+hosts: ["https://example.com"]
+multi_request:
+  candidates: ["${number}"]
+  unique: true
+  request:
+    method: GET
+    path: /search/${candidate}
+  success_when:
+    mode: and
+    conditions:
+      - 'regex_match("${candidate}", "^[A-Z]+-\\d+$")'
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	ctx = meta.SetNumberID(ctx, "ABC-123")
+	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
+
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       nopCloser([]byte(`<html><body><title>T</title></body></html>`)),
+			Header:     make(http.Header),
+		}, nil
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	require.NoError(t, err)
+	defer func() { _ = rsp.Body.Close() }()
+	assert.Equal(t, 200, rsp.StatusCode)
+}
+
+func TestConditionEval_RegexMatchFail(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+hosts: ["https://example.com"]
+multi_request:
+  candidates: ["${number}"]
+  unique: true
+  request:
+    method: GET
+    path: /search/${candidate}
+  success_when:
+    mode: and
+    conditions:
+      - 'regex_match("${candidate}", "^NOPE-\\d+$")'
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	ctx = meta.SetNumberID(ctx, "ABC-123")
+	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
+
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       nopCloser([]byte(`<html><body><title>T</title></body></html>`)),
+			Header:     make(http.Header),
+		}, nil
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	if rsp != nil && rsp.Body != nil {
+		defer func() { _ = rsp.Body.Close() }()
+	}
+	require.Error(t, err)
+}
+
+// --- OnMakeHTTPRequest with nil request but multiRequest ---
+
+func TestConditionGroup_OrMode_FirstTrue(t *testing.T) {
+	yamlStr := `
+version: 1
+name: test
+type: one-step
+hosts: ["https://example.com"]
+multi_request:
+  candidates: ["${number}"]
+  request:
+    method: GET
+    path: /search/${candidate}
+  success_when:
+    mode: or
+    conditions:
+      - 'contains("${candidate}", "ABC")'
+      - 'contains("${candidate}", "NOPE")'
+scrape:
+  format: html
+  fields:
+    title:
+      selector:
+        kind: xpath
+        expr: //title/text()
+`
+	plg := mustCompilePlugin(t, yamlStr)
+	ctx := pluginapi.InitContainer(context.Background())
+	ctx = meta.SetNumberID(ctx, "ABC-123")
+	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
+
+	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       nopCloser([]byte(`<html><body></body></html>`)),
+			Header:     make(http.Header),
+		}, nil
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
+	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
+	require.NoError(t, err)
+	defer func() { _ = rsp.Body.Close() }()
+}
+
+// --- decodeHTML with required string field empty ---

@@ -126,3 +126,70 @@ func TestEvalJSONPathStrings_ObjectField(t *testing.T) {
 	require.Len(t, values, 1)
 	assert.Contains(t, values[0], "key")
 }
+
+func TestEvalJSONPathStrings(t *testing.T) {
+	doc := map[string]interface{}{
+		"str":  "hello",
+		"num":  42.0,
+		"bool": true,
+		"arr":  []interface{}{"a", "b"},
+		"nested": map[string]interface{}{
+			"key": "val",
+		},
+	}
+	tests := []struct {
+		name   string
+		expr   string
+		expect []string
+	}{
+		{name: "string", expr: "$.str", expect: []string{"hello"}},
+		{name: "number", expr: "$.num", expect: []string{"42"}},
+		{name: "bool", expr: "$.bool", expect: []string{"true"}},
+		{name: "array", expr: "$.arr[*]", expect: []string{"a", "b"}},
+		{name: "missing", expr: "$.missing", expect: nil},
+		{name: "nested_object", expr: "$.nested", expect: []string{`{"key":"val"}`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := evalJSONPathStrings(doc, tt.expr)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expect, result)
+		})
+	}
+}
+
+func TestFlattenJSONPathValue_Nil(t *testing.T) {
+	var out []string
+	flattenJSONPathValue(nil, &out)
+	assert.Nil(t, out)
+}
+
+func TestIsJSONPathMissingError(t *testing.T) {
+	assert.False(t, isJSONPathMissingError(nil))
+}
+
+// --- plugin compile/validate tests ---
+
+func TestEvalJSONPathStrings_Missing(t *testing.T) {
+	doc := map[string]any{"a": "b"}
+	values, err := evalJSONPathStrings(doc, "$.missing")
+	assert.NoError(t, err)
+	assert.Nil(t, values)
+}
+
+func TestFlattenJSONPathValue_Types(t *testing.T) {
+	var out []string
+	flattenJSONPathValue(nil, &out)
+	assert.Empty(t, out)
+
+	flattenJSONPathValue(float64(3.14), &out)
+	assert.Len(t, out, 1)
+
+	flattenJSONPathValue(true, &out)
+	assert.Len(t, out, 2)
+
+	flattenJSONPathValue(map[string]any{"k": "v"}, &out)
+	assert.Len(t, out, 3)
+}
+
+// --- OnHandleHTTPRequest with multi_request ---

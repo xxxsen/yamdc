@@ -248,3 +248,229 @@ func TestFindTemplateEnd_Unterminated(t *testing.T) {
 	_, err := findTemplateEnd("${number", 0)
 	require.ErrorIs(t, err, errUnterminatedTemplate)
 }
+
+func TestTemplateRender(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		ctx     *evalContext
+		expect  string
+		wantErr bool
+	}{
+		{name: "plain_text", raw: "hello", ctx: &evalContext{}, expect: "hello"},
+		{name: "number_var", raw: "/search/${number}", ctx: &evalContext{number: "ABC-123"}, expect: "/search/ABC-123"},
+		{name: "host_var", raw: "${host}/path", ctx: &evalContext{host: "https://example.com"}, expect: "https://example.com/path"},
+		{name: "body_var", raw: "${body}", ctx: &evalContext{body: "content"}, expect: "content"},
+		{name: "value_var", raw: "${value}", ctx: &evalContext{value: "val"}, expect: "val"},
+		{name: "candidate_var", raw: "${candidate}", ctx: &evalContext{candidate: "cand"}, expect: "cand"},
+		{name: "vars_ref", raw: "${vars.myvar}", ctx: &evalContext{vars: map[string]string{"myvar": "v"}}, expect: "v"},
+		{name: "item_ref", raw: "${item.col}", ctx: &evalContext{item: map[string]string{"col": "v"}}, expect: "v"},
+		{name: "item_variables_ref", raw: "${item_variables.x}", ctx: &evalContext{itemVariables: map[string]string{"x": "y"}}, expect: "y"},
+		{name: "meta_ref", raw: "${meta.title}", ctx: &evalContext{meta: map[string]string{"title": "T"}}, expect: "T"},
+		{name: "to_upper", raw: "${to_upper(${number})}", ctx: &evalContext{number: "abc"}, expect: "ABC"},
+		{name: "to_lower", raw: "${to_lower(${number})}", ctx: &evalContext{number: "ABC"}, expect: "abc"},
+		{name: "trim", raw: "${trim(\" hello \")}", ctx: &evalContext{}, expect: "hello"},
+		{name: "trim_prefix", raw: "${trim_prefix(\"abc123\", \"abc\")}", ctx: &evalContext{}, expect: "123"},
+		{name: "trim_suffix", raw: "${trim_suffix(\"abc123\", \"123\")}", ctx: &evalContext{}, expect: "abc"},
+		{name: "replace", raw: "${replace(\"a-b-c\", \"-\", \"_\")}", ctx: &evalContext{}, expect: "a_b_c"},
+		{name: "clean_number", raw: "${clean_number(\"ABC-123\")}", ctx: &evalContext{}, expect: "ABC123"},
+		{name: "concat", raw: "${concat(\"a\", \"b\", \"c\")}", ctx: &evalContext{}, expect: "abc"},
+		{name: "first_non_empty", raw: "${first_non_empty(\"\", \"b\")}", ctx: &evalContext{}, expect: "b"},
+		{name: "first_non_empty_all_empty", raw: "${first_non_empty(\"\", \"\")}", ctx: &evalContext{}, expect: ""},
+		{name: "last_segment", raw: "${last_segment(\"a/b/c\", \"/\")}", ctx: &evalContext{}, expect: "c"},
+		{name: "last_segment_empty_sep", raw: "${last_segment(\"abc\", \"\")}", ctx: &evalContext{}, expect: "abc"},
+		{name: "build_url", raw: "${build_url(\"https://example.com\", \"/path\")}", ctx: &evalContext{}, expect: "https://example.com/path"},
+		{name: "build_url_abs_ref", raw: "${build_url(\"https://example.com\", \"https://other.com/x\")}", ctx: &evalContext{}, expect: "https://other.com/x"},
+		{name: "unknown_var", raw: "${unknown_var}", ctx: &evalContext{}, wantErr: true},
+		{name: "nested_call", raw: "${to_upper(${to_lower(\"ABC\")})}", ctx: &evalContext{}, expect: "ABC"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := compileTemplate(tt.raw)
+			if err != nil {
+				if tt.wantErr {
+					return
+				}
+				require.NoError(t, err)
+			}
+			result, err := tmpl.Render(tt.ctx)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expect, result)
+			}
+		})
+	}
+}
+
+func TestTemplateFunc_Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   string
+		args []string
+	}{
+		{"build_url_1_arg", "build_url", []string{"a"}},
+		{"to_upper_0_arg", "to_upper", nil},
+		{"to_lower_0_arg", "to_lower", nil},
+		{"trim_0_arg", "trim", nil},
+		{"trim_prefix_1_arg", "trim_prefix", []string{"a"}},
+		{"trim_suffix_1_arg", "trim_suffix", []string{"a"}},
+		{"replace_2_args", "replace", []string{"a", "b"}},
+		{"clean_number_0_arg", "clean_number", nil},
+		{"first_non_empty_1_arg", "first_non_empty", []string{"a"}},
+		{"last_segment_1_arg", "last_segment", []string{"a"}},
+		{"unknown_func", "nonexistent", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := evalTemplateFunc(tt.fn, tt.args)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestUnterminatedTemplate(t *testing.T) {
+	_, err := compileTemplate("${number")
+	require.Error(t, err)
+}
+
+func TestIsIdentifier(t *testing.T) {
+	assert.True(t, isIdentifier("abc"))
+	assert.True(t, isIdentifier("_abc"))
+	assert.True(t, isIdentifier("abc123"))
+	assert.True(t, isIdentifier("abc.def"))
+	assert.False(t, isIdentifier(""))
+	assert.False(t, isIdentifier("123abc"))
+	assert.False(t, isIdentifier("abc-def"))
+}
+
+func TestIsVariableRef(t *testing.T) {
+	assert.True(t, isVariableRef("number"))
+	assert.True(t, isVariableRef("host"))
+	assert.True(t, isVariableRef("body"))
+	assert.True(t, isVariableRef("value"))
+	assert.True(t, isVariableRef("candidate"))
+	assert.True(t, isVariableRef("vars.x"))
+	assert.True(t, isVariableRef("item.x"))
+	assert.True(t, isVariableRef("item_variables.x"))
+	assert.True(t, isVariableRef("meta.x"))
+	assert.False(t, isVariableRef("unknown"))
+	assert.False(t, isVariableRef(""))
+}
+
+func TestParseCall(t *testing.T) {
+	name, args, ok, err := parseCall("fn(a, b)")
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "fn", name)
+	assert.Equal(t, []string{"a", "b"}, args)
+
+	_, _, ok, _ = parseCall("not_a_call") //nolint:dogsled
+	assert.False(t, ok)
+
+	_, _, ok, _ = parseCall("123(a)") //nolint:dogsled
+	assert.False(t, ok)
+}
+
+func TestSplitArgs(t *testing.T) {
+	args, err := splitArgs("")
+	require.NoError(t, err)
+	assert.Nil(t, args)
+
+	args, err = splitArgs(`"a", "b"`)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`"a"`, `"b"`}, args)
+
+	_, err = splitArgs(`"unterminated`)
+	require.Error(t, err)
+
+	_, err = splitArgs(`extra)`)
+	require.Error(t, err)
+}
+
+func TestTemplateValidateArg_NestedCalls(t *testing.T) {
+	err := validateTemplateArg(`to_upper("abc")`)
+	assert.NoError(t, err)
+
+	err = validateTemplateArg(`${number}`)
+	assert.NoError(t, err)
+
+	err = validateTemplateArg(`abc${number}def`)
+	assert.NoError(t, err)
+
+	err = validateTemplateArg(`"literal"`)
+	assert.NoError(t, err)
+
+	err = validateTemplateArg(``)
+	assert.NoError(t, err)
+
+	err = validateTemplateArg(`number`)
+	assert.NoError(t, err)
+}
+
+func TestEvalTemplateArg_Branches(t *testing.T) {
+	ctx := &evalContext{number: "ABC"}
+
+	v, err := evalTemplateArg(`"literal"`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "literal", v)
+
+	v, err = evalTemplateArg(`${number}`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ABC", v)
+
+	v, err = evalTemplateArg(`prefix${number}suffix`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "prefixABCsuffix", v)
+
+	v, err = evalTemplateArg(`to_upper("abc")`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ABC", v)
+
+	v, err = evalTemplateArg(`number`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ABC", v)
+
+	v, err = evalTemplateArg(`plaintext`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "plaintext", v)
+}
+
+// --- condition edge cases ---
+
+func TestSplitArgs_Errors(t *testing.T) {
+	_, err := splitArgs(`"unterminated`)
+	assert.Error(t, err)
+
+	_, err = splitArgs(`(unbalanced`)
+	assert.Error(t, err)
+
+	_, err = splitArgs(`)extra_close`)
+	assert.Error(t, err)
+}
+
+// --- movieMetaStringMap ---
+
+func TestEvalTemplateExpr_ResolveVar(t *testing.T) {
+	ctx := &evalContext{number: "ABC-123"}
+	v, err := evalTemplateExpr("number", ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ABC-123", v)
+}
+
+func TestEvalTemplateExpr_FunctionCall(t *testing.T) {
+	ctx := &evalContext{number: "abc-123"}
+	v, err := evalTemplateExpr(`to_upper("hello")`, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO", v)
+}
+
+func TestEvalTemplateExpr_Empty(t *testing.T) {
+	ctx := &evalContext{}
+	v, err := evalTemplateExpr("", ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", v)
+}
+
+// --- readResponseBody with charset ---

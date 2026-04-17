@@ -86,3 +86,45 @@ func TestParserSpec_UnmarshalJSON_Number(t *testing.T) {
 	err := p.UnmarshalJSON([]byte(`123`))
 	require.Error(t, err)
 }
+
+func TestParserSpecUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		kind   string
+		layout string
+	}{
+		{name: "string", input: `"string"`, kind: "string"},
+		{name: "object", input: `{"kind":"time_format","layout":"2006-01-02"}`, kind: "time_format", layout: "2006-01-02"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var p ParserSpec
+			err := json.Unmarshal([]byte(tt.input), &p)
+			require.NoError(t, err)
+			assert.Equal(t, tt.kind, p.Kind)
+			assert.Equal(t, tt.layout, p.Layout)
+		})
+	}
+}
+
+func TestParserSpecUnmarshalJSON_Error(t *testing.T) {
+	var p ParserSpec
+	err := json.Unmarshal([]byte(`{"kind": 123}`), &p)
+	require.Error(t, err)
+
+	err = json.Unmarshal([]byte(`"unterminated`), &p)
+	require.Error(t, err)
+}
+
+func TestParserSpecUnmarshalYAML_Error(t *testing.T) {
+	raw := `parser: [1, 2]`
+	type wrapper struct {
+		Parser ParserSpec `yaml:"parser"`
+	}
+	var w wrapper
+	err := yaml.Unmarshal([]byte(raw), &w)
+	require.Error(t, err)
+}
+
+// --- OnPrecheckRequest ---
