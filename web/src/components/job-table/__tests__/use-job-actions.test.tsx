@@ -429,7 +429,7 @@ describe("handleToggleSelectAll", () => {
     hook.result.current.handleToggleSelectAll();
     expect(setSelectedJobIds).toHaveBeenCalled();
 
-    const updater = setSelectedJobIds.mock.calls[0]![0] as (prev: Set<number>) => Set<number>;
+    const updater = setSelectedJobIds.mock.calls[0][0] as (prev: Set<number>) => Set<number>;
     const prev = new Set([1, 2]);
     expect(updater(prev)).toBe(prev);
   });
@@ -438,7 +438,7 @@ describe("handleToggleSelectAll", () => {
     const selectable = [makeJob({ id: 1 }), makeJob({ id: 2 })];
     const { hook, setSelectedJobIds } = renderJobActions({ selectableJobs: selectable });
     hook.result.current.handleToggleSelectAll();
-    const updater = setSelectedJobIds.mock.calls[0]![0] as (prev: Set<number>) => Set<number>;
+    const updater = setSelectedJobIds.mock.calls[0][0] as (prev: Set<number>) => Set<number>;
     const next = updater(new Set([1, 2]));
     expect(next.size).toBe(0);
   });
@@ -447,7 +447,7 @@ describe("handleToggleSelectAll", () => {
     const selectable = [makeJob({ id: 1 }), makeJob({ id: 2 })];
     const { hook, setSelectedJobIds } = renderJobActions({ selectableJobs: selectable });
     hook.result.current.handleToggleSelectAll();
-    const updater = setSelectedJobIds.mock.calls[0]![0] as (prev: Set<number>) => Set<number>;
+    const updater = setSelectedJobIds.mock.calls[0][0] as (prev: Set<number>) => Set<number>;
     const next = updater(new Set([1]));
     expect(Array.from(next).sort()).toEqual([1, 2]);
   });
@@ -457,7 +457,7 @@ describe("handleToggleSelectJob", () => {
   it("adds unseen id", () => {
     const { hook, setSelectedJobIds } = renderJobActions();
     hook.result.current.handleToggleSelectJob(5);
-    const updater = setSelectedJobIds.mock.calls[0]![0] as (prev: Set<number>) => Set<number>;
+    const updater = setSelectedJobIds.mock.calls[0][0] as (prev: Set<number>) => Set<number>;
     const next = updater(new Set());
     expect(next.has(5)).toBe(true);
   });
@@ -465,7 +465,7 @@ describe("handleToggleSelectJob", () => {
   it("removes seen id", () => {
     const { hook, setSelectedJobIds } = renderJobActions();
     hook.result.current.handleToggleSelectJob(5);
-    const updater = setSelectedJobIds.mock.calls[0]![0] as (prev: Set<number>) => Set<number>;
+    const updater = setSelectedJobIds.mock.calls[0][0] as (prev: Set<number>) => Set<number>;
     const next = updater(new Set([5]));
     expect(next.has(5)).toBe(false);
   });

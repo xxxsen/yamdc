@@ -545,7 +545,7 @@ describe("updater thin wrappers (smoke)", () => {
     });
     expect(result.current.state.fields.length).toBe(before + 1);
 
-    const idToRemove = result.current.state.fields[0]!.id;
+    const idToRemove = result.current.state.fields[0].id;
     act(() => {
       result.current.removeField(idToRemove);
     });

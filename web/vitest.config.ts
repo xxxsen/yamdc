@@ -64,9 +64,22 @@ const COVERED_SOURCES = [
   // pickVariant / normalizeMeta / getVariantCoverPath). 与 library-shell/utils
   // 并行的一份, 未来可能合并; 先各自冻结.
   "src/components/media-library-detail-shell/utils.ts",
+  // media-library-detail-shell/use-media-library-detail-state.ts: 媒体库详情
+  // 页面主 state 容器. 覆盖 8s polling, 编辑态守门, handleSaveEdit 的
+  // dirty check + 成功/失败路径, handleCancelEdit 回滚 draft, message
+  // auto-clear 对 '失败/error' 关键字的短路.
+  "src/components/media-library-detail-shell/use-media-library-detail-state.ts",
   // review-shell/utils.ts: review 页面 meta 解析与 payload 构造
   // (parseMeta / parseRawMeta / normalizeList / buildPayload / imageTitle).
   "src/components/review-shell/utils.ts",
+  // review-shell/use-review-batch-actions.ts: review 页面的单条/批量 入库
+  // + 删除 action 集散. moveRunning 短路, persistReview 失败短路,
+  // 部分/全部失败的 message 汇总都冻结在单测里.
+  "src/components/review-shell/use-review-batch-actions.ts",
+  // review-shell/use-review-asset-actions.ts: review 页面的封面/海报/fanart
+  // 上传 + crop + remove. 覆盖 file-input 触发 / cancel / 上传失败 / crop
+  // 成功 & 失败 / fanart 替换同 key 等边界.
+  "src/components/review-shell/use-review-asset-actions.ts",
   // handler-debug-shell/utils.ts: JSON 按行 LCS diff 算法 + debug 常量.
   // 算法边界情况多, 行为冻结.
   "src/components/handler-debug-shell/utils.ts",

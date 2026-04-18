@@ -182,16 +182,21 @@ async function flushAsync() {
 let lastInput: HTMLInputElement | null = null;
 function installInputStub() {
   lastInput = null;
+  // 测试用 spy 的 mockImplementation 签名只能取 createElement 的 deprecated
+  // overload (generic string tagName). 这里的 originalCreate / 调用也会走同一
+  // overload, 是 mock 实现细节, 不是被测代码本身.
+  /* eslint-disable @typescript-eslint/no-deprecated */
   const originalCreate = document.createElement.bind(document);
-  vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
-    const el = originalCreate(tag) as HTMLElement;
+  vi.spyOn(document, "createElement").mockImplementation(((tag: string) => {
+    const el = originalCreate(tag);
     if (tag === "input") {
       lastInput = el as HTMLInputElement;
       // 覆盖 .click() 让它不要真的打开文件对话框 (jsdom 是 no-op, 这里只是保险).
       (el as HTMLInputElement).click = vi.fn();
     }
     return el;
-  });
+  }) as typeof document.createElement);
+  /* eslint-enable @typescript-eslint/no-deprecated */
 }
 
 function firePickedFile(name = "test.png", type = "image/png") {
@@ -542,7 +547,7 @@ describe("misc", () => {
     // 详情切换到另一份的潜在竞争). 用不同的 detail/detailRef 让它走 ref.
     const detail = makeDetail();
     const altDetail = makeDetail({ item: { ...detail.item, poster_path: "/lib/alt-poster.jpg" } as never });
-    const detailRef = createRef<LibraryDetail | null>() as RefObject<LibraryDetail | null>;
+    const detailRef = createRef<LibraryDetail | null>();
     detailRef.current = altDetail;
     mockCropPoster.mockResolvedValue(detail);
 
