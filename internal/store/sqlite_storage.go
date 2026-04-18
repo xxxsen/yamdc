@@ -173,7 +173,7 @@ func configureSqliteStoreDB(ctx context.Context, db *sql.DB) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`)
+	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 10000`)
 }
 
 func (s *sqliteStore) Close() error {

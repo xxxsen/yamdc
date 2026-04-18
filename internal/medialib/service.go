@@ -42,7 +42,7 @@ const AutoSyncCronSpec = "0 3 * * *"
 //
 // 该 cleanup 不依赖 sync 是否触发 (避免 "用户只刮不入库 -> sync 从不跑
 // -> 日志无限累积" 的 bug), 所以必须走独立 cron 条目。
-const LogCleanupCronSpec = "0 3 * * *"
+const LogCleanupCronSpec = "15 3 * * *"
 
 var (
 	errLibraryDirNotConfigured = errors.New("library dir is not configured")
