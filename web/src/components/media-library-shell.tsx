@@ -11,14 +11,12 @@ import {
   type SortOrder,
 } from "@/components/media-library-shell/filter-rail";
 import { MediaLibrarySyncLogsModal } from "@/components/media-library-shell/sync-logs-modal";
+import { useMediaLibraryDetail } from "@/components/media-library-shell/use-media-library-detail";
 import { useMediaLibrarySync } from "@/components/media-library-shell/use-media-library-sync";
 import { extractYearOptions } from "@/components/media-library-shell/utils";
 import { Modal } from "@/components/ui/modal";
-import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
-import {
-  getMediaLibraryItem,
-  listMediaLibrarySyncLogs,
-} from "@/lib/api";
+import type { MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
+import { listMediaLibrarySyncLogs } from "@/lib/api";
 
 interface Props {
   items: MediaLibraryItem[];
@@ -37,10 +35,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
-  const [activeDetail, setActiveDetail] = useState<MediaLibraryDetail | null>(null);
-  const [activeDetailID, setActiveDetailID] = useState<number | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState("");
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const [syncLogsOpen, setSyncLogsOpen] = useState(false);
   const [syncLogs, setSyncLogs] = useState<MediaLibrarySyncLogEntry[]>([]);
@@ -69,6 +63,16 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     setItems,
     setYearOptions,
   });
+
+  const {
+    activeDetail,
+    activeDetailID,
+    detailLoading,
+    detailError,
+    openDetailModal,
+    closeDetailModal,
+    applyDetailChange,
+  } = useMediaLibraryDetail({ setItems });
 
   const resetViewport = () => {
     setVisibleCount(PAGE_SIZE);
@@ -101,22 +105,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [syncMenuOpen]);
 
-  useEffect(() => {
-    if (!activeDetail && activeDetailID === null) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveDetail(null);
-        setActiveDetailID(null);
-        setDetailError("");
-        setDetailLoading(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeDetail, activeDetailID]);
-
   const filteredItems = items;
   const visibleYearOptions = yearOptions.slice(0, 13);
   const overflowYearOptions = yearOptions.slice(13);
@@ -146,13 +134,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
 
   const visibleItems = filteredItems.slice(0, visibleCount);
 
-  const closeDetailModal = () => {
-    setActiveDetail(null);
-    setActiveDetailID(null);
-    setDetailError("");
-    setDetailLoading(false);
-  };
-
   // 每次打开日志弹窗都重新拉最新数据, 而不是 "一次加载一直复用"。理由:
   // sync 是异步后台跑的, 用户可能在 sync 运行中点开弹窗看进度; 缓存数据
   // 只会让用户看到过时的状态。200 条默认量级下一次拉取 < 30KB, 没必要省。
@@ -177,23 +158,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const closeSyncLogs = () => {
     setSyncLogsOpen(false);
     setSyncLogsError("");
-  };
-
-  const openDetailModal = (id: number) => {
-    setActiveDetailID(id);
-    setActiveDetail(null);
-    setDetailError("");
-    setDetailLoading(true);
-    void (async () => {
-      try {
-        const next = await getMediaLibraryItem(id);
-        setActiveDetail(next);
-      } catch (error) {
-        setDetailError(error instanceof Error ? error.message : "加载媒体详情失败");
-      } finally {
-        setDetailLoading(false);
-      }
-    })();
   };
 
   const handleTriggerSync = () => {
@@ -285,25 +249,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           <MediaLibraryDetailShell
             initialDetail={activeDetail}
             stageOnly
-            onDetailChange={(next) => {
-              setActiveDetail(next);
-              setItems((current) =>
-                current.map((item) =>
-                  item.id === next.item.id
-                    ? {
-                        ...item,
-                        title: next.item.title,
-                        number: next.item.number,
-                        release_date: next.item.release_date,
-                        actors: next.item.actors,
-                        updated_at: next.item.updated_at,
-                        poster_path: next.item.poster_path,
-                        cover_path: next.item.cover_path,
-                      }
-                    : item,
-                ),
-              );
-            }}
+            onDetailChange={applyDetailChange}
           />
         ) : null}
       </Modal>
