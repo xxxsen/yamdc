@@ -1,10 +1,17 @@
 "use client";
 
-import { Crop, Plus, Trash2, X } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { ImageCropper, type CropRect } from "@/components/image-cropper";
 import { AppToast } from "@/components/library-shell/app-toast";
+import {
+  LibraryCoverCard,
+  LibraryFanartStrip,
+  LibraryPosterCard,
+  LibraryPreviewOverlay,
+  type LibraryPreviewState,
+} from "@/components/library-shell/asset-gallery";
 import { LibraryBottomActions } from "@/components/library-shell/bottom-actions";
 import { LibraryListPanel } from "@/components/library-shell/list-panel";
 import {
@@ -53,7 +60,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [draftMeta, setDraftMeta] = useState<LibraryMeta>(initialDraftMeta);
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(getInitialMessage(initialItems));
-  const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<LibraryPreviewState>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [assetOverrides, setAssetOverrides] = useState<Record<string, string>>({});
   const [assetVersions, setAssetVersions] = useState<Record<string, number>>({});
@@ -745,39 +752,16 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                       />
                     </div>
                   </div>
-                  <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
-                    <div className="review-image-card-head">
-                      <span className="review-image-title">海报</span>
-                      <Button
-                        className="review-inline-icon-btn review-image-crop-btn"
-                        onClick={openCropper}
-                        aria-label="从封面截取海报"
-                        title="从封面截取海报"
-                        disabled={!selectedCover || isPending}
-                      >
-                        <Crop size={14} />
-                      </Button>
-                    </div>
-                    <div className={`review-image-box review-image-box-poster${selectedPoster ? "" : " review-upload-empty"}`}>
-                      {selectedPoster ? (
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "海报", path: selectedPoster, name: "海报" }); }}>
-                          <img src={resolveLibraryImageSrc(selectedPoster)} alt="海报" className="library-poster-image" />
-                        </button>
-                      ) : (
-                        <div className="library-preview-empty">暂无海报</div>
-                      )}
-                      <button
-                        type="button"
-                        className="review-upload-overlay"
-                        onClick={() => openUploadPicker("poster")}
-                        aria-label="上传海报"
-                        title="上传海报"
-                        disabled={isPending}
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </div>
+                  <LibraryPosterCard
+                    selectedPoster={selectedPoster}
+                    selectedCover={selectedCover}
+                    isPending={isPending}
+                    uploadActiveRef={uploadActiveRef}
+                    resolveImage={resolveLibraryImageSrc}
+                    onOpenCropper={openCropper}
+                    onOpenUploadPicker={() => openUploadPicker("poster")}
+                    onOpenPreview={setPreview}
+                  />
                 </div>
 
                 <div className="review-meta-row review-meta-row-full">
@@ -791,90 +775,24 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   />
                 </div>
 
-                <div className="review-media-offset review-cover-slot">
-                  <div className="panel review-image-card review-image-card-cover">
-                    <div className="review-image-card-head">
-                      <span className="review-image-title">封面</span>
-                    </div>
-                    <div className={`review-image-box review-image-box-cover${selectedCover ? "" : " review-upload-empty"}`}>
-                      {selectedCover ? (
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "封面", path: selectedCover, name: "封面" }); }}>
-                          <img src={resolveLibraryImageSrc(selectedCover)} alt="封面" className="library-cover-image" />
-                        </button>
-                      ) : (
-                        <div className="library-preview-empty">暂无封面</div>
-                      )}
-                      <button
-                        type="button"
-                        className="review-upload-overlay"
-                        onClick={() => openUploadPicker("cover")}
-                        aria-label="上传封面"
-                        title="上传封面"
-                        disabled={isPending}
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <LibraryCoverCard
+                  selectedCover={selectedCover}
+                  isPending={isPending}
+                  uploadActiveRef={uploadActiveRef}
+                  resolveImage={resolveLibraryImageSrc}
+                  onOpenUploadPicker={() => openUploadPicker("cover")}
+                  onOpenPreview={setPreview}
+                />
 
-                <div className="review-media-offset library-file-offset">
-                  <div className="panel review-fanart-panel library-fanart-panel">
-                    <div className="library-file-section-head">
-                      <div className="library-file-section-title">Extrafanart</div>
-                      <div className="library-file-section-subtitle">目录里的扩展剧照资源。</div>
-                    </div>
-                    {fanartFiles.length > 0 ? (
-                      <div
-                        className="review-fanart-strip library-fanart-strip"
-                        onWheel={(e) => {
-                          if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
-                            return;
-                          }
-                          e.currentTarget.scrollLeft += e.deltaY;
-                          e.preventDefault();
-                        }}
-                      >
-                        {fanartFiles.map((file) => (
-                          <div key={file.rel_path} className="review-fanart-item library-fanart-item">
-                            <button
-                              type="button"
-                              className="review-image-hit"
-                              onClick={() => { if (!uploadActiveRef.current) setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name }); }}
-                            >
-                              <img src={resolveLibraryImageSrc(file.rel_path)} alt={file.name} className="library-fanart-image" />
-                            </button>
-                            <Button
-                              className="review-inline-icon-btn review-fanart-delete"
-                              onClick={() => handleDeleteFanart(file.rel_path)}
-                              aria-label="删除 extrafanart"
-                              title="删除 extrafanart"
-                              disabled={isPending}
-                            >
-                              <X size={12} />
-                            </Button>
-                            <div className="library-fanart-name">{file.name.split("/").pop()}</div>
-                          </div>
-                        ))}
-                        <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")} disabled={isPending}>
-                          <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
-                            <Plus size={18} />
-                          </span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="review-fanart-strip library-fanart-strip">
-                        <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")} disabled={isPending}>
-                          <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
-                            <Plus size={18} />
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-
+                <LibraryFanartStrip
+                  fanartFiles={fanartFiles}
+                  isPending={isPending}
+                  uploadActiveRef={uploadActiveRef}
+                  resolveImage={resolveLibraryImageSrc}
+                  onOpenUploadPicker={() => openUploadPicker("fanart")}
+                  onDeleteFanart={handleDeleteFanart}
+                  onOpenPreview={setPreview}
+                />
               </div>
             </div>
           </>
@@ -882,23 +800,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
           <div className="review-empty-state">当前没有可查看的已入库目录</div>
         )}
       </section>
-      {preview ? (
-        <div className="review-preview-overlay" onClick={() => setPreview(null)}>
-          <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={() => setPreview(null)}>
-            <X size={18} />
-          </button>
-          <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
-            <div className="review-preview-title">{preview.title}</div>
-            <div className="review-preview-frame">
-              <img
-                src={resolveLibraryImageSrc(preview.path)}
-                alt={preview.name}
-                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <LibraryPreviewOverlay preview={preview} resolveImage={resolveLibraryImageSrc} onClose={() => setPreview(null)} />
       {cropOpen && selectedCover ? (
         <ImageCropper
           open
