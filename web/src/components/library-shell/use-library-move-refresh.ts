@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, type TransitionStartFunction, useEffect, useEffectEvent, useReducer, useState } from "react";
+import { type Dispatch, type SetStateAction, type TransitionStartFunction, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
 import {
   getInitialMoveRefreshState,
@@ -87,6 +87,42 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [state, dispatch] = useReducer(moveRefreshReducer, initialMediaStatus, getInitialMoveRefreshState);
 
+  // lastAckedMoveStartedAtRef: 上一次已经 "ack 过" 的 move.started_at. 用来判
+  // 定 polling 返回的 "completed/idle/failed" 是**新任务的完成**还是**上一次
+  // 任务残留的快照**.
+  //
+  // ── 为什么需要这个 watermark ──
+  // 用户点 "移动到媒体库" 后, dispatch MOVE_CLICK 会让 state.move=starting,
+  // moveBusy=true, 触发 shouldPollMediaStatus 的 useEffect 同步 fire. 那个
+  // effect 里 `void pollStatusOnce()` 是 fire-and-forget 的 fetch, 几乎总是
+  // 比 `startTransition(await triggerMoveToMediaLibrary(...))` 里的 await 更
+  // 早回来 (一个是立即发请求, 一个要走完整 round-trip 并等 server 处理).
+  //
+  // 此时 server 还没收到 TriggerMove, mediaStatus.move 仍是 **上一次 move
+  // 残留的 { status: "completed", started_at: T_prev }**. setMediaStatus 会
+  // 让 useEffect[mediaStatus] 立刻 fire, 翻译成 MOVE_SERVER_NOT_RUNNING, reducer
+  // 走 fast path: starting -> completed-flash. 结果: 用户第二次 (及以后)
+  // 点击, 直接看到 "移动完成" 闪过, 进度条一帧没出现.
+  //
+  // 修法: 每次 ack MOVE_SERVER_NOT_RUNNING 时把 started_at 记下. 后续 poll
+  // 返回 started_at <= ref 的快照 (同一任务 / 老任务), 视为 stale 忽略; 只
+  // 有 started_at 严格大于 ref 才是新任务完成信号. 由于 server 在每次新 move
+  // StartedAt 都会写入新的 UnixMillis (见 internal/medialib), watermark 是
+  // 单调递增的.
+  //
+  // ── 幂等与边界 ──
+  // - 初值 0: 服务端 started_at 第一次出现就会被 ack (> 0), 不影响首次行为.
+  // - 重复同值快照: ref.current = T, poll 返回 T, 不 dispatch, reducer 不前
+  //   移 — 避免了页面加载后的 completed 快照反复 dispatch 的噪音 (reducer
+  //   本身在 idle 态是 no-op, 但这里提前剪掉也省一份 effect 调度).
+  // - 外部/其它窗口发起的 move: 页面加载时 initialMediaStatus.move.status
+  //   可能是 running, started_at=T_ext. ref 初值是 0, 所以该 move 的完成信
+  //   号 (started_at=T_ext > 0) 仍会被 ack, 不会误判.
+  // - 服务端返回 "已在进行中" 错误: handleMoveError 里 dispatch MOVE_SERVER_
+  //   RUNNING 推进状态机, 当前正在跑的任务完成时 started_at 仍会 > 原有
+  //   ref.current (因为那个跑中任务 started 时就已经 > 之前的 ack 值了).
+  const lastAckedMoveStartedAtRef = useRef<number>(0);
+
   const view = deriveView(state, mediaStatus);
   const mediaSyncRunning = mediaStatus?.sync.status === "running";
   const configured = !!mediaStatus?.configured;
@@ -97,14 +133,22 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
 
   // 翻译服务器 move.status -> reducer action. 每次 polling setMediaStatus 产生
   // 新对象, 这个 effect 会重跑一次; reducer 本身幂等 (重复同态 action 是 no-op),
-  // 不会无限循环.
+  // 不会无限循环. MOVE_SERVER_NOT_RUNNING 由 watermark 把门, 只认新任务的
+  // 完成信号 (细节见 lastAckedMoveStartedAtRef 上方注释).
   useEffect(() => {
     if (!mediaStatus) return;
     const status = mediaStatus.move.status;
+    const startedAt = mediaStatus.move.started_at;
     if (status === "running") {
       dispatch({ type: "MOVE_SERVER_RUNNING" });
-    } else if (status === "idle" || status === "completed" || status === "failed") {
-      dispatch({ type: "MOVE_SERVER_NOT_RUNNING" });
+      return;
+    }
+    if (status === "idle" || status === "completed" || status === "failed") {
+      if (startedAt > lastAckedMoveStartedAtRef.current) {
+        lastAckedMoveStartedAtRef.current = startedAt;
+        dispatch({ type: "MOVE_SERVER_NOT_RUNNING" });
+      }
+      // started_at <= ref.current: stale snapshot (新任务还没登记), 忽略.
     }
   }, [mediaStatus]);
 
