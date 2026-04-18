@@ -92,10 +92,15 @@ func TestAutoSyncJobRunDelegatesToTryAutoSync(t *testing.T) {
 
 // TestLogCleanupJobMetadata 覆盖正常 case: 和 AutoSync 一样做 Name/Spec
 // 断言, 防止改动时漂掉。
+//
+// 注意 Spec 刻意是 "15 3 * * *" 而不是 "0 3 * * *": 和 AutoSync 错开 15
+// 分钟执行, 避免两个 03:00 整点的 job 在同一 tick 里并发抢 sqlite 锁 —
+// cron adapter 会按注册顺序依次触发, 但各 Job.Run 之间相互不阻塞, 错开
+// 比 "靠 SkipIfStillRunning 兜底" 更稳。改 Spec 要一并改这里的断言。
 func TestLogCleanupJobMetadata(t *testing.T) {
 	job := NewLogCleanupJob(nil)
 	assert.Equal(t, "media_library_log_cleanup", job.Name())
-	assert.Equal(t, "0 3 * * *", job.Spec())
+	assert.Equal(t, "15 3 * * *", job.Spec())
 }
 
 // TestLogCleanupJobRunScrubsOldRows 覆盖正常 case: 写一条日志 + 手动改

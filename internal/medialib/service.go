@@ -35,10 +35,18 @@ const (
 // 可调, 改这里就够, 不动 cronscheduler 包。
 const AutoSyncCronSpec = "0 3 * * *"
 
-// LogCleanupCronSpec 是日志 retention 清理的 cron 表达式。和 auto sync 同
-// 在 03:00 触发是刻意的: 都挪到深夜低负载时段, 而且 cleanup 先跑 (SQLite
-// 是串行写, robfig/cron 同一时刻的 job 按注册顺序依次触发, 我们把
-// LogCleanupJob 注册在 AutoSync 之前, 保证裁旧再 sync)。
+// LogCleanupCronSpec 是日志 retention 清理的 cron 表达式: 03:15 触发,
+// 刻意比 AutoSync (03:00) 晚 15 分钟。
+//
+// 为什么错开而不是同一时刻: SQLite 是串行写 + busy_timeout 10s, 两个 job
+// 同 tick 并发时锁争用虽然能被 timeout 吃掉但会拖长两边耗时; 更重要的是
+// 这俩 job 在 cronscheduler 里是独立 adapter, **不** 按注册顺序串行 (
+// robfig/cron 同 tick 会各自起 goroutine), SkipIfStillRunning 只防同一
+// job 自己重入, 不防跨 job 并发。所以靠 "错 15 分钟" 物理隔离最省心:
+// AutoSync 触发的 runFullSync 是 goroutine + bgWG, 通常秒到分钟级能结束,
+// 15 分钟窗口足够。AutoSync 如果真跑超 15 分钟, 两者确实会重叠, 但此时
+// cleanup 也不会破坏 sync (两者各自写 DB, 互不依赖数据), 只会慢一点,
+// 是可接受的退化。
 //
 // 该 cleanup 不依赖 sync 是否触发 (避免 "用户只刮不入库 -> sync 从不跑
 // -> 日志无限累积" 的 bug), 所以必须走独立 cron 条目。
