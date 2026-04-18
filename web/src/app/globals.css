@@ -863,6 +863,13 @@ textarea.input {
   align-content: center;
 }
 
+/* 大小列只显示一个值, 窄屏下 "5.3 GB" 会因为数字和单位之间的空格被浏
+ * 览器当作 soft wrap 点而拆成两行; 这里统一禁止换行, 留给 grid 列宽
+ * 自己处理挤不下的情况 (实际测下来 5 个字符以内不会打架)。*/
+.file-meta-cell {
+  white-space: nowrap;
+}
+
 .file-path-copy,
 .file-number-copy {
   min-width: 0;
