@@ -10,6 +10,9 @@ const COVERED_SOURCES = [
   // 不单独列 — 它的行为全部由 api/* 的测试覆盖, 收进 include 只会拉低百分比。
   "src/lib/api/**/*.ts",
   "src/lib/upload-debug.ts",
+  // lib/utils.ts: 公共工具函数 (cn / formatBytes / formatUnixMillis),
+  // 被全站组件广泛引用, 行为冻结在单测里防止回归。
+  "src/lib/utils.ts",
   "src/components/plugin-editor/plugin-editor-utils.ts",
   "src/components/plugin-editor/plugin-editor-constants.ts",
   // library-shell/move-refresh-reducer.ts: pure state machine for library
