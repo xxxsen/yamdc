@@ -1,21 +1,24 @@
 "use client";
 
-import { ChevronDown, RefreshCw, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
+import { MediaLibraryCardGrid } from "@/components/media-library-shell/card-grid";
+import {
+  MediaLibraryFilterRail,
+  type SizeFilter,
+  type SortMode,
+  type SortOrder,
+} from "@/components/media-library-shell/filter-rail";
+import { MediaLibrarySyncLogsModal } from "@/components/media-library-shell/sync-logs-modal";
 import {
   extractYearOptions,
-  formatSyncLogTime,
-  getReleaseYear,
   mergeYearOptions,
   toMediaLibrarySyncMessage,
 } from "@/components/media-library-shell/utils";
-import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
 import {
-  getMediaLibraryFileURL,
   getMediaLibraryItem,
   getMediaLibraryStatus,
   listMediaLibraryItems,
@@ -27,10 +30,6 @@ interface Props {
   items: MediaLibraryItem[];
   initialStatus: MediaLibraryStatus | null;
 }
-
-type SizeFilter = "all" | "lt-1" | "1-2" | "2-5" | "5-10" | "10-20" | "20-50" | "50-plus";
-type SortMode = "ingested" | "year" | "size" | "title";
-type SortOrder = "desc" | "asc";
 
 const PAGE_SIZE = 30;
 
@@ -286,6 +285,35 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     })();
   };
 
+  const handleTriggerSync = () => {
+    setSyncMenuOpen(false);
+    setSyncCompletedFlash(false);
+    setSyncMessage("媒体库同步已启动");
+    setSyncStarting(true);
+    void (async () => {
+      try {
+        await triggerMediaLibrarySync();
+        setSyncRunning(true);
+        setSyncStarting(false);
+        observedSyncRunningRef.current = true;
+        prevSyncRunningRef.current = true;
+      } catch (error) {
+        const message = toMediaLibrarySyncMessage(error);
+        setSyncMessage(message);
+        if (message === "媒体库正在同步中") {
+          setSyncStarting(false);
+          setSyncRunning(true);
+          prevSyncRunningRef.current = true;
+          observedSyncRunningRef.current = true;
+          return;
+        }
+        setSyncStarting(false);
+        setSyncRunning(false);
+        prevSyncRunningRef.current = false;
+      }
+    })();
+  };
+
   return (
     <div className="media-library-page media-library-page-wide">
       <section className="panel media-library-overview media-library-overview-wide">
@@ -293,237 +321,57 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           <div className="review-empty-state">当前还没有配置 `library_dir`，媒体库页面暂不可用。</div>
         ) : (
           <div className="media-library-browser-shell">
-            <aside className="media-library-filter-rail">
-              <div className="media-library-filter-stack">
-                <div className="media-library-filter-body">
-                  <label className="media-library-search-bar media-library-search-bar-rail">
-                    <Search size={16} />
-                    <input
-                      className="media-library-search-input"
-                      placeholder="搜索标题 / 影片 ID"
-                      value={keyword}
-                      onChange={(e) => {
-                        setKeyword(e.target.value);
-                        resetViewport();
-                      }}
-                    />
-                  </label>
+            <MediaLibraryFilterRail
+              keyword={keyword}
+              onKeywordChange={(value) => {
+                setKeyword(value);
+                resetViewport();
+              }}
+              yearFilter={yearFilter}
+              onYearFilterChange={(value) => {
+                setYearFilter(value);
+                resetViewport();
+              }}
+              visibleYearOptions={visibleYearOptions}
+              overflowYearOptions={overflowYearOptions}
+              isOverflowYearSelected={isOverflowYearSelected}
+              yearPickerOpen={yearPickerOpen}
+              onYearPickerToggle={() => setYearPickerOpen((current) => !current)}
+              onYearPickerClose={() => setYearPickerOpen(false)}
+              yearPickerRef={yearPickerRef}
+              sizeFilter={sizeFilter}
+              onSizeFilterChange={(value) => {
+                setSizeFilter(value);
+                resetViewport();
+              }}
+              sortMode={sortMode}
+              onSortModeChange={(value) => {
+                setSortMode(value);
+                resetViewport();
+              }}
+              sortOrder={sortOrder}
+              onSortOrderChange={(value) => {
+                setSortOrder(value);
+                resetViewport();
+              }}
+              syncBusy={syncBusy}
+              syncButtonLabel={syncButtonLabel}
+              syncMenuOpen={syncMenuOpen}
+              onSyncMenuToggle={() => setSyncMenuOpen((current) => !current)}
+              syncMenuRef={syncMenuRef}
+              onTriggerSync={handleTriggerSync}
+              onOpenSyncLogs={openSyncLogs}
+            />
 
-                  <div className="media-library-filter-group">
-                    <div className="media-library-filter-title">年份</div>
-                    <div className="media-library-filter-chips media-library-filter-chips-years" ref={yearPickerRef}>
-                      <button type="button" className="media-library-filter-chip" data-active={yearFilter === "all"} onClick={() => { setYearFilter("all"); resetViewport(); }}>
-                        全部
-                      </button>
-                      {visibleYearOptions.map((year) => (
-                        <button key={year} type="button" className="media-library-filter-chip" data-active={yearFilter === year} onClick={() => { setYearFilter(year); resetViewport(); }}>
-                          {year}
-                        </button>
-                      ))}
-                      {overflowYearOptions.length > 0 ? (
-                        <div className="media-library-year-overflow">
-                          <button
-                            type="button"
-                            className="media-library-filter-chip"
-                            data-active={isOverflowYearSelected || yearPickerOpen}
-                            onClick={() => setYearPickerOpen((current) => !current)}
-                          >
-                            其他
-                          </button>
-                          {yearPickerOpen ? (
-                            <div className="media-library-year-popover panel">
-                              <div className="media-library-year-popover-grid">
-                                {overflowYearOptions.map((year) => (
-                                  <button
-                                    key={year}
-                                    type="button"
-                                    className="media-library-filter-chip"
-                                    data-active={yearFilter === year}
-                                    onClick={() => {
-                                      setYearFilter(year);
-                                      setYearPickerOpen(false);
-                                      resetViewport();
-                                    }}
-                                  >
-                                    {year}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="media-library-filter-group">
-                    <div className="media-library-filter-title">文件大小</div>
-                    <div className="media-library-filter-chips">
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "all"} onClick={() => { setSizeFilter("all"); resetViewport(); }}>
-                        全部
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "lt-1"} onClick={() => { setSizeFilter("lt-1"); resetViewport(); }}>
-                        &lt; 1 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "1-2"} onClick={() => { setSizeFilter("1-2"); resetViewport(); }}>
-                        1-2 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "2-5"} onClick={() => { setSizeFilter("2-5"); resetViewport(); }}>
-                        2-5 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "5-10"} onClick={() => { setSizeFilter("5-10"); resetViewport(); }}>
-                        5-10 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "10-20"} onClick={() => { setSizeFilter("10-20"); resetViewport(); }}>
-                        10-20 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "20-50"} onClick={() => { setSizeFilter("20-50"); resetViewport(); }}>
-                        20-50 GB
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sizeFilter === "50-plus"} onClick={() => { setSizeFilter("50-plus"); resetViewport(); }}>
-                        50+ GB
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="media-library-filter-group">
-                    <div className="media-library-filter-title">排序</div>
-                    <div className="media-library-filter-chips">
-                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "ingested"} onClick={() => { setSortMode("ingested"); resetViewport(); }}>
-                        入库时间
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "year"} onClick={() => { setSortMode("year"); resetViewport(); }}>
-                        年份
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "size"} onClick={() => { setSortMode("size"); resetViewport(); }}>
-                        大小
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sortMode === "title"} onClick={() => { setSortMode("title"); resetViewport(); }}>
-                        标题
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="media-library-filter-group">
-                    <div className="media-library-filter-title">排序顺序</div>
-                    <div className="media-library-filter-chips">
-                      <button type="button" className="media-library-filter-chip" data-active={sortOrder === "desc"} onClick={() => { setSortOrder("desc"); resetViewport(); }}>
-                        逆序
-                      </button>
-                      <button type="button" className="media-library-filter-chip" data-active={sortOrder === "asc"} onClick={() => { setSortOrder("asc"); resetViewport(); }}>
-                        顺序
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="media-library-filter-footer">
-                  {/* split button: 主按钮触发同步, 右侧下拉箭头打开菜单,
-                      目前唯一菜单项是 "查看同步日志"。把两个按钮放到同一
-                      视觉容器里, 避免让用户困惑 "多出来的按钮在做什么"。 */}
-                  <div className="media-library-sync-split" ref={syncMenuRef}>
-                    <Button
-                      variant="primary"
-                      className="media-library-sync-btn"
-                      disabled={syncBusy}
-                      leftIcon={
-                        <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
-                      }
-                      onClick={() => {
-                        setSyncMenuOpen(false);
-                        setSyncCompletedFlash(false);
-                        setSyncMessage("媒体库同步已启动");
-                        setSyncStarting(true);
-                        void (async () => {
-                          try {
-                            await triggerMediaLibrarySync();
-                            setSyncRunning(true);
-                            setSyncStarting(false);
-                            observedSyncRunningRef.current = true;
-                            prevSyncRunningRef.current = true;
-                          } catch (error) {
-                            const message = toMediaLibrarySyncMessage(error);
-                            setSyncMessage(message);
-                            if (message === "媒体库正在同步中") {
-                              setSyncStarting(false);
-                              setSyncRunning(true);
-                              prevSyncRunningRef.current = true;
-                              observedSyncRunningRef.current = true;
-                              return;
-                            }
-                            setSyncStarting(false);
-                            setSyncRunning(false);
-                            prevSyncRunningRef.current = false;
-                          }
-                        })();
-                      }}
-                    >
-                      {syncButtonLabel}
-                    </Button>
-                    {/* 下拉按钮不跟随 disabled: 用户可能想在同步进行中
-                        看历史日志 / 当前 run 进度, 不该被主按钮的 busy
-                        状态拦住。 */}
-                    <Button
-                      variant="primary"
-                      className="media-library-sync-caret"
-                      aria-label="同步菜单"
-                      aria-haspopup="menu"
-                      aria-expanded={syncMenuOpen}
-                      onClick={() => setSyncMenuOpen((current) => !current)}
-                    >
-                      <ChevronDown size={14} />
-                    </Button>
-                    {syncMenuOpen ? (
-                      <div className="media-library-sync-menu panel" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="media-library-sync-menu-item"
-                          onClick={openSyncLogs}
-                        >
-                          查看同步日志
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </aside>
-
-            <div className="media-library-browser-content" ref={browserRef}>
-              <div className="media-library-card-grid media-library-card-grid-wide">
-                {visibleItems.map((item) => {
-                  const posterPath = item.poster_path || item.cover_path;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="media-library-card media-library-card-wide media-library-card-button"
-                      onClick={() => openDetailModal(item.id)}
-                    >
-                      <div className="media-library-card-poster">
-                        {posterPath ? (
-                          <img src={getMediaLibraryFileURL(posterPath)} alt={item.title || item.name} className="media-library-card-image" />
-                        ) : (
-                          <div className="library-thumb-fallback">{(item.number || item.title || item.name).slice(0, 2).toUpperCase()}</div>
-                        )}
-                      </div>
-                      <div className="media-library-card-copy">
-                        <div className="media-library-card-title media-library-card-title-only">{item.title || item.name}</div>
-                        <div className="media-library-card-meta">
-                          <div className="library-item-number">{item.number || "未命名影片"}</div>
-                          <div className="media-library-card-year">{getReleaseYear(item.release_date) || "----"}</div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {items.length === 0 ? <div className="review-empty-state media-library-grid-empty">当前媒体库里还没有项目</div> : null}
-                {items.length > 0 && filteredItems.length === 0 ? <div className="review-empty-state media-library-grid-empty">没有匹配的媒体库项目</div> : null}
-                {filteredItems.length > visibleItems.length ? <div ref={loadMoreRef} className="media-library-load-sentinel" aria-hidden="true" /> : null}
-              </div>
-            </div>
+            <MediaLibraryCardGrid
+              visibleItems={visibleItems}
+              itemsTotal={items.length}
+              filteredTotal={filteredItems.length}
+              browserRef={browserRef}
+              loadMoreRef={loadMoreRef}
+              showLoadMoreSentinel={filteredItems.length > visibleItems.length}
+              onOpenDetail={openDetailModal}
+            />
           </div>
         )}
       </section>
@@ -572,65 +420,13 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           />
         ) : null}
       </Modal>
-      <Modal
+      <MediaLibrarySyncLogsModal
         open={syncLogsOpen}
         onClose={closeSyncLogs}
-        bare
-        backdropClassName="media-library-detail-modal"
-        frameClassName="media-library-sync-logs-frame panel"
-        ariaLabel="同步日志"
-      >
-        <div className="media-library-sync-logs-header">
-          <div className="media-library-sync-logs-title">媒体库同步日志</div>
-          <Button
-            variant="ghost"
-            className="media-library-sync-logs-close"
-            onClick={closeSyncLogs}
-          >
-            关闭
-          </Button>
-        </div>
-        {syncLogsLoading ? (
-          <div className="media-library-sync-logs-state">
-            <div className="list-loading-spinner" aria-hidden="true" />
-          </div>
-        ) : syncLogsError ? (
-          <div className="media-library-sync-logs-state">
-            <span className="review-message" data-tone="danger">
-              {syncLogsError}
-            </span>
-          </div>
-        ) : syncLogs.length === 0 ? (
-          <div className="media-library-sync-logs-state">
-            <span className="review-empty-state">暂无同步日志</span>
-          </div>
-        ) : (
-          // 一行一条, 最新的在最上面 (后端已按 created_at DESC 返回)。
-          // 不再做前端二次分组 / 折叠: 扁平列表的心智负担最低,
-          // 用 run_id 列让用户肉眼区分不同 sync 轮次。
-          <ul className="media-library-sync-logs-list">
-            {syncLogs.map((entry) => (
-              <li key={entry.id} className="media-library-sync-logs-row" data-level={entry.level}>
-                <div className="media-library-sync-logs-row-meta">
-                  <span className="media-library-sync-logs-row-time">{formatSyncLogTime(entry.created_at)}</span>
-                  <span className="media-library-sync-logs-row-level" data-level={entry.level}>
-                    {entry.level.toUpperCase()}
-                  </span>
-                  <span className="media-library-sync-logs-row-run" title={entry.run_id}>
-                    {entry.run_id}
-                  </span>
-                </div>
-                <div className="media-library-sync-logs-row-body">
-                  {entry.rel_path ? (
-                    <span className="media-library-sync-logs-row-path">{entry.rel_path}</span>
-                  ) : null}
-                  <span className="media-library-sync-logs-row-message">{entry.message}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Modal>
+        loading={syncLogsLoading}
+        error={syncLogsError}
+        logs={syncLogs}
+      />
       {syncMessage ? (
         <div className="app-toast app-toast-top" data-tone={/失败|error/i.test(syncMessage) ? "danger" : undefined} role="status" aria-live="polite">
           {syncMessage}
