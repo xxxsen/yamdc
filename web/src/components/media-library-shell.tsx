@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
 import { MediaLibraryCardGrid } from "@/components/media-library-shell/card-grid";
@@ -11,19 +11,13 @@ import {
   type SortOrder,
 } from "@/components/media-library-shell/filter-rail";
 import { MediaLibrarySyncLogsModal } from "@/components/media-library-shell/sync-logs-modal";
-import {
-  extractYearOptions,
-  mergeYearOptions,
-  toMediaLibrarySyncMessage,
-} from "@/components/media-library-shell/utils";
+import { useMediaLibrarySync } from "@/components/media-library-shell/use-media-library-sync";
+import { extractYearOptions } from "@/components/media-library-shell/utils";
 import { Modal } from "@/components/ui/modal";
 import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
 import {
   getMediaLibraryItem,
-  getMediaLibraryStatus,
-  listMediaLibraryItems,
   listMediaLibrarySyncLogs,
-  triggerMediaLibrarySync,
 } from "@/lib/api";
 
 interface Props {
@@ -36,9 +30,6 @@ const PAGE_SIZE = 30;
 export function MediaLibraryShell({ items: initialItems, initialStatus }: Props) {
   const [items, setItems] = useState(initialItems);
   const [yearOptions, setYearOptions] = useState(() => extractYearOptions(initialItems));
-  const [configured, setConfigured] = useState(Boolean(initialStatus?.configured));
-  const [syncRunning, setSyncRunning] = useState(initialStatus?.sync.status === "running");
-  const [syncStarting, setSyncStarting] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>("all");
@@ -46,8 +37,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
-  const [syncCompletedFlash, setSyncCompletedFlash] = useState(false);
   const [activeDetail, setActiveDetail] = useState<MediaLibraryDetail | null>(null);
   const [activeDetailID, setActiveDetailID] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -62,9 +51,24 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const yearPickerRef = useRef<HTMLDivElement | null>(null);
   const syncMenuRef = useRef<HTMLDivElement | null>(null);
-  const prevSyncRunningRef = useRef(initialStatus?.sync.status === "running");
-  const observedSyncRunningRef = useRef(initialStatus?.sync.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
+
+  const {
+    configured,
+    syncBusy,
+    syncButtonLabel,
+    syncMessage,
+    handleTriggerSync: triggerSync,
+  } = useMediaLibrarySync({
+    initialStatus,
+    deferredKeyword,
+    yearFilter,
+    sizeFilter,
+    sortMode,
+    sortOrder,
+    setItems,
+    setYearOptions,
+  });
 
   const resetViewport = () => {
     setVisibleCount(PAGE_SIZE);
@@ -112,99 +116,6 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDetail, activeDetailID]);
-
-  const refreshItems = useEffectEvent(async (nextParams?: {
-    keyword?: string;
-    year?: string;
-    size?: string;
-    sort?: string;
-    order?: string;
-  }) => {
-    try {
-      const next = await listMediaLibraryItems(nextParams);
-      setItems(next);
-      if (!nextParams?.year || nextParams.year === "all") {
-        setYearOptions((current) => mergeYearOptions(current, extractYearOptions(next)));
-      }
-    } catch {
-      // ignore polling errors
-    }
-  });
-
-  const refreshStatus = useEffectEvent(async () => {
-    try {
-      const next = await getMediaLibraryStatus();
-      setConfigured(next.configured);
-      const nextSyncRunning = next.sync.status === "running";
-      setSyncRunning(nextSyncRunning);
-      if (nextSyncRunning) {
-        setSyncStarting(false);
-        observedSyncRunningRef.current = true;
-      }
-      if (observedSyncRunningRef.current && prevSyncRunningRef.current && !nextSyncRunning) {
-        setSyncCompletedFlash(true);
-        observedSyncRunningRef.current = false;
-        const nextItems = await listMediaLibraryItems({
-          keyword: deferredKeyword,
-          year: yearFilter,
-          size: sizeFilter,
-          sort: sortMode,
-          order: sortOrder,
-        });
-        setItems(nextItems);
-      }
-      prevSyncRunningRef.current = nextSyncRunning;
-    } catch {
-      // ignore polling errors
-    }
-  });
-
-  useEffect(() => {
-    if (!syncMessage) {
-      return;
-    }
-    const timer = window.setTimeout(() => setSyncMessage(""), 2400);
-    return () => window.clearTimeout(timer);
-  }, [syncMessage]);
-
-  useEffect(() => {
-    if (!syncCompletedFlash) {
-      return;
-    }
-    const timer = window.setTimeout(() => setSyncCompletedFlash(false), 1000);
-    return () => window.clearTimeout(timer);
-  }, [syncCompletedFlash]);
-
-  useEffect(() => {
-    void refreshStatus();
-  }, []);
-
-  useEffect(() => {
-    if (!configured) {
-      return;
-    }
-    const params = {
-      keyword: deferredKeyword,
-      year: yearFilter,
-      size: sizeFilter,
-      sort: sortMode,
-      order: sortOrder,
-    };
-    void refreshItems(params);
-  }, [configured, deferredKeyword, yearFilter, sizeFilter, sortMode, sortOrder]);
-
-  const syncBusy = syncStarting || syncRunning;
-  const syncButtonLabel = syncBusy ? "同步中..." : syncCompletedFlash ? "同步完成" : "同步媒体库";
-
-  useEffect(() => {
-    if (!syncBusy) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [syncBusy]);
 
   const filteredItems = items;
   const visibleYearOptions = yearOptions.slice(0, 13);
@@ -287,31 +198,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
 
   const handleTriggerSync = () => {
     setSyncMenuOpen(false);
-    setSyncCompletedFlash(false);
-    setSyncMessage("媒体库同步已启动");
-    setSyncStarting(true);
-    void (async () => {
-      try {
-        await triggerMediaLibrarySync();
-        setSyncRunning(true);
-        setSyncStarting(false);
-        observedSyncRunningRef.current = true;
-        prevSyncRunningRef.current = true;
-      } catch (error) {
-        const message = toMediaLibrarySyncMessage(error);
-        setSyncMessage(message);
-        if (message === "媒体库正在同步中") {
-          setSyncStarting(false);
-          setSyncRunning(true);
-          prevSyncRunningRef.current = true;
-          observedSyncRunningRef.current = true;
-          return;
-        }
-        setSyncStarting(false);
-        setSyncRunning(false);
-        prevSyncRunningRef.current = false;
-      }
-    })();
+    triggerSync();
   };
 
   return (
