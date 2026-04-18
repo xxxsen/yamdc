@@ -322,50 +322,64 @@ textarea {
   box-shadow: 0 12px 40px rgba(58, 35, 20, 0.08);
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 10px 16px;
-  background: var(--panel-strong);
-  color: var(--foreground);
-  cursor: pointer;
-  transition:
-    transform 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
-}
+/* .btn family: 走 @layer components 让 Tailwind utility (在 @layer
+ * utilities) 能正常覆写 padding/background/border 等. v4 的 @import
+ * "tailwindcss" 已经声明了 layer 顺序 theme→base→components→utilities,
+ * 所以这里包进 components 后, utility 永远后胜.
+ *
+ * 没包 layer 时这套 .btn 因为在"无 layer"的最外层, 会偷偷盖掉
+ * <Button className="px-2.5"> 之类的局部覆写, 让 ImageCropper 的浮动
+ * 截取按钮被撑成 ~50px 高溢出选区 (P0-A 实战踩坑 2026-04-18).
+ *
+ * 详见 td/022 §2.1 "前置障碍". 本次只动 .btn family, 后续 .input /
+ * .panel / .badge / .tab 等 ui 原子也要按需加进来.
+ */
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 10px 16px;
+    background: var(--panel-strong);
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+      transform 120ms ease,
+      background 120ms ease,
+      border-color 120ms ease;
+  }
 
-.btn:hover {
-  transform: translateY(-1px);
-}
+  .btn:hover {
+    transform: translateY(-1px);
+  }
 
-.btn:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-  transform: none;
-}
+  .btn:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    transform: none;
+  }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff8f4;
-}
+  .btn-primary {
+    background: var(--accent);
+    color: #fff8f4;
+  }
 
-.btn-primary:hover {
-  background: var(--accent-strong);
-}
+  .btn-primary:hover {
+    background: var(--accent-strong);
+  }
 
-/* .btn-ghost: 透明背景 + 透明边框, 仅悬停时浮起来一层弱底色。
-   适合作为次级动作 (例如关闭、取消) 与已有内容区融合。 */
-.btn-ghost {
-  background: transparent;
-  border-color: transparent;
-}
-.btn-ghost:hover {
-  background: rgba(91, 67, 44, 0.06);
+  /* .btn-ghost: 透明背景 + 透明边框, 仅悬停时浮起来一层弱底色。
+     适合作为次级动作 (例如关闭、取消) 与已有内容区融合。 */
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+  }
+  .btn-ghost:hover {
+    background: rgba(91, 67, 44, 0.06);
+  }
 }
 
 .input {

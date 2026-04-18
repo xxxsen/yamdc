@@ -7,7 +7,7 @@ import {
   type SyntheticEvent,
 } from "react";
 
-import { Modal } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 
 // ImageCropper: 从一张封面里截海报的固定宽高比拖拽框选器.
 //
@@ -185,20 +185,18 @@ export function ImageCropper({
             />
           ) : null}
           {showSelection ? (
-            // 截取按钮浮在选区右上角, 暗底白字 + backdrop blur. 这里刻意
-            // 用裸 <button> 而非 ui/Button — Button 套着的 .btn 全局规则
-            // (padding: 10px 16px) 会覆盖我们的 padding utility, 把按钮
-            // 撑成 50px 高溢出选区. 旧 .review-crop-confirm 用 padding: 0
-            // 10px 显式压制, 这里直接绕过 .btn 体系干净一些.
-            <button
-              type="button"
-              className="absolute z-[3] inline-flex items-center justify-center min-w-[42px] h-[26px] px-2.5 py-0 rounded-full border border-[rgba(255,248,244,0.28)] bg-[rgba(31,26,20,0.7)] text-[#fff8f4] backdrop-blur-md text-[12px] leading-none shadow-[0_8px_18px_rgba(26,18,14,0.18)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            // 截取按钮浮在选区右上角, 暗底白字 + backdrop blur. 这里走
+            // <Button> 而非裸 <button>, 依赖 td/022 §2.1 9b 的 cascade
+            // fix (.btn family 已进 @layer components, utility 后胜).
+            // 没这一步 .btn 默认 padding: 10px 16px 会撑爆 26px 高度.
+            <Button
+              className="absolute z-[3] min-w-[42px] h-[26px] px-2.5 py-0 rounded-full border border-[rgba(255,248,244,0.28)] bg-[rgba(31,26,20,0.7)] text-[#fff8f4] backdrop-blur-md text-[12px] leading-none shadow-[0_8px_18px_rgba(26,18,14,0.18)]"
               style={{ left: rect.x + rect.width - 54, top: rect.y + 8 }}
               onClick={handleConfirm}
               disabled={isPending}
             >
               截取
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
