@@ -2,11 +2,13 @@ package medialib
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xxxsen/yamdc/internal/repository"
 	"go.uber.org/zap"
 )
 
@@ -136,4 +138,30 @@ func TestLogCleanupJobRunNoDB(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("log cleanup job with nil db should not start goroutines")
 	}
+}
+
+// TestLogCleanupJobRunPropagatesRepoError 覆盖异常 case: 底层 DeleteOlderThan
+// 返回 error 时, Run 必须把错误原样 wrap 向上抛, 让 cron adapter 能记录
+// "finished with error" 而不是吞掉。吞错会让运维以为 retention 一直在跑,
+// 实际日志表早已停止裁剪。
+//
+// 构造手法: 建完 Service 后把底层 sqlite 连接关掉, 这样 DeleteOlderThan
+// 会必然走进 "DB closed" 分支返回 error。这是目前最稳的不用 mock 的触发
+// 方式 (LogRepository 是具体类型, 不是接口, 无法直接注入 fake)。
+func TestLogCleanupJobRunPropagatesRepoError(t *testing.T) {
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	svc := NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+	t.Cleanup(func() {
+		svc.Stop()
+		svc.WaitBackground()
+	})
+
+	require.NoError(t, sqlite.Close(), "close underlying sqlite to force DeleteOlderThan error")
+
+	job := NewLogCleanupJob(svc)
+	err = job.Run(context.Background())
+	require.Error(t, err, "closed DB must surface as error from Run")
+	assert.Contains(t, err.Error(), "cleanup media library logs",
+		"error must be wrapped with Job-level prefix for log filtering")
 }

@@ -113,9 +113,10 @@ func TestJobExecutes(t *testing.T) {
 	}, 2*time.Second, 20*time.Millisecond, "job should tick at least once within 2s")
 }
 
-// TestJobRunReceivesContext 覆盖正常 case: adapter 给 Run 传的 ctx 是从
-// rootCtx 派生的, 具体来说 ctx 非 nil 且不等于 context.TODO (ctx 用于 job
-// 自行判断是否该 early-exit, 必须能被正确使用)。
+// TestJobRunReceivesContext 覆盖正常 case: adapter 给 Run 传的 ctx 是非 nil
+// 的合法 ctx (当前实现是原样透传 Scheduler.rootCtx, 不派生子 ctx)。业务方
+// 的 "early-exit" 语义目前靠 Scheduler.Stop 让 cron 不再调度, 未来如果加了
+// 逐 job 超时/cancel, 可以扩这里的断言 (e.g. 断言 ctx.Deadline 或 ctx.Done)。
 func TestJobRunReceivesContext(t *testing.T) {
 	gotCtx := make(chan context.Context, 1)
 	s := newScheduler(t)

@@ -702,34 +702,6 @@ func TestSyncAndActivate_SameContent_NotUpdated(t *testing.T) {
 	assert.False(t, updated)
 }
 
-// ---------- watchRemote ----------
-
-func TestWatchRemote_ContextCancel(t *testing.T) {
-	m := &Manager{
-		syncInterval: 10 * time.Millisecond,
-		location:     "https://github.com/owner/repo",
-		cacheDir:     t.TempDir(),
-		cli: &mockHTTPClient{
-			doFunc: func(_ *http.Request) (*http.Response, error) {
-				return nil, errors.New("fail")
-			},
-		},
-		cb: func(_ context.Context, _ *Data) error { return nil },
-	}
-	m.zipPath = filepath.Join(m.cacheDir, "test.zip")
-	m.tempPath = filepath.Join(m.cacheDir, "test.zip.temp")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		m.watchRemote(ctx)
-		close(done)
-	}()
-	<-done
-}
-
 // ---------- FetchLatestGitHubTag with blank tag name ----------
 
 func TestFetchLatestGitHubTag_BlankTagName(t *testing.T) {

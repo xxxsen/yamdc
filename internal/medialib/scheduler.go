@@ -30,9 +30,10 @@ import (
 // 仅针对 "机器长时间关机" 的少数用户 — 他们进 UI 手动点同步也能触发,
 // 并没有丢功能的紧迫性。
 
-// autoSyncJobName / logCleanupJobName 是写进日志的 cron_job 字段值,
-// 排障时能用它过滤某一类 job 的所有历史触发。保持 snake_case 和项目
-// 其他结构化字段一致。
+// autoSyncJobName / logCleanupJobName 供 cron adapter 作为 zap 的 cron_job
+// 字段值 (只在 adapter 自己的 started/finished/skipped 日志上, 不注入业务
+// 的 logutil.GetLogger(ctx)), 排障时能 filter 某一类 job 的所有历史触发。
+// 保持 snake_case 和项目其他结构化字段一致。
 const (
 	autoSyncJobName   = "media_library_auto_sync"
 	logCleanupJobName = "media_library_log_cleanup"
@@ -63,8 +64,12 @@ type autoSyncJob struct {
 func (j *autoSyncJob) Name() string { return autoSyncJobName }
 func (j *autoSyncJob) Spec() string { return AutoSyncCronSpec }
 func (j *autoSyncJob) Run(ctx context.Context) error {
-	// ctx 来自 cron adapter, 已经带了 cron_job 字段的 logger。
-	// tryAutoSync 自己会再补 task=media_library_sync / reason 这些业务字段。
+	// ctx 来自 cron adapter, 但 adapter 的 cron_job 字段 logger 只挂在
+	// adapter 自己的 started/finished 日志上 — ctx 本身不携带它
+	// (xxxsen/common/logutil 只从 ctx 取 traceid)。这里通过 logutil.GetLogger
+	// 拿到的是全局 logger, 由 tryAutoSync 自己补 reason 等业务字段, 不会带
+	// cron_job。需要 cron 维度排障时用 adapter 外层日志 + task_state_tab.message
+	// 里的 autoSyncReason 关联即可。
 	j.svc.tryAutoSync(ctx, logutil.GetLogger(ctx))
 	return nil
 }

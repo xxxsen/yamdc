@@ -64,16 +64,27 @@ type Service struct {
 	moveRunning bool
 	bgWG        sync.WaitGroup
 
-	// shutdownCtx / shutdownCancel 控制后台 goroutine 的生命周期。
-	// Stop 会 cancel 这个 ctx, 正在跑的 Trigger* 派生 runFullSync / runMove
-	// 能响应退出; bgWG 负责阻塞外部 cleanup 等这些 goroutine 完整返回后再让
-	// 底层 sqlite / tempdir 被清理, 避免 "DB 已关闭、goroutine 还在写 DB"
-	// 的竞争。Stop 必须在 WaitBackground 之前调用。
+	// shutdownCtx / shutdownCancel 是 "Stop 已被调用" 的进程级 marker。
+	//
+	// **当前实现 runFullSync / runMove 并不 select 这个 ctx** — 它们在
+	// triggerFullSyncWithReason / TriggerMove 里被 context.WithoutCancel
+	// 刻意隔离调用方 ctx, 原因是 sync/move 中间截停有可能让 DB 和磁盘脱节
+	// (比如目录已 rename 但 upsertDetail 还没写, 或 cleanupStaleItems 删了
+	// 行但文件没动), 远比让进程退出多等几秒危险。所以进程关停靠的是:
+	//   (1) Stop() 发 cancel 信号 (目前主要是 "有人调过 Stop" 的状态标记);
+	//   (2) WaitBackground() 硬等 bgWG.Wait() 让所有 goroutine 自然跑完;
+	//   (3) 最后才允许底层 sqlite / tempdir 被关闭。
+	// 顺序由 bootstrap 负责, Stop 必须在 WaitBackground 之前调用, 避免
+	// bgWG 里恰好在 "正要 Add(1) 但还没 Add 完" 的窗口被 Wait 错过。
+	//
+	// 这个字段刻意保留不删: 将来若把 runFullSync 拆成 checkpoint-safe 的
+	// 阶段, 阶段之间 select shutdownCtx 可以做到"快速响应关机而不破坏一致性",
+	// 不用再加一遍构造方法/生命周期钩子。
 	//
 	// 自动 sync 的定时调度职责 1.5 起从这里挪到 internal/cronscheduler;
 	// 本 Service 不再自管 scheduler goroutine, 对应字段 (schedulerClock /
 	// schedulerStartupDelay) 随之删除。
-	shutdownCtx    context.Context
+	shutdownCtx    context.Context //nolint:containedctx // see doc above
 	shutdownCancel context.CancelFunc
 }
 
@@ -121,10 +132,18 @@ func (s *Service) Start(ctx context.Context) {
 	}
 }
 
-// Stop 取消 shutdownCtx, 让正在跑的 runFullSync / runMove 响应退出;
-// WaitBackground 负责等这些 goroutine 完整返回。
-// 调用顺序建议: Stop 先走, 立即发 cancel 信号; 接着 WaitBackground 阻塞
-// 等 sync/move 收完尾; 最后关闭底层 sqlite。cron scheduler 的停止职责
+// Stop 取消 shutdownCtx, 标记 "已进入关机阶段"。
+//
+// 注意: 当前 runFullSync / runMove 并不 select 这个 ctx (见 shutdownCtx
+// 字段文档), 所以 Stop 的直接效果仅是 "cancel 掉一个状态 ctx", 不会中断
+// 正在跑的 sync/move。真正让后台 goroutine 退出靠 WaitBackground 的硬等。
+//
+// 保留 Stop 是为了: (a) 保持与其它 service (如 job.Service.Stop) 的 API
+// 对称, bootstrap cleanup LIFO 写起来一致; (b) 给未来 checkpoint-safe 的
+// sync 留下 "关机信号" 的接入点。
+//
+// 调用顺序建议: Stop 先走, 发 cancel 信号; 接着 WaitBackground 阻塞等
+// sync/move 自然收完尾; 最后关闭底层 sqlite。cron scheduler 的停止职责
 // 由 bootstrap 独立管理, 顺序见 actions_app.go 的注释。
 func (s *Service) Stop() {
 	if s.shutdownCancel == nil {
@@ -336,7 +355,8 @@ func (s *Service) recoverTaskState(ctx context.Context, taskKey string) error {
 	logutil.GetLogger(ctx).Warn("recover media library task state from running to failed", zap.String("task", taskKey))
 	// Sync 被进程重启中断: cleanupStaleItems 可能没跑, 之后新增/删除的目录
 	// 都会让 DB 和磁盘脱节, 只能通过一次完整 sync 重新对齐。所以这里强制
-	// 标 dirty, 下一次 startup 延迟窗口或 03:00 自动触发兜底。
+	// 标 dirty, 下一次 03:00 AutoSyncJob tick 时会自动触发兜底 (1.5 起
+	// startup 延迟触发线已移除, 只剩 cron 这一路)。
 	// Move 被中断理论上不会让 DB 失真 (move 本身只改磁盘, 而且 1.4 之后
 	// move 会走 per-item upsert, 下一节会提到), 这里还是顺带标 dirty,
 	// 属于 "多做一点总比漏一点好" 的保守选择。

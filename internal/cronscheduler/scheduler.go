@@ -4,9 +4,13 @@
 //
 // 为什么要有这一层 (而不是业务方直接用 robfig/cron):
 //
-//  1. 统一命名: 每个 Job 暴露 Name(), adapter 会把 name 写到 zap logger 的
-//     context 字段里, 排障时一眼看出 "是哪个 job 在跑/跑了多久/失败原因"。
-//     如果业务方各自用 cron, 日志风格会散成八九种。
+//  1. 统一命名: 每个 Job 暴露 Name(), adapter 会把 name 写进 zap logger
+//     的 "cron_job" 字段 (是 zap.Field, 不是 context.Context), 专用于
+//     adapter 自身的 started/finished/skipped 日志, 排障时一眼看出 "是
+//     哪个 job 在跑/跑了多久/失败原因"。注意这个字段 **不会** 注入到传给
+//     Job.Run 的 ctx 里, 业务内部用 logutil.GetLogger(ctx) 拿到的 logger
+//     不带 cron_job (详见 jobAdapter 文档)。如果业务方各自用 cron, 日志
+//     风格会散成八九种。
 //  2. 统一兜底: adapter 层固定包 panic recover + 耗时记录 + SkipIfStillRunning。
 //     一个 job panic 不会带挂其它 job, 也不会出现 "前一次 job 还没跑完、
 //     下一次 tick 又进来重叠执行" 的怪事。
@@ -38,10 +42,15 @@ import (
 //     @every 简写        e.g. "@every 30s"       (每 30 秒一次)
 //     @hourly/@daily 等预设
 //     复杂表达式推荐走 crontab, 可读性最好。
-//   - Run: 真正的业务逻辑, 由 adapter 负责派生 ctx + 记录耗时 + recover。
-//     实现里应响应 ctx.Done() 以便 Scheduler.Stop 能在超时内收敛。
-//     返回 error 仅用于日志记录, 不会影响 scheduler 本身; 想主动让 job
-//     下次 skip, 自己在 Run 里判断返回。
+//   - Run: 真正的业务逻辑。adapter 会把 Scheduler 的 rootCtx 原样传给
+//     Run (不派生子 ctx — 目前没有逐 job 独立取消的诉求, 省一层封装),
+//     并在外层包 panic recover + 耗时日志 + SkipIfStillRunning。rootCtx
+//     默认由 bootstrap 传 context.Background(), 不会被 Stop 主动 cancel;
+//     job 的 "取消" 走 Scheduler.Stop 让 cron 不再调度新 tick, 正在跑的
+//     Run 不会被强制打断。长耗时 job 若想响应进程退出, 可自行组合出一
+//     个带 cancel 的子 ctx, 但 adapter 这一层不做这件事。
+//     返回 error 仅用于 adapter 打日志, 不会影响 scheduler 本身; 想让
+//     下一次 tick 直接 skip, 在 Run 里自己判断并返回即可。
 type Job interface {
 	Name() string
 	Spec() string
@@ -80,9 +89,11 @@ var (
 // 强制截断。超时到期后 Stop 会打 warn 直接返回, 不会让进程退出卡住。
 const stopTimeout = 30 * time.Second
 
-// New 构造一个 Scheduler。rootCtx 是所有 Job.Run 派生 ctx 的父级, 约定由
-// bootstrap 传进来 (通常是 context.Background, 因为 job 自己的取消走 Stop
-// 路径而不是 rootCtx cancel); logger 用于 adapter 的结构化日志。
+// New 构造一个 Scheduler。rootCtx 是所有 Job.Run 收到的 ctx, adapter 原样
+// 透传 (不派生子 ctx — 目前没有逐 job 独立取消的需求, 省一层封装); 约定
+// 由 bootstrap 传进来 (通常是 context.Background, 因为 job 的取消语义走
+// Scheduler.Stop 路径, 不走 rootCtx cancel)。logger 用于 adapter 自己的
+// 结构化日志。
 //
 // 使用 time.Local 作为 cron 时区: yamdc 是本地工具, 用户看 "0 3 * * *"
 // 期待的是本地时间 03:00, 不是 UTC 03:00。这个选择是有意的, 不要改成 UTC。
@@ -182,7 +193,11 @@ func (s *Scheduler) Stop() {
 }
 
 // jobAdapter 把 Job 适配到 cron.Job (Run() 无参), 负责:
-//   - 派生带 job name 的 zap logger, 写进 ctx 供 Run 内部沿用;
+//   - 持有一个带 cron_job=<name> 字段的 zap logger, 用于 adapter 自身打
+//     started/finished/skipped/panic 这几条结构化日志; 注意 **这个 logger
+//     不会注入到传给 Job.Run 的 ctx**, 业务代码里调 logutil.GetLogger(ctx)
+//     仍然拿到全局 logger (xxxsen/common/logutil 只从 ctx 取 traceid, 不认
+//     识别的 context value), 业务日志要带 cron 相关字段需自己挂;
 //   - 记录开始 / 结束 / 耗时 / 错误;
 //   - panic recover: 打 error 后吞掉, 保证其它 job 继续跑;
 //   - SkipIfStillRunning: 上一次 Run 没返回前, 下一次 tick 直接 skip
@@ -206,10 +221,11 @@ func newJobAdapter(rootCtx context.Context, j Job, logger *zap.Logger) *jobAdapt
 	}
 }
 
-// Run 实现 cron.Job. 注意签名里没有 ctx, ctx 由 adapter 从 rootCtx 派生。
-// 绝大部分定时任务的 "取消" 不是靠 ctx, 而是靠 Scheduler.Stop 让 cron
-// 本身不再调度新 tick; 但我们仍把 ctx 挂上, 方便长耗时 job 在进程收敛
-// 时响应 rootCtx 的 cancel (bootstrap 层决定要不要把它接上)。
+// Run 实现 cron.Job. cron.Job 签名没有 ctx, adapter 把 Scheduler 的 rootCtx
+// 原样透传给 Job.Run (见 runWithRecover)。绝大部分定时任务的 "取消" 不靠
+// ctx, 而是靠 Scheduler.Stop 让 cron 不再调度新 tick; rootCtx 默认是
+// context.Background, 进程退出时 **不会** 被 Stop 主动 cancel, 正在跑的
+// Job.Run 不会因此中断 (这是刻意取舍, 见 Job 接口的文档)。
 func (a *jobAdapter) Run() {
 	if !a.running.CompareAndSwap(0, 1) {
 		a.logger.Warn("cron job skipped: previous run still in progress")

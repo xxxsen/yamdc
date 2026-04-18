@@ -73,7 +73,7 @@ func buildProcessorsAction(ctx context.Context, sc *StartContext) error {
 
 func buildMovieIDCleanerAction(ctx context.Context, sc *StartContext) error {
 	c := sc.Infra.Config
-	cleaner, _, err := domain.BuildMovieIDCleaner(
+	cleaner, manager, err := domain.BuildMovieIDCleaner(
 		ctx, sc.Infra.HTTPClient,
 		c.DataDir, c.MovieIDRulesetConfig.SourceType, c.MovieIDRulesetConfig.Location,
 	)
@@ -81,6 +81,7 @@ func buildMovieIDCleanerAction(ctx context.Context, sc *StartContext) error {
 		return fmt.Errorf("build movieid cleaner: %w", err)
 	}
 	sc.Domain.MovieIDCleaner = cleaner
+	sc.Domain.MovieIDCleanerMgr = manager
 	return nil
 }
 

@@ -10,6 +10,7 @@ import (
 
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 )
 
 var errPluginBundleCallbackRequired = errors.New("plugin bundle callback is required")
@@ -43,7 +44,15 @@ func NewManager(name, dataDir string, cli client.IHTTPClient, sources []Source, 
 	managers := make([]*basebundle.Manager, 0, len(sources))
 	for index, source := range sources {
 		sourceIndex := index
-		manager, err := basebundle.NewManager(name, dataDir, cli, source.SourceType, source.Location, "remote-plugins",
+		// 给每个 sub-manager 一个带 index 的唯一 name。这个 name 同时决定
+		// 两件事: (1) basebundle 内部报错消息的前缀 ("sync remote %s bundle
+		// failed"), 加 index 排障时能一眼看出是哪一路 source 出问题; (2) 经
+		// RemoteSyncJob 转成 "<prefix>_<subName>_remote_sync" 的全局 Job name,
+		// cronscheduler 要求注册名全局唯一 — 如果所有 sub 都共用 name 参数,
+		// 多 remote source 配置下会在启动期被 errDuplicateJobName 直接拒掉,
+		// 进程起不来。
+		subName := fmt.Sprintf("%s_source%d", name, index)
+		manager, err := basebundle.NewManager(subName, dataDir, cli, source.SourceType, source.Location, "remote-plugins",
 			func(ctx context.Context, data *basebundle.Data) error {
 				bundle, err := LoadBundleFromData(data, sourceIndex)
 				if err != nil {
@@ -77,6 +86,30 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.initialized = true
 	m.mu.Unlock()
 	return m.emit(ctx)
+}
+
+// CronJobs 聚合所有 remote 子 manager 的周期同步 job, 交由 bootstrap 统一注册
+// 进全局 cronscheduler。同一个 pluginbundle.Manager 可能有 N 个 source (配置
+// 多 bundle 源时), 每个 source 对应一个 basebundle.Manager — 调用方只需要
+// "拿一组 job 全塞进 scheduler" 的接口, 不关心有几条。
+//
+// Job Name 形如 "searcher_plugin_searcher_plugin_source<N>_remote_sync": 外层
+// 前缀 (m.name, 当前取 "searcher_plugin") 负责和 movieidcleaner 那路区分;
+// 内层 subName 由 NewManager 按 sourceIndex 生成 ("<name>_source<N>") 保证
+// 多 source 时每条 job 全局唯一 — 这个全局唯一性是硬要求, 重名会被
+// cronscheduler.Register 直接拒掉导致启动失败。Local 类型 sub 返回 nil, 自动
+// 跳过, 这里不收集。
+func (m *Manager) CronJobs() []cronscheduler.Job {
+	if m == nil {
+		return nil
+	}
+	jobs := make([]cronscheduler.Job, 0, len(m.managers))
+	for _, sub := range m.managers {
+		if job := sub.RemoteSyncJob(m.name); job != nil {
+			jobs = append(jobs, job)
+		}
+	}
+	return jobs
 }
 
 func (m *Manager) emit(ctx context.Context) error {
