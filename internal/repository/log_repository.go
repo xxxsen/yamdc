@@ -161,9 +161,21 @@ func (r *LogRepository) DeleteByTask(ctx context.Context, logType, taskID string
 }
 
 // DeleteOlderThan 是 retention 清理主入口, 按 created_at 裁掉超期日志。
-// 走 idx_yamdc_unified_log_type_created_at 索引的时候 SQLite 能精确扫裁剪
-// 区间, 即便表规模到百万也只付出裁剪区间的 IO。调用方决定 cutoff 策略
-// (目前统一 7 天), 这里只负责执行。
+// 调用方决定 cutoff 策略 (目前统一 7 天), 这里只负责执行。
+//
+// 索引说明: 现有两个索引 idx_yamdc_unified_log_type_task_created_at /
+// idx_yamdc_unified_log_type_created_at 都以 log_type 做最左前缀, 这条
+// DELETE 不带 log_type 条件, 实际走全表扫。之所以不优化:
+//
+//  1. retention 触发频率极低: 只在 sync 收尾调一次, 全天 < 10 次;
+//  2. 7 天 retention 天然压住表规模 (估算 ~ 万到十万行),
+//     SQLite 全表扫毫秒级完成, 不是性能瓶颈;
+//  3. 单独加一个 (created_at) 索引会让每条日志 INSERT 都付索引维护成本,
+//     write 侧一直交税, 仅在低频 DELETE 回收, 性价比负;
+//  4. 如果后面真观察到 retention 变慢, 更优解是按 log_type 拆:
+//     for each lt: DELETE WHERE log_type=? AND created_at < ?, 可以命中
+//     idx_yamdc_unified_log_type_created_at, 不用加新索引。代价是
+//     把 log_type 枚举耦合到 retention 入口, 当前没有业务信号不值得。
 func (r *LogRepository) DeleteOlderThan(ctx context.Context, cutoffMs int64) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM yamdc_unified_log_tab WHERE created_at < ?`, cutoffMs)
 	if err != nil {
