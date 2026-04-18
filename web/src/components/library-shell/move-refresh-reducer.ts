@@ -42,9 +42,11 @@ import type { MediaLibraryStatus } from "@/lib/api";
 //   不要重复触发.
 // - MOVE_ERROR 只清除 move 分支, 不碰 refresh, 让 refresh 的生命
 //   周期独立 (错误上报由上层 setMessage 负责).
-// - REFRESH_SUCCESS 从任意 refresh 态都能到 completed-flash, 因为
-//   手动 "重新扫描库" 和 "移动完成自动刷新" 都走同一条 REFRESH_*
-//   通路, 语义一致.
+// - REFRESH_* 一族只给 **手动 "重新扫描库"** 按钮用, 用来驱动按钮
+//   "扫描中..." / "扫描完成" 文案和 spinner 图标. 移动完成后的自动
+//   刷新 **不走** 这组 action (走 startTransition + 直接调 refreshLibrary),
+//   否则用户没点扫描按钮却看到自己没触发的 "扫描完成", 属 UX 回归.
+//   详见 use-library-move-refresh.ts 里 triggerRefreshAfterMove 的注释.
 
 export type MoveStatus = "idle" | "starting" | "running" | "completed-flash";
 export type RefreshStatus = "idle" | "running" | "completed-flash";

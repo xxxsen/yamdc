@@ -133,15 +133,22 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
   // 进入 completed-flash 时触发一次 refresh. starting-> completed-flash
   // (fast path) / running -> completed-flash (normal path) 都走这条分支,
   // 彻底消除 0KB 漏刷新 bug.
+  //
+  // 注意: 这里 **故意不走** REFRESH_START / REFRESH_SUCCESS reducer 路径.
+  // 那条路径是给用户点 "重新扫描库" 按钮用的, 会把按钮文案切到 "扫描中..."
+  // 再闪 "扫描完成". 移动后的自动 refresh 是副作用式的后处理, 用户根本
+  // 没点那个按钮, 反馈点应该是 "移动完成" (在 move 按钮上). 如果这里也
+  // 走 reducer, 用户会看到自己没触发的 "扫描完成" 文案 (历史 bug).
+  //
+  // 并发边界: 用户若在 ~1s flash 窗口内手动点 "重新扫描库", 会并发产生
+  // 两次 listLibraryItems 请求, 最后到达的响应赢. 数据不会坏, 接受这个
+  // 小代价换 UX 清晰.
   const triggerRefreshAfterMove = useEffectEvent(() => {
-    dispatch({ type: "REFRESH_START" });
     startTransition(async () => {
       try {
         await refreshLibrary();
-        dispatch({ type: "REFRESH_SUCCESS" });
       } catch (error) {
         setMessage(toErrorMessage(error, "刷新已入库目录失败"));
-        dispatch({ type: "REFRESH_ERROR" });
       }
     });
   });
