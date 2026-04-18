@@ -15,6 +15,18 @@ export function parseMeta(data: ScrapeDataItem | null): ReviewMeta | null {
   }
 }
 
+// parseRawMeta: 只认 raw_data (原始刮削快照). 用来支撑 "恢复原始刮削" 按钮
+// 的 hasRawMeta 判定. parseMeta 会 fallback 到 raw_data, 但 raw_data 未必存在,
+// 两个不能复用.
+export function parseRawMeta(data: ScrapeDataItem | null): ReviewMeta | null {
+  if (!data?.raw_data) return null;
+  try {
+    return JSON.parse(data.raw_data) as ReviewMeta;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeList(items?: string[]) {
   return (items ?? []).map((item) => item.trim()).filter(Boolean);
 }

@@ -1,19 +1,18 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { ImageCropper } from "@/components/image-cropper";
 import { ReviewCoverCard, ReviewFanartStrip, ReviewPosterCard } from "@/components/review-shell/asset-gallery";
 import { DeleteConfirmOverlay } from "@/components/review-shell/delete-confirm-overlay";
+import { ReviewDetailHeader } from "@/components/review-shell/detail-header";
 import { ReviewFormFields } from "@/components/review-shell/form-fields";
 import { ReviewListPanel } from "@/components/review-shell/list-panel";
 import { ReviewPreviewOverlay, type ReviewPreviewState } from "@/components/review-shell/preview-overlay";
 import { RestoreConfirmOverlay } from "@/components/review-shell/restore-confirm-overlay";
 import { useReviewAssetActions } from "@/components/review-shell/use-review-asset-actions";
 import { useReviewBatchActions } from "@/components/review-shell/use-review-batch-actions";
-import { buildPayload, normalizeList, parseMeta } from "@/components/review-shell/utils";
-import { Button } from "@/components/ui/button";
+import { buildPayload, normalizeList, parseMeta, parseRawMeta } from "@/components/review-shell/utils";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { JobItem, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { getAssetURL, getMediaLibraryStatus, getReviewJob, saveReviewJob } from "@/lib/api";
@@ -26,13 +25,7 @@ interface Props {
 
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
-  const initialRawMeta = initialScrapeData?.raw_data ? (() => {
-    try {
-      return JSON.parse(initialScrapeData.raw_data) as ReviewMeta;
-    } catch {
-      return null;
-    }
-  })() : null;
+  const initialRawMeta = parseRawMeta(initialScrapeData);
   const [items, setItems] = useState<JobItem[]>(jobs);
   const [selected, setSelected] = useState<JobItem | null>(jobs[0] ?? null);
   const [meta, setMeta] = useState<ReviewMeta | null>(initialMeta);
@@ -92,14 +85,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
-    let nextRawMeta: ReviewMeta | null = null;
-    if (data?.raw_data) {
-      try {
-        nextRawMeta = JSON.parse(data.raw_data) as ReviewMeta;
-      } catch {
-        nextRawMeta = null;
-      }
-    }
+    const nextRawMeta = parseRawMeta(data);
     const payload = buildPayload(nextMeta);
     setMeta(nextMeta);
     metaRef.current = nextMeta;
@@ -320,25 +306,14 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
           onDelete={handleDelete}
         />
         <section className="panel review-detail-panel">
-          <div className="review-header">
-            <div>
-              <div className="review-list-kicker">Review Editor</div>
-              <h2 className="review-detail-title">Review 内容</h2>
-              {selected ? <div className="review-subtitle">当前任务 #{selected.id} / {selected.rel_path}</div> : null}
-            </div>
-            <div className="review-actions">
-              {message ? <span className="review-message" data-tone={messageTone}>{message}</span> : null}
-              <Button
-                className="review-inline-icon-btn"
-                onClick={handleRestoreRaw}
-                disabled={!selected || isPending || !hasRawMeta}
-                aria-label="恢复原始刮削内容"
-                title="恢复原始刮削内容"
-              >
-                <RotateCcw size={14} />
-              </Button>
-            </div>
-          </div>
+          <ReviewDetailHeader
+            selected={selected}
+            message={message}
+            messageTone={messageTone}
+            hasRawMeta={hasRawMeta}
+            isPending={isPending}
+            onRestoreRaw={handleRestoreRaw}
+          />
           {meta ? (
             <div className="review-content review-content-single">
               <div className="review-form">
