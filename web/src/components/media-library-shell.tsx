@@ -1,8 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
-import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
+// MediaLibraryDetailShell (自身 174 行 + 子模块合计 700+ 行) 只在用户
+// 点媒体库卡片、打开详情 Modal 后才挂. 从 /media-library 列表首屏 JS 里
+// 踢出去, 用户浏览列表的典型路径完全不触碰. 独立路由 /media-library/[id]
+// 仍然直接 import (不受本文件的 dynamic 影响). 详见 §5.2.
+const MediaLibraryDetailShell = dynamic(
+  () =>
+    import("@/components/media-library-detail-shell").then(
+      (m) => m.MediaLibraryDetailShell,
+    ),
+  { ssr: false },
+);
+
 import { MediaLibraryCardGrid } from "@/components/media-library-shell/card-grid";
 import {
   MediaLibraryFilterRail,

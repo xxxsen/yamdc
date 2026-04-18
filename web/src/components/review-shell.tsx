@@ -1,8 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import { ImageCropper } from "@/components/image-cropper";
+// ImageCropper 只在用户点 "裁剪封面" 按钮 (或 review 页特定裁图流程) 后才
+// 真的挂上. 初次打开 /review 路由时 200+ 行的 cropper 模块 + 指针/canvas
+// 交互代码都不该进首屏 JS chunk. ssr: false 保证不给没交互的用户 SSR 这
+// 个组件. 详见 td/022-frontend-optimization-roadmap.md §5.2.
+const ImageCropper = dynamic(
+  () => import("@/components/image-cropper").then((m) => m.ImageCropper),
+  { ssr: false },
+);
+
 import { ReviewCoverCard, ReviewFanartStrip, ReviewPosterCard } from "@/components/review-shell/asset-gallery";
 import { DeleteConfirmOverlay } from "@/components/review-shell/delete-confirm-overlay";
 import { ReviewDetailHeader } from "@/components/review-shell/detail-header";

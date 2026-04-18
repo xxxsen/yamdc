@@ -1,8 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import { ImageCropper } from "@/components/image-cropper";
+// ImageCropper 只在用户点 "裁剪封面/海报" 时才挂上. 把 200+ 行 cropper +
+// 指针/canvas 代码从 /library 首屏 JS 里踢出去. 详见 §5.2.
+const ImageCropper = dynamic(
+  () => import("@/components/image-cropper").then((m) => m.ImageCropper),
+  { ssr: false },
+);
+
 import { AppToast } from "@/components/library-shell/app-toast";
 import {
   LibraryCoverCard,

@@ -1,10 +1,23 @@
 "use client";
 
 import { X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { FloatingMenu } from "./floating-menu";
-import { ImportModal, ExampleModal } from "./import-modal";
+
+// ImportModal / ExampleModal 只在用户按 "导入 YAML" / "查看示例" 后才打开,
+// 且还挂带了 IMPORT_YAML_EXAMPLE 常量文本. 默认不进首屏 JS. 两者同在
+// ./import-modal, webpack 自动 dedupe 到一个 chunk. 详见 §5.2.
+const ImportModal = dynamic(
+  () => import("./import-modal").then((m) => m.ImportModal),
+  { ssr: false },
+);
+const ExampleModal = dynamic(
+  () => import("./import-modal").then((m) => m.ExampleModal),
+  { ssr: false },
+);
+
 import { OutputShell } from "./output-shell";
 import type { EditorSection } from "./plugin-editor-types";
 import { BasicSection } from "./sections/basic-section";
