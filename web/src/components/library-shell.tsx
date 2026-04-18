@@ -16,17 +16,14 @@ import { LibraryDetailHeader } from "@/components/library-shell/detail-header";
 import { LibraryFormFields } from "@/components/library-shell/form-fields";
 import { LibraryListPanel } from "@/components/library-shell/list-panel";
 import { useLibraryAssetActions } from "@/components/library-shell/use-library-asset-actions";
+import { useLibraryMoveRefresh } from "@/components/library-shell/use-library-move-refresh";
 import {
   cloneMeta,
   getInitialCopyMode,
   getInitialMessage,
   getInitialSelectedPath,
   getInitialVariantKey,
-  getMoveButtonLabel,
-  getRefreshButtonLabel,
-  handleMoveToMediaLibraryError,
   itemActors,
-  markMoveStarting,
   normalizeMeta,
   pickNextCopyMode,
   pickNextVariantKey,
@@ -34,13 +31,12 @@ import {
   resolveSelectedCover,
   resolveSelectedPoster,
   serializeMeta,
-  taskPercent,
   toErrorMessage,
 } from "@/components/library-shell/utils";
 import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus } from "@/lib/api";
-import { deleteLibraryItem, getLibraryItem, getMediaLibraryStatus, listLibraryItems, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
+import { deleteLibraryItem, getLibraryItem, listLibraryItems, updateLibraryItem } from "@/lib/api";
 
 interface Props {
   items: LibraryListItem[];
@@ -59,12 +55,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState(getInitialMessage(initialItems));
   const [preview, setPreview] = useState<LibraryPreviewState>(null);
-  const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
-  const [refreshRunning, setRefreshRunning] = useState(false);
-  const [refreshCompletedFlash, setRefreshCompletedFlash] = useState(false);
-  const [moveStarting, setMoveStarting] = useState(false);
-  const [moveCompletedFlash, setMoveCompletedFlash] = useState(false);
-  const [moveProgressVisible, setMoveProgressVisible] = useState(initialMediaStatus?.move.status === "running");
   const [cropOpen, setCropOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const detailAbortRef = useRef<AbortController | null>(null);
@@ -73,23 +63,13 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
   const lastSavedMetaRef = useRef(initialDetail ? serializeMeta(initialDraftMeta) : "");
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const observedMoveRunningRef = useRef(initialMediaStatus?.move.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
 
   const query = deferredKeyword.trim().toLowerCase();
-  const filteredItems = !query
-    ? items
-    : items.filter((item) => {
-      const actors = itemActors(item);
-      const haystack = [
-        item.title,
-        item.number,
-        actors.join(" "),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
+  const filteredItems = !query ? items : items.filter((item) => {
+    const haystack = [item.title, item.number, itemActors(item).join(" ")].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
 
   const currentVariant = pickVariant(detail, selectedVariantKey);
   const showVariantSwitch = (detail?.variants.length ?? 0) > 1;
@@ -98,15 +78,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const fanartFiles = detail?.files.filter((file) => file.rel_path.includes("/extrafanart/")) ?? [];
   const selectedPoster = resolveSelectedPoster(currentVariant, draftMeta, detail);
   const selectedCover = resolveSelectedCover(currentVariant, draftMeta, detail);
-  const moveState = mediaStatus?.move ?? null;
-  const moveRunning = moveState?.status === "running";
-  const mediaSyncRunning = mediaStatus?.sync.status === "running";
-  const moveBusy = moveStarting || moveRunning;
-  const shouldPollMediaStatus = moveBusy || mediaSyncRunning;
-  const refreshBusy = refreshRunning;
-  const moveProgress = moveState ? taskPercent(moveState) : 0;
-  const refreshButtonLabel = getRefreshButtonLabel(refreshRunning, refreshCompletedFlash);
-  const moveButtonLabel = getMoveButtonLabel(moveBusy, moveRunning, moveState, moveCompletedFlash);
 
   useEffect(() => {
     if (!message || /失败|error/i.test(message)) {
@@ -115,53 +86,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     const timer = window.setTimeout(() => setMessage(""), 2400);
     return () => window.clearTimeout(timer);
   }, [message]);
-
-  const refreshMediaStatus = useEffectEvent(async (signal?: AbortSignal) => {
-    try {
-      const next = await getMediaLibraryStatus(signal);
-      setMediaStatus(next);
-    } catch {
-      // ignore polling errors
-    }
-  });
-
-  useEffect(() => {
-    if (!shouldPollMediaStatus) {
-      return;
-    }
-    const controller = new AbortController();
-    void refreshMediaStatus(controller.signal);
-    const timer = window.setInterval(() => {
-      void refreshMediaStatus(controller.signal);
-    }, 3000);
-    return () => {
-      window.clearInterval(timer);
-      controller.abort();
-    };
-  }, [shouldPollMediaStatus]);
-
-  useEffect(() => {
-    if (moveRunning) {
-      setMoveProgressVisible(true);
-      observedMoveRunningRef.current = true;
-    }
-  }, [moveRunning]);
-
-  useEffect(() => {
-    if (!refreshCompletedFlash) {
-      return;
-    }
-    const timer = window.setTimeout(() => setRefreshCompletedFlash(false), 1000);
-    return () => window.clearTimeout(timer);
-  }, [refreshCompletedFlash]);
-
-  useEffect(() => {
-    if (!moveCompletedFlash) {
-      return;
-    }
-    const timer = window.setTimeout(() => setMoveCompletedFlash(false), 1000);
-    return () => window.clearTimeout(timer);
-  }, [moveCompletedFlash]);
 
   const updateDraftMeta = (updater: SetStateAction<LibraryMeta>) => {
     setDraftMeta((prev) => {
@@ -183,9 +107,31 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     lastSavedMetaRef.current = serializeMeta(nextDraftMeta);
   };
 
-  const syncDetailFromEffect = useEffectEvent((next: LibraryDetail) => {
-    syncDetail(next);
-  });
+  // resetDetailState / applyRefreshedItems 统一 "列表刷新后重新对齐详情" 的
+  // 两条路径 (手动重扫 / 删除后回列表). 原来写了两遍几乎一模一样的 block,
+  // 现在抽成本地 helper, 只保留 excludePath 这一个差异参数.
+  const resetDetailState = (msg: string) => {
+    setDetail(null);
+    detailRef.current = null;
+    updateDraftMeta(cloneMeta(null));
+    setSelectedPath("");
+    setSelectedVariantKey("");
+    lastSavedPathRef.current = "";
+    lastSavedMetaRef.current = "";
+    setMessage(msg);
+  };
+
+  const applyRefreshedItems = async (nextItems: LibraryListItem[], emptyMsg: string, excludePath?: string) => {
+    setItems(nextItems);
+    if (nextItems.length === 0) {
+      resetDetailState(emptyMsg);
+      return;
+    }
+    const keep = nextItems.some((item) => item.rel_path === selectedPath && item.rel_path !== excludePath);
+    const nextSelected = keep ? selectedPath : nextItems[0].rel_path;
+    const nextDetail = await getLibraryItem(nextSelected);
+    syncDetail(nextDetail);
+  };
 
   const persistMeta = (meta: LibraryMeta, messageText: string, options?: { silent?: boolean }) => {
     const currentDetail = detailRef.current;
@@ -238,117 +184,42 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     });
   };
 
-  const loadInitialDetail = useEffectEvent(async (path: string) => {
-    detailAbortRef.current?.abort();
-    const controller = new AbortController();
-    detailAbortRef.current = controller;
-    try {
-      setMessage("加载已入库详情...");
-      const next = await getLibraryItem(path, controller.signal);
-      syncDetail(next);
-      setMessage("");
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      setMessage(toErrorMessage(error, "加载已入库详情失败"));
-    }
+  // 首次渲染若已经有 items 但没 detail (比如 SSR 只拿了列表), 派发一次
+  // loadDetail 把 detail 补上. 用 useEffectEvent 包装避免 loadDetail 每次
+  // 渲染新引用带来的 deps 噪音.
+  const triggerInitialLoad = useEffectEvent((path: string) => {
+    loadDetail(path);
   });
 
   useEffect(() => {
     if (!detail && items.length > 0 && selectedPath) {
-      startTransition(async () => {
-        await loadInitialDetail(selectedPath);
-      });
+      triggerInitialLoad(selectedPath);
     }
-  }, [detail, items.length, selectedPath, startTransition]);
+  }, [detail, items.length, selectedPath]);
 
   const refreshLibrary = async () => {
     const nextItems = await listLibraryItems();
-    setItems(nextItems);
-    if (nextItems.length === 0) {
-      setDetail(null);
-      detailRef.current = null;
-      updateDraftMeta(cloneMeta(null));
-      setSelectedPath("");
-      setSelectedVariantKey("");
-      lastSavedPathRef.current = "";
-      lastSavedMetaRef.current = "";
-      setMessage("当前 savedir 里还没有已入库内容");
-      return;
-    }
-    const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
-    const nextDetail = await getLibraryItem(nextSelected);
-    syncDetail(nextDetail);
+    await applyRefreshedItems(nextItems, "当前 savedir 里还没有已入库内容");
   };
 
-  const handleRefreshLibrary = () => {
-    setRefreshRunning(true);
-    startTransition(async () => {
-      try {
-        await refreshLibrary();
-        setRefreshCompletedFlash(true);
-      } catch (error) {
-        setMessage(toErrorMessage(error, "刷新已入库目录失败"));
-      } finally {
-        setRefreshRunning(false);
-      }
-    });
-  };
-
-  const handleMoveToMediaLibrary = () => {
-    setMoveStarting(true);
-    setMoveProgressVisible(true);
-    setMoveCompletedFlash(false);
-    setMessage("媒体库移动已启动");
-    setMediaStatus(markMoveStarting);
-    startTransition(async () => {
-      try {
-        await triggerMoveToMediaLibrary();
-        const next = await getMediaLibraryStatus();
-        setMediaStatus(next);
-        setMoveProgressVisible(next.move.status === "running");
-      } catch (error) {
-        handleMoveToMediaLibraryError(error, setMessage, setMoveProgressVisible, setMediaStatus, observedMoveRunningRef);
-      } finally {
-        setMoveStarting(false);
-      }
-    });
-  };
-
-  const prevMoveRunningRef = useRef(moveRunning);
-
-  useEffect(() => {
-    if (observedMoveRunningRef.current && prevMoveRunningRef.current && !moveRunning) {
-      observedMoveRunningRef.current = false;
-      setRefreshRunning(true);
-      startTransition(async () => {
-        try {
-          const nextItems = await listLibraryItems();
-          setItems(nextItems);
-          if (nextItems.length === 0) {
-            setDetail(null);
-            detailRef.current = null;
-            updateDraftMeta(cloneMeta(null));
-            setSelectedPath("");
-            setSelectedVariantKey("");
-            lastSavedPathRef.current = "";
-            lastSavedMetaRef.current = "";
-            setMessage("当前 savedir 里还没有已入库内容");
-            return;
-          }
-          const nextSelected = nextItems.some((item) => item.rel_path === selectedPath) ? selectedPath : nextItems[0].rel_path;
-          const nextDetail = await getLibraryItem(nextSelected);
-          syncDetailFromEffect(nextDetail);
-        } catch (error) {
-          setMessage(toErrorMessage(error, "刷新已入库目录失败"));
-        } finally {
-          setRefreshRunning(false);
-          setMoveProgressVisible(false);
-          setMoveCompletedFlash(true);
-        }
-      });
-    }
-    prevMoveRunningRef.current = moveRunning;
-  }, [moveRunning, selectedPath, startTransition]);
+  const {
+    moveState,
+    mediaSyncRunning,
+    configured,
+    moveBusy,
+    moveProgressVisible,
+    moveProgress,
+    refreshBusy,
+    refreshButtonLabel,
+    moveButtonLabel,
+    handleRefreshLibrary,
+    handleMoveToMediaLibrary,
+  } = useLibraryMoveRefresh({
+    initialMediaStatus,
+    refreshLibrary,
+    setMessage,
+    startTransition,
+  });
 
   const handleBlurSave = () => {
     startTransition(async () => {
@@ -379,32 +250,14 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   });
 
   const handleDeleteLibraryItem = () => {
-    if (!detail) {
-      return;
-    }
+    if (!detail) return;
     const targetPath = detail.item.rel_path;
     startTransition(async () => {
       try {
         setMessage("删除已入库目录...");
         await deleteLibraryItem(targetPath);
         const nextItems = await listLibraryItems();
-        setItems(nextItems);
-        if (nextItems.length === 0) {
-          setDetail(null);
-          detailRef.current = null;
-          updateDraftMeta(cloneMeta(null));
-          setSelectedPath("");
-          setSelectedVariantKey("");
-          lastSavedPathRef.current = "";
-          lastSavedMetaRef.current = "";
-          setMessage("已入库目录已删除");
-          return;
-        }
-        const nextSelected = nextItems.some((item) => item.rel_path === selectedPath && item.rel_path !== targetPath)
-          ? selectedPath
-          : nextItems[0].rel_path;
-        const nextDetail = await getLibraryItem(nextSelected);
-        syncDetail(nextDetail);
+        await applyRefreshedItems(nextItems, "已入库目录已删除", targetPath);
         setMessage("已入库目录已删除");
       } catch (error) {
         setMessage(toErrorMessage(error, "删除已入库目录失败"));
@@ -426,7 +279,7 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
             refreshBusy={refreshBusy}
             moveBusy={moveBusy}
             mediaSyncRunning={mediaSyncRunning}
-            configured={!!mediaStatus?.configured}
+            configured={configured}
             refreshButtonLabel={refreshButtonLabel}
             moveButtonLabel={moveButtonLabel}
             moveProgressVisible={moveProgressVisible}

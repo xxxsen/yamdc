@@ -12,6 +12,10 @@ const COVERED_SOURCES = [
   "src/lib/upload-debug.ts",
   "src/components/plugin-editor/plugin-editor-utils.ts",
   "src/components/plugin-editor/plugin-editor-constants.ts",
+  // library-shell/move-refresh-reducer.ts: pure state machine for library
+  // shell's 移动到媒体库 / 重新扫描库 生命周期. 迁移自 §3.4, 修掉了 0KB
+  // fast-path 漏刷新 bug. 行为冻结在单测里.
+  "src/components/library-shell/move-refresh-reducer.ts",
   // components/ui/*: 项目公共原子组件 (Button / Badge / Modal ...),
   // 每个组件带单测, 入白名单后阈值守护其行为不被后续重构改崩。
   "src/components/ui/**/*.tsx",
