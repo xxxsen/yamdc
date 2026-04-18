@@ -1,8 +1,9 @@
 "use client";
 
 import { Crop, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, type SetStateAction, type SyntheticEvent, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { ImageCropper, type CropRect } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
 import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
@@ -226,8 +227,6 @@ function getInitialMessage(items: LibraryListItem[]): string {
   return items.length === 0 ? "当前 savedir 里还没有已入库内容" : "";
 }
 
-const POSTER_ASPECT = 2 / 3;
-
 function TokenEditor({
   label,
   placeholder,
@@ -304,77 +303,6 @@ function TokenEditor({
             onBlurSave();
           }}
         />
-      </div>
-    </div>
-  );
-}
-
-function CropOverlay({
-  coverSrc,
-  cropRect,
-  onImageLoad,
-  onDragStart,
-  onDrag,
-  onDragEnd,
-  onConfirm,
-  onClose,
-  isPending,
-}: {
-  coverSrc: string;
-  cropRect: { x: number; y: number; width: number; height: number };
-  onImageLoad: (event: SyntheticEvent<HTMLImageElement>) => void;
-  onDragStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onDrag: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onDragEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onConfirm: () => void;
-  onClose: () => void;
-  isPending: boolean;
-}) {
-  const showSelection = cropRect.width > 0 && cropRect.height > 0;
-  return (
-    <div className="review-preview-overlay" onClick={onClose}>
-      <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-crop-head">
-          <div className="review-preview-title">从封面截取海报</div>
-        </div>
-        <div className="review-crop-stage">
-          <div className="review-crop-canvas">
-            <img
-              src={coverSrc}
-              alt="cover crop preview"
-              className="review-crop-image"
-              onLoad={onImageLoad}
-            />
-            {showSelection ? (
-              <div
-                className="review-crop-selection"
-                style={{
-                  left: cropRect.x,
-                  top: cropRect.y,
-                  width: cropRect.width,
-                  height: cropRect.height,
-                }}
-                onPointerDown={onDragStart}
-                onPointerMove={onDrag}
-                onPointerUp={onDragEnd}
-                onPointerCancel={onDragEnd}
-              />
-            ) : null}
-            {showSelection ? (
-              <Button
-                className="review-crop-confirm"
-                style={{
-                  left: cropRect.x + cropRect.width - 54,
-                  top: cropRect.y + 8,
-                }}
-                onClick={onConfirm}
-                disabled={isPending}
-              >
-                截取
-              </Button>
-            ) : null}
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -467,11 +395,8 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [moveCompletedFlash, setMoveCompletedFlash] = useState(false);
   const [moveProgressVisible, setMoveProgressVisible] = useState(initialMediaStatus?.move.status === "running");
   const [cropOpen, setCropOpen] = useState(false);
-  const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [cropImageSize, setCropImageSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
   const [isPending, startTransition] = useTransition();
   const uploadActiveRef = useRef(false);
-  const cropDragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const detailAbortRef = useRef<AbortController | null>(null);
   const detailRef = useRef<LibraryDetail | null>(initialDetail);
   const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
@@ -925,86 +850,17 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     setCropOpen(true);
   };
 
-  const handleCropImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const img = event.currentTarget;
-    const naturalWidth = img.naturalWidth;
-    const naturalHeight = img.naturalHeight;
-    const displayWidth = img.clientWidth;
-    const displayHeight = img.clientHeight;
-    let width = 0;
-    let height = 0;
-    let x = 0;
-    let y = 0;
-    if (naturalWidth >= naturalHeight) {
-      height = displayHeight;
-      width = height * POSTER_ASPECT;
-      x = Math.max(0, (displayWidth - width) / 2);
-      y = 0;
-    } else {
-      width = displayWidth;
-      height = width / POSTER_ASPECT;
-      x = 0;
-      y = Math.max(0, (displayHeight - height) / 2);
-    }
-    setCropImageSize({ displayWidth, displayHeight, naturalWidth, naturalHeight });
-    setCropRect({ x, y, width, height });
-  };
-
-  const beginCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    cropDragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: cropRect.x,
-      originY: cropRect.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handleCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const dragState = cropDragRef.current;
-    if (!dragState) {
+  // 截取按钮回调: ImageCropper 已经把 display→natural 缩放算完, 我们这里
+  // 只做 detail 守卫和 API 调用 + 缓存失效, 不重复手势/计算逻辑.
+  const handleConfirmCrop = (rect: CropRect) => {
+    if (!detail || !selectedCover) {
       return;
     }
-    const deltaX = event.clientX - dragState.startX;
-    const deltaY = event.clientY - dragState.startY;
-    setCropRect((prev) => {
-      const next = { ...prev };
-      if (cropImageSize.naturalWidth >= cropImageSize.naturalHeight) {
-        next.x = Math.min(Math.max(0, dragState.originX + deltaX), cropImageSize.displayWidth - prev.width);
-      } else {
-        next.y = Math.min(Math.max(0, dragState.originY + deltaY), cropImageSize.displayHeight - prev.height);
-      }
-      return next;
-    });
-  };
-
-  const endCropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!cropDragRef.current) {
-      return;
-    }
-    cropDragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  const handleConfirmCrop = () => {
-    if (!detail || !selectedCover || cropImageSize.displayWidth === 0 || cropImageSize.displayHeight === 0) {
-      return;
-    }
-    const scaleX = cropImageSize.naturalWidth / cropImageSize.displayWidth;
-    const scaleY = cropImageSize.naturalHeight / cropImageSize.displayHeight;
-    const payload = {
-      x: Math.round(cropRect.x * scaleX),
-      y: Math.round(cropRect.y * scaleY),
-      width: Math.round(cropRect.width * scaleX),
-      height: Math.round(cropRect.height * scaleY),
-    };
     startTransition(async () => {
       try {
         setMessage("从封面截取海报...");
         const currentPosterPath = getVariantPosterPath(detailRef.current, currentVariant?.key ?? selectedVariantKey);
-        const next = await cropLibraryPosterFromCover(detail.item.rel_path, currentVariant?.key ?? "", payload);
+        const next = await cropLibraryPosterFromCover(detail.item.rel_path, currentVariant?.key ?? "", rect);
         clearAssetOverride(currentPosterPath);
         syncDetail(next);
         setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
@@ -1431,15 +1287,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
         </div>
       ) : null}
       {cropOpen && selectedCover ? (
-        <CropOverlay
-          coverSrc={resolveLibraryImageSrc(selectedCover)}
-          cropRect={cropRect}
-          onImageLoad={handleCropImageLoad}
-          onDragStart={beginCropDrag}
-          onDrag={handleCropDrag}
-          onDragEnd={endCropDrag}
-          onConfirm={handleConfirmCrop}
+        <ImageCropper
+          open
+          imageSrc={resolveLibraryImageSrc(selectedCover)}
           onClose={() => setCropOpen(false)}
+          onConfirm={handleConfirmCrop}
           isPending={isPending}
         />
       ) : null}

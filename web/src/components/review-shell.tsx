@@ -2,8 +2,9 @@
 
 import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Image from "next/image";
-import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { ImageCropper } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
 import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
@@ -17,7 +18,6 @@ interface Props {
 
 const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
 const PREVIEW_IMAGE_STYLE = { objectFit: "contain", objectPosition: "center" } as const;
-const POSTER_ASPECT = 2 / 3;
 
 function parseMeta(data: ScrapeDataItem | null): ReviewMeta | null {
   if (!data) {
@@ -144,126 +144,6 @@ function TokenEditor({
             onBlurSave();
           }}
         />
-      </div>
-    </div>
-  );
-}
-
-function CropOverlay({
-  coverKey,
-  onClose,
-  onCrop,
-}: {
-  coverKey: string;
-  onClose: () => void;
-  onCrop: (rect: { x: number; y: number; width: number; height: number }) => void;
-}) {
-  const [rect, setRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [imgSize, setImgSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
-  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
-
-  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const img = event.currentTarget;
-    const nw = img.naturalWidth;
-    const nh = img.naturalHeight;
-    const dw = img.clientWidth;
-    const dh = img.clientHeight;
-    let w = 0;
-    let h = 0;
-    let x = 0;
-    let y = 0;
-    if (nw >= nh) {
-      h = dh;
-      w = h * POSTER_ASPECT;
-      x = Math.max(0, (dw - w) / 2);
-    } else {
-      w = dw;
-      h = w / POSTER_ASPECT;
-      y = Math.max(0, (dh - h) / 2);
-    }
-    setImgSize({ displayWidth: dw, displayHeight: dh, naturalWidth: nw, naturalHeight: nh });
-    setRect({ x, y, width: w, height: h });
-  };
-
-  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = { startX: event.clientX, startY: event.clientY, originX: rect.x, originY: rect.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const ds = dragRef.current;
-    if (!ds) return;
-    const dx = event.clientX - ds.startX;
-    const dy = event.clientY - ds.startY;
-    setRect((prev) => {
-      const next = { ...prev };
-      if (imgSize.naturalWidth >= imgSize.naturalHeight) {
-        next.x = Math.min(Math.max(0, ds.originX + dx), imgSize.displayWidth - prev.width);
-      } else {
-        next.y = Math.min(Math.max(0, ds.originY + dy), imgSize.displayHeight - prev.height);
-      }
-      return next;
-    });
-  };
-
-  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current) {
-      dragRef.current = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    }
-  };
-
-  const handleConfirm = () => {
-    if (imgSize.displayWidth === 0 || imgSize.displayHeight === 0) return;
-    const sx = imgSize.naturalWidth / imgSize.displayWidth;
-    const sy = imgSize.naturalHeight / imgSize.displayHeight;
-    onCrop({
-      x: Math.round(rect.x * sx),
-      y: Math.round(rect.y * sy),
-      width: Math.round(rect.width * sx),
-      height: Math.round(rect.height * sy),
-    });
-  };
-
-  const showSelection = rect.width > 0 && rect.height > 0;
-
-  return (
-    <div className="review-preview-overlay" onClick={onClose}>
-      <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-crop-head">
-          <div className="review-preview-title">从封面截取海报</div>
-        </div>
-        <div className="review-crop-stage">
-          <div className="review-crop-canvas">
-            <img
-              src={getAssetURL(coverKey)}
-              alt="cover crop preview"
-              className="review-crop-image"
-              onLoad={handleImageLoad}
-            />
-            {showSelection ? (
-              <div
-                className="review-crop-selection"
-                style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
-                onPointerDown={beginDrag}
-                onPointerMove={moveDrag}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
-              />
-            ) : null}
-            {showSelection ? (
-              <Button
-                className="review-crop-confirm"
-                style={{ left: rect.x + rect.width - 54, top: rect.y + 8 }}
-                onClick={handleConfirm}
-              >
-                截取
-              </Button>
-            ) : null}
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -1135,8 +1015,14 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
       ) : null}
 
       {cropOpen && meta?.cover ? (
-        <CropOverlay coverKey={meta.cover.key} onClose={() => setCropOpen(false)} onCrop={handleCropResult} />
+        <ImageCropper
+          open
+          imageSrc={getAssetURL(meta.cover.key)}
+          onClose={() => setCropOpen(false)}
+          onConfirm={handleCropResult}
+        />
       ) : null}
+
       <DeleteConfirmOverlay
         targetIds={deleteTargetIds}
         selectedRelPath={selected?.rel_path}
