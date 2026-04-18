@@ -4,6 +4,13 @@ import { ChevronDown, RefreshCw, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
+import {
+  extractYearOptions,
+  formatSyncLogTime,
+  getReleaseYear,
+  mergeYearOptions,
+  toMediaLibrarySyncMessage,
+} from "@/components/media-library-shell/utils";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
@@ -26,41 +33,6 @@ type SortMode = "ingested" | "year" | "size" | "title";
 type SortOrder = "desc" | "asc";
 
 const PAGE_SIZE = 30;
-
-function getReleaseYear(value: string) {
-  const match = value.match(/\d{4}/);
-  return match?.[0] ?? "";
-}
-
-function extractYearOptions(items: MediaLibraryItem[]) {
-  const seenYears = new Set<string>();
-  for (const item of items) {
-    const year = getReleaseYear(item.release_date);
-    if (year) {
-      seenYears.add(year);
-    }
-  }
-  return Array.from(seenYears).sort((left, right) => Number.parseInt(right, 10) - Number.parseInt(left, 10));
-}
-
-function mergeYearOptions(current: string[], next: string[]) {
-  return Array.from(new Set([...current, ...next])).sort((left, right) => Number.parseInt(right, 10) - Number.parseInt(left, 10));
-}
-
-function toMediaLibrarySyncMessage(error: unknown) {
-  const raw = error instanceof Error ? error.message : "启动媒体库同步失败";
-  const text = raw.trim();
-  if (text.includes("media library sync is already running")) {
-    return "媒体库正在同步中";
-  }
-  if (text.includes("move to media library is running")) {
-    return "媒体库移动任务进行中，暂时无法同步";
-  }
-  if (text.includes("library dir is not configured")) {
-    return "未配置媒体库目录";
-  }
-  return raw;
-}
 
 export function MediaLibraryShell({ items: initialItems, initialStatus }: Props) {
   const [items, setItems] = useState(initialItems);
@@ -666,16 +638,4 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
       ) : null}
     </div>
   );
-}
-
-// formatSyncLogTime 把后端的 unix ms 时间戳转成 "YYYY-MM-DD HH:mm:ss" 本地
-// 时间字符串。用手写 format 而不是 toLocaleString 是为了避免不同浏览器 /
-// 系统下展示格式不一致, 也避开 Date.prototype.toLocaleString 的时区碎片。
-function formatSyncLogTime(timestampMs: number): string {
-  if (!Number.isFinite(timestampMs) || timestampMs <= 0) {
-    return "--";
-  }
-  const d = new Date(timestampMs);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
