@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { Button } from "@/components/ui/button";
 import type {
   PluginEditorRequestDebugResult,
   PluginEditorScrapeDebugResult,
@@ -69,9 +70,9 @@ export function ResponseDetailPanel({ response }: { response?: PluginEditorReque
                 <option value="xpath">xpath</option>
                 <option value="jsonpath">json</option>
               </select>
-              <button className="btn btn-primary" type="button" onClick={runExpr}>
+              <Button variant="primary" onClick={runExpr}>
                 Run
-              </button>
+              </Button>
             </div>
             <pre className="searcher-debug-json plugin-editor-json-scroll plugin-editor-expr-output">{output || "暂无结果"}</pre>
           </div>

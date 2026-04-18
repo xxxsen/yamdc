@@ -1,8 +1,9 @@
 "use client";
 
-import { Bug, LoaderCircle, Play } from "lucide-react";
+import { Bug, Play } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
 import { explainMovieIDCleaner, type MovieIDCleanerExplainResult } from "@/lib/api";
 
 const DEFAULT_INPUT = "MOVIE12345 SUBTITLE.mp4";
@@ -72,10 +73,16 @@ export function RulesetDebugShell() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="例如：MOVIE12345 SUBTITLE.mp4"
             />
-            <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isPending}>
-              {isPending ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Play size={16} />}
+            <Button
+              variant="primary"
+              className="ruleset-debug-run-button"
+              onClick={handleRun}
+              disabled={isPending}
+              loading={isPending}
+              leftIcon={<Play size={16} />}
+            >
               <span>{isPending ? "解析中..." : "开始测试"}</span>
-            </button>
+            </Button>
           </div>
           {error ? <div className="ruleset-debug-error">{error}</div> : null}
         </div>

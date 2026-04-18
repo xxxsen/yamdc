@@ -1,9 +1,10 @@
 "use client";
 
-import { Search, LoaderCircle, WandSparkles, Copy, ArrowRight } from "lucide-react";
+import { Search, WandSparkles, Copy, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   debugSearcher,
   getSearcherDebugPlugins,
@@ -155,10 +156,16 @@ export function SearcherDebugShell() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="例如：MOVIE-12345"
             />
-            <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isRunning}>
-              {isRunning ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Search size={16} />}
+            <Button
+              variant="primary"
+              className="ruleset-debug-run-button"
+              onClick={handleRun}
+              disabled={isRunning}
+              loading={isRunning}
+              leftIcon={<Search size={16} />}
+            >
               <span>{isRunning ? "检索中..." : "开始检索"}</span>
-            </button>
+            </Button>
           </div>
 
           <label className="ruleset-debug-label" htmlFor="searcher-debug-plugin">
@@ -230,14 +237,20 @@ export function SearcherDebugShell() {
               {result.meta ? (
                 <div className="searcher-debug-summary-footer">
                   <div className="searcher-debug-summary-actions">
-                    <button className="btn btn-primary" type="button" onClick={() => void handleCopyMeta()}>
-                      <Copy size={16} />
+                    <Button
+                      variant="primary"
+                      onClick={() => void handleCopyMeta()}
+                      leftIcon={<Copy size={16} />}
+                    >
                       <span>复制 Meta JSON</span>
-                    </button>
-                    <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
-                      <ArrowRight size={16} />
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={handleOpenHandlerDebug}
+                      leftIcon={<ArrowRight size={16} />}
+                    >
                       <span>发送到 Handler 测试</span>
-                    </button>
+                    </Button>
                   </div>
                   {metaActionMessage ? <div className="handler-debug-message">{metaActionMessage}</div> : null}
                 </div>

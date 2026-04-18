@@ -1,9 +1,10 @@
 "use client";
 
-import { LoaderCircle, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   debugHandler,
   getAssetURL,
@@ -322,10 +323,16 @@ export function HandlerDebugShell() {
           </span>
           <div className="handler-debug-title-row">
             <h2>Handler 链测试</h2>
-            <button className="btn btn-primary ruleset-debug-run-button handler-debug-run-inline" type="button" onClick={handleRun} disabled={isRunning}>
-              {isRunning ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Play size={16} />}
+            <Button
+              variant="primary"
+              className="ruleset-debug-run-button handler-debug-run-inline"
+              onClick={handleRun}
+              disabled={isRunning}
+              loading={isRunning}
+              leftIcon={<Play size={16} />}
+            >
               <span>{isRunning ? "执行中..." : "运行"}</span>
-            </button>
+            </Button>
           </div>
         </div>
 

@@ -2,6 +2,8 @@
 
 import { Plus, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 import { FIELD_OPTIONS } from "./plugin-editor-constants";
 import type { FieldForm, TransformForm } from "./plugin-editor-types";
 import {
@@ -63,15 +65,14 @@ export function FieldCard(props: {
             <input type="checkbox" checked={field.required} onChange={(event) => props.onPatchField((prev) => ({ ...prev, required: event.target.checked }))} />
             <span>REQUIRED</span>
           </label>
-          <button
-            className="btn btn-secondary plugin-editor-field-card-remove"
-            type="button"
+          <Button
+            className="plugin-editor-field-card-remove"
             aria-label="删除字段"
             title="删除字段"
             onClick={props.onRemove}
           >
             <Trash2 size={16} />
-          </button>
+          </Button>
         </div>
 
         <div className="plugin-editor-field-inline-row">
@@ -112,24 +113,22 @@ export function FieldCard(props: {
             {field.transforms.map((transform) => (
               <div key={transform.id} className="plugin-editor-transform-card">
                 <div className="plugin-editor-transform-actions">
-                  <button
-                    className="btn btn-secondary plugin-editor-transform-action"
-                    type="button"
+                  <Button
+                    className="plugin-editor-transform-action"
                     aria-label="新增 transform"
                     title="新增 transform"
                     onClick={() => props.onAddTransform(transform.id)}
                   >
                     <Plus size={14} />
-                  </button>
-                  <button
-                    className="btn btn-secondary plugin-editor-transform-action"
-                    type="button"
+                  </Button>
+                  <Button
+                    className="plugin-editor-transform-action"
                     aria-label="删除 transform"
                     title="删除 transform"
                     onClick={() => props.onRemoveTransform(transform.id)}
                   >
                     <span aria-hidden="true">×</span>
-                  </button>
+                  </Button>
                 </div>
                 <label className="plugin-editor-transform-inline-field plugin-editor-transform-inline-field-kind">
                   <span>Kind</span>
