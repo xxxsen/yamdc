@@ -5,7 +5,9 @@ import Link from "next/link";
 import { type SetStateAction, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
+import { MediaLibraryDisplayView } from "@/components/media-library-detail-shell/display-view";
 import { FanartStrip } from "@/components/media-library-detail-shell/fanart-strip";
+import { MediaLibraryFormFields } from "@/components/media-library-detail-shell/form-fields";
 import {
   ImagePreviewOverlay,
   type MediaLibraryImagePreview,
@@ -17,7 +19,6 @@ import {
   pickVariant,
   serializeMeta,
 } from "@/components/media-library-detail-shell/utils";
-import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryMeta, MediaLibraryDetail } from "@/lib/api";
 import { getMediaLibraryFileURL, getMediaLibraryItem, updateMediaLibraryItem } from "@/lib/api";
 
@@ -204,102 +205,16 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
 
               <div className="panel media-library-hero-main">
                 {isEditing ? (
-                  <div className="media-library-fields-grid media-library-inline-editor">
-                    <div className="review-field media-library-field-span-2">
-                      <span className="review-label review-label-side">原始标题</span>
-                      <input className="input review-input-strong" value={draftMeta.title} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, title: e.target.value }))} />
-                    </div>
-                    <div className="review-field media-library-field-span-2">
-                      <span className="review-label review-label-side">翻译标题</span>
-                      <input className="input" value={draftMeta.title_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, title_translated: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">影片 ID</span>
-                      <input className="input" value={draftMeta.number} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, number: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">发行日期</span>
-                      <input className="input" placeholder="YYYY-MM-DD" value={draftMeta.release_date} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, release_date: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">时长</span>
-                      <input className="input" inputMode="numeric" value={draftMeta.runtime ? String(draftMeta.runtime) : ""} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, runtime: Number.parseInt(e.target.value || "0", 10) || 0 }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">来源</span>
-                      <input className="input" value={draftMeta.source} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, source: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">导演</span>
-                      <input className="input" value={draftMeta.director} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, director: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">片商</span>
-                      <input className="input" value={draftMeta.studio} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, studio: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">发行商</span>
-                      <input className="input" value={draftMeta.label} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, label: e.target.value }))} />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">系列</span>
-                      <input className="input" value={draftMeta.series} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, series: e.target.value }))} />
-                    </div>
-                    <div className="review-field review-field-area media-library-inline-plot-field">
-                      <span className="review-label review-label-side">原始简介</span>
-                      <textarea className="input review-textarea library-textarea media-library-inline-plot-textarea" value={draftMeta.plot} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot: e.target.value }))} />
-                    </div>
-                    <div className="review-field review-field-area media-library-inline-plot-field">
-                      <span className="review-label review-label-side">翻译简介</span>
-                      <textarea className="input review-textarea library-textarea media-library-inline-plot-textarea" value={draftMeta.plot_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot_translated: e.target.value }))} />
-                    </div>
-                    <div className="media-library-field-span-2">
-                      <TokenEditor idPrefix="media-library-token" label="演员" placeholder="输入后回车或逗号确认" value={draftMeta.actors} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))} singleLine readOnly={false} />
-                    </div>
-                    <div className="media-library-field-span-2">
-                      <TokenEditor idPrefix="media-library-token" label="标签" placeholder="输入后回车或逗号确认" value={draftMeta.genres} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, genres: next }))} readOnly={false} />
-                    </div>
-                  </div>
+                  <MediaLibraryFormFields draftMeta={draftMeta} updateDraftMeta={updateDraftMeta} />
                 ) : (
-                  <>
-                    <div className="media-library-hero-main-head">
-                      <div className="media-library-hero-title-block">
-                        <div className="media-library-hero-title">{detailDisplayTitle}</div>
-                        {detailDisplayTitleSecondary ? <div className="media-library-hero-title-secondary">{detailDisplayTitleSecondary}</div> : null}
-                      </div>
-                    </div>
-
-                    <div className="media-library-hero-facts">
-                      <div className="media-library-hero-fact"><span>影片 ID</span><strong>{detailDisplayNumber}</strong></div>
-                      <div className="media-library-hero-fact"><span>发行日期</span><strong>{draftMeta.release_date || "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>时长</span><strong>{draftMeta.runtime ? `${draftMeta.runtime} 分钟` : "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>来源</span><strong>{draftMeta.source || "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>导演</span><strong>{draftMeta.director || "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>片商</span><strong>{draftMeta.studio || "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>发行商</span><strong>{draftMeta.label || "-"}</strong></div>
-                      <div className="media-library-hero-fact"><span>系列</span><strong>{draftMeta.series || "-"}</strong></div>
-                    </div>
-
-                    <div className="media-library-hero-plot">
-                      <div>{detailDisplayPlot || "暂无简介"}</div>
-                      {detailDisplayPlotSecondary ? <div className="media-library-hero-plot-secondary">{detailDisplayPlotSecondary}</div> : null}
-                    </div>
-
-                    <div className="media-library-hero-taxonomy">
-                      <div className="media-library-hero-taxonomy-row">
-                        <span className="media-library-hero-taxonomy-label">演员</span>
-                        <div className="media-library-hero-chip-row">
-                          {draftMeta.actors.length > 0 ? draftMeta.actors.map((actor) => <span key={actor} className="token-chip">{actor}</span>) : <span className="library-inline-muted">暂无演员</span>}
-                        </div>
-                      </div>
-                      <div className="media-library-hero-taxonomy-row">
-                        <span className="media-library-hero-taxonomy-label">标签</span>
-                        <div className="media-library-hero-chip-row">
-                          {draftMeta.genres.length > 0 ? draftMeta.genres.map((genre) => <span key={genre} className="token-chip">{genre}</span>) : <span className="library-inline-muted">暂无标签</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </>
+                  <MediaLibraryDisplayView
+                    draftMeta={draftMeta}
+                    displayTitle={detailDisplayTitle}
+                    displayTitleSecondary={detailDisplayTitleSecondary}
+                    displayNumber={detailDisplayNumber}
+                    displayPlot={detailDisplayPlot}
+                    displayPlotSecondary={detailDisplayPlotSecondary}
+                  />
                 )}
               </div>
 
