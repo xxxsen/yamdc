@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, Pencil, X } from "lucide-react";
 import Link from "next/link";
-import { type SetStateAction, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import { useState } from "react";
 
 import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
 import { MediaLibraryDisplayView } from "@/components/media-library-detail-shell/display-view";
@@ -12,15 +12,10 @@ import {
   ImagePreviewOverlay,
   type MediaLibraryImagePreview,
 } from "@/components/media-library-detail-shell/image-preview-overlay";
-import {
-  cloneMeta,
-  getVariantCoverPath,
-  normalizeMeta,
-  pickVariant,
-  serializeMeta,
-} from "@/components/media-library-detail-shell/utils";
-import type { LibraryMeta, MediaLibraryDetail } from "@/lib/api";
-import { getMediaLibraryFileURL, getMediaLibraryItem, updateMediaLibraryItem } from "@/lib/api";
+import { useMediaLibraryDetailState } from "@/components/media-library-detail-shell/use-media-library-detail-state";
+import { getVariantCoverPath, pickVariant } from "@/components/media-library-detail-shell/utils";
+import type { MediaLibraryDetail } from "@/lib/api";
+import { getMediaLibraryFileURL } from "@/lib/api";
 
 interface Props {
   initialDetail: MediaLibraryDetail;
@@ -29,17 +24,20 @@ interface Props {
 }
 
 export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDetailChange }: Props) {
-  const initialDraftMeta = cloneMeta(initialDetail.meta);
-  const [detail, setDetail] = useState<MediaLibraryDetail>(initialDetail);
-  const [selectedVariantKey, setSelectedVariantKey] = useState(initialDetail.primary_variant_key || initialDetail.variants[0]?.key || "");
-  const [draftMeta, setDraftMeta] = useState<LibraryMeta>(initialDraftMeta);
-  const [message, setMessage] = useState("");
+  const {
+    detail,
+    draftMeta,
+    selectedVariantKey,
+    setSelectedVariantKey,
+    message,
+    isEditing,
+    isPending,
+    updateDraftMeta,
+    handleStartEdit,
+    handleSaveEdit,
+    handleCancelEdit,
+  } = useMediaLibraryDetailState({ initialDetail, onDetailChange });
   const [preview, setPreview] = useState<MediaLibraryImagePreview | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const detailRef = useRef<MediaLibraryDetail>(initialDetail);
-  const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
-  const lastSavedMetaRef = useRef(serializeMeta(initialDraftMeta));
 
   const currentVariant = pickVariant(detail, selectedVariantKey);
   const showVariantSwitch = detail.variants.length > 1;
@@ -60,91 +58,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
       ? draftMeta.plot_translated.trim()
       : "";
 
-  useEffect(() => {
-    if (!message || /失败|error/i.test(message)) {
-      return;
-    }
-    const timer = window.setTimeout(() => setMessage(""), 2400);
-    return () => window.clearTimeout(timer);
-  }, [message]);
-
-  const syncDetail = (next: MediaLibraryDetail) => {
-    setDetail(next);
-    detailRef.current = next;
-    const nextDraftMeta = cloneMeta(next.meta);
-    setDraftMeta(nextDraftMeta);
-    draftMetaRef.current = nextDraftMeta;
-    setSelectedVariantKey((current) => {
-      if (current && next.variants.some((item) => item.key === current)) {
-        return current;
-      }
-      return next.primary_variant_key || next.variants[0]?.key || "";
-    });
-    lastSavedMetaRef.current = serializeMeta(nextDraftMeta);
-    onDetailChange?.(next);
-  };
-
-  const refreshDetail = useEffectEvent(async () => {
-    try {
-      const next = await getMediaLibraryItem(detailRef.current.item.id);
-      syncDetail(next);
-    } catch {
-      // ignore polling errors
-    }
-  });
-
-  useEffect(() => {
-    if (isEditing) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      void refreshDetail();
-    }, 8000);
-    return () => window.clearInterval(timer);
-  }, [isEditing]);
-
-  const updateDraftMeta = (updater: SetStateAction<LibraryMeta>) => {
-    setDraftMeta((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      draftMetaRef.current = next;
-      return next;
-    });
-  };
-
   const resolveImageSrc = (path: string) => getMediaLibraryFileURL(path);
-
-  const persistMeta = async (meta: LibraryMeta) => {
-    const normalizedMeta = normalizeMeta(meta);
-    const serialized = serializeMeta(normalizedMeta);
-    if (serialized === lastSavedMetaRef.current) {
-      return true;
-    }
-    try {
-      const next = await updateMediaLibraryItem(detailRef.current.item.id, normalizedMeta);
-      syncDetail(next);
-      return true;
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "保存媒体库 NFO 失败");
-      return false;
-    }
-  };
-
-  const handleSaveEdit = () => {
-    startTransition(async () => {
-      const saved = await persistMeta(draftMetaRef.current);
-      if (saved) {
-        setIsEditing(false);
-      }
-    });
-  };
-
-  const handleCancelEdit = () => {
-    const nextDraftMeta = cloneMeta(detailRef.current.meta);
-    setDraftMeta(nextDraftMeta);
-    draftMetaRef.current = nextDraftMeta;
-    setIsEditing(false);
-    setMessage("");
-  };
 
   const stage = (
       <div className={`panel media-library-detail-stage media-library-backdrop${selectedCover ? "" : " media-library-backdrop-empty"}${stageOnly ? " media-library-detail-stage-inline" : ""}`}>
@@ -172,7 +86,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
               </button>
             </>
           ) : (
-            <button className="media-library-stage-action-btn" type="button" onClick={() => { setMessage(""); setIsEditing(true); }} disabled={isPending} aria-label="编辑">
+            <button className="media-library-stage-action-btn" type="button" onClick={handleStartEdit} disabled={isPending} aria-label="编辑">
               <Pencil size={16} />
             </button>
           )}
