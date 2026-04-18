@@ -13,15 +13,20 @@ export interface LibraryVariantSwitcherProps {
   variants: LibraryVariant[];
   currentKey: string;
   onSelect: (key: string) => void;
+  // extraClassName: 给外层 panel 追加的 class, 用于不同页面的布局微调.
+  // media-library-detail-shell 需要 "media-library-hero-variant-panel"
+  // 来放到 hero 右列; library-shell 则不需要.
+  extraClassName?: string;
 }
 
 export function LibraryVariantSwitcher({
   variants,
   currentKey,
   onSelect,
+  extraClassName = "",
 }: LibraryVariantSwitcherProps) {
   return (
-    <div className="panel library-variant-panel">
+    <div className={`panel library-variant-panel ${extraClassName}`.trim()}>
       <div className="library-variant-list">
         {variants.map((variant) => (
           <button

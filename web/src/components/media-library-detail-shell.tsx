@@ -4,6 +4,12 @@ import { Check, ChevronLeft, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { type SetStateAction, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
+import { FanartStrip } from "@/components/media-library-detail-shell/fanart-strip";
+import {
+  ImagePreviewOverlay,
+  type MediaLibraryImagePreview,
+} from "@/components/media-library-detail-shell/image-preview-overlay";
 import {
   cloneMeta,
   getVariantCoverPath,
@@ -27,7 +33,7 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
   const [selectedVariantKey, setSelectedVariantKey] = useState(initialDetail.primary_variant_key || initialDetail.variants[0]?.key || "");
   const [draftMeta, setDraftMeta] = useState<LibraryMeta>(initialDraftMeta);
   const [message, setMessage] = useState("");
-  const [preview, setPreview] = useState<{ title: string; path: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<MediaLibraryImagePreview | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const detailRef = useRef<MediaLibraryDetail>(initialDetail);
@@ -139,35 +145,6 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
     setMessage("");
   };
 
-  const renderFanartSection = (extraClassName = "") => {
-    if (fanartFiles.length === 0) {
-      return null;
-    }
-    return (
-      <div className={`panel review-fanart-panel library-fanart-panel media-library-fanart-section media-library-fanart-compact ${extraClassName}`.trim()}>
-        <div
-          className="review-fanart-strip library-fanart-strip"
-          onWheel={(e) => {
-            if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
-              return;
-            }
-            e.currentTarget.scrollLeft += e.deltaY;
-            e.preventDefault();
-          }}
-        >
-          {fanartFiles.map((file) => (
-            <div key={file.rel_path} className="review-fanart-item library-fanart-item">
-              <button type="button" className="review-image-hit" onClick={() => setPreview({ title: "Extrafanart", path: file.rel_path, name: file.name })}>
-                <img src={resolveImageSrc(file.rel_path)} alt={file.name} className="library-fanart-image" />
-              </button>
-              <div className="sr-only">{file.name.split("/").pop()}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const stage = (
       <div className={`panel media-library-detail-stage media-library-backdrop${selectedCover ? "" : " media-library-backdrop-empty"}${stageOnly ? " media-library-detail-stage-inline" : ""}`}>
         {selectedCover ? (
@@ -217,22 +194,12 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
 
             <div className="media-library-hero-side">
               {showVariantSwitch ? (
-                <div className="panel library-variant-panel media-library-hero-variant-panel">
-                  <div className="library-variant-list">
-                    {detail.variants.map((variant) => (
-                      <button
-                        key={variant.key}
-                        type="button"
-                        className="library-variant-chip"
-                        data-active={currentVariant?.key === variant.key}
-                        onClick={() => setSelectedVariantKey(variant.key)}
-                      >
-                        <span className="library-variant-chip-title">{variant.label}</span>
-                        <span className="library-variant-chip-meta">{variant.base_name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <LibraryVariantSwitcher
+                  variants={detail.variants}
+                  currentKey={selectedVariantKey}
+                  onSelect={setSelectedVariantKey}
+                  extraClassName="media-library-hero-variant-panel"
+                />
               ) : null}
 
               <div className="panel media-library-hero-main">
@@ -336,7 +303,12 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
                 )}
               </div>
 
-              {renderFanartSection("media-library-stage-fanart")}
+              <FanartStrip
+                files={fanartFiles}
+                resolveImageSrc={resolveImageSrc}
+                onPreview={setPreview}
+                extraClassName="media-library-stage-fanart"
+              />
             </div>
           </div>
         </div>
@@ -369,32 +341,5 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
 
       <ImagePreviewOverlay preview={preview} resolveImageSrc={resolveImageSrc} onClose={() => setPreview(null)} />
     </>
-  );
-}
-
-function ImagePreviewOverlay({ preview, resolveImageSrc, onClose }: {
-  preview: { title: string; path: string; name: string } | null;
-  resolveImageSrc: (path: string) => string;
-  onClose: () => void;
-}) {
-  if (!preview) {
-    return null;
-  }
-  return (
-    <div className="review-preview-overlay" onClick={onClose}>
-      <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={onClose}>
-        <X size={18} />
-      </button>
-      <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
-        <div className="review-preview-title">{preview.title}</div>
-        <div className="review-preview-frame">
-          <img
-            src={resolveImageSrc(preview.path)}
-            alt={preview.name}
-            style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
-          />
-        </div>
-      </div>
-    </div>
   );
 }
