@@ -18,6 +18,11 @@ const COVERED_SOURCES = [
   // plugin-editor-state-ops.ts: usePluginEditorState 内部的 16 个 StateOp 工厂.
   // 每个 op 是一次不可变状态更新, 一错就全错, 行为冻结在单测.
   "src/components/plugin-editor/plugin-editor-state-ops.ts",
+  // plugin-editor/use-plugin-editor-state.ts: 编辑器 shell 的主 state 容器,
+  // localStorage 调试草稿的 hydrate/save + debug 运行四条 action 分支
+  // (compile / request / workflow / scrape) + 剪贴板 / YAML 导入 / 清空草稿.
+  // 大头状态机, 行为冻结在单测里.
+  "src/components/plugin-editor/use-plugin-editor-state.ts",
   // plugin-editor/output-panels/dom-utils.ts: XPath 计算 + DOM 文本匹配 /
   // 遍历. 算法复杂, 是 body 面板的核心逻辑, 回归风险高.
   "src/components/plugin-editor/output-panels/dom-utils.ts",
@@ -34,10 +39,19 @@ const COVERED_SOURCES = [
   // normalizeMeta / handleMoveToMediaLibraryError / getMoveButtonLabel 等).
   // §2.2 B-2 里从 library-shell.tsx 拆出来的纯函数, 行为冻结防腐.
   "src/components/library-shell/utils.ts",
+  // library-shell/use-library-asset-actions.ts: library 详情页的资产操作 hook
+  // (替换封面 / 海报 / fanart, 删除 fanart, 从封面裁剪海报). 逻辑涉及
+  // file input / object URL / version cache bust / override lifecycle, 是
+  // 用户可见度最高的交互之一, 回归风险高, 行为冻结在单测里.
+  "src/components/library-shell/use-library-asset-actions.ts",
   // media-library-shell/utils.ts: 媒体库页面派生逻辑 (getReleaseYear /
   // extractYearOptions / mergeYearOptions / toMediaLibrarySyncMessage /
   // formatSyncLogTime).
   "src/components/media-library-shell/utils.ts",
+  // media-library-shell/use-media-library-sync.ts: 媒体库同步任务的 polling +
+  // flash 生命周期, 与 use-library-move-refresh 同构的 "running -> completed"
+  // 观测守门 (observedSyncRunningRef). 行为冻结在单测里.
+  "src/components/media-library-shell/use-media-library-sync.ts",
   // media-library-detail-shell/utils.ts: 媒体库详情页的纯工具集 (cloneMeta /
   // pickVariant / normalizeMeta / getVariantCoverPath). 与 library-shell/utils
   // 并行的一份, 未来可能合并; 先各自冻结.
