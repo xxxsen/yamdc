@@ -1,9 +1,8 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import { ImageCropper, type CropRect } from "@/components/image-cropper";
+import { ImageCropper } from "@/components/image-cropper";
 import { AppToast } from "@/components/library-shell/app-toast";
 import {
   LibraryCoverCard,
@@ -13,7 +12,10 @@ import {
   type LibraryPreviewState,
 } from "@/components/library-shell/asset-gallery";
 import { LibraryBottomActions } from "@/components/library-shell/bottom-actions";
+import { LibraryDetailHeader } from "@/components/library-shell/detail-header";
+import { LibraryFormFields } from "@/components/library-shell/form-fields";
 import { LibraryListPanel } from "@/components/library-shell/list-panel";
+import { useLibraryAssetActions } from "@/components/library-shell/use-library-asset-actions";
 import {
   cloneMeta,
   getInitialCopyMode,
@@ -22,9 +24,6 @@ import {
   getInitialVariantKey,
   getMoveButtonLabel,
   getRefreshButtonLabel,
-  getUploadMessage,
-  getVariantCoverPath,
-  getVariantPosterPath,
   handleMoveToMediaLibraryError,
   itemActors,
   markMoveStarting,
@@ -39,10 +38,9 @@ import {
   toErrorMessage,
 } from "@/components/library-shell/utils";
 import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
-import { Button } from "@/components/ui/button";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus } from "@/lib/api";
-import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
+import { deleteLibraryItem, getLibraryItem, getMediaLibraryStatus, listLibraryItems, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 
 interface Props {
   items: LibraryListItem[];
@@ -62,8 +60,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [message, setMessage] = useState(getInitialMessage(initialItems));
   const [preview, setPreview] = useState<LibraryPreviewState>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
-  const [assetOverrides, setAssetOverrides] = useState<Record<string, string>>({});
-  const [assetVersions, setAssetVersions] = useState<Record<string, number>>({});
   const [refreshRunning, setRefreshRunning] = useState(false);
   const [refreshCompletedFlash, setRefreshCompletedFlash] = useState(false);
   const [moveStarting, setMoveStarting] = useState(false);
@@ -71,14 +67,12 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const [moveProgressVisible, setMoveProgressVisible] = useState(initialMediaStatus?.move.status === "running");
   const [cropOpen, setCropOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const uploadActiveRef = useRef(false);
   const detailAbortRef = useRef<AbortController | null>(null);
   const detailRef = useRef<LibraryDetail | null>(initialDetail);
   const draftMetaRef = useRef<LibraryMeta>(initialDraftMeta);
   const lastSavedPathRef = useRef(initialDetail?.item.rel_path ?? "");
   const lastSavedMetaRef = useRef(initialDetail ? serializeMeta(initialDraftMeta) : "");
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const assetOverridesRef = useRef<Record<string, string>>({});
   const observedMoveRunningRef = useRef(initialMediaStatus?.move.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
 
@@ -113,16 +107,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
   const moveProgress = moveState ? taskPercent(moveState) : 0;
   const refreshButtonLabel = getRefreshButtonLabel(refreshRunning, refreshCompletedFlash);
   const moveButtonLabel = getMoveButtonLabel(moveBusy, moveRunning, moveState, moveCompletedFlash);
-
-  useEffect(() => {
-    assetOverridesRef.current = assetOverrides;
-  }, [assetOverrides]);
-
-  useEffect(() => () => {
-    for (const url of Object.values(assetOverridesRef.current)) {
-      URL.revokeObjectURL(url);
-    }
-  }, []);
 
   useEffect(() => {
     if (!message || /失败|error/i.test(message)) {
@@ -183,52 +167,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     setDraftMeta((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       draftMetaRef.current = next;
-      return next;
-    });
-  };
-
-  const setAssetOverride = (path: string, file: File) => {
-    if (!path) {
-      return;
-    }
-    const nextURL = URL.createObjectURL(file);
-    setAssetOverrides((prev) => {
-      const existing = prev[path];
-      if (existing) {
-        URL.revokeObjectURL(existing);
-      }
-      return { ...prev, [path]: nextURL };
-    });
-  };
-
-  const resolveLibraryImageSrc = (path: string) => {
-    const overrideURL = assetOverrides[path];
-    if (overrideURL) {
-      return overrideURL;
-    }
-    const version = assetVersions[path];
-    if (!version) {
-      return getLibraryFileURL(path);
-    }
-    return `${getLibraryFileURL(path)}&v=${version}`;
-  };
-
-  const bumpAssetVersion = (path: string) => {
-    if (!path) {
-      return;
-    }
-    setAssetVersions((prev) => ({ ...prev, [path]: Date.now() }));
-  };
-
-  const clearAssetOverride = (path: string) => {
-    setAssetOverrides((prev) => {
-      const existing = prev[path];
-      if (!existing) {
-        return prev;
-      }
-      URL.revokeObjectURL(existing);
-      const next = { ...prev };
-      delete next[path];
       return next;
     });
   };
@@ -418,71 +356,27 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     });
   };
 
-  const openUploadPicker = (kind: "poster" | "cover" | "fanart") => {
-    if (!detail) {
-      return;
-    }
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    uploadActiveRef.current = true;
-    const unlock = () => {
-      setTimeout(() => { uploadActiveRef.current = false; }, 300);
-    };
-    input.addEventListener("change", () => {
-      const file = input.files?.[0] ?? null;
-      unlock();
-      if (!file) {
-        return;
-      }
-      startTransition(async () => {
-        try {
-          setMessage(getUploadMessage(kind, "start"));
-          const next = await replaceLibraryAsset(detail.item.rel_path, currentVariant?.key ?? "", kind, file);
-          syncDetail(next);
-          setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
-          if (kind === "poster") {
-            setAssetOverride(getVariantPosterPath(next, currentVariant?.key ?? ""), file);
-          } else if (kind === "cover") {
-            setAssetOverride(getVariantCoverPath(next, currentVariant?.key ?? ""), file);
-          }
-          setMessage(getUploadMessage(kind, "done"));
-        } catch (error) {
-          setMessage(toErrorMessage(error, "替换图片失败"));
-        }
-      });
-    }, { once: true });
-    input.addEventListener("cancel", () => {
-      unlock();
-    }, { once: true });
-    input.click();
-  };
-
-  const handleDeleteFanart = (path: string) => {
-    startTransition(async () => {
-      try {
-        setMessage("删除 extrafanart...");
-        const next = await deleteLibraryFile(path);
-        clearAssetOverride(path);
-        setAssetVersions((prev) => {
-          if (!(path in prev)) {
-            return prev;
-          }
-          const nextVersions = { ...prev };
-          delete nextVersions[path];
-          return nextVersions;
-        });
-        if (preview?.path === path) {
-          setPreview(null);
-        }
-        syncDetail(next);
-        setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
-        setMessage("Extrafanart 已删除");
-      } catch (error) {
-        setMessage(toErrorMessage(error, "删除 extrafanart 失败"));
-      }
-    });
-  };
+  const {
+    uploadActiveRef,
+    resolveImage: resolveLibraryImageSrc,
+    openUploadPicker,
+    handleDeleteFanart,
+    openCropper,
+    handleConfirmCrop,
+  } = useLibraryAssetActions({
+    detail,
+    detailRef,
+    currentVariant,
+    selectedVariantKey,
+    selectedCover,
+    syncDetail,
+    setItems,
+    setMessage,
+    startTransition,
+    preview,
+    setPreview,
+    setCropOpen,
+  });
 
   const handleDeleteLibraryItem = () => {
     if (!detail) {
@@ -518,36 +412,6 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
     });
   };
 
-  const openCropper = () => {
-    if (!selectedCover) {
-      return;
-    }
-    setCropOpen(true);
-  };
-
-  // 截取按钮回调: ImageCropper 已经把 display→natural 缩放算完, 我们这里
-  // 只做 detail 守卫和 API 调用 + 缓存失效, 不重复手势/计算逻辑.
-  const handleConfirmCrop = (rect: CropRect) => {
-    if (!detail || !selectedCover) {
-      return;
-    }
-    startTransition(async () => {
-      try {
-        setMessage("从封面截取海报...");
-        const currentPosterPath = getVariantPosterPath(detailRef.current, currentVariant?.key ?? selectedVariantKey);
-        const next = await cropLibraryPosterFromCover(detail.item.rel_path, currentVariant?.key ?? "", rect);
-        clearAssetOverride(currentPosterPath);
-        syncDetail(next);
-        setItems((prev) => prev.map((item) => (item.rel_path === next.item.rel_path ? next.item : item)));
-        bumpAssetVersion(getVariantPosterPath(next, currentVariant?.key ?? selectedVariantKey));
-        setCropOpen(false);
-        setMessage("海报已更新");
-      } catch (error) {
-        setMessage(toErrorMessage(error, "海报截取失败"));
-      }
-    });
-  };
-
   return (
     <div className="library-shell">
       <LibraryListPanel
@@ -577,42 +441,14 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
       <section className="panel library-detail-panel">
         {detail ? (
           <>
-            <div className="review-header library-detail-header">
-              <div>
-                <div className="review-list-kicker">Library Editor</div>
-                <h2 className="review-detail-title">已入库内容</h2>
-                <div className="review-subtitle">{detail.item.rel_path}</div>
-              </div>
-              <div className="review-actions library-detail-actions">
-                <div className="library-copy-toggle" role="tablist" aria-label="标题与简介语言切换">
-                  <button
-                    type="button"
-                    className="library-copy-toggle-btn"
-                    data-active={copyMode === "translated"}
-                    onClick={() => setCopyMode("translated")}
-                  >
-                    中文
-                  </button>
-                  <button
-                    type="button"
-                    className="library-copy-toggle-btn"
-                    data-active={copyMode === "original"}
-                    onClick={() => setCopyMode("original")}
-                  >
-                    原文
-                  </button>
-                </div>
-                {detail.item.conflict ? <span className="badge library-conflict-badge">已存在(冲突)</span> : null}
-                <Button
-                  className="file-action-btn file-action-btn-ghost"
-                  onClick={handleDeleteLibraryItem}
-                  disabled={isPending}
-                  leftIcon={<Trash2 size={16} />}
-                >
-                  删除
-                </Button>
-              </div>
-            </div>
+            <LibraryDetailHeader
+              subtitle={detail.item.rel_path}
+              copyMode={copyMode}
+              onCopyModeChange={setCopyMode}
+              conflict={detail.item.conflict}
+              isPending={isPending}
+              onDelete={handleDeleteLibraryItem}
+            />
 
             {showVariantSwitch ? (
               <LibraryVariantSwitcher
@@ -625,120 +461,14 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
             <div className="review-content review-content-single">
               <div className="review-form library-detail-form">
                 <div className="review-main-layout library-main-layout">
-                  <div className="review-top-fields">
-                    <div className="review-field">
-                      <span className="review-label review-label-side">标题</span>
-                      <input
-                        className="input review-input-strong"
-                        placeholder={copyMode === "translated" ? draftMeta.title || "暂无中文标题" : "输入原始标题"}
-                        value={activeTitleValue}
-                        onChange={(e) =>
-                          updateDraftMeta((prev) => ({
-                            ...prev,
-                            [copyMode === "translated" ? "title_translated" : "title"]: e.target.value,
-                          }))
-                        }
-                        onBlur={handleBlurSave}
-                      />
-                    </div>
-                    <div className="review-meta-row review-meta-row-2 review-meta-row-top">
-                      <div className="review-field">
-                        <span className="review-label review-label-side">导演</span>
-                        <input
-                          className="input"
-                          value={draftMeta.director}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, director: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">片商</span>
-                        <input
-                          className="input"
-                          value={draftMeta.studio}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, studio: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">发行商</span>
-                        <input
-                          className="input"
-                          value={draftMeta.label}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, label: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">系列</span>
-                        <input
-                          className="input"
-                          value={draftMeta.series}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, series: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                    </div>
-                    <div className="review-meta-row review-meta-row-2 library-meta-grid">
-                      <div className="review-field">
-                        <span className="review-label review-label-side">影片 ID</span>
-                        <input
-                          className="input"
-                          value={draftMeta.number}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, number: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">发行日期</span>
-                        <input
-                          className="input"
-                          placeholder="YYYY-MM-DD"
-                          value={draftMeta.release_date}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, release_date: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">时长</span>
-                        <input
-                          className="input"
-                          inputMode="numeric"
-                          value={draftMeta.runtime ? String(draftMeta.runtime) : ""}
-                          onChange={(e) =>
-                            updateDraftMeta((prev) => ({ ...prev, runtime: Number.parseInt(e.target.value || "0", 10) || 0 }))
-                          }
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">来源</span>
-                        <input
-                          className="input"
-                          value={draftMeta.source}
-                          onChange={(e) => updateDraftMeta((prev) => ({ ...prev, source: e.target.value }))}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                    </div>
-                    <div className="review-meta-row">
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">简介</span>
-                        <textarea
-                          className="input review-textarea library-textarea"
-                          placeholder={copyMode === "translated" ? draftMeta.plot || "暂无中文简介" : "输入原始简介"}
-                          value={activePlotValue}
-                          onChange={(e) =>
-                            updateDraftMeta((prev) => ({
-                              ...prev,
-                              [copyMode === "translated" ? "plot_translated" : "plot"]: e.target.value,
-                            }))
-                          }
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <LibraryFormFields
+                    draftMeta={draftMeta}
+                    copyMode={copyMode}
+                    activeTitleValue={activeTitleValue}
+                    activePlotValue={activePlotValue}
+                    updateDraftMeta={updateDraftMeta}
+                    onBlurSave={handleBlurSave}
+                  />
                   <div className="review-main-side library-actors-side">
                     <div className="review-meta-row">
                       <TokenEditor
