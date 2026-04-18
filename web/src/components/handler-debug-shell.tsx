@@ -2,8 +2,15 @@
 
 import { Play } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { ChainName } from "@/components/handler-debug-shell/chain-name";
+import {
+  buildJSONDiffRows,
+  DEFAULT_META,
+  HANDLER_DEBUG_CHAIN_STORAGE_KEY,
+  HANDLER_DEBUG_META_STORAGE_KEY,
+} from "@/components/handler-debug-shell/utils";
 import { Button } from "@/components/ui/button";
 import {
   debugHandler,
@@ -12,139 +19,6 @@ import {
   type HandlerDebugInstance,
   type HandlerDebugResult,
 } from "@/lib/api";
-
-const DEFAULT_META = {
-  number: "ABC-123",
-  title: "Sample Title",
-  actors: [],
-  genres: [],
-  ext_info: {
-    scrape_info: {
-      source: "debug",
-      date_ts: 0,
-    },
-  },
-};
-const HANDLER_DEBUG_META_STORAGE_KEY = "yamdc.debug.handler.meta";
-const HANDLER_DEBUG_CHAIN_STORAGE_KEY = "yamdc.debug.handler.chain";
-
-type DiffKind = "added" | "removed" | "changed";
-
-type DiffRow = {
-  kind: DiffKind | "unchanged";
-  beforeLineNumber?: number;
-  beforeLine?: string;
-  afterLineNumber?: number;
-  afterLine?: string;
-};
-
-function buildJSONDiffRows(before: string, after: string): DiffRow[] {
-  const beforeLines = before.split("\n");
-  const afterLines = after.split("\n");
-  const m = beforeLines.length;
-  const n = afterLines.length;
-  const dp = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i -= 1) {
-    for (let j = n - 1; j >= 0; j -= 1) {
-      if (beforeLines[i] === afterLines[j]) {
-        dp[i][j] = dp[i + 1][j + 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-      }
-    }
-  }
-
-  const rows: DiffRow[] = [];
-  let i = 0;
-  let j = 0;
-  let beforeLineNumber = 1;
-  let afterLineNumber = 1;
-
-  while (i < m && j < n) {
-    if (beforeLines[i] === afterLines[j]) {
-      rows.push({
-        kind: "unchanged",
-        beforeLineNumber,
-        beforeLine: beforeLines[i],
-        afterLineNumber,
-        afterLine: afterLines[j],
-      });
-      i += 1;
-      j += 1;
-      beforeLineNumber += 1;
-      afterLineNumber += 1;
-      continue;
-    }
-    if (dp[i + 1][j] >= dp[i][j + 1]) {
-      rows.push({
-        kind: "removed",
-        beforeLineNumber,
-        beforeLine: beforeLines[i],
-      });
-      i += 1;
-      beforeLineNumber += 1;
-      continue;
-    }
-    rows.push({
-      kind: "added",
-      afterLineNumber,
-      afterLine: afterLines[j],
-    });
-    j += 1;
-    afterLineNumber += 1;
-  }
-
-  while (i < m) {
-    rows.push({
-      kind: "removed",
-      beforeLineNumber,
-      beforeLine: beforeLines[i],
-    });
-    i += 1;
-    beforeLineNumber += 1;
-  }
-
-  while (j < n) {
-    rows.push({
-      kind: "added",
-      afterLineNumber,
-      afterLine: afterLines[j],
-    });
-    j += 1;
-    afterLineNumber += 1;
-  }
-
-  return rows;
-}
-
-function ChainName({ name }: { name: string }) {
-  const wrapRef = useRef<HTMLSpanElement | null>(null);
-  const textRef = useRef<HTMLSpanElement | null>(null);
-  const [distance, setDistance] = useState(0);
-
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    const text = textRef.current;
-    if (!wrap || !text) {
-      return;
-    }
-    const nextDistance = Math.max(0, text.scrollWidth - wrap.clientWidth);
-    setDistance(nextDistance);
-  }, [name]);
-
-  return (
-    <span className="handler-debug-chain-name-wrap" ref={wrapRef} title={name}>
-      <span
-        ref={textRef}
-        className={`handler-debug-chain-name ${distance > 0 ? "handler-debug-chain-name-scroll" : ""}`}
-        style={distance > 0 ? ({ "--handler-chain-scroll-distance": `${distance}px` } as CSSProperties) : undefined}
-      >
-        {name}
-      </span>
-    </span>
-  );
-}
 
 export function HandlerDebugShell() {
   const [handlers, setHandlers] = useState<HandlerDebugInstance[]>([]);
