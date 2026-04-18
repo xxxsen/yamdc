@@ -161,6 +161,15 @@ export interface MediaLibraryStatus {
   move: TaskState;
 }
 
+export interface MediaLibrarySyncLogEntry {
+  id: number;
+  run_id: string;
+  level: string;
+  rel_path: string;
+  message: string;
+  created_at: number;
+}
+
 export interface ReviewMeta {
   number?: string;
   title?: string;
@@ -742,6 +751,21 @@ export async function getMediaLibraryStatus(signal?: AbortSignal) {
 export async function triggerMediaLibrarySync(signal?: AbortSignal) {
   const data = await apiRequest<unknown>("/api/media-library/sync", { method: "POST", signal });
   return data;
+}
+
+export async function listMediaLibrarySyncLogs(limit?: number, signal?: AbortSignal) {
+  const query = new URLSearchParams();
+  if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+    query.set("limit", String(Math.floor(limit)));
+  }
+  const path = query.toString()
+    ? buildPath("/api/media-library/sync/logs", query)
+    : "/api/media-library/sync/logs";
+  const data = await apiRequest<MediaLibrarySyncLogEntry[] | null>(path, {
+    cache: "no-store",
+    signal,
+  });
+  return Array.isArray(data.data) ? data.data : [];
 }
 
 export async function triggerMoveToMediaLibrary(signal?: AbortSignal) {

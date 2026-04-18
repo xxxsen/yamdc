@@ -26,8 +26,13 @@ func newTestMediaService(t *testing.T) *Service {
 	})
 	svc := NewService(sqlite.DB(), t.TempDir(), t.TempDir())
 	// 按 LIFO, 先等待后台同步/移动 goroutine 返回再关闭 sqlite/tempdir,
-	// 避免异步 DB 写入与 tempdir 清理竞争。
-	t.Cleanup(func() { svc.WaitBackground() })
+	// 避免异步 DB 写入与 tempdir 清理竞争。Stop() 必须先于 WaitBackground(),
+	// 否则 Start() 拉起的 scheduler goroutine 会一直卡在 60s 延时 / 每日定时里,
+	// 让 WaitBackground hang 住测试。
+	t.Cleanup(func() {
+		svc.Stop()
+		svc.WaitBackground()
+	})
 	return svc
 }
 
@@ -37,7 +42,10 @@ func newTestMediaServiceWithDirs(t *testing.T, libraryDir, saveDir string) *Serv
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlite.Close() })
 	svc := NewService(sqlite.DB(), libraryDir, saveDir)
-	t.Cleanup(func() { svc.WaitBackground() })
+	t.Cleanup(func() {
+		svc.Stop()
+		svc.WaitBackground()
+	})
 	return svc
 }
 
@@ -980,7 +988,7 @@ func TestSyncOneItem(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(item, "movie.mp4"), []byte("v"), 0o600))
 
 		keep := make(map[string]struct{})
-		result := svc.syncOneItem(ctx, lg, keep, item)
+		result := svc.syncOneItem(ctx, lg, keep, item, "test-run")
 		assert.True(t, result.Success)
 		assert.Equal(t, "movie", result.RelPath)
 		_, ok := keep["movie"]
@@ -993,7 +1001,7 @@ func TestSyncOneItem(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(item, "readme.txt"), []byte("x"), 0o600))
 
 		keep := make(map[string]struct{})
-		result := svc.syncOneItem(ctx, lg, keep, item)
+		result := svc.syncOneItem(ctx, lg, keep, item, "test-run")
 		assert.True(t, result.Failed)
 	})
 }
@@ -1012,7 +1020,7 @@ func TestMoveOneItem(t *testing.T) {
 		require.NoError(t, os.MkdirAll(itemSrc, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(itemSrc, "movie.mp4"), []byte("v"), 0o600))
 
-		result := svc.moveOneItem(lg, itemSrc)
+		result := svc.moveOneItem(context.Background(), lg, itemSrc)
 		assert.True(t, result.Success)
 		assert.Equal(t, "movie", result.RelPath)
 		assert.FileExists(t, filepath.Join(libraryDir, "movie", "movie.mp4"))
@@ -1028,7 +1036,7 @@ func TestMoveOneItem(t *testing.T) {
 		require.NoError(t, os.MkdirAll(itemSrc, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(itemSrc, "movie.mp4"), []byte("v"), 0o600))
 
-		result := svc.moveOneItem(lg, itemSrc)
+		result := svc.moveOneItem(context.Background(), lg, itemSrc)
 		assert.True(t, result.Conflict)
 	})
 }
@@ -1114,7 +1122,7 @@ func TestSyncOneItemRelPathFails(t *testing.T) {
 	svc := &Service{libraryDir: ""}
 	lg := zap.NewNop()
 	keep := make(map[string]struct{})
-	result := svc.syncOneItem(context.Background(), lg, keep, "/nonexistent")
+	result := svc.syncOneItem(context.Background(), lg, keep, "/nonexistent", "test-run")
 	assert.True(t, result.Failed || result.Success)
 }
 
@@ -1133,7 +1141,7 @@ func TestMoveOneItemMoveError(t *testing.T) {
 	require.NoError(t, os.MkdirAll(target, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(target, "existing.txt"), []byte("v"), 0o600))
 
-	result := svc.moveOneItem(zap.NewNop(), src)
+	result := svc.moveOneItem(context.Background(), zap.NewNop(), src)
 	assert.True(t, result.Conflict)
 }
 
@@ -1608,7 +1616,7 @@ func TestSyncOneItemUpsertError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(item, "movie.mp4"), []byte("v"), 0o600))
 
 	keep := make(map[string]struct{})
-	result := svc.syncOneItem(context.Background(), zap.NewNop(), keep, item)
+	result := svc.syncOneItem(context.Background(), zap.NewNop(), keep, item, "test-run")
 	assert.True(t, result.Failed)
 }
 
@@ -1633,7 +1641,7 @@ func TestSyncAllItemsWithFailedItem(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(badItem, 0o755) })
 
 	state := newRunningTaskState(TaskSync, 2, "test")
-	keep := svc.syncAllItems(ctx, zap.NewNop(), []string{goodItem, badItem}, &state)
+	keep := svc.syncAllItems(ctx, zap.NewNop(), []string{goodItem, badItem}, &state, "test-run")
 	assert.Equal(t, 2, state.Processed)
 	assert.True(t, state.ErrorCount > 0 || state.SuccessCount > 0)
 	_ = keep
@@ -1679,7 +1687,7 @@ func TestMoveOneItemMkdirAllError(t *testing.T) {
 	deepLib := filepath.Join(libraryDir, "deep")
 	require.NoError(t, os.WriteFile(deepLib, []byte("not a dir"), 0o600))
 
-	result := svc.moveOneItem(zap.NewNop(), subDir)
+	result := svc.moveOneItem(context.Background(), zap.NewNop(), subDir)
 	assert.True(t, result.Failed)
 }
 

@@ -104,11 +104,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s failed: %w", m.file, err)
 		}
-		for _, q := range strings.Split(string(content), ";") {
-			q = strings.TrimSpace(q)
-			if q == "" {
-				continue
-			}
+		for _, q := range splitSQLStatements(string(content)) {
 			if _, err := db.ExecContext(ctx, q); err != nil {
 				return fmt.Errorf("execute migration %s failed: %w", m.file, err)
 			}
@@ -126,6 +122,39 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 type migrationFile struct {
 	version int
 	file    string
+}
+
+// splitSQLStatements 把一整段 SQL 文本切成多个独立语句。
+//
+// 为什么不直接 strings.Split(content, ";"):
+//
+//	早期实现是这么做的, 但 "--" 行注释里的中文标点 (分号/句号) 会把
+//	一条语义完整的 SQL 切断, 下游 Exec 只会看到半句, 报 "syntax error",
+//	且错误位置指向中文字里, 非常难排查。
+//	历史上 002 / 003 都因为注释里写了分号栽过同一个坑。
+//
+// 这里先按行剥掉 "--" 行注释 (SQL 的行注释不跨行), 再按 ";" 切。
+// 我们的 migration 只定义 schema, 不出现字符串字面量里含 "--" 的情况,
+// 所以这个简化实现是安全的; 如果将来引入 INSERT 语句带复杂字符串,
+// 再考虑上 token-level 切分器。
+func splitSQLStatements(content string) []string {
+	var buf strings.Builder
+	for _, line := range strings.Split(content, "\n") {
+		if idx := strings.Index(line, "--"); idx >= 0 {
+			line = line[:idx]
+		}
+		buf.WriteString(line)
+		buf.WriteByte('\n')
+	}
+	result := make([]string, 0)
+	for _, part := range strings.Split(buf.String(), ";") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		result = append(result, part)
+	}
+	return result
 }
 
 func readUserVersion(ctx context.Context, db *sql.DB) (int, error) {

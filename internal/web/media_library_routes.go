@@ -11,6 +11,7 @@ func (a *API) registerEngineMediaLibraryRoutes(group *gin.RouterGroup) {
 	group.POST("/api/media-library/asset", a.handleMediaLibraryAsset)
 	group.GET("/api/media-library/sync", a.handleMediaLibrarySyncGet)
 	group.POST("/api/media-library/sync", a.handleMediaLibrarySyncPost)
+	group.GET("/api/media-library/sync/logs", a.handleMediaLibrarySyncLogs)
 	group.GET("/api/media-library/move", a.handleMediaLibraryMoveGet)
 	group.POST("/api/media-library/move", a.handleMediaLibraryMovePost)
 	group.GET("/api/media-library/status", a.handleMediaLibraryStatus)

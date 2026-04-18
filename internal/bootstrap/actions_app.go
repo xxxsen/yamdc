@@ -76,6 +76,14 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		sc.App.MediaSvc.WaitBackground()
 		return nil
 	})
+	// stop_media_service 必须紧挨在 wait_media_background 之后注册,
+	// 这样 LIFO 执行时 Stop() 会先跑一次 (把 scheduler 的 shutdownCtx cancel 掉),
+	// 然后 wait_media_background 才真正阻塞等 scheduler 以及其它 bg goroutine
+	// 返回。如果顺序颠倒, WaitBackground 会被仍在 sleep 的 scheduler 卡住。
+	sc.Cleanup.Add("stop_media_service", func(context.Context) error {
+		sc.App.MediaSvc.Stop()
+		return nil
+	})
 	// 3.4: 用 Stop(ctx) 替代 WaitQueuedJobs(): 除了等排空, 还主动拒绝
 	// cleanup 阶段 (HTTP 已 shutdown, 但 recover/其它 goroutine 理论上可能
 	// 还在 Run) 的新入队请求, 避免 close(queue) 与 Run 的 channel send 竞争。

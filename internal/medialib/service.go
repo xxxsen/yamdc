@@ -14,12 +14,31 @@ import (
 	"time"
 
 	"github.com/xxxsen/common/logutil"
+	"github.com/xxxsen/yamdc/internal/repository"
 	"go.uber.org/zap"
 )
 
 const (
 	TaskSync = "media_library_sync"
 	TaskMove = "media_library_move"
+)
+
+// 自动 sync 调度的几个硬编码参数。刻意没放 config: 对应决策详见 1.4 设计
+// 记录, 简要说明:
+//
+//   - autoSyncDailyHour / autoSyncDailyMinute: 每天本地时间 03:00 触发一次。
+//     03:00 相对 00:00 的好处是避开整点脚本/备份高峰, 且基本不会和用户活跃
+//     使用窗口撞车; 晚一点也给 00:00 完成的磁盘合并/索引构建足够冷却时间。
+//   - autoSyncStartupDelay: 进程起来后 60s 再做一次 dirty 检查。延迟是为了
+//     让 HTTP / worker 先就绪、避免启动期磁盘竞争; 60s 是一个经验值,
+//     用户几乎感知不到, 和 recover 流程没冲突。
+//
+// 所有触发最终都会经过 triggerFullSyncWithReason 走相同的互斥 + bgWG 路径,
+// 和手动 "同步媒体库" 完全等价, 因此不会和 move 任务并发。
+const (
+	autoSyncDailyHour    = 3
+	autoSyncDailyMinute  = 0
+	autoSyncStartupDelay = 60 * time.Second
 )
 
 var (
@@ -33,6 +52,7 @@ var (
 
 type Service struct {
 	db         *sql.DB
+	logRepo    *repository.LogRepository
 	libraryDir string
 	saveDir    string
 
@@ -40,6 +60,19 @@ type Service struct {
 	syncRunning bool
 	moveRunning bool
 	bgWG        sync.WaitGroup
+
+	// shutdownCtx / shutdownCancel 控制 scheduler goroutine 的生命周期。
+	// scheduler 在 Start 里拉起, 在 Stop 里收敛; bgWG 负责阻塞外部 cleanup
+	// 等所有后台 goroutine (含 scheduler + Trigger* 派生的 sync/move)
+	// 完整返回后再让底层 sqlite / tempdir 被清理, 避免 "DB 已关闭、goroutine
+	// 还在写 DB" 的竞争。Stop 必须在 WaitBackground 之前调用。
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
+
+	// schedulerClock / schedulerStartupDelay 只在测试里被覆盖, 正式运行
+	// 一律走 time.Now 和 autoSyncStartupDelay 默认值, 参见 startScheduler 注释。
+	schedulerClock        func() time.Time
+	schedulerStartupDelay time.Duration
 }
 
 type ListItemsOptions struct {
@@ -51,10 +84,23 @@ type ListItemsOptions struct {
 }
 
 func NewService(db *sql.DB, libraryDir, saveDir string) *Service {
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	// logRepo 只是个 *sql.DB 的薄封装, 在 NewService 里一次性构造, 内部复用。
+	// 保留 NewService 现有签名是刻意的: 外面大量单测和业务代码都以 (db, libraryDir, saveDir)
+	// 方式构造 Service, 不想因为一次 refactor 把所有调用点都改掉。
+	var logRepo *repository.LogRepository
+	if db != nil {
+		logRepo = repository.NewLogRepository(db)
+	}
 	return &Service{
-		db:         db,
-		libraryDir: libraryDir,
-		saveDir:    saveDir,
+		db:                    db,
+		logRepo:               logRepo,
+		libraryDir:            libraryDir,
+		saveDir:               saveDir,
+		shutdownCtx:           shutdownCtx,
+		shutdownCancel:        shutdownCancel,
+		schedulerClock:        time.Now,
+		schedulerStartupDelay: autoSyncStartupDelay,
 	}
 }
 
@@ -69,6 +115,18 @@ func (s *Service) Start(ctx context.Context) {
 	if err := s.recoverTaskStates(ctx); err != nil {
 		logutil.GetLogger(ctx).Error("recover media library task states failed", zap.Error(err))
 	}
+	s.startScheduler()
+}
+
+// Stop 取消 scheduler goroutine 的 ctx, 让它立刻退出等待; 不等待已经
+// Trigger 出去的 runFullSync / runMove, 后者交给 WaitBackground 收敛。
+// 调用顺序建议: Stop 先走, 立即切断 scheduler 后续触发; 接着 WaitBackground
+// 让仍在跑的 sync/move 收完尾; 最后关闭底层 sqlite。
+func (s *Service) Stop() {
+	if s.shutdownCancel == nil {
+		return
+	}
+	s.shutdownCancel()
 }
 
 // ListItems 按 options 拉取媒体库列表。keyword / year / size 过滤和排序全部下推到 SQL,
@@ -213,7 +271,15 @@ func (s *Service) ResolveLibraryPath(raw string) (string, string, error) {
 }
 
 func (s *Service) TriggerFullSync(ctx context.Context) error {
-	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", "manual"))
+	return s.triggerFullSyncWithReason(ctx, "manual")
+}
+
+// triggerFullSyncWithReason 是手动 (TriggerFullSync) 和自动 (scheduler)
+// 触发共享的入口, reason 仅用于日志 + task_state_tab.message 区分来源。
+// 所有排他性检查都在这里统一执行, 上层 (web handler / scheduler) 只需要
+// 根据返回 error 类型决定怎么向用户展示。
+func (s *Service) triggerFullSyncWithReason(ctx context.Context, reason string) error {
+	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskSync), zap.String("reason", reason))
 	if !s.IsConfigured() {
 		logger.Warn("media library sync skipped because library dir is not configured")
 		return errLibraryDirNotConfigured
@@ -233,7 +299,7 @@ func (s *Service) TriggerFullSync(ctx context.Context) error {
 		// runFullSync 内部已通过 failTask 把错误写入 task_state_tab 并记日志,
 		// 前端可以通过 /api/media-library/status 看到具体失败原因,
 		// 因此这里显式忽略返回值是安全的。
-		_ = s.runFullSync(context.WithoutCancel(ctx), "manual")
+		_ = s.runFullSync(context.WithoutCancel(ctx), reason)
 	}()
 	return nil
 }
@@ -264,6 +330,22 @@ func (s *Service) recoverTaskState(ctx context.Context, taskKey string) error {
 		return err
 	}
 	logutil.GetLogger(ctx).Warn("recover media library task state from running to failed", zap.String("task", taskKey))
+	// Sync 被进程重启中断: cleanupStaleItems 可能没跑, 之后新增/删除的目录
+	// 都会让 DB 和磁盘脱节, 只能通过一次完整 sync 重新对齐。所以这里强制
+	// 标 dirty, 下一次 startup 延迟窗口或 03:00 自动触发兜底。
+	// Move 被中断理论上不会让 DB 失真 (move 本身只改磁盘, 而且 1.4 之后
+	// move 会走 per-item upsert, 下一节会提到), 这里还是顺带标 dirty,
+	// 属于 "多做一点总比漏一点好" 的保守选择。
+	if err := s.markSyncDirty(ctx); err != nil {
+		logutil.GetLogger(ctx).Warn("mark media library sync dirty after recover failed",
+			zap.String("task", taskKey), zap.Error(err))
+	}
+	if taskKey == TaskSync {
+		if err := s.appendSyncLog(ctx, "", SyncLogLevelError, "",
+			"检测到上一次媒体库同步被中断 (可能是进程被重启或崩溃), 下一次自动同步窗口会重新对齐。"); err != nil {
+			logutil.GetLogger(ctx).Warn("append recover sync log failed", zap.Error(err))
+		}
+	}
 	return nil
 }
 
@@ -325,24 +407,58 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 	}
 	defer s.finishSync()
 
+	runID := newRunID(startedAt)
+	logger = logger.With(zap.String("run_id", runID))
+	if err := s.appendSyncLog(ctx, runID, SyncLogLevelInfo, "",
+		fmt.Sprintf("媒体库同步开始 (reason=%s)", reason)); err != nil {
+		logger.Warn("append sync start log failed", zap.Error(err))
+	}
+	// finalize: 无论 sync 从哪条分支退出都清 dirty + 裁剪日志。
+	// "即使有 error 也清 dirty" 是刻意的: 避免 dirty 永远是 1 导致每天
+	// 03:00 重跑同一个必败 sync, 一直写同样的 error 日志, 用户只能从
+	// UI 的 '查看同步日志' 里发现并人肉处理。
+	defer func() {
+		if err := s.clearSyncDirty(ctx); err != nil {
+			logger.Warn("clear media library sync dirty failed", zap.Error(err))
+		}
+		if err := s.cleanupSyncLogs(ctx); err != nil {
+			logger.Warn("cleanup media library sync logs failed", zap.Error(err))
+		}
+	}()
+
 	itemDirs, err := s.listRootItemDirs(s.libraryDir)
 	if err != nil {
 		s.failTask(ctx, logger, TaskSync, "list media library directories failed", err)
+		_ = s.appendSyncLog(ctx, runID, SyncLogLevelError, "",
+			fmt.Sprintf("列出媒体库目录失败: %s", err.Error()))
 		return err
 	}
 	logger.Info("media library sync started", zap.Int("total", len(itemDirs)))
 	state := newRunningTaskState(TaskSync, len(itemDirs), "同步媒体库中")
 	_ = s.saveTaskState(ctx, state)
-	keep := s.syncAllItems(ctx, logger, itemDirs, &state)
+	keep := s.syncAllItems(ctx, logger, itemDirs, &state, runID)
 	deletedCount := s.cleanupStaleItems(ctx, logger, keep, &state)
 	s.finishTask(ctx, &state, fmt.Sprintf("媒体库同步完成 (%s)", reason))
+	duration := time.Since(startedAt)
 	logger.Info("media library sync completed",
 		zap.Int("total", state.Total),
 		zap.Int("success_count", state.SuccessCount),
 		zap.Int("error_count", state.ErrorCount),
 		zap.Int("deleted_count", deletedCount),
-		zap.Duration("duration", time.Since(startedAt)),
+		zap.Duration("duration", duration),
 	)
+	summaryLevel := SyncLogLevelInfo
+	if state.ErrorCount > 0 {
+		// pipeline 整体收尾成功, 但有 per-item 失败, 用 warn 让用户在日志
+		// 弹窗里能一眼筛出来。
+		summaryLevel = SyncLogLevelWarn
+	}
+	if err := s.appendSyncLog(ctx, runID, summaryLevel, "",
+		fmt.Sprintf("媒体库同步完成: total=%d success=%d error=%d deleted=%d duration=%s",
+			state.Total, state.SuccessCount, state.ErrorCount, deletedCount,
+			duration.Round(time.Second))); err != nil {
+		logger.Warn("append sync completion log failed", zap.Error(err))
+	}
 	return nil
 }
 
@@ -351,13 +467,14 @@ func (s *Service) syncAllItems(
 	logger *zap.Logger,
 	itemDirs []string,
 	state *TaskState,
+	runID string,
 ) map[string]struct{} {
 	keep := make(map[string]struct{}, len(itemDirs))
 	for index, absPath := range itemDirs {
 		logger.Info("media library sync item started",
 			zap.Int("index", index+1), zap.Int("total", len(itemDirs)), zap.String("abs_path", absPath))
 		itemStartedAt := time.Now()
-		result := s.syncOneItem(ctx, logger, keep, absPath)
+		result := s.syncOneItem(ctx, logger, keep, absPath, runID)
 		state.Processed = index + 1
 		state.Current = result.RelPath
 		if result.Success {
@@ -395,6 +512,16 @@ func (s *Service) runMove(ctx context.Context) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("task", TaskMove))
 	defer s.finishMove()
 
+	// 标 dirty: move 本身只是 rename 目录, 后面 moveOneItem 会对每个成功
+	// 移过去的 item 做 per-item upsertDetail 把 DB 写对, 所以正常路径下
+	// 不需要额外全量 sync。但 rename 后到 upsertDetail 之间一旦 crash,
+	// 新 item 就既在磁盘又不在 DB, 靠 dirty + 下次 auto sync 兜底。
+	// 开头就置 dirty 的另一个考量: 即使所有 upsert 都失败, dirty 也已经
+	// 在, 不会漏记。
+	if err := s.markSyncDirty(ctx); err != nil {
+		logger.Warn("mark media library sync dirty at move start failed", zap.Error(err))
+	}
+
 	itemDirs, err := s.listRootItemDirs(s.saveDir)
 	if err != nil {
 		s.failTask(ctx, logger, TaskMove, "list save directories before move failed", err)
@@ -410,7 +537,7 @@ func (s *Service) runMove(ctx context.Context) error {
 			zap.String("abs_path", absPath),
 		)
 		itemStartedAt := time.Now()
-		result := s.moveOneItem(logger, absPath)
+		result := s.moveOneItem(ctx, logger, absPath)
 		state.Processed = index + 1
 		state.Current = result.RelPath
 		if result.Success {
@@ -433,8 +560,6 @@ func (s *Service) runMove(ctx context.Context) error {
 		)
 		s.persistTaskProgress(ctx, &state)
 	}
-	// 移动电影, 但是不执行全量sync, 这个太慢了, 用户手动触发即可
-	// _ = s.runFullSync(ctx, "move")
 	s.finishTask(ctx, &state, "移动到媒体库完成")
 	logger.Info("move to media library completed",
 		zap.Int("total", state.Total),
@@ -514,20 +639,27 @@ func (s *Service) syncOneItem(
 	logger *zap.Logger,
 	keep map[string]struct{},
 	absPath string,
+	runID string,
 ) itemTaskResult {
 	relPath, err := filepath.Rel(s.libraryDir, absPath)
 	if err != nil {
 		logger.Warn("resolve media library relative path failed", zap.String("abs_path", absPath), zap.Error(err))
+		_ = s.appendSyncLog(ctx, runID, SyncLogLevelWarn, absPath,
+			fmt.Sprintf("无法解析相对路径: %s", err.Error()))
 		return itemTaskResult{Failed: true}
 	}
 	relPath = filepath.ToSlash(relPath)
 	detail, err := s.readRootDetail(s.libraryDir, relPath, absPath)
 	if err != nil {
 		logger.Warn("read media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
+		_ = s.appendSyncLog(ctx, runID, SyncLogLevelWarn, relPath,
+			fmt.Sprintf("读取 item 详情失败: %s", err.Error()))
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
 	if err := s.upsertDetail(ctx, detail); err != nil {
 		logger.Warn("upsert media library detail failed", zap.String("rel_path", relPath), zap.Error(err))
+		_ = s.appendSyncLog(ctx, runID, SyncLogLevelWarn, relPath,
+			fmt.Sprintf("写入 item 详情失败: %s", err.Error()))
 		return itemTaskResult{RelPath: relPath, Failed: true}
 	}
 	keep[relPath] = struct{}{}
@@ -542,7 +674,7 @@ func (s *Service) syncOneItem(
 	return itemTaskResult{RelPath: relPath, Success: true}
 }
 
-func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult {
+func (s *Service) moveOneItem(ctx context.Context, logger *zap.Logger, absPath string) itemTaskResult {
 	relPath, err := filepath.Rel(s.saveDir, absPath)
 	if err != nil {
 		logger.Warn("resolve save relative path failed", zap.String("abs_path", absPath), zap.Error(err))
@@ -574,6 +706,26 @@ func (s *Service) moveOneItem(logger *zap.Logger, absPath string) itemTaskResult
 		zap.String("src_path", absPath),
 		zap.String("dst_path", targetAbs),
 	)
+	// per-item 增量 upsert: 目录刚搬过来, 直接把 item_json / 索引列写 DB,
+	// 用户回到前端立即能看到这条新入库记录, 不用等 "同步媒体库" 或下次
+	// 03:00 自动任务。比起 3.4 时代那条 "太慢了, 用户手动触发即可" 的注释,
+	// 这里的代价是 O(被移动数) 次 readRootDetail + INSERT/UPSERT, 相对
+	// 上一段 moveDirectory 的 IO 可忽略。
+	//
+	// 就算这一段失败, 目录已经在媒体库里, dirty flag 在 runMove 开头已经
+	// 置 1, 下一次 auto-sync 会兜底把它补进 DB。所以这里拿 warn 级别记录
+	// 即可, 不把整个 item 标 Failed (磁盘搬迁成功才是 move 本职)。
+	detail, err := s.readRootDetail(s.libraryDir, relPath, targetAbs)
+	if err != nil {
+		logger.Warn("read moved item detail failed; will be picked up by next auto sync",
+			zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Success: true}
+	}
+	if err := s.upsertDetail(ctx, detail); err != nil {
+		logger.Warn("upsert moved item detail failed; will be picked up by next auto sync",
+			zap.String("rel_path", relPath), zap.Error(err))
+		return itemTaskResult{RelPath: relPath, Success: true}
+	}
 	return itemTaskResult{RelPath: relPath, Success: true}
 }
 

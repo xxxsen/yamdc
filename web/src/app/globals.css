@@ -3095,13 +3095,200 @@ textarea.input {
 }
 
 .media-library-sync-btn {
-  width: 100%;
+  flex: 1 1 auto;
   justify-content: center;
+  min-width: 0;
+}
+
+/* split button: 两个 .btn 紧贴成一颗按钮, 中间用半透明分隔线区分主区和
+   caret, 而不是靠 gap 切开 (gap 会让两颗胶囊各自露端, 视觉上像 "两个
+   不相干的按钮"). */
+.media-library-sync-split {
+  position: relative;
+  display: flex;
+  gap: 0;
+  width: 100%;
+}
+
+/* split 内按钮 hover 抬升 1px 会让一边翘起, 撕开 "一体" 感, 所以禁掉
+   translateY; 背景色变化仍保留, 用户仍能感知 hover. */
+.media-library-sync-split .btn:hover {
+  transform: none;
+}
+
+.media-library-sync-split .media-library-sync-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 1px solid rgba(255, 248, 244, 0.28);
+}
+
+.media-library-sync-caret {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* 菜单本体直接穿上 accent 主色, 视觉上和 split 主按钮是 "同一个 primary
+   按钮延伸出来的一片", 而不是一个独立风格的下拉面板。border 用半透明白
+   替代 .panel 默认的灰 line, 落在 accent 底色上才不会糊。 */
+.media-library-sync-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 12;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--accent);
+  color: #fff8f4;
+  border: 1px solid rgba(255, 248, 244, 0.22);
+  box-shadow: 0 18px 40px rgba(12, 8, 6, 0.22);
+}
+
+.media-library-sync-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* hover/focus 用 accent-strong (和 .btn-primary:hover 对齐), 这样菜单项
+   点击反馈和主按钮 hover 是同一种 "变深" 语言。 */
+.media-library-sync-menu-item:hover,
+.media-library-sync-menu-item:focus {
+  background: var(--accent-strong);
+  outline: none;
 }
 
 .media-library-sync-icon-spinning {
   display: block;
   animation: spin 0.8s linear infinite;
+}
+
+.media-library-sync-logs-frame {
+  position: relative;
+  width: min(92vw, 960px);
+  max-height: calc(100vh - 56px);
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.media-library-sync-logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.media-library-sync-logs-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.media-library-sync-logs-close {
+  flex: 0 0 auto;
+}
+
+.media-library-sync-logs-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.media-library-sync-logs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 180px);
+}
+
+.media-library-sync-logs-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(91, 67, 44, 0.04);
+  border: 1px solid rgba(91, 67, 44, 0.06);
+}
+
+.media-library-sync-logs-row[data-level="warn"] {
+  background: rgba(220, 161, 59, 0.08);
+  border-color: rgba(220, 161, 59, 0.24);
+}
+
+.media-library-sync-logs-row[data-level="error"] {
+  background: rgba(208, 67, 58, 0.08);
+  border-color: rgba(208, 67, 58, 0.26);
+}
+
+.media-library-sync-logs-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(91, 67, 44, 0.72);
+}
+
+.media-library-sync-logs-row-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.media-library-sync-logs-row-level {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  background: rgba(91, 67, 44, 0.08);
+  color: rgba(91, 67, 44, 0.9);
+}
+
+.media-library-sync-logs-row-level[data-level="warn"] {
+  background: rgba(220, 161, 59, 0.18);
+  color: #8c5d11;
+}
+
+.media-library-sync-logs-row-level[data-level="error"] {
+  background: rgba(208, 67, 58, 0.18);
+  color: #9a241c;
+}
+
+.media-library-sync-logs-row-run {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: rgba(91, 67, 44, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.media-library-sync-logs-row-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.media-library-sync-logs-row-path {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: rgba(91, 67, 44, 0.7);
 }
 
 .media-library-search-bar-rail {
