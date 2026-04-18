@@ -296,7 +296,7 @@ cmd/yamdc/bootstrap.go
 
 ```json
 {
-  "searcher_plugin": {
+  "searcher_plugin_config": {
     "sources": [
       {
         "source_type": "remote",
