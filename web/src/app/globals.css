@@ -1,34 +1,83 @@
 @import "tailwindcss";
 
+/* ─── Design tokens (§5.1 two-layer) ─────────────────────────────────
+ * 两层 token 体系:
+ *
+ *   1. primitive — 纯色板, 用 --primitive-<hue>-<weight> 命名. 只声明当
+ *      前实际被 semantic 层引用的点, 不做 50..900 全填充 (避免死 token).
+ *   2. semantic  — UI 语义别名, 以 var(--primitive-xxx-N) 引用 primitive.
+ *
+ * 为什么不用 --color-<hue>-N: Tailwind v4 内建 @theme 已经声明了 color
+ * 命名空间 (--color-red-500 / --color-orange-500 全套 oklch 值, 用于
+ * bg-red-500 这类 utility). 如果我们也在 :root 里写 --color-orange-500,
+ * :root 的无 layer 声明会盖过 @layer theme 里的 tailwind 默认值, 悄无
+ * 声息地把 `bg-orange-500` 改成项目的暖 accent 色, 埋雷. 用 primitive
+ * 命名空间彻底避开冲突.
+ *
+ * 为什么分两层: 后续要调整主色 (比如把 accent 从 #b44f2d 往 #a53d1f
+ * 偏), 只改 primitive 的 --primitive-orange-500, 不用遍历 6000 行 CSS
+ * 找出所有直接引用. 暗色模式已明确不做 (td/022 §6), 没有 dark variant.
+ *
+ * 色值兼容性: 本次切分保证 primitive 字面值 = 原 semantic token 字面值,
+ * 即每个 --xxx 变量最终解析结果 与原版完全一致 (bytewise drift 仅体现在
+ * 顶部多了 primitive 声明, 其他 6000 行 CSS 输出不变).
+ *
+ * 对比度基线 (WCAG AA 阈值 4.5:1):
+ *   --accent        + 白字 #fff8f4   4.96:1  (AA, 余量 0.46; 调色前复核)
+ *   --accent-strong + 白字 #fff8f4   7.60:1  (AAA)
+ */
 :root {
-  --background: #f6f1e8;
-  --foreground: #1f1a14;
-  --panel: rgba(255, 252, 247, 0.82);
-  --panel-strong: #fffaf2;
-  --line: rgba(91, 67, 44, 0.16);
-  --muted: #6a5d50;
-  /* --accent + .btn-primary 白字 (#fff8f4) 对比度实测 4.96:1, 过 WCAG AA
-   * (阈值 4.5), 但余量只有 0.46。如果后续想把 accent 调亮 (如往 #c06038
-   * 偏移), 会跌破阈值, 调色前请用 contrast checker 复核。
-   * --accent-strong + 白字对比度 7.60:1, 处于 AAA 级, hover 态安全。*/
-  --accent: #b44f2d;
-  --accent-strong: #8b3618;
-  --danger: #9d2b2b;
-  --warn: #9f6a14;
-  --ok: #2f6b45;
-  --info: #275d8a;
+  /* ── primitive ───────────────────────────────────────────────── */
+  /* cream: 暖米色底面 (背景 / panel / 渐变端点). */
+  --primitive-cream-100: #fffaf2;  /* panel-strong (不透明) */
+  --primitive-cream-200: #fbf7f0;  /* 体背景顶端渐变起点 */
+  --primitive-cream-300: #f6f1e8;  /* 主 body background */
+  --primitive-cream-400: #f3ebdf;  /* 体背景底端渐变终点 */
+
+  /* neutral: 暖色灰阶 (文字 / 次要文字). */
+  --primitive-neutral-500: #6a5d50;  /* 次要文字 (muted) */
+  --primitive-neutral-900: #1f1a14;  /* 正文 / 主文字 */
+
+  /* orange: 项目主 accent (warm serif 基调). */
+  --primitive-orange-500: #b44f2d;  /* accent 主 */
+  --primitive-orange-700: #8b3618;  /* accent-strong (hover / active) */
+
+  /* 功能色: 分别对应 danger / warn / ok / info, 每个只取中间权重一级;
+   * hover / active 若需要, 后续再补 -600 / -800. */
+  --primitive-red-600:   #9d2b2b;  /* danger */
+  --primitive-amber-700: #9f6a14;  /* warn (金黄, 比 yellow 更暖) */
+  --primitive-green-700: #2f6b45;  /* ok */
+  --primitive-blue-700:  #275d8a;  /* info */
+
+  /* ── semantic ────────────────────────────────────────────────── */
+  --background:     var(--primitive-cream-300);
+  --foreground:     var(--primitive-neutral-900);
+  /* panel / line 是半透明 (rgba) token, 不属于 primitive ramp, 保留直接
+   * 字面值. 如果未来需要从 primitive 生成, 可用 color-mix() 或 rgb 三元
+   * 组方案 (暂不必要). */
+  --panel:          rgba(255, 252, 247, 0.82);
+  --panel-strong:   var(--primitive-cream-100);
+  --line:           rgba(91, 67, 44, 0.16);
+  --muted:          var(--primitive-neutral-500);
+  --accent:         var(--primitive-orange-500);
+  --accent-strong:  var(--primitive-orange-700);
+  --danger:         var(--primitive-red-600);
+  --warn:           var(--primitive-amber-700);
+  --ok:             var(--primitive-green-700);
+  --info:           var(--primitive-blue-700);
 }
 
-/* Tailwind v4 设计 token. v4 把 @theme 里 --color-* / --spacing-* 等命名空间
- * 自动暴露为 utility (例: --color-accent → bg-accent / text-accent /
- * border-accent). 这里只声明颜色 token, 间距/圆角/阴影按需后续再补.
+/* Tailwind v4 设计 token 暴露. @theme 里的 --color-* 会被 v4 自动生成
+ * 对应 utility (--color-accent → bg-accent / text-accent / border-accent).
  *
- * 设计意图 (硬切策略, 见 td/022 §2.1 决策):
- *   - 新写的组件一律用 Tailwind utility, 不再往本文件加新的全局 class.
- *   - :root 下的 --accent / --danger 等老变量保留, globals.css 7000 行
- *     老规则继续 var(--accent) 引用; 等老 class 被逐 shell 迁完再清.
- *   - @theme 里复用 :root 同名 token 的字面值, 保证新旧两套引用同一色板,
- *     调色时改一处 (后续做 5.1 design tokens 分层时再让它们合一). */
+ * 这里只暴露 semantic 层, 不暴露 primitive (bg-orange-500 这类). 原因:
+ *   - 项目策略是 "用语义 class", 不鼓励直接写 bg-orange-500, 避免调色
+ *     时再扫描工程找硬编码色.
+ *   - primitive 层是 CSS 内部实现细节, 外部只应该看到 --accent / --danger.
+ *
+ * 注意: @theme 内不能用 var(...) 引用 :root 变量 (Tailwind v4 要求字面
+ * 值, 才能做 OKLCH 计算 / utility 生成). 这里保留字面值, 与 :root 保持
+ * 同步 — 调色时两处一起改. */
 @theme {
   --color-background: #f6f1e8;
   --color-foreground: #1f1a14;
