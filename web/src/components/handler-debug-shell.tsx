@@ -1,10 +1,10 @@
 "use client";
 
 import { Play } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
-import { ChainName } from "@/components/handler-debug-shell/chain-name";
+import { ChainPicker } from "@/components/handler-debug-shell/chain-picker";
+import { ResultPanel, type ResultTab } from "@/components/handler-debug-shell/result-panel";
 import {
   buildJSONDiffRows,
   DEFAULT_META,
@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   debugHandler,
-  getAssetURL,
   getHandlerDebugHandlers,
   type HandlerDebugInstance,
   type HandlerDebugResult,
@@ -47,9 +46,8 @@ export function HandlerDebugShell() {
   const [result, setResult] = useState<HandlerDebugResult | null>(null);
   const [error, setError] = useState("");
   const [prefillMessage, setPrefillMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<"json" | "pic" | "chain">("json");
+  const [activeTab, setActiveTab] = useState<ResultTab>("json");
   const [isRunning, setIsRunning] = useState(false);
-  const [draggingHandlerID, setDraggingHandlerID] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -211,196 +209,28 @@ export function HandlerDebugShell() {
         </div>
 
         <div className="handler-debug-controls">
-          <div className="handler-debug-chain-top">
-            <div className="handler-debug-chain-workspace">
-              <div className="handler-debug-chain-column">
-                <div className="handler-debug-chain-head">
-                  <strong>已选 Handler</strong>
-                  <span className="handler-debug-chain-count">{selectedChainHandlers.length}</span>
-                </div>
-                <div className="handler-debug-chain-list">
-                  {selectedChainHandlers.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="handler-debug-chain-card handler-debug-chain-card-selected"
-                      onClick={() => removeChainHandler(item.id)}
-                      draggable
-                      onDragStart={() => setDraggingHandlerID(item.id)}
-                      onDragEnd={() => setDraggingHandlerID(null)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (draggingHandlerID) {
-                          moveChainHandler(draggingHandlerID, item.id);
-                        }
-                        setDraggingHandlerID(null);
-                      }}
-                    >
-                      <span className="handler-debug-chain-grip">::</span>
-                      <ChainName name={item.name} />
-                    </button>
-                  ))}
-                  {selectedChainHandlers.length === 0 ? <div className="ruleset-debug-empty">点击右侧未选中的 handler 加入链路。</div> : null}
-                </div>
-              </div>
-              <div className="handler-debug-chain-column">
-                <div className="handler-debug-chain-head">
-                  <strong>未选 Handler</strong>
-                  <span className="handler-debug-chain-count">{unselectedChainHandlers.length}</span>
-                </div>
-                <div className="handler-debug-chain-list">
-                  {unselectedChainHandlers.map((item) => (
-                    <button key={item.id} type="button" className="handler-debug-chain-card" onClick={() => addChainHandler(item.id)}>
-                      <ChainName name={item.name} />
-                    </button>
-                  ))}
-                  {unselectedChainHandlers.length === 0 ? <div className="ruleset-debug-empty">当前全部 handler 都已加入链路。</div> : null}
-                </div>
-              </div>
-            </div>
-            <div className="handler-debug-chain-meta">
-              <div className="handler-debug-chain-head">
-                <strong>Meta JSON</strong>
-              </div>
-              <textarea className="input handler-debug-textarea handler-debug-textarea-compact" value={metaJSON} onChange={(event) => setMetaJSON(event.target.value)} />
-            </div>
-          </div>
+          <ChainPicker
+            selectedChainHandlers={selectedChainHandlers}
+            unselectedChainHandlers={unselectedChainHandlers}
+            metaJSON={metaJSON}
+            onAdd={addChainHandler}
+            onRemove={removeChainHandler}
+            onMove={moveChainHandler}
+            onMetaJSONChange={setMetaJSON}
+          />
 
           {prefillMessage ? <div className="handler-debug-message">{prefillMessage}</div> : null}
           {error ? <div className="ruleset-debug-error">{error}</div> : null}
         </div>
       </section>
 
-      <div className="handler-debug-results">
-        <section className="panel handler-debug-panel">
-          <div className="ruleset-debug-panel-head">
-            <div className="handler-debug-tabs">
-              <button type="button" className={`handler-debug-tab ${activeTab === "json" ? "handler-debug-tab-active" : ""}`} onClick={() => setActiveTab("json")}>
-                Json Diff
-              </button>
-              <button type="button" className={`handler-debug-tab ${activeTab === "pic" ? "handler-debug-tab-active" : ""}`} onClick={() => setActiveTab("pic")}>
-                Pic Diff
-              </button>
-              <button type="button" className={`handler-debug-tab ${activeTab === "chain" ? "handler-debug-tab-active" : ""}`} onClick={() => setActiveTab("chain")}>
-                Chain Result
-              </button>
-            </div>
-            {result?.error ? <span className="ruleset-debug-status ruleset-debug-status-no_match">error</span> : null}
-          </div>
-          {activeTab === "json" ? (
-            result ? (
-              diffRows.some((row) => row.kind !== "unchanged") ? (
-                <div className="handler-debug-code-diff">
-                  <div className="handler-debug-code-diff-head">
-                    <div>Before</div>
-                    <div>After</div>
-                  </div>
-                  <div className="handler-debug-code-diff-body">
-                    {diffRows.map((row, index) => (
-                      <div key={`${row.kind}-${index}`} className={`handler-debug-code-diff-row handler-debug-code-diff-row-${row.kind}`}>
-                        <div className="handler-debug-code-diff-side">
-                          <span className="handler-debug-code-diff-line">{row.beforeLineNumber ?? ""}</span>
-                          <code>{row.kind === "added" ? "" : row.beforeLine ?? ""}</code>
-                        </div>
-                        <div className="handler-debug-code-diff-side">
-                          <span className="handler-debug-code-diff-line">{row.afterLineNumber ?? ""}</span>
-                          <code>{row.kind === "removed" ? "" : row.afterLine ?? ""}</code>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="ruleset-debug-empty">当前 handler 没有改动任何字段。</div>
-              )
-            ) : (
-              <div className="ruleset-debug-empty">运行后会按 JSON 文本展示前后差异。</div>
-            )
-          ) : activeTab === "pic" ? (
-            result ? (
-            picDiffState && (picDiffState.coverChanged || picDiffState.posterChanged || picDiffState.sampleChanged) ? (
-              <div className="handler-debug-pic-diff">
-                <article className="handler-debug-pic-diff-section">
-                  <div className="handler-debug-pic-diff-head">
-                    <h4>Cover</h4>
-                    <span className={`ruleset-debug-step-badge ${picDiffState.coverChanged ? "ruleset-debug-step-badge-hit" : ""}`}>{picDiffState.coverChanged ? "changed" : "unchanged"}</span>
-                  </div>
-                  <div className="handler-debug-pic-diff-compare">
-                    <div className="handler-debug-pic-slot">
-                      {result.before_meta.cover?.key ? <Image src={getAssetURL(result.before_meta.cover.key)} alt="before cover" width={220} height={320} unoptimized /> : <div className="ruleset-debug-empty">No Image</div>}
-                    </div>
-                    <div className="handler-debug-pic-slot">
-                      {result.after_meta.cover?.key ? <Image src={getAssetURL(result.after_meta.cover.key)} alt="after cover" width={220} height={320} unoptimized /> : <div className="ruleset-debug-empty">No Image</div>}
-                    </div>
-                  </div>
-                </article>
-
-                <article className="handler-debug-pic-diff-section">
-                  <div className="handler-debug-pic-diff-head">
-                    <h4>Poster</h4>
-                    <span className={`ruleset-debug-step-badge ${picDiffState.posterChanged ? "ruleset-debug-step-badge-hit" : ""}`}>{picDiffState.posterChanged ? "changed" : "unchanged"}</span>
-                  </div>
-                  <div className="handler-debug-pic-diff-compare">
-                    <div className="handler-debug-pic-slot">
-                      {result.before_meta.poster?.key ? <Image src={getAssetURL(result.before_meta.poster.key)} alt="before poster" width={220} height={320} unoptimized /> : <div className="ruleset-debug-empty">No Image</div>}
-                    </div>
-                    <div className="handler-debug-pic-slot">
-                      {result.after_meta.poster?.key ? <Image src={getAssetURL(result.after_meta.poster.key)} alt="after poster" width={220} height={320} unoptimized /> : <div className="ruleset-debug-empty">No Image</div>}
-                    </div>
-                  </div>
-                </article>
-
-                <article className="handler-debug-pic-diff-section">
-                  <div className="handler-debug-pic-diff-head">
-                    <h4>Sample Images</h4>
-                    <span className={`ruleset-debug-step-badge ${picDiffState.sampleChanged ? "ruleset-debug-step-badge-hit" : ""}`}>{picDiffState.sampleChanged ? "changed" : "unchanged"}</span>
-                  </div>
-                  <div className="handler-debug-pic-diff-compare">
-                    <div className="handler-debug-pic-grid">
-                      {(result.before_meta.sample_images ?? []).length ? (
-                        result.before_meta.sample_images?.map((item) =>
-                          item.key ? <Image key={`before-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "before sample"} width={220} height={140} unoptimized /> : null,
-                        )
-                      ) : (
-                        <div className="ruleset-debug-empty">No Image</div>
-                      )}
-                    </div>
-                    <div className="handler-debug-pic-grid">
-                      {(result.after_meta.sample_images ?? []).length ? (
-                        result.after_meta.sample_images?.map((item) =>
-                          item.key ? <Image key={`after-${item.key}`} src={getAssetURL(item.key)} alt={item.name || "after sample"} width={220} height={140} unoptimized /> : null,
-                        )
-                      ) : (
-                        <div className="ruleset-debug-empty">No Image</div>
-                      )}
-                    </div>
-                  </div>
-                </article>
-              </div>
-            ) : (
-              <div className="ruleset-debug-empty">当前 handler 没有图片资源差异。</div>
-            )
-            ) : (
-            <div className="ruleset-debug-empty">运行后会按 Before / After 展示图片资源差异。</div>
-            )
-          ) : result?.steps.length ? (
-            <div className="handler-debug-step-list">
-              {result.steps.map((step, index) => (
-                <article key={`${step.handler_id}-${index}`} className={`handler-debug-step-card ${step.error ? "handler-debug-step-card-error" : ""}`}>
-                  <div className="handler-debug-step-head">
-                    <strong>{step.handler_name}</strong>
-                    <span className={`ruleset-debug-step-badge ${step.error ? "" : "ruleset-debug-step-badge-hit"}`}>{step.error ? "error" : "ok"}</span>
-                  </div>
-                  {step.error ? <p className="ruleset-debug-step-summary">{step.error}</p> : null}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="ruleset-debug-empty">运行后会展示链式执行的每一步结果。</div>
-          )}
-        </section>
-      </div>
+      <ResultPanel
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        result={result}
+        diffRows={diffRows}
+        picDiffState={picDiffState}
+      />
     </div>
   );
 }
