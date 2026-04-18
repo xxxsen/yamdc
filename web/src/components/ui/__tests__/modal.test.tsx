@@ -15,6 +15,10 @@ describe("Modal", () => {
     document
       .querySelectorAll(".plugin-editor-modal-backdrop")
       .forEach((el) => el.remove());
+    // bare 模式用自定义 backdrop class, 也要兜底清掉。
+    document
+      .querySelectorAll("[data-bare-backdrop]")
+      .forEach((el) => el.remove());
   });
 
   // ---- 正常 case ----
@@ -294,6 +298,68 @@ describe("Modal", () => {
     expect(
       document.querySelector(".plugin-editor-modal-actions"),
     ).toBeNull();
+    unmount();
+  });
+
+  // ---- bare 模式 ----
+  it("bare=true 时不渲染 plugin-editor-modal-head/body 骨架, children 直接挂到 frame", () => {
+    const { unmount } = mount(
+      <Modal
+        open
+        onClose={vi.fn()}
+        bare
+        backdropClassName="custom-backdrop"
+        frameClassName="custom-frame"
+        ariaLabel="no-header-modal"
+      >
+        <div data-testid="bare-content">raw-body</div>
+      </Modal>,
+    );
+    expect(document.querySelector(".plugin-editor-modal-backdrop")).toBeNull();
+    expect(document.querySelector(".plugin-editor-modal-head")).toBeNull();
+    expect(document.querySelector(".plugin-editor-modal-body")).toBeNull();
+    const backdrop = document.querySelector(".custom-backdrop")!;
+    expect(backdrop).not.toBeNull();
+    const dialog = backdrop.querySelector('[role="dialog"]')!;
+    expect(dialog.className).toContain("custom-frame");
+    expect(dialog.getAttribute("aria-label")).toBe("no-header-modal");
+    expect(dialog.querySelector('[data-testid="bare-content"]')!.textContent).toBe("raw-body");
+    unmount();
+  });
+
+  it("bare 模式下 ESC / backdrop 点击行为仍然生效", () => {
+    const onClose = vi.fn();
+    const { unmount } = mount(
+      <Modal
+        open
+        onClose={onClose}
+        bare
+        backdropClassName="bare-test-backdrop"
+        frameClassName="bare-test-frame"
+      >
+        <div />
+      </Modal>,
+    );
+    const backdrop = document.querySelector(".bare-test-backdrop") as HTMLElement;
+    act(() => {
+      backdrop.click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it("非 bare 模式额外传 backdropClassName 时, 以追加方式与默认 class 叠加", () => {
+    const { unmount } = mount(
+      <Modal open onClose={vi.fn()} title="T" backdropClassName="extra-class">
+        <div />
+      </Modal>,
+    );
+    const backdrop = document.querySelector(".plugin-editor-modal-backdrop")!;
+    expect(backdrop.className).toContain("extra-class");
     unmount();
   });
 });

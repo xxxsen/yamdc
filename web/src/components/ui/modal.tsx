@@ -6,13 +6,19 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-// Modal: 项目公共弹层原子。第一版不引入动画/focus-trap, 聚焦于把
-// 散落在各 shell 里的 Modal 行为 (portal / ESC / backdrop 点击 /
-// body 滚动锁) 统一化, 把"每个 shell 自己 new 一份"的重复代码收敛。
+// Modal: 项目公共弹层原子。不引入动画/focus-trap, 聚焦于把散落在各
+// shell 里的 Modal 行为 (portal / ESC / backdrop 点击 / body 滚动锁)
+// 统一化, 把"每个 shell 自己 new 一份"的重复代码收敛。
 //
-// 样式上直接沿用 globals.css 既有的 .plugin-editor-modal-* 一套类
-// (当前项目里最完整的一套 Modal 样式)。类名带 plugin-editor- 前缀
-// 属历史遗留; 后续在 §class-rename 任务里再做 alias, 本轮不动。
+// 两种变体:
+//   1. shell (默认, bare=false): 带 plugin-editor-modal-* 一套 head/body
+//      包装, 用 title/subtitle/badge/actions 做声明式 slots。
+//      覆盖 ImportModal / ExampleModal 这类"标准对话框"。
+//   2. bare (bare=true): 不渲染任何 head/body 骨架, 调用方在 children
+//      里自己摆布局, Modal 只负责 portal + 三件行为 + 把
+//      frameClassName 套在内框上。覆盖 media-library-shell 里那些
+//      有独特 backdrop 样式和不规则 header 的对话框。
+//
 // 详见 td/022-frontend-optimization-roadmap.md §3.1。
 
 export interface ModalBadge {
@@ -20,21 +26,36 @@ export interface ModalBadge {
   label: string;
 }
 
+// 通用 props: 两种变体都用得到。title 在 shell 模式下必填, bare
+// 模式下无意义; 由 consumer 自觉遵守 (我们在运行期放弃校验, 保持
+// 类型声明简洁)。
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  children: React.ReactNode;
+
+  // shell 模式独有 (bare=true 时被忽略)
+  title?: string;
   subtitle?: string;
   badge?: ModalBadge;
   actions?: React.ReactNode;
-  children: React.ReactNode;
+  closeAriaLabel?: string;
+
+  // 外观定制
+  bare?: boolean;
+  backdropClassName?: string;
+  frameClassName?: string;
   className?: string;
+
+  // 行为 / 可访问性
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
-  closeAriaLabel?: string;
   ariaLabel?: string;
   disableClose?: boolean;
 }
+
+const DEFAULT_BACKDROP_CLASS = "plugin-editor-modal-backdrop";
+const DEFAULT_FRAME_CLASS = "panel plugin-editor-modal";
 
 export function Modal({
   open,
@@ -44,6 +65,9 @@ export function Modal({
   badge,
   actions,
   children,
+  bare = false,
+  backdropClassName,
+  frameClassName,
   className,
   closeOnBackdrop = true,
   closeOnEscape = true,
@@ -92,48 +116,64 @@ export function Modal({
     onClose();
   };
 
+  // bare 模式: 调用方自己给 backdrop/frame 上类; 我们不追加任何默认,
+  // 避免和调用方的自定义样式相互打架 (例如 .media-library-detail-modal
+  // 的 flex 布局不想叠加 .plugin-editor-modal-backdrop 的 grid 居中)。
+  const resolvedBackdropClass = bare
+    ? backdropClassName
+    : cn(DEFAULT_BACKDROP_CLASS, backdropClassName);
+  const resolvedFrameClass = bare
+    ? cn(frameClassName, className)
+    : cn(DEFAULT_FRAME_CLASS, frameClassName, className);
+
   return createPortal(
     <div
-      className="plugin-editor-modal-backdrop"
+      className={resolvedBackdropClass}
       role="presentation"
       onClick={handleBackdropClick}
     >
       <div
-        className={cn("panel plugin-editor-modal", className)}
+        className={resolvedFrameClass}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? title}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="plugin-editor-modal-head">
-          <div className="plugin-editor-modal-title-group">
-            {badge ? (
-              <div className="plugin-editor-modal-badge">
-                {badge.icon}
-                <span>{badge.label}</span>
+        {bare ? (
+          children
+        ) : (
+          <>
+            <div className="plugin-editor-modal-head">
+              <div className="plugin-editor-modal-title-group">
+                {badge ? (
+                  <div className="plugin-editor-modal-badge">
+                    {badge.icon}
+                    <span>{badge.label}</span>
+                  </div>
+                ) : null}
+                <div className="plugin-editor-modal-title-copy">
+                  <h3>{title}</h3>
+                  {subtitle ? <span>{subtitle}</span> : null}
+                </div>
               </div>
-            ) : null}
-            <div className="plugin-editor-modal-title-copy">
-              <h3>{title}</h3>
-              {subtitle ? <span>{subtitle}</span> : null}
+              {disableClose ? null : (
+                <button
+                  className="btn plugin-editor-modal-close"
+                  type="button"
+                  aria-label={closeAriaLabel}
+                  title={closeAriaLabel}
+                  onClick={onClose}
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
-          </div>
-          {disableClose ? null : (
-            <button
-              className="btn plugin-editor-modal-close"
-              type="button"
-              aria-label={closeAriaLabel}
-              title={closeAriaLabel}
-              onClick={onClose}
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-        <div className="plugin-editor-modal-body">{children}</div>
-        {actions ? (
-          <div className="plugin-editor-modal-actions">{actions}</div>
-        ) : null}
+            <div className="plugin-editor-modal-body">{children}</div>
+            {actions ? (
+              <div className="plugin-editor-modal-actions">{actions}</div>
+            ) : null}
+          </>
+        )}
       </div>
     </div>,
     document.body,

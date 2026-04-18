@@ -4,6 +4,8 @@ import { ChevronDown, RefreshCw, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
 import {
   getMediaLibraryFileURL,
@@ -448,10 +450,13 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                       目前唯一菜单项是 "查看同步日志"。把两个按钮放到同一
                       视觉容器里, 避免让用户困惑 "多出来的按钮在做什么"。 */}
                   <div className="media-library-sync-split" ref={syncMenuRef}>
-                    <button
-                      type="button"
-                      className="btn btn-primary media-library-sync-btn"
+                    <Button
+                      variant="primary"
+                      className="media-library-sync-btn"
                       disabled={syncBusy}
+                      leftIcon={
+                        <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
+                      }
                       onClick={() => {
                         setSyncMenuOpen(false);
                         setSyncCompletedFlash(false);
@@ -481,22 +486,21 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                         })();
                       }}
                     >
-                      <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
                       {syncButtonLabel}
-                    </button>
+                    </Button>
                     {/* 下拉按钮不跟随 disabled: 用户可能想在同步进行中
                         看历史日志 / 当前 run 进度, 不该被主按钮的 busy
                         状态拦住。 */}
-                    <button
-                      type="button"
-                      className="btn btn-primary media-library-sync-caret"
+                    <Button
+                      variant="primary"
+                      className="media-library-sync-caret"
                       aria-label="同步菜单"
                       aria-haspopup="menu"
                       aria-expanded={syncMenuOpen}
                       onClick={() => setSyncMenuOpen((current) => !current)}
                     >
                       <ChevronDown size={14} />
-                    </button>
+                    </Button>
                     {syncMenuOpen ? (
                       <div className="media-library-sync-menu panel" role="menu">
                         <button
@@ -552,106 +556,109 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
         )}
       </section>
 
-      {activeDetailID !== null ? (
-        <div className="media-library-detail-modal" onClick={closeDetailModal}>
-          <div className="media-library-detail-modal-frame" onClick={(event) => event.stopPropagation()}>
-            {detailLoading ? (
-              <div className="media-library-detail-modal-state panel">
-                <div className="list-loading-spinner" aria-hidden="true" />
-              </div>
-            ) : detailError ? (
-              <div className="media-library-detail-modal-state panel">
-                <span className="review-message" data-tone="danger">
-                  {detailError}
-                </span>
-              </div>
-            ) : activeDetail ? (
-              <MediaLibraryDetailShell
-                initialDetail={activeDetail}
-                stageOnly
-                onDetailChange={(next) => {
-                  setActiveDetail(next);
-                  setItems((current) =>
-                    current.map((item) =>
-                      item.id === next.item.id
-                        ? {
-                            ...item,
-                            title: next.item.title,
-                            number: next.item.number,
-                            release_date: next.item.release_date,
-                            actors: next.item.actors,
-                            updated_at: next.item.updated_at,
-                            poster_path: next.item.poster_path,
-                            cover_path: next.item.cover_path,
-                          }
-                        : item,
-                    ),
-                  );
-                }}
-              />
-            ) : null}
+      <Modal
+        open={activeDetailID !== null}
+        onClose={closeDetailModal}
+        bare
+        backdropClassName="media-library-detail-modal"
+        frameClassName="media-library-detail-modal-frame"
+        ariaLabel="媒体项详情"
+      >
+        {detailLoading ? (
+          <div className="media-library-detail-modal-state panel">
+            <div className="list-loading-spinner" aria-hidden="true" />
           </div>
-        </div>
-      ) : null}
-      {syncLogsOpen ? (
-        <div className="media-library-detail-modal" onClick={closeSyncLogs} role="dialog" aria-modal="true" aria-label="同步日志">
-          <div
-            className="media-library-sync-logs-frame panel"
-            onClick={(event) => event.stopPropagation()}
+        ) : detailError ? (
+          <div className="media-library-detail-modal-state panel">
+            <span className="review-message" data-tone="danger">
+              {detailError}
+            </span>
+          </div>
+        ) : activeDetail ? (
+          <MediaLibraryDetailShell
+            initialDetail={activeDetail}
+            stageOnly
+            onDetailChange={(next) => {
+              setActiveDetail(next);
+              setItems((current) =>
+                current.map((item) =>
+                  item.id === next.item.id
+                    ? {
+                        ...item,
+                        title: next.item.title,
+                        number: next.item.number,
+                        release_date: next.item.release_date,
+                        actors: next.item.actors,
+                        updated_at: next.item.updated_at,
+                        poster_path: next.item.poster_path,
+                        cover_path: next.item.cover_path,
+                      }
+                    : item,
+                ),
+              );
+            }}
+          />
+        ) : null}
+      </Modal>
+      <Modal
+        open={syncLogsOpen}
+        onClose={closeSyncLogs}
+        bare
+        backdropClassName="media-library-detail-modal"
+        frameClassName="media-library-sync-logs-frame panel"
+        ariaLabel="同步日志"
+      >
+        <div className="media-library-sync-logs-header">
+          <div className="media-library-sync-logs-title">媒体库同步日志</div>
+          <Button
+            variant="ghost"
+            className="media-library-sync-logs-close"
+            onClick={closeSyncLogs}
           >
-            <div className="media-library-sync-logs-header">
-              <div className="media-library-sync-logs-title">媒体库同步日志</div>
-              <button
-                type="button"
-                className="btn btn-ghost media-library-sync-logs-close"
-                onClick={closeSyncLogs}
-              >
-                关闭
-              </button>
-            </div>
-            {syncLogsLoading ? (
-              <div className="media-library-sync-logs-state">
-                <div className="list-loading-spinner" aria-hidden="true" />
-              </div>
-            ) : syncLogsError ? (
-              <div className="media-library-sync-logs-state">
-                <span className="review-message" data-tone="danger">
-                  {syncLogsError}
-                </span>
-              </div>
-            ) : syncLogs.length === 0 ? (
-              <div className="media-library-sync-logs-state">
-                <span className="review-empty-state">暂无同步日志</span>
-              </div>
-            ) : (
-              // 一行一条, 最新的在最上面 (后端已按 created_at DESC 返回)。
-              // 不再做前端二次分组 / 折叠: 扁平列表的心智负担最低,
-              // 用 run_id 列让用户肉眼区分不同 sync 轮次。
-              <ul className="media-library-sync-logs-list">
-                {syncLogs.map((entry) => (
-                  <li key={entry.id} className="media-library-sync-logs-row" data-level={entry.level}>
-                    <div className="media-library-sync-logs-row-meta">
-                      <span className="media-library-sync-logs-row-time">{formatSyncLogTime(entry.created_at)}</span>
-                      <span className="media-library-sync-logs-row-level" data-level={entry.level}>
-                        {entry.level.toUpperCase()}
-                      </span>
-                      <span className="media-library-sync-logs-row-run" title={entry.run_id}>
-                        {entry.run_id}
-                      </span>
-                    </div>
-                    <div className="media-library-sync-logs-row-body">
-                      {entry.rel_path ? (
-                        <span className="media-library-sync-logs-row-path">{entry.rel_path}</span>
-                      ) : null}
-                      <span className="media-library-sync-logs-row-message">{entry.message}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+            关闭
+          </Button>
         </div>
-      ) : null}
+        {syncLogsLoading ? (
+          <div className="media-library-sync-logs-state">
+            <div className="list-loading-spinner" aria-hidden="true" />
+          </div>
+        ) : syncLogsError ? (
+          <div className="media-library-sync-logs-state">
+            <span className="review-message" data-tone="danger">
+              {syncLogsError}
+            </span>
+          </div>
+        ) : syncLogs.length === 0 ? (
+          <div className="media-library-sync-logs-state">
+            <span className="review-empty-state">暂无同步日志</span>
+          </div>
+        ) : (
+          // 一行一条, 最新的在最上面 (后端已按 created_at DESC 返回)。
+          // 不再做前端二次分组 / 折叠: 扁平列表的心智负担最低,
+          // 用 run_id 列让用户肉眼区分不同 sync 轮次。
+          <ul className="media-library-sync-logs-list">
+            {syncLogs.map((entry) => (
+              <li key={entry.id} className="media-library-sync-logs-row" data-level={entry.level}>
+                <div className="media-library-sync-logs-row-meta">
+                  <span className="media-library-sync-logs-row-time">{formatSyncLogTime(entry.created_at)}</span>
+                  <span className="media-library-sync-logs-row-level" data-level={entry.level}>
+                    {entry.level.toUpperCase()}
+                  </span>
+                  <span className="media-library-sync-logs-row-run" title={entry.run_id}>
+                    {entry.run_id}
+                  </span>
+                </div>
+                <div className="media-library-sync-logs-row-body">
+                  {entry.rel_path ? (
+                    <span className="media-library-sync-logs-row-path">{entry.rel_path}</span>
+                  ) : null}
+                  <span className="media-library-sync-logs-row-message">{entry.message}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
       {syncMessage ? (
         <div className="app-toast app-toast-top" data-tone={/失败|error/i.test(syncMessage) ? "danger" : undefined} role="status" aria-live="polite">
           {syncMessage}
