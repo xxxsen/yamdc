@@ -6,7 +6,9 @@ import path from "node:path";
 // 新增被测文件时, 需要同步把它加进 include, 并视情况调 thresholds。
 // 详见 td/022-frontend-optimization-roadmap.md §3.3。
 const COVERED_SOURCES = [
-  "src/lib/api.ts",
+  // api/* 是 lib/api.ts 按资源拆分后的实际实现; lib/api.ts 本身只做 re-export,
+  // 不单独列 — 它的行为全部由 api/* 的测试覆盖, 收进 include 只会拉低百分比。
+  "src/lib/api/**/*.ts",
   "src/lib/upload-debug.ts",
   "src/components/plugin-editor/plugin-editor-utils.ts",
   "src/components/plugin-editor/plugin-editor-constants.ts",
