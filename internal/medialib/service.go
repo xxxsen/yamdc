@@ -75,8 +75,9 @@ func (s *Service) Start(ctx context.Context) {
 // 只把已经筛选+排序好的行反序列化回来, 避免 1.4 里描述的 "一把 SELECT * + 全表 Unmarshal" 问题。
 //
 // 精确匹配字段 (title/number/name/release_year/total_size) 来自专用索引列,
-// 由 upsertDetail 在写入时同步更新; 旧行通过 002 migration 的 json_extract 回填,
-// 回填不准的会在下一次 media library sync 时被 upsertDetail 覆盖修正。
+// 由 upsertDetail 在写入时同步更新; 002 migration 升级场景下, 历史行的这几列
+// 仍是默认零值, 需要用户手动触发一次 "同步媒体库" 让 upsertDetail 重写覆盖,
+// 否则 keyword/year/size 过滤会漏命中这些旧行。
 func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]Item, error) {
 	query, args := buildListItemsQuery(options)
 	rows, err := s.db.QueryContext(ctx, query, args...)

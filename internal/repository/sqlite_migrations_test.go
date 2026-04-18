@@ -54,7 +54,7 @@ func TestApplyMigrationsIsIdempotent(t *testing.T) {
 // 把 user_version 手动回退到 0, 代表老版本只跑过 001_init 且没有 user_version 记录,
 // 重新打开 DB 后 applyMigrations 必须把 002 重放、把 user_version 顶上去。
 //
-// 002 migration 里面用的是 ALTER TABLE ADD COLUMN (非幂等) + UPDATE (幂等) +
+// 002 migration 里面用的是 ALTER TABLE ADD COLUMN (非幂等) +
 // CREATE INDEX IF NOT EXISTS (幂等)。回退 user_version 时要同步把 002 加的列
 // 扔掉, 不然 ALTER TABLE 会直接报 duplicate column, 测试等效于模拟了升级。
 func TestApplyMigrationsRunsPendingOnUpgrade(t *testing.T) {

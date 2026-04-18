@@ -684,10 +684,12 @@ func TestListItemsKeywordLiteralWildcards(t *testing.T) {
 	assert.Equal(t, "a", got[0].RelPath)
 }
 
-func TestListItemsReleaseYearBackfilledForLegacyRows(t *testing.T) {
+func TestListItemsLegacyRowsNeedSyncToBeFilterable(t *testing.T) {
 	// 模拟 002 migration 升级老库: 构造一行 release_year 索引列为空、
-	// 但 item_json 里有可解析年份的数据, 然后手动按 migration SQL 回填,
-	// 验证 year 过滤能命中。这覆盖了 "旧库升级后不等 sync 也能过滤" 的路径。
+	// 但 item_json 里有可解析年份的数据。002 不做 SQL 回填, 所以 year 过滤
+	// 在 sync 之前必然漏掉这行; 跑一次 upsertDetail (等价于一次 sync)
+	// 之后, 索引列被写正确, 过滤才能命中。覆盖 "升级后必须触发同步媒体库
+	// 才能让旧行参与过滤" 的契约。
 	svc := newTestMediaService(t)
 	ctx := context.Background()
 
@@ -705,19 +707,9 @@ func TestListItemsReleaseYearBackfilledForLegacyRows(t *testing.T) {
 
 	before, err := svc.ListItems(ctx, ListItemsOptions{Year: "2023"})
 	require.NoError(t, err)
-	assert.Empty(t, before, "backfill 之前 release_year 列为空, year 过滤不应该命中")
+	assert.Empty(t, before, "sync 之前 release_year 列为空, year 过滤不应该命中")
 
-	_, err = svc.db.ExecContext(ctx, `
-		UPDATE yamdc_media_library_tab
-		SET release_year = CASE
-			WHEN substr(COALESCE(json_extract(item_json, '$.release_date'), ''), 1, 4)
-				 GLOB '[0-9][0-9][0-9][0-9]'
-			THEN substr(COALESCE(json_extract(item_json, '$.release_date'), ''), 1, 4)
-			ELSE ''
-		END
-		WHERE release_year = '' AND item_json != ''
-	`)
-	require.NoError(t, err)
+	require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: item}))
 
 	after, err := svc.ListItems(ctx, ListItemsOptions{Year: "2023"})
 	require.NoError(t, err)
