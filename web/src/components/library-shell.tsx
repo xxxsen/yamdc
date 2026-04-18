@@ -1,14 +1,14 @@
 "use client";
 
-import { Crop, Plus, Search, Trash2, X } from "lucide-react";
+import { Crop, Plus, Trash2, X } from "lucide-react";
 import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { ImageCropper, type CropRect } from "@/components/image-cropper";
 import { AppToast } from "@/components/library-shell/app-toast";
 import { LibraryBottomActions } from "@/components/library-shell/bottom-actions";
+import { LibraryListPanel } from "@/components/library-shell/list-panel";
 import {
   cloneMeta,
-  getCardImage,
   getInitialCopyMode,
   getInitialMessage,
   getInitialSelectedPath,
@@ -31,11 +31,11 @@ import {
   taskPercent,
   toErrorMessage,
 } from "@/components/library-shell/utils";
+import { LibraryVariantSwitcher } from "@/components/library-shell/variant-switcher";
 import { Button } from "@/components/ui/button";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus } from "@/lib/api";
 import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
-import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
   items: LibraryListItem[];
@@ -543,76 +543,29 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
 
   return (
     <div className="library-shell">
-      <section className="panel library-list-panel">
-        <div className="library-list-head">
-          <div className="library-list-kicker">Saved Library</div>
-          <h2 className="library-list-title">已入库</h2>
-          <p className="library-list-subtitle">浏览 `savedir` 下的媒体目录，并直接修改目录内全部 NFO 的共享元数据。</p>
-        </div>
-
-        <label className="file-list-search library-search">
-          <Search size={16} />
-          <input
-            className="input file-list-search-input"
-            placeholder="按标题 / 影片 ID / 演员搜索"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+      <LibraryListPanel
+        items={filteredItems}
+        keyword={keyword}
+        onKeywordChange={setKeyword}
+        selectedPath={selectedPath}
+        onSelectItem={loadDetail}
+        resolveImage={resolveLibraryImageSrc}
+        bottomActions={
+          <LibraryBottomActions
+            refreshBusy={refreshBusy}
+            moveBusy={moveBusy}
+            mediaSyncRunning={mediaSyncRunning}
+            configured={!!mediaStatus?.configured}
+            refreshButtonLabel={refreshButtonLabel}
+            moveButtonLabel={moveButtonLabel}
+            moveProgressVisible={moveProgressVisible}
+            moveState={moveState}
+            moveProgress={moveProgress}
+            onRefresh={handleRefreshLibrary}
+            onMove={handleMoveToMediaLibrary}
           />
-        </label>
-
-        <div className="library-item-list">
-          {filteredItems.map((item) => {
-            const imagePath = getCardImage(item);
-            return (
-              <button
-                key={item.rel_path}
-                type="button"
-                className="library-item-card"
-                data-active={selectedPath === item.rel_path}
-                onClick={() => loadDetail(item.rel_path)}
-              >
-                <div className="library-item-thumb">
-                  {imagePath ? (
-                    <img src={resolveLibraryImageSrc(imagePath)} alt={item.title} className="library-thumb-image" />
-                  ) : (
-                    <div className="library-thumb-fallback">{(item.number || item.title || item.name).slice(0, 2).toUpperCase()}</div>
-                  )}
-                </div>
-                <div className="library-item-copy">
-                  <div className="library-item-topline">
-                    <span className="library-item-number">{item.number || "未命名影片"}</span>
-                    <span className="library-item-time">{formatUnixMillis(item.updated_at)}</span>
-                  </div>
-                  {item.conflict ? (
-                    <div className="library-item-badge-row">
-                      <span className="badge library-conflict-badge">已存在(冲突)</span>
-                    </div>
-                  ) : null}
-                  <div className="library-item-title" title={item.title || item.name}>{item.title || item.name}</div>
-                  <div className="library-item-meta">{itemActors(item).length > 0 ? itemActors(item).join(" / ") : "暂无演员信息"}</div>
-                  <div className="library-item-path">{item.rel_path}</div>
-                  <div className="library-item-footnote">{item.variant_count > 1 ? `${item.variant_count} 个文件实例` : "单实例目录"}</div>
-                </div>
-              </button>
-            );
-          })}
-          {filteredItems.length === 0 ? <div className="review-empty-state">没有匹配的已入库项目</div> : null}
-        </div>
-
-        <LibraryBottomActions
-          refreshBusy={refreshBusy}
-          moveBusy={moveBusy}
-          mediaSyncRunning={mediaSyncRunning}
-          configured={!!mediaStatus?.configured}
-          refreshButtonLabel={refreshButtonLabel}
-          moveButtonLabel={moveButtonLabel}
-          moveProgressVisible={moveProgressVisible}
-          moveState={moveState}
-          moveProgress={moveProgress}
-          onRefresh={handleRefreshLibrary}
-          onMove={handleMoveToMediaLibrary}
-        />
-      </section>
+        }
+      />
 
       <section className="panel library-detail-panel">
         {detail ? (
@@ -655,22 +608,11 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
             </div>
 
             {showVariantSwitch ? (
-              <div className="panel library-variant-panel">
-                <div className="library-variant-list">
-                  {detail.variants.map((variant) => (
-                    <button
-                      key={variant.key}
-                      type="button"
-                      className="library-variant-chip"
-                      data-active={currentVariant?.key === variant.key}
-                      onClick={() => setSelectedVariantKey(variant.key)}
-                    >
-                      <span className="library-variant-chip-title">{variant.label}</span>
-                      <span className="library-variant-chip-meta">{variant.base_name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <LibraryVariantSwitcher
+                variants={detail.variants}
+                currentKey={currentVariant?.key ?? ""}
+                onSelect={setSelectedVariantKey}
+              />
             ) : null}
 
             <div className="review-content review-content-single">
