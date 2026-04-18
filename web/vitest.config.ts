@@ -25,6 +25,11 @@ const COVERED_SOURCES = [
   // shell's 移动到媒体库 / 重新扫描库 生命周期. 迁移自 §3.4, 修掉了 0KB
   // fast-path 漏刷新 bug. 行为冻结在单测里.
   "src/components/library-shell/move-refresh-reducer.ts",
+  // library-shell/use-library-move-refresh.ts: reducer 之上包裹 polling / flash
+  // timer / auto-refresh 等副作用, 是两次 bug fix (commit 1d2f24d watermark +
+  // commit 7bce4bd auto-refresh 不串扰 refresh 按钮) 的落脚点. 用
+  // @testing-library/react renderHook + fake timers 把完整生命周期冻在单测里.
+  "src/components/library-shell/use-library-move-refresh.ts",
   // library-shell/utils.ts: library-shell 的纯工具集 (cloneMeta / pickVariant /
   // normalizeMeta / handleMoveToMediaLibraryError / getMoveButtonLabel 等).
   // §2.2 B-2 里从 library-shell.tsx 拆出来的纯函数, 行为冻结防腐.
