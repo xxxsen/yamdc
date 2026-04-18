@@ -5,9 +5,13 @@ import Image from "next/image";
 import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { ImageCropper } from "@/components/image-cropper";
+import { DeleteConfirmOverlay } from "@/components/review-shell/delete-confirm-overlay";
+import { ReviewPreviewOverlay, type ReviewPreviewState } from "@/components/review-shell/preview-overlay";
+import { RestoreConfirmOverlay } from "@/components/review-shell/restore-confirm-overlay";
+import { buildPayload, imageTitle, normalizeList, parseMeta } from "@/components/review-shell/utils";
 import { Button } from "@/components/ui/button";
 import { TokenEditor } from "@/components/ui/token-editor";
-import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
+import type { JobItem, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
 
@@ -18,127 +22,6 @@ interface Props {
 }
 
 const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
-const PREVIEW_IMAGE_STYLE = { objectFit: "contain", objectPosition: "center" } as const;
-
-function parseMeta(data: ScrapeDataItem | null): ReviewMeta | null {
-  if (!data) {
-    return null;
-  }
-  const raw = data.review_data || data.raw_data;
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw) as ReviewMeta;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeList(items?: string[]) {
-  return (items ?? []).map((item) => item.trim()).filter(Boolean);
-}
-
-function buildPayload(meta: ReviewMeta | null) {
-  if (!meta) {
-    return "";
-  }
-  return JSON.stringify(
-    {
-      ...meta,
-      actors: normalizeList(meta.actors),
-      genres: normalizeList(meta.genres),
-    },
-    null,
-    2,
-  );
-}
-
-function imageTitle(type: string) {
-  if (type === "cover") {
-    return "封面";
-  }
-  if (type === "poster") {
-    return "海报";
-  }
-  return "Extrafanart";
-}
-
-function DeleteConfirmOverlay({
-  targetIds,
-  selectedRelPath,
-  onCancel,
-  onConfirm,
-  isPending,
-}: {
-  targetIds: number[] | null;
-  selectedRelPath: string | undefined;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  if (!targetIds || targetIds.length === 0) return null;
-  return (
-    <div className="review-preview-overlay" onClick={onCancel}>
-      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-confirm-title">确认删除</div>
-        <div className="review-confirm-body">
-          {targetIds.length > 1 ? (
-            <>
-              这会删除已选中的 {targetIds.length} 个任务以及各自对应的源文件。
-            </>
-          ) : (
-            <>
-              这会删除当前任务以及对应的源文件。
-              <br />
-              <span className="review-confirm-path">{selectedRelPath}</span>
-            </>
-          )}
-        </div>
-        <div className="review-confirm-actions">
-          <Button onClick={onCancel}>取消</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={isPending}>
-            删除
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RestoreConfirmOverlay({
-  open,
-  selectedRelPath,
-  onCancel,
-  onConfirm,
-  isPending,
-}: {
-  open: boolean;
-  selectedRelPath: string | undefined;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="review-preview-overlay" onClick={onCancel}>
-      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-confirm-title">恢复原始内容</div>
-        <div className="review-confirm-body">
-          这会用最初刮削得到的原始内容覆盖当前修改。
-          <br />
-          <span className="review-confirm-path">{selectedRelPath}</span>
-        </div>
-        <div className="review-confirm-actions">
-          <Button onClick={onCancel}>取消</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={isPending}>
-            恢复
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
@@ -154,7 +37,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const [meta, setMeta] = useState<ReviewMeta | null>(initialMeta);
   const [hasRawMeta, setHasRawMeta] = useState(initialRawMeta !== null);
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
-  const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
+  const [preview, setPreview] = useState<ReviewPreviewState>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [cropOpen, setCropOpen] = useState(false);
@@ -917,19 +800,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
           )}
         </section>
       </div>
-      {preview ? (
-        <div className="review-preview-overlay" onClick={() => setPreview(null)}>
-          <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={() => setPreview(null)}>
-            <X size={18} />
-          </button>
-          <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
-            <div className="review-preview-title">{preview.title}</div>
-            <div className="review-preview-frame">
-              <Image src={getAssetURL(preview.item.key)} alt={preview.item.name} fill style={PREVIEW_IMAGE_STYLE} unoptimized />
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ReviewPreviewOverlay preview={preview} onClose={() => setPreview(null)} />
 
       {cropOpen && meta?.cover ? (
         <ImageCropper
