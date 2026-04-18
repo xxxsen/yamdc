@@ -52,6 +52,14 @@ const COVERED_SOURCES = [
   // flash 生命周期, 与 use-library-move-refresh 同构的 "running -> completed"
   // 观测守门 (observedSyncRunningRef). 行为冻结在单测里.
   "src/components/media-library-shell/use-media-library-sync.ts",
+  // media-library-shell/use-media-library-detail.ts: 详情 modal 的 fetch /
+  // 关闭 / Escape 监听 / applyDetailChange 同步回 items 列表. 交互路径
+  // 短但关键, 被主 shell 直接复用, 行为冻结在单测里.
+  "src/components/media-library-shell/use-media-library-detail.ts",
+  // handler-debug-shell/use-handler-debug-state.ts: handler-debug 页面主
+  // state 容器. 覆盖默认全选 / searcher prefill 接管 / metaJSON+chainIDs
+  // 持久化 / handleRun 三种校验 + 成功 + 失败路径 + add/remove/move.
+  "src/components/handler-debug-shell/use-handler-debug-state.ts",
   // media-library-detail-shell/utils.ts: 媒体库详情页的纯工具集 (cloneMeta /
   // pickVariant / normalizeMeta / getVariantCoverPath). 与 library-shell/utils
   // 并行的一份, 未来可能合并; 先各自冻结.
