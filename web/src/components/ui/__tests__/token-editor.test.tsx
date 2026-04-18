@@ -18,10 +18,8 @@ function typeInto(input: HTMLInputElement, value: string) {
   );
   if (!descriptor?.set) throw new Error("native input setter missing");
   act(() => {
-    // 解引用 descriptor.set 以调用 native setter。eslint 的 unbound-method
-    // 规则会对"裸取方法"误报, 但这里通过 .call(input, ...) 已显式绑定了
-    // this, 是安全的惯用法。
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+    // 解引用 descriptor.set 以调用 native setter, 通过 .call(input, ...)
+    // 显式绑定 this, 是安全的惯用法。
     descriptor.set.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
