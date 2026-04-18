@@ -27,6 +27,16 @@ describe("Button", () => {
     unmount();
   });
 
+  it("variant=ghost 追加 .btn-ghost (透明背景次级动作)", () => {
+    const { container, unmount } = mount(<Button variant="ghost">关闭</Button>);
+    const btn = container.querySelector("button")!;
+    const classes = btn.className.split(" ");
+    expect(classes).toContain("btn");
+    expect(classes).toContain("btn-ghost");
+    expect(classes).not.toContain("btn-primary");
+    unmount();
+  });
+
   it("click 触发 onClick handler", () => {
     const onClick = vi.fn();
     const { container, unmount } = mount(<Button onClick={onClick}>click</Button>);

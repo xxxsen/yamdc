@@ -422,6 +422,16 @@ textarea {
   background: var(--accent-strong);
 }
 
+/* .btn-ghost: 透明背景 + 透明边框, 仅悬停时浮起来一层弱底色。
+   适合作为次级动作 (例如关闭、取消) 与已有内容区融合。 */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background: rgba(91, 67, 44, 0.06);
+}
+
 .input {
   width: 100%;
   border: 1px solid var(--line);
