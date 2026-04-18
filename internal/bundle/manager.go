@@ -16,9 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/client"
-	"go.uber.org/zap"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 )
 
 const (
@@ -114,6 +113,10 @@ func NewManager(
 	}
 }
 
+// Start 负责 Manager 的一次性初始化: local 直接读目录回调, remote 拉一次
+// 并激活 zip。周期性 remote 同步不再由 Manager 自己起 goroutine 负责, 而
+// 是由调用方拿 RemoteSyncJob 去注册到全局 cronscheduler — 这样所有进程
+// 级定时任务的日志/生命周期/panic 兜底走同一套, 而不是各家自写一份。
 func (m *Manager) Start(ctx context.Context) error {
 	switch m.sourceType {
 	case SourceTypeLocal:
@@ -126,14 +129,35 @@ func (m *Manager) Start(ctx context.Context) error {
 		}()
 		return m.cb(ctx, data)
 	case SourceTypeRemote:
-		if err := m.startRemote(ctx); err != nil {
-			return err
-		}
-		go m.watchRemote(ctx)
-		return nil
+		return m.startRemote(ctx)
 	default:
 		return fmt.Errorf("unsupported bundle source type: %s: %w", m.sourceType, errUnsupportedSourceType)
 	}
+}
+
+// RemoteSyncJob 返回一个包装 syncAndActivate 的 cron job, 用于按 syncInterval
+// 做周期性远程同步。对 Local 类型返回 nil, 调用方需要自己判空 — local 没有
+// 周期同步这回事, 让 caller 显式跳过比让 job 里再静默 skip 一次更清晰。
+//
+// namePrefix 由调用方传: 同一进程里可能既有 searcher_plugin bundle, 又有
+// movieid cleaner bundle, 子 manager 的 name 不保证全局唯一 (配置文件里
+// 作者可以随便起), 由上层补稳定前缀形成 "prefix_name_remote_sync" 的全局
+// 唯一 job name, 直接喂给 cronscheduler.Register 不会撞车。
+func (m *Manager) RemoteSyncJob(namePrefix string) cronscheduler.Job {
+	if m == nil || m.sourceType != SourceTypeRemote {
+		return nil
+	}
+	name := fmt.Sprintf("%s_%s_remote_sync", namePrefix, m.name)
+	return cronscheduler.NewFuncJob(
+		name,
+		"@every "+m.syncInterval.String(),
+		func(ctx context.Context) error {
+			if _, err := m.syncAndActivate(ctx); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+			return nil
+		},
+	)
 }
 
 func (m *Manager) startRemote(ctx context.Context) error {
@@ -165,25 +189,6 @@ func (m *Manager) startRemote(ctx context.Context) error {
 		_ = data.Close()
 	}()
 	return m.cb(ctx, data)
-}
-
-func (m *Manager) watchRemote(ctx context.Context) {
-	ticker := time.NewTicker(m.syncInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if _, err := m.syncAndActivate(ctx); err != nil {
-				logutil.GetLogger(ctx).Warn("bundle remote sync failed",
-					zap.String("bundle", m.name),
-					zap.String("location", m.location),
-					zap.Error(err),
-				)
-			}
-		}
-	}
 }
 
 func (m *Manager) syncAndActivate(ctx context.Context) (bool, error) {

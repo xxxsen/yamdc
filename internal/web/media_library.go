@@ -276,6 +276,27 @@ func (a *API) handleMediaLibraryMovePost(c *gin.Context) {
 	writeSuccess(c.Writer, "move to media library started", nil)
 }
 
+// handleMediaLibrarySyncLogs 暴露最近的自动/手动同步事件日志, 支持 limit 参数
+// (默认 200, 上限 1000 由 service 层兜底)。前端 '查看同步日志' 弹窗调用此接口。
+func (a *API) handleMediaLibrarySyncLogs(c *gin.Context) {
+	if a.media == nil || !a.media.IsConfigured() {
+		writeSuccess(c.Writer, "ok", []medialib.SyncLogEntry{})
+		return
+	}
+	limit := 0
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	entries, err := a.media.ListSyncLogs(c.Request.Context(), limit)
+	if err != nil {
+		writeFail(c.Writer, errCodeMediaLibrarySyncLogsFailed, err.Error())
+		return
+	}
+	writeSuccess(c.Writer, "ok", entries)
+}
+
 func (a *API) handleMediaLibraryStatus(c *gin.Context) {
 	if a.media == nil {
 		writeSuccess(c.Writer, "ok", medialib.StatusSnapshot{Configured: false})

@@ -11,64 +11,52 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	_ "github.com/glebarez/go-sqlite" // register sqlite driver
 )
 
 const (
-	defaultExpireTime      = 90 * 24 * time.Hour // 默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
-	defaultCleanupInterval = 24 * time.Hour
+	defaultExpireTime = 90 * 24 * time.Hour // 默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
+
+	// CacheCleanupInterval 是缓存过期行的清理周期, 由 internal/cronscheduler
+	// 注册的 cache_store_cleanup job 负责按本周期触发一次 CleanupExpired。
+	//
+	// 24 小时是保守值: 缓存失效是 "到期后读不到即可", 不要求立即物理删除;
+	// 过频清理会抢读路径的 sqlite 锁, 过疏清理会让过期数据占盘更久。DB 规模
+	// 不大 (搜索/评分相关元数据), 过期行延迟到次日再扫一次成本可忽略。
+	// 如果将来缓存规模上来了, 再考虑拆成 "过期时懒删" + "夜间批量清理" 两级。
+	CacheCleanupInterval = 24 * time.Hour
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 type sqliteStore struct {
-	db              *sql.DB
-	cleanupInterval time.Duration
-	cleanupCancel   context.CancelFunc
-	cleanupWG       sync.WaitGroup
+	db *sql.DB
 }
 
 func (s *sqliteStore) init(ctx context.Context) error {
 	if err := applyMigrations(ctx, s.db); err != nil {
 		return err
 	}
-	if err := s.cleanupExpired(ctx); err != nil {
+	if err := s.CleanupExpired(ctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *sqliteStore) cleanupExpired(ctx context.Context) error {
+// CleanupExpired 删掉所有 expire_at <= now 的缓存行。
+//
+// 导出而非私有: cronscheduler 的 cache_store_cleanup job 需要从外部调本方法
+// 触发周期清理 (见 internal/cronscheduler + store.NewCacheCleanupJob)。
+// 同时 init 里也会顺手跑一次, 相当于进程重启时把历史过期行清掉, 避免等到
+// 下一轮 cron tick 才清理。
+func (s *sqliteStore) CleanupExpired(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM cache_tab WHERE expire_at <= ?", time.Now().Unix()); err != nil {
 		return fmt.Errorf("cleanup expired cache failed: %w", err)
 	}
 	return nil
-}
-
-func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
-	if s.cleanupInterval <= 0 {
-		return
-	}
-	loopCtx, cancel := context.WithCancel(ctx)
-	s.cleanupCancel = cancel
-	s.cleanupWG.Add(1)
-	go func() { //nolint:gosec // background cleanup goroutine
-		defer s.cleanupWG.Done()
-		ticker := time.NewTicker(s.cleanupInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-loopCtx.Done():
-				return
-			case <-ticker.C:
-				_ = s.cleanupExpired(context.Background()) //nolint:contextcheck // background cleanup goroutine
-			}
-		}
-	}()
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
@@ -149,7 +137,7 @@ func (s *sqliteStore) IsDataExist(ctx context.Context, key string) (bool, error)
 	return true, nil
 }
 
-func newSqliteStorage(ctx context.Context, path string, cleanupInterval time.Duration) (*sqliteStore, error) {
+func newSqliteStorage(ctx context.Context, path string) (*sqliteStore, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create cache dir %s failed: %w", dir, err)
@@ -159,20 +147,16 @@ func newSqliteStorage(ctx context.Context, path string, cleanupInterval time.Dur
 		return nil, fmt.Errorf("open sqlite db %s failed: %w", path, err)
 	}
 	configureSqliteStoreDB(ctx, db)
-	s := &sqliteStore{
-		db:              db,
-		cleanupInterval: cleanupInterval,
-	}
+	s := &sqliteStore{db: db}
 	if err := s.init(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	s.startCleanupLoop(ctx)
 	return s, nil
 }
 
 func NewSqliteStorage(ctx context.Context, path string) (IStorage, error) {
-	return newSqliteStorage(ctx, path, defaultCleanupInterval)
+	return newSqliteStorage(ctx, path)
 }
 
 func MustNewSqliteStorage(ctx context.Context, path string) IStorage {
@@ -189,22 +173,11 @@ func configureSqliteStoreDB(ctx context.Context, db *sql.DB) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`)
+	_, _ = db.ExecContext(ctx, `PRAGMA busy_timeout = 10000`)
 }
 
 func (s *sqliteStore) Close() error {
-	if s == nil {
-		return nil
-	}
-	if s.cleanupCancel != nil {
-		s.cleanupCancel()
-		s.cleanupCancel = nil
-	}
-	// 等待 cleanup goroutine 完全退出再关闭 db, 避免 goroutine 仍在执行
-	// cleanupExpired 时 db.Close 导致的 "database is closed" 错误, 以及
-	// 与测试 tempdir 清理的 journal 文件竞争。
-	s.cleanupWG.Wait()
-	if s.db == nil {
+	if s == nil || s.db == nil {
 		return nil
 	}
 	if err := s.db.Close(); err != nil {

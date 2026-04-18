@@ -30,18 +30,10 @@ CREATE INDEX IF NOT EXISTS idx_yamdc_job_status ON yamdc_job_tab(status);
 CREATE INDEX IF NOT EXISTS idx_yamdc_job_updated_at ON yamdc_job_tab(updated_at);
 CREATE INDEX IF NOT EXISTS idx_yamdc_job_conflict_key_active ON yamdc_job_tab(conflict_key) WHERE deleted_at = 0 AND status != 'done' AND conflict_key != '';
 
-CREATE TABLE IF NOT EXISTS yamdc_log_tab (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_id INTEGER NOT NULL,
-    level TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    message TEXT NOT NULL,
-    detail TEXT NOT NULL DEFAULT '',
-    created_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_yamdc_log_job_id_created_at ON yamdc_log_tab(job_id, created_at);
-
+-- 注: 历史上这里还会 CREATE TABLE yamdc_log_tab (scrape job 专用日志表),
+-- 1.4 已经把日志表合到 yamdc_unified_log_tab, 定义搬到 003 migration,
+-- 所以 001 不再创建 yamdc_log_tab。对早就装过 001 / 002 的老库, 003 会
+-- 额外跑一条 "DROP TABLE IF EXISTS yamdc_log_tab" 把遗留表清掉。
 CREATE TABLE IF NOT EXISTS yamdc_scrape_data_tab (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL UNIQUE,

@@ -26,6 +26,7 @@ import {
   listJobLogs,
   listJobs,
   listMediaLibraryItems,
+  listMediaLibrarySyncLogs,
   replaceMediaLibraryAsset,
   rerunJob,
   runJob,
@@ -388,6 +389,46 @@ describe("media library API", () => {
     });
     vi.stubGlobal("fetch", fn);
     await expect(triggerMoveToMediaLibrary()).resolves.toEqual(envelope);
+  });
+
+  // 正常 case: limit 合法时必须作为 query 参数透传给后端, 避免前端口径和
+  // 后端默认值漂移。
+  it("listMediaLibrarySyncLogs passes limit as query and returns array", async () => {
+    const entries = [
+      { id: 1, run_id: "r1", level: "info", rel_path: "", message: "start", created_at: 100 },
+      { id: 2, run_id: "r1", level: "warn", rel_path: "a", message: "warn", created_at: 200 },
+    ];
+    const fn = mockSuccess(entries);
+    await expect(listMediaLibrarySyncLogs(50)).resolves.toEqual(entries);
+    const [url] = fn.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/media-library/sync/logs");
+    expect(url).toContain("limit=50");
+  });
+
+  // 边缘 case: limit 省略 / 非法 (NaN、负数、0) 时不能把 bad value 拼进
+  // URL, 否则后端 strconv.Atoi 会失败回 0 浪费一次解析。
+  it("listMediaLibrarySyncLogs omits limit query when invalid or missing", async () => {
+    const fn = mockSuccess([]);
+    await expect(listMediaLibrarySyncLogs()).resolves.toEqual([]);
+    await expect(listMediaLibrarySyncLogs(0)).resolves.toEqual([]);
+    await expect(listMediaLibrarySyncLogs(-5)).resolves.toEqual([]);
+    await expect(listMediaLibrarySyncLogs(Number.NaN)).resolves.toEqual([]);
+    for (const call of fn.mock.calls) {
+      const [url] = call as [string, RequestInit];
+      expect(url).not.toContain("limit=");
+    }
+  });
+
+  // 异常 case: 后端返回 data=null (配置未就绪时的空响应) 必须归一化到
+  // []; HTTP 500 要抛 HTTP 5xx 让上层弹窗捕获。
+  it("listMediaLibrarySyncLogs normalizes nullish data to empty array", async () => {
+    mockSuccess(null);
+    await expect(listMediaLibrarySyncLogs()).resolves.toEqual([]);
+  });
+
+  it("listMediaLibrarySyncLogs throws on HTTP error", async () => {
+    mockHTTPError(500);
+    await expect(listMediaLibrarySyncLogs()).rejects.toThrow(/HTTP 500/);
   });
 });
 

@@ -156,3 +156,37 @@ func TestReadUserVersionOnFreshDB(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, got)
 }
+
+// TestSplitSQLStatementsStripsLineComments 覆盖注释里含 ";" 的正常路径:
+// SQL 行注释 (--) 里的分号不应该被误认成语句分隔符, 两条 CREATE 依然按
+// 期望各自独立。历史上 002 / 003 迁移都因为中文注释里带分号踩过同一个坑,
+// 这个测试确保修好之后不会回退。
+func TestSplitSQLStatementsStripsLineComments(t *testing.T) {
+	input := `-- 注释里有分号; 和中文标点也没关系;
+CREATE TABLE foo (id INTEGER);
+-- 另一段注释; 继续带分号;
+CREATE TABLE bar (id INTEGER);`
+	got := splitSQLStatements(input)
+	require.Len(t, got, 2)
+	assert.Contains(t, got[0], "CREATE TABLE foo")
+	assert.Contains(t, got[1], "CREATE TABLE bar")
+}
+
+// TestSplitSQLStatementsSkipsBlank 覆盖边缘 case: 连续分号 / 纯注释行 / 纯空白
+// 不应该产生空语句 (否则 ExecContext 会因为 "" 报语法错)。
+func TestSplitSQLStatementsSkipsBlank(t *testing.T) {
+	input := `;;
+-- only a comment;
+   ;
+CREATE TABLE foo (id INTEGER);`
+	got := splitSQLStatements(input)
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0], "CREATE TABLE foo")
+}
+
+// TestSplitSQLStatementsEmpty 覆盖异常 case: 空输入不应该 panic 也不应该
+// 返回 [""].
+func TestSplitSQLStatementsEmpty(t *testing.T) {
+	assert.Empty(t, splitSQLStatements(""))
+	assert.Empty(t, splitSQLStatements("-- just a comment\n"))
+}

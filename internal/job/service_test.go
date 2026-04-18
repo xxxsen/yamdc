@@ -318,7 +318,7 @@ func newLoggingTestCapture(t *testing.T, searcher *loggingTestSearcher) *capture
 	return capt
 }
 
-func findLogByMessage(logs []repository.LogItem, message string) *repository.LogItem {
+func findLogByMessage(logs []LogItem, message string) *LogItem {
 	for idx := range logs {
 		if logs[idx].Message == message {
 			return &logs[idx]
@@ -1173,8 +1173,8 @@ func TestServiceListLogs(t *testing.T) {
 	svc, repo := newTestServiceWithSQLite(t)
 	jobID := insertJob(t, repo, filepath.Join(t.TempDir(), "LOG.mp4"), jobdef.StatusInit)
 
-	require.NoError(t, svc.logRepo.Add(context.Background(), jobID, "info", "test", "msg1", "d1"))
-	require.NoError(t, svc.logRepo.Add(context.Background(), jobID, "error", "test", "msg2", "d2"))
+	svc.addJobLog(context.Background(), jobID, "info", "test", "msg1", "d1")
+	svc.addJobLog(context.Background(), jobID, "error", "test", "msg2", "d2")
 
 	logs, err := svc.ListLogs(context.Background(), jobID)
 	require.NoError(t, err)
@@ -1731,12 +1731,12 @@ func TestServiceDeleteCleansScrapeAndLogs(t *testing.T) {
 	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 	jobID := insertJob(t, repo, file, jobdef.StatusFailed)
 
-	require.NoError(t, svc.logRepo.Add(context.Background(), jobID, "info", "test", "msg", "d"))
+	svc.addJobLog(context.Background(), jobID, "info", "test", "msg", "d")
 	require.NoError(t, svc.scrapeRepo.UpsertRawData(context.Background(), jobID, "src", `{"title":"t"}`))
 
 	require.NoError(t, svc.Delete(context.Background(), jobID))
 
-	logs, err := svc.logRepo.ListByJobID(context.Background(), jobID, 10)
+	logs, err := svc.ListLogs(context.Background(), jobID)
 	require.NoError(t, err)
 	assert.Empty(t, logs)
 
@@ -2137,7 +2137,7 @@ func breakScrapeTable(t *testing.T, sqlite *repository.SQLite) {
 
 func breakLogTable(t *testing.T, sqlite *repository.SQLite) {
 	t.Helper()
-	_, err := sqlite.DB().Exec(`ALTER TABLE yamdc_log_tab RENAME TO yamdc_log_tab_broken`)
+	_, err := sqlite.DB().Exec(`ALTER TABLE yamdc_unified_log_tab RENAME TO yamdc_unified_log_tab_broken`)
 	require.NoError(t, err)
 }
 
@@ -2607,7 +2607,7 @@ func TestFailJobUpdatesStatusAndWritesLog(t *testing.T) {
 	assert.Equal(t, jobdef.StatusFailed, j.Status)
 	assert.Equal(t, "fake failure", j.ErrorMsg)
 
-	logs, err := svc.logRepo.ListByJobID(ctx, jobID, 10)
+	logs, err := svc.ListLogs(ctx, jobID)
 	require.NoError(t, err)
 	require.NotEmpty(t, logs)
 	assert.Equal(t, "error", logs[0].Level)
@@ -2660,7 +2660,7 @@ func TestFailJobNonProcessingStatusNoTransition(t *testing.T) {
 	assert.Equal(t, jobdef.StatusInit, j.Status,
 		"failJob requires status=processing, init job should stay untouched")
 
-	logs, err := svc.logRepo.ListByJobID(ctx, jobID, 10)
+	logs, err := svc.ListLogs(ctx, jobID)
 	require.NoError(t, err)
 	require.NotEmpty(t, logs)
 	assert.Equal(t, "should not transition", logs[0].Message)

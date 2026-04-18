@@ -107,11 +107,14 @@ func TestLogAndScrapeDataRepository(t *testing.T) {
 	logRepo := NewLogRepository(sqlite.DB())
 	scrapeRepo := NewScrapeDataRepository(sqlite.DB())
 
-	require.NoError(t, logRepo.Add(ctx, 1, "info", "scan", "scan started", "detail"))
-	logs, err := logRepo.ListByJobID(ctx, 1, 10)
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "1", "info", `{"stage":"scan","message":"scan started","detail":"detail"}`))
+	logs, err := logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
-	require.Equal(t, "scan started", logs[0].Message)
+	require.Equal(t, LogTypeScrapeJob, logs[0].LogType)
+	require.Equal(t, "1", logs[0].TaskID)
+	require.Equal(t, "info", logs[0].Level)
+	require.Contains(t, logs[0].Msg, `"message":"scan started"`)
 
 	require.NoError(t, scrapeRepo.UpsertRawData(ctx, 1, "plugin-a", `{"title":"a"}`))
 	item, err := scrapeRepo.GetByJobID(ctx, 1)
@@ -129,10 +132,10 @@ func TestLogAndScrapeDataRepository(t *testing.T) {
 	require.Equal(t, `{"title":"c"}`, item.FinalData)
 	require.Equal(t, "imported", item.Status)
 
-	require.NoError(t, logRepo.DeleteByJobID(ctx, 1))
+	require.NoError(t, logRepo.DeleteByTask(ctx, LogTypeScrapeJob, "1"))
 	require.NoError(t, scrapeRepo.DeleteByJobID(ctx, 1))
 
-	logs, err = logRepo.ListByJobID(ctx, 1, 10)
+	logs, err = logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, logs, 0)
 
@@ -662,16 +665,74 @@ func TestListActiveJobsByConflictKeysEdgeCases(t *testing.T) {
 
 // ==================== LogRepository edge cases ====================
 
-func TestListByJobIDDefaultLimit(t *testing.T) {
+// TestLogListDefaultLimit 覆盖边缘 case: List 不传 Limit 时走默认 500,
+// 返回结果集完整而不是被截断。
+func TestLogListDefaultLimit(t *testing.T) {
 	ctx := context.Background()
 	sqlite := newTestSQLite(t)
 	logRepo := NewLogRepository(sqlite.DB())
 
-	require.NoError(t, logRepo.Add(ctx, 99, "info", "test", "msg", ""))
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "99", "info", `{"message":"msg"}`))
 
-	logs, err := logRepo.ListByJobID(ctx, 99, 0)
+	logs, err := logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "99"})
 	require.NoError(t, err)
 	assert.Len(t, logs, 1)
+}
+
+// TestLogListEmptyLogTypeReturnsEmpty 覆盖异常 case: 调用方忘了填 LogType,
+// List 必须静默返回空而不是去全表扫 (迁移后 yamdc_unified_log_tab 承载了多种日志)。
+func TestLogListEmptyLogTypeReturnsEmpty(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	logRepo := NewLogRepository(sqlite.DB())
+
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "1", "info", `{}`))
+
+	logs, err := logRepo.List(ctx, LogListFilter{})
+	require.NoError(t, err)
+	assert.Empty(t, logs)
+}
+
+// TestLogListDescOrder 覆盖正常 case: Order=desc 时按 created_at 逆序返回,
+// 这个路径被 media library sync 的 "查看同步日志" 弹窗依赖。
+func TestLogListDescOrder(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	logRepo := NewLogRepository(sqlite.DB())
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, logRepo.Append(ctx, LogTypeMediaLibrarySync, "run-1", "info", `{"message":"x"}`))
+	}
+
+	logs, err := logRepo.List(ctx, LogListFilter{
+		LogType: LogTypeMediaLibrarySync,
+		Order:   LogOrderDesc,
+	})
+	require.NoError(t, err)
+	require.Len(t, logs, 3)
+	assert.GreaterOrEqual(t, logs[0].ID, logs[1].ID)
+	assert.GreaterOrEqual(t, logs[1].ID, logs[2].ID)
+}
+
+// TestLogDeleteOlderThan 覆盖正常 case: cutoffMs 之前的日志被裁, 之后的保留。
+// retention 流程 (每次 sync 收尾调一次) 靠这个路径, 是 hot path。
+func TestLogDeleteOlderThan(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	logRepo := NewLogRepository(sqlite.DB())
+
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "1", "info", `{"message":"old"}`))
+	// 直接把刚插入的行的 created_at 改到远古, 这样不用等时间也能验证裁剪路径。
+	_, err := sqlite.DB().ExecContext(ctx, `UPDATE yamdc_unified_log_tab SET created_at = 0 WHERE task_id = '1'`)
+	require.NoError(t, err)
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "1", "info", `{"message":"new"}`))
+
+	require.NoError(t, logRepo.DeleteOlderThan(ctx, 1))
+
+	logs, err := logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1"})
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Contains(t, logs[0].Msg, `"new"`)
 }
 
 // ==================== Closed-DB error tests ====================
@@ -727,9 +788,13 @@ func TestLogRepoClosedDBErrors(t *testing.T) {
 		name string
 		fn   func() error
 	}{
-		{"Add", func() error { return repo.Add(ctx, 1, "info", "s", "m", "") }},
-		{"ListByJobID", func() error { _, err := repo.ListByJobID(ctx, 1, 10); return err }},
-		{"DeleteByJobID", func() error { return repo.DeleteByJobID(ctx, 1) }},
+		{"Append", func() error { return repo.Append(ctx, LogTypeScrapeJob, "1", "info", `{}`) }},
+		{"List", func() error {
+			_, err := repo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1", Limit: 10})
+			return err
+		}},
+		{"DeleteByTask", func() error { return repo.DeleteByTask(ctx, LogTypeScrapeJob, "1") }},
+		{"DeleteOlderThan", func() error { return repo.DeleteOlderThan(ctx, 0) }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -883,20 +948,23 @@ func TestListJobsScanError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestLogListByJobIDScanError(t *testing.T) {
+// TestLogListScanError 覆盖异常 case: 底层 schema 被篡改成跟 SELECT 对不上的
+// 列类型时, List 必须把 Scan 报出来的错误往上传, 而不是静默吞。用一个
+// RENAME + 把 id 列换成文本的视图模拟这种坏数据场景。
+func TestLogListScanError(t *testing.T) {
 	_, db := newTestSQLiteWithRawDB(t)
 	logRepo := NewLogRepository(db)
 	ctx := context.Background()
 
-	require.NoError(t, logRepo.Add(ctx, 1, "info", "test", "msg", ""))
+	require.NoError(t, logRepo.Append(ctx, LogTypeScrapeJob, "1", "info", `{"message":"x"}`))
 
-	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_log_tab RENAME TO yamdc_log_tab_bak`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE yamdc_unified_log_tab RENAME TO yamdc_unified_log_tab_bak`)
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_log_tab AS
-		SELECT 'bad' AS id, job_id, level, stage, message, detail, created_at
-		FROM yamdc_log_tab_bak`)
+	_, err = db.ExecContext(ctx, `CREATE VIEW yamdc_unified_log_tab AS
+		SELECT 'bad' AS id, log_type, task_id, level, msg, created_at
+		FROM yamdc_unified_log_tab_bak`)
 	require.NoError(t, err)
 
-	_, err = logRepo.ListByJobID(ctx, 1, 10)
+	_, err = logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1", Limit: 10})
 	require.Error(t, err)
 }

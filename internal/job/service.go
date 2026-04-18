@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -124,10 +125,69 @@ func (s *Service) Rerun(ctx context.Context, jobID int64) error {
 	return s.start(ctx, jobID, []jobdef.Status{jobdef.StatusFailed})
 }
 
-func (s *Service) ListLogs(ctx context.Context, jobID int64) ([]repository.LogItem, error) {
-	items, err := s.logRepo.ListByJobID(ctx, jobID, 500)
+// LogItem 是 job 日志对外 (web API / 前端 / 同包测试) 暴露的形状。
+// 字段 / JSON tag 刻意和 1.4 之前 repository.LogItem 一模一样, 这样前端
+// handleJobLogs 的响应 schema 没有 breaking change。
+//
+// 底层存储已经是统一的 yamdc_unified_log_tab.msg (JSON), 这里由 ListLogs
+// 把 {stage, message, detail} 从 JSON 拆回三个字段后再塞进 LogItem,
+// 让调用方看起来和旧接口完全一致。
+type LogItem struct {
+	ID        int64  `json:"id"`
+	JobID     int64  `json:"job_id"`
+	Level     string `json:"level"`
+	Stage     string `json:"stage"`
+	Message   string `json:"message"`
+	Detail    string `json:"detail"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// scrapeLogPayload 是 yamdc_unified_log_tab.msg 在 log_type='scrape_job'
+// 下的 JSON schema. addJobLog 写入时 marshal, ListLogs 读取时 unmarshal,
+// 两端使用同一个 struct 保持字段不漂移。
+type scrapeLogPayload struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+	Detail  string `json:"detail"`
+}
+
+// jobTaskID 把 jobID 渲染成 yamdc_unified_log_tab.task_id 需要的字符串。
+// task_id 列是 TEXT 为了同时容纳 scrape 的整型 job_id 和 sync 的 run_id,
+// 这里用 strconv 走标准路径, 避免 fmt.Sprintf 的额外分配。
+func jobTaskID(jobID int64) string {
+	return strconv.FormatInt(jobID, 10)
+}
+
+func (s *Service) ListLogs(ctx context.Context, jobID int64) ([]LogItem, error) {
+	entries, err := s.logRepo.List(ctx, repository.LogListFilter{
+		LogType: repository.LogTypeScrapeJob,
+		TaskID:  jobTaskID(jobID),
+		Limit:   500,
+		Order:   repository.LogOrderAsc,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list job logs: %w", err)
+	}
+	items := make([]LogItem, 0, len(entries))
+	for _, entry := range entries {
+		var payload scrapeLogPayload
+		if entry.Msg != "" {
+			// 老数据在 migration 003 里已经 DROP, 正常路径拿到的都是新写入的
+			// JSON. 这里做一层兜底: 如果哪天有脏数据 (比如外部工具直接写库)
+			// 解析失败也不要让整个 API 挂, 把原文塞到 Message 里让用户能看到。
+			if err := json.Unmarshal([]byte(entry.Msg), &payload); err != nil {
+				payload = scrapeLogPayload{Message: entry.Msg}
+			}
+		}
+		items = append(items, LogItem{
+			ID:        entry.ID,
+			JobID:     jobID,
+			Level:     entry.Level,
+			Stage:     payload.Stage,
+			Message:   payload.Message,
+			Detail:    payload.Detail,
+			CreatedAt: entry.CreatedAt,
+		})
 	}
 	return items, nil
 }
@@ -136,7 +196,13 @@ func (s *Service) addJobLog(ctx context.Context, jobID int64, level, stage, mess
 	if s == nil || s.logRepo == nil {
 		return
 	}
-	_ = s.logRepo.Add(ctx, jobID, level, stage, message, detail)
+	// 字段全是 string 的 struct, json.Marshal 理论上不会失败;
+	// 真的失败也只是丢一条日志, 不影响主流程, 所以直接静默 return。
+	msg, err := json.Marshal(scrapeLogPayload{Stage: stage, Message: message, Detail: detail})
+	if err != nil {
+		return
+	}
+	_ = s.logRepo.Append(ctx, repository.LogTypeScrapeJob, jobTaskID(jobID), level, string(msg))
 }
 
 func buildScrapeSummary(fc *model.FileContext) string {
@@ -288,7 +354,7 @@ func (s *Service) Delete(ctx context.Context, jobID int64) error {
 	if err := s.scrapeRepo.DeleteByJobID(ctx, jobID); err != nil {
 		return fmt.Errorf("delete scrape data: %w", err)
 	}
-	if err := s.logRepo.DeleteByJobID(ctx, jobID); err != nil {
+	if err := s.logRepo.DeleteByTask(ctx, repository.LogTypeScrapeJob, jobTaskID(jobID)); err != nil {
 		return fmt.Errorf("delete job logs: %w", err)
 	}
 	if err := s.jobRepo.SoftDelete(ctx, jobID); err != nil {

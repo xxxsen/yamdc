@@ -1,11 +1,18 @@
 "use client";
 
-import { RefreshCw, Search } from "lucide-react";
+import { ChevronDown, RefreshCw, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { MediaLibraryDetailShell } from "@/components/media-library-detail-shell";
-import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
-import { getMediaLibraryFileURL, getMediaLibraryItem, getMediaLibraryStatus, listMediaLibraryItems, triggerMediaLibrarySync } from "@/lib/api";
+import type { MediaLibraryDetail, MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
+import {
+  getMediaLibraryFileURL,
+  getMediaLibraryItem,
+  getMediaLibraryStatus,
+  listMediaLibraryItems,
+  listMediaLibrarySyncLogs,
+  triggerMediaLibrarySync,
+} from "@/lib/api";
 
 interface Props {
   items: MediaLibraryItem[];
@@ -72,10 +79,16 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
   const [activeDetailID, setActiveDetailID] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
+  const [syncLogsOpen, setSyncLogsOpen] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<MediaLibrarySyncLogEntry[]>([]);
+  const [syncLogsLoading, setSyncLogsLoading] = useState(false);
+  const [syncLogsError, setSyncLogsError] = useState("");
 
   const browserRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const yearPickerRef = useRef<HTMLDivElement | null>(null);
+  const syncMenuRef = useRef<HTMLDivElement | null>(null);
   const prevSyncRunningRef = useRef(initialStatus?.sync.status === "running");
   const observedSyncRunningRef = useRef(initialStatus?.sync.status === "running");
   const deferredKeyword = useDeferredValue(keyword);
@@ -97,6 +110,19 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [yearPickerOpen]);
+
+  useEffect(() => {
+    if (!syncMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!syncMenuRef.current?.contains(event.target as Node)) {
+        setSyncMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [syncMenuOpen]);
 
   useEffect(() => {
     if (!activeDetail && activeDetailID === null) {
@@ -241,6 +267,32 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     setActiveDetailID(null);
     setDetailError("");
     setDetailLoading(false);
+  };
+
+  // 每次打开日志弹窗都重新拉最新数据, 而不是 "一次加载一直复用"。理由:
+  // sync 是异步后台跑的, 用户可能在 sync 运行中点开弹窗看进度; 缓存数据
+  // 只会让用户看到过时的状态。200 条默认量级下一次拉取 < 30KB, 没必要省。
+  const openSyncLogs = () => {
+    setSyncMenuOpen(false);
+    setSyncLogsOpen(true);
+    setSyncLogsError("");
+    setSyncLogsLoading(true);
+    void (async () => {
+      try {
+        const entries = await listMediaLibrarySyncLogs(200);
+        setSyncLogs(entries);
+      } catch (error) {
+        setSyncLogsError(error instanceof Error ? error.message : "加载同步日志失败");
+        setSyncLogs([]);
+      } finally {
+        setSyncLogsLoading(false);
+      }
+    })();
+  };
+
+  const closeSyncLogs = () => {
+    setSyncLogsOpen(false);
+    setSyncLogsError("");
   };
 
   const openDetailModal = (id: number) => {
@@ -392,41 +444,72 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
                 </div>
 
                 <div className="media-library-filter-footer">
-                  <button
-                    type="button"
-                    className="btn btn-primary media-library-sync-btn"
-                    disabled={syncBusy}
-                    onClick={() => {
-                      setSyncCompletedFlash(false);
-                      setSyncMessage("媒体库同步已启动");
-                      setSyncStarting(true);
-                      void (async () => {
-                        try {
-                          await triggerMediaLibrarySync();
-                          setSyncRunning(true);
-                          setSyncStarting(false);
-                          observedSyncRunningRef.current = true;
-                          prevSyncRunningRef.current = true;
-                        } catch (error) {
-                          const message = toMediaLibrarySyncMessage(error);
-                          setSyncMessage(message);
-                          if (message === "媒体库正在同步中") {
-                            setSyncStarting(false);
+                  {/* split button: 主按钮触发同步, 右侧下拉箭头打开菜单,
+                      目前唯一菜单项是 "查看同步日志"。把两个按钮放到同一
+                      视觉容器里, 避免让用户困惑 "多出来的按钮在做什么"。 */}
+                  <div className="media-library-sync-split" ref={syncMenuRef}>
+                    <button
+                      type="button"
+                      className="btn btn-primary media-library-sync-btn"
+                      disabled={syncBusy}
+                      onClick={() => {
+                        setSyncMenuOpen(false);
+                        setSyncCompletedFlash(false);
+                        setSyncMessage("媒体库同步已启动");
+                        setSyncStarting(true);
+                        void (async () => {
+                          try {
+                            await triggerMediaLibrarySync();
                             setSyncRunning(true);
-                            prevSyncRunningRef.current = true;
+                            setSyncStarting(false);
                             observedSyncRunningRef.current = true;
-                            return;
+                            prevSyncRunningRef.current = true;
+                          } catch (error) {
+                            const message = toMediaLibrarySyncMessage(error);
+                            setSyncMessage(message);
+                            if (message === "媒体库正在同步中") {
+                              setSyncStarting(false);
+                              setSyncRunning(true);
+                              prevSyncRunningRef.current = true;
+                              observedSyncRunningRef.current = true;
+                              return;
+                            }
+                            setSyncStarting(false);
+                            setSyncRunning(false);
+                            prevSyncRunningRef.current = false;
                           }
-                          setSyncStarting(false);
-                          setSyncRunning(false);
-                          prevSyncRunningRef.current = false;
-                        }
-                      })();
-                    }}
-                  >
-                    <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
-                    {syncButtonLabel}
-                  </button>
+                        })();
+                      }}
+                    >
+                      <RefreshCw size={16} className={syncBusy ? "media-library-sync-icon-spinning" : ""} />
+                      {syncButtonLabel}
+                    </button>
+                    {/* 下拉按钮不跟随 disabled: 用户可能想在同步进行中
+                        看历史日志 / 当前 run 进度, 不该被主按钮的 busy
+                        状态拦住。 */}
+                    <button
+                      type="button"
+                      className="btn btn-primary media-library-sync-caret"
+                      aria-label="同步菜单"
+                      aria-haspopup="menu"
+                      aria-expanded={syncMenuOpen}
+                      onClick={() => setSyncMenuOpen((current) => !current)}
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                    {syncMenuOpen ? (
+                      <div className="media-library-sync-menu panel" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="media-library-sync-menu-item"
+                          onClick={openSyncLogs}
+                        >
+                          查看同步日志
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </aside>
@@ -510,6 +593,65 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
           </div>
         </div>
       ) : null}
+      {syncLogsOpen ? (
+        <div className="media-library-detail-modal" onClick={closeSyncLogs} role="dialog" aria-modal="true" aria-label="同步日志">
+          <div
+            className="media-library-sync-logs-frame panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="media-library-sync-logs-header">
+              <div className="media-library-sync-logs-title">媒体库同步日志</div>
+              <button
+                type="button"
+                className="btn btn-ghost media-library-sync-logs-close"
+                onClick={closeSyncLogs}
+              >
+                关闭
+              </button>
+            </div>
+            {syncLogsLoading ? (
+              <div className="media-library-sync-logs-state">
+                <div className="list-loading-spinner" aria-hidden="true" />
+              </div>
+            ) : syncLogsError ? (
+              <div className="media-library-sync-logs-state">
+                <span className="review-message" data-tone="danger">
+                  {syncLogsError}
+                </span>
+              </div>
+            ) : syncLogs.length === 0 ? (
+              <div className="media-library-sync-logs-state">
+                <span className="review-empty-state">暂无同步日志</span>
+              </div>
+            ) : (
+              // 一行一条, 最新的在最上面 (后端已按 created_at DESC 返回)。
+              // 不再做前端二次分组 / 折叠: 扁平列表的心智负担最低,
+              // 用 run_id 列让用户肉眼区分不同 sync 轮次。
+              <ul className="media-library-sync-logs-list">
+                {syncLogs.map((entry) => (
+                  <li key={entry.id} className="media-library-sync-logs-row" data-level={entry.level}>
+                    <div className="media-library-sync-logs-row-meta">
+                      <span className="media-library-sync-logs-row-time">{formatSyncLogTime(entry.created_at)}</span>
+                      <span className="media-library-sync-logs-row-level" data-level={entry.level}>
+                        {entry.level.toUpperCase()}
+                      </span>
+                      <span className="media-library-sync-logs-row-run" title={entry.run_id}>
+                        {entry.run_id}
+                      </span>
+                    </div>
+                    <div className="media-library-sync-logs-row-body">
+                      {entry.rel_path ? (
+                        <span className="media-library-sync-logs-row-path">{entry.rel_path}</span>
+                      ) : null}
+                      <span className="media-library-sync-logs-row-message">{entry.message}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
       {syncMessage ? (
         <div className="app-toast app-toast-top" data-tone={/失败|error/i.test(syncMessage) ? "danger" : undefined} role="status" aria-live="polite">
           {syncMessage}
@@ -517,4 +659,16 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
       ) : null}
     </div>
   );
+}
+
+// formatSyncLogTime 把后端的 unix ms 时间戳转成 "YYYY-MM-DD HH:mm:ss" 本地
+// 时间字符串。用手写 format 而不是 toLocaleString 是为了避免不同浏览器 /
+// 系统下展示格式不一致, 也避开 Date.prototype.toLocaleString 的时区碎片。
+function formatSyncLogTime(timestampMs: number): string {
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0) {
+    return "--";
+  }
+  const d = new Date(timestampMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }

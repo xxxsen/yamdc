@@ -12,8 +12,15 @@ import (
 
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 	"gopkg.in/yaml.v3"
 )
+
+// cronJobPrefix 给本包的 bundle manager 产出的 remote sync job 加一个固定
+// 前缀, 和 searcher plugin bundle 区分开 (Job.Name 需要全局唯一, 否则
+// cronscheduler.Register 会拒掉)。前端看不到, 纯运维视角命名, 改名要同步
+// 更新排障文档里的示例。
+const cronJobPrefix = "movieid_cleaner"
 
 const (
 	SourceTypeLocal  = basebundle.SourceTypeLocal
@@ -72,6 +79,17 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("start bundle manager failed: %w", err)
 	}
 	return nil
+}
+
+// CronJob 返回本 Manager 对应的 remote 周期同步 job, 给 bootstrap 注册进
+// 全局 cronscheduler。Local 类型 / nil manager 返回 nil, 调用方需要判空 —
+// 让 "本实例就不该有周期任务" 这件事在 API 层面明示, 而不是藏在 job 内部
+// 静默 skip。
+func (m *Manager) CronJob() cronscheduler.Job {
+	if m == nil || m.manager == nil {
+		return nil
+	}
+	return m.manager.RemoteSyncJob(cronJobPrefix)
 }
 
 func LoadRuleSetFromBundleData(data *basebundle.Data) (*RuleSet, []string, error) {

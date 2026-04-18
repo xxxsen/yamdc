@@ -765,6 +765,61 @@ func TestHandleMediaLibraryStatusDBError(t *testing.T) {
 	assert.Equal(t, errCodeMediaLibraryStatusFailed, resp.Code)
 }
 
+// TestHandleMediaLibrarySyncLogsNotConfigured 覆盖边缘 case: media service
+// 未注入时前端依然能拿到合法的空列表响应, 不会跑到 500。
+func TestHandleMediaLibrarySyncLogsNotConfigured(t *testing.T) {
+	api := &API{}
+	c, rec := newGinContext(http.MethodGet, "/api/media-library/sync/logs", nil)
+	api.handleMediaLibrarySyncLogs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, 0, resp.Code)
+}
+
+// TestHandleMediaLibrarySyncLogsSuccess 覆盖正常 case: 先触发一次 full sync
+// (libraryDir 是空 TempDir, 日志表里会留下 "同步开始 / 同步完成" 两条),
+// 再请求日志接口, 断言 code=0 + 返回的 list 非空。
+func TestHandleMediaLibrarySyncLogsSuccess(t *testing.T) {
+	svc := setupMediaLibDB(t)
+	require.NoError(t, svc.TriggerFullSync(context.Background()))
+	svc.WaitBackground()
+
+	api := &API{media: svc}
+	c, rec := newGinContext(http.MethodGet, "/api/media-library/sync/logs?limit=10", nil)
+	c.Request.URL.RawQuery = "limit=10"
+	api.handleMediaLibrarySyncLogs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, 0, resp.Code)
+
+	// resp.Data 是 []interface{} 形式, 至少有 start + end 两条记录。
+	items, ok := resp.Data.([]interface{})
+	require.True(t, ok, "response data must be array")
+	assert.GreaterOrEqual(t, len(items), 2)
+}
+
+// TestHandleMediaLibrarySyncLogsDBError 覆盖异常 case: db 已关闭时 List 返回
+// 错误, handler 必须走 errCodeMediaLibrarySyncLogsFailed 分支而不是 500。
+func TestHandleMediaLibrarySyncLogsDBError(t *testing.T) {
+	svc := setupClosedMediaLibDB(t)
+	api := &API{media: svc}
+	c, rec := newGinContext(http.MethodGet, "/api/media-library/sync/logs", nil)
+	api.handleMediaLibrarySyncLogs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeMediaLibrarySyncLogsFailed, resp.Code)
+}
+
+// TestHandleMediaLibrarySyncLogsBadLimit 覆盖边缘 case: limit 参数不是合法
+// 整数时 handler 不应该 400, 而是退化到 service 层的默认 limit (ListSyncLogs
+// 自己把 <=0 兜回默认值)。
+func TestHandleMediaLibrarySyncLogsBadLimit(t *testing.T) {
+	svc := setupMediaLibDB(t)
+	api := &API{media: svc}
+	c, rec := newGinContext(http.MethodGet, "/api/media-library/sync/logs?limit=abc", nil)
+	c.Request.URL.RawQuery = "limit=abc"
+	api.handleMediaLibrarySyncLogs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, 0, resp.Code)
+}
+
 func TestHandleMediaLibraryListDBError(t *testing.T) {
 	svc := setupClosedMediaLibDB(t)
 	api := &API{media: svc}

@@ -70,6 +70,7 @@ const (
 	errCodeMediaLibraryMoveStatusFailed   = 130012
 	errCodeMediaLibraryMoveTriggerFailed  = 130013
 	errCodeMediaLibraryStatusFailed       = 130014
+	errCodeMediaLibrarySyncLogsFailed     = 130015
 
 	// Debug errors.
 	errCodeMovieIDCleanerUnavailable   = 140001

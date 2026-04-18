@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
+	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/store"
 )
@@ -810,7 +811,9 @@ func TestHandleJobLogsSuccess(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
 	j := createTestJob(t, jobRepo, "LOGSOK-001")
-	require.NoError(t, logRepo.Add(context.Background(), j.ID, "info", "test", "hello", "detail"))
+	require.NoError(t, logRepo.Append(context.Background(), repository.LogTypeScrapeJob,
+		fmt.Sprintf("%d", j.ID), "info",
+		`{"stage":"test","message":"hello","detail":"detail"}`))
 
 	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
 	c, rec := newGinContextWithParams(http.MethodGet, "/test", nil, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})

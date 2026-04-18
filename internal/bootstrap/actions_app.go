@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/xxxsen/common/logutil"
 	bootapp "github.com/xxxsen/yamdc/internal/bootstrap/app"
 	"github.com/xxxsen/yamdc/internal/bootstrap/server"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/review"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
+	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/web"
 	"go.uber.org/zap"
 )
@@ -69,19 +72,23 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		}
 		return nil
 	})
-	// 按 LIFO 注册: 这两个 wait 会在 app_db/cache_store 关闭前执行,
-	// 避免后台 goroutine 的 DB 写入撞上 sql.DB.Close() 导致的
-	// "database is closed" 错误。
-	sc.Cleanup.Add("wait_media_background", func(context.Context) error {
-		sc.App.MediaSvc.WaitBackground()
-		return nil
-	})
-	// 3.4: 用 Stop(ctx) 替代 WaitQueuedJobs(): 除了等排空, 还主动拒绝
-	// cleanup 阶段 (HTTP 已 shutdown, 但 recover/其它 goroutine 理论上可能
-	// 还在 Run) 的新入队请求, 避免 close(queue) 与 Run 的 channel send 竞争。
-	sc.Cleanup.Add("stop_job_worker", func(ctx context.Context) error {
-		return sc.App.JobSvc.Stop(ctx)
-	})
+	// CronScheduler 是进程级的定时任务编排器, 目前挂 media library 的
+	// auto sync / log cleanup / sqlite cache cleanup / bundle remote sync
+	// 等定时任务。rootCtx 用 context.Background 是故意的: cron job 的
+	// "取消" 语义走 Scheduler.Stop (拒绝新 tick + 等当前 job 返回), 不走
+	// rootCtx cancel — 避免外层 ctx 被 cancel 时某个 job 正好执行到一半
+	// 被硬拽断。
+	//
+	// 注意: Scheduler 内不会主动 cancel rootCtx, Job.Run 拿到的 ctx 没有
+	// "关机信号", 长耗时 job (例如 AutoSyncJob 触发的 runFullSync) 自己
+	// 也不响应 cancel (见 medialib.Service.shutdownCtx 文档), 所以关机
+	// 节奏完全靠 Scheduler.Stop 的 stopTimeout + 各 service 的 bgWG 硬等。
+	//
+	// 刻意不继承 startup ctx: cron 的 rootCtx 要贯穿整个进程生命周期,
+	// 由 Scheduler.Stop 管理, 不能被 startup ctx 的 cancel 提前打挂。
+	//nolint:contextcheck // see comment above
+	sc.App.CronScheduler = cronscheduler.New(context.Background(), sc.Infra.Logger)
+	registerAppCleanups(sc)
 	editorSvc, err := plugineditor.NewService(sc.Infra.HTTPClient)
 	if err != nil {
 		return fmt.Errorf("init plugin editor service failed, err:%w", err)
@@ -101,6 +108,53 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		buildHealthCheck(sc.App.AppDB),
 	)
 	return nil
+}
+
+// registerAppCleanups 注册 app 层服务的 cleanup 条目。
+//
+// Cleanup 注册顺序决定了 LIFO 执行顺序 (后注册的先执行)。
+// 本 scope 下期望的 LIFO 执行顺序:
+//  1. stop_job_worker        (不再接新 scrape 任务)
+//  2. stop_media_service     (发送 shutdownCtx cancel 作为关机 marker;
+//     当前 runFullSync / runMove 不响应 cancel,
+//     这一步主要是给未来 checkpoint-safe 版本
+//     留接入点, 见 MediaSvc.shutdownCtx 文档)
+//  3. stop_cron_scheduler    (cron.Stop() 拒绝新 tick, 等运行中的 cron
+//     job 在 stopTimeout 内收敛; AutoSyncJob.Run
+//     是 "起 goroutine 后立即返回" 的快路径, 不
+//     会卡住 Stop, 长耗时的 runFullSync 交给
+//     wait_media_background 兜底)
+//  4. wait_media_background  (阻塞等所有 bg goroutine 自然完成 — 这是
+//     关机阶段的实际等待点)
+//  5. app_db / cache_store 关闭 (由 openAppDBAction 等更早注册的 cleanup 负责)
+//
+// 顺序反了会挂住:
+//   - stop_cron_scheduler 早于 wait_media_background: 没直接问题, 现在
+//     的顺序 (cron 先停, 再等 media background) 已经是正确形状;
+//   - stop_media_service 早于 stop_job_worker: 正在跑的 scrape 任务可能
+//     还会调到 media svc, 此时 Stop 发 cancel 也没副作用, 但保守起见仍
+//     按 "更上游的服务先停" 写。
+//
+// 因此注册时必须逆序写 (注册时 LIFO 尾部的条目是运行时的第一条)。
+func registerAppCleanups(sc *StartContext) {
+	sc.Cleanup.Add("wait_media_background", func(context.Context) error {
+		sc.App.MediaSvc.WaitBackground()
+		return nil
+	})
+	sc.Cleanup.Add("stop_cron_scheduler", func(context.Context) error {
+		sc.App.CronScheduler.Stop()
+		return nil
+	})
+	sc.Cleanup.Add("stop_media_service", func(context.Context) error {
+		sc.App.MediaSvc.Stop()
+		return nil
+	})
+	// 3.4: 用 Stop(ctx) 替代 WaitQueuedJobs(): 除了等排空, 还主动拒绝
+	// cleanup 阶段 (HTTP 已 shutdown, 但 recover/其它 goroutine 理论上可能
+	// 还在 Run) 的新入队请求, 避免 close(queue) 与 Run 的 channel send 竞争。
+	sc.Cleanup.Add("stop_job_worker", func(ctx context.Context) error {
+		return sc.App.JobSvc.Stop(ctx)
+	})
 }
 
 // buildHealthCheck 构造 web 层深度健康检查函数。
@@ -128,6 +182,62 @@ func recoverJobsAction(ctx context.Context, sc *StartContext) error {
 
 func startMediaServiceAction(ctx context.Context, sc *StartContext) error {
 	sc.App.MediaSvc.Start(ctx)
+	return nil
+}
+
+// registerCronJobsAction 把进程级定时任务挂进 CronScheduler。
+// 注册顺序也是 cron 触发时相同 tick 下的执行顺序 (robfig/cron 按注册顺序
+// 依次触发): LogCleanupJob 先, AutoSyncJob 后 — 这样 03:00 的 tick 下
+// 总是 "先裁旧日志、再看要不要同步", 日志表不会因为 sync 长耗时导致
+// cleanup 被推迟。
+//
+// 新增定时任务时, 在这里追加一行 Register 即可, 不需要改其它地方。
+func registerCronJobsAction(ctx context.Context, sc *StartContext) error {
+	if err := sc.App.CronScheduler.Register(medialib.NewLogCleanupJob(sc.App.MediaSvc)); err != nil {
+		return fmt.Errorf("register log cleanup cron job: %w", err)
+	}
+	if err := sc.App.CronScheduler.Register(medialib.NewAutoSyncJob(sc.App.MediaSvc)); err != nil {
+		return fmt.Errorf("register media library auto sync cron job: %w", err)
+	}
+	// cache store 在 server 模式下用 *sqliteStore 实现, 走类型断言注册 cron
+	// cleanup; 断言失败 (测试场景可能塞 noop 或 mock 实现) 不拒启动, 但打一
+	// 条 Warn 让运维/开发者能察觉 — 不然将来某天缓存实现换掉后 cleanup 就
+	// 悄悄失效, 现象只有"盘占用慢慢涨", 排障成本极高。不是致命问题所以只
+	// warn 不 error, 保持启动鲁棒性。
+	if cleanup, ok := sc.Infra.CacheStore.(store.CacheCleanupExpirer); ok {
+		if err := sc.App.CronScheduler.Register(store.NewCacheCleanupJob(cleanup)); err != nil {
+			return fmt.Errorf("register cache store cleanup cron job: %w", err)
+		}
+	} else {
+		logutil.GetLogger(ctx).Warn(
+			"cache store does not implement CacheCleanupExpirer, skip cache cleanup cron job",
+			zap.String("store_type", fmt.Sprintf("%T", sc.Infra.CacheStore)),
+		)
+	}
+	// bundle 周期同步: searcher plugin bundle 可能有 N 个 source (配置多源时),
+	// movieid cleaner 最多 1 个。Local 类型返回 nil job 自动跳过; Remote 类型
+	// Job.Name 已被各自包装成 "<prefix>_<bundle_name>_remote_sync", 由 cron
+	// scheduler 在 Register 时校验全局唯一性, 撞 name 会立刻在启动期报错,
+	// 不会让同步任务静默丢失。
+	if mgr := sc.Domain.PluginBundleMgr; mgr != nil {
+		for _, job := range mgr.CronJobs() {
+			if err := sc.App.CronScheduler.Register(job); err != nil {
+				return fmt.Errorf("register plugin bundle cron job %q: %w", job.Name(), err)
+			}
+		}
+	}
+	if mgr := sc.Domain.MovieIDCleanerMgr; mgr != nil {
+		if job := mgr.CronJob(); job != nil {
+			if err := sc.App.CronScheduler.Register(job); err != nil {
+				return fmt.Errorf("register movieid cleaner cron job %q: %w", job.Name(), err)
+			}
+		}
+	}
+	return nil
+}
+
+func startCronSchedulerAction(_ context.Context, sc *StartContext) error {
+	sc.App.CronScheduler.Start()
 	return nil
 }
 

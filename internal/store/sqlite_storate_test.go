@@ -58,9 +58,9 @@ func TestStore(t *testing.T) {
 	assert.Equal(t, "aaa", string(val))
 }
 
-func TestStoreCleanupLoopDeletesExpiredRows(t *testing.T) {
+func TestStoreCleanupExpiredDeletesExpiredRows(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	storage, err := newSqliteStorage(context.Background(), file, 20*time.Millisecond)
+	storage, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, storage.Close())
@@ -70,6 +70,7 @@ func TestStoreCleanupLoopDeletesExpiredRows(t *testing.T) {
 	require.NoError(t, storage.PutData(ctx, "abc", []byte("helloworld"), 20*time.Millisecond))
 
 	assert.Eventually(t, func() bool {
+		require.NoError(t, storage.CleanupExpired(ctx))
 		var cnt int
 		err := storage.db.QueryRowContext(ctx, "SELECT count(*) FROM cache_tab WHERE key = ?", "abc").Scan(&cnt)
 		require.NoError(t, err)
@@ -98,9 +99,9 @@ func TestSqliteStore_Close_NilDB(t *testing.T) {
 	assert.NoError(t, s.Close())
 }
 
-func TestSqliteStore_Close_WithCancel(t *testing.T) {
+func TestSqliteStore_Close_Idempotent(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	assert.NoError(t, s.Close())
 }
@@ -117,7 +118,7 @@ func TestConfigureSqliteStoreDB_NilDB(_ *testing.T) {
 
 func TestSqliteStore_PutReplaceKey(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -132,7 +133,7 @@ func TestSqliteStore_PutReplaceKey(t *testing.T) {
 
 func TestSqliteStore_IsDataExist_NotFound(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -143,7 +144,7 @@ func TestSqliteStore_IsDataExist_NotFound(t *testing.T) {
 
 func TestSqliteStore_GetData_Expired(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -157,7 +158,7 @@ func TestSqliteStore_GetData_Expired(t *testing.T) {
 
 func TestSqliteStore_IsDataExist_Expired(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -171,7 +172,7 @@ func TestSqliteStore_IsDataExist_Expired(t *testing.T) {
 
 func TestSqliteStore_CleanupExpired_DirectCall(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -181,7 +182,7 @@ func TestSqliteStore_CleanupExpired_DirectCall(t *testing.T) {
 		_, getErr := s.GetData(ctx, "expkey")
 		return getErr != nil
 	}, 5*time.Second, 100*time.Millisecond)
-	require.NoError(t, s.cleanupExpired(ctx))
+	require.NoError(t, s.CleanupExpired(ctx))
 
 	var cnt int
 	err = s.db.QueryRowContext(ctx, "SELECT count(*) FROM cache_tab WHERE key = ?", "expkey").Scan(&cnt)
@@ -191,14 +192,14 @@ func TestSqliteStore_CleanupExpired_DirectCall(t *testing.T) {
 
 func TestSqliteStore_Close_MultipleTimes(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 }
 
 func TestSqliteStore_PutData_DefaultExpire(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -212,7 +213,7 @@ func TestSqliteStore_PutData_DefaultExpire(t *testing.T) {
 
 func TestSqliteStore_Init_AppliesMigrations(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 
@@ -222,17 +223,9 @@ func TestSqliteStore_Init_AppliesMigrations(t *testing.T) {
 	assert.Equal(t, "cache_tab", tableName)
 }
 
-func TestSqliteStore_StartCleanupLoop_ZeroInterval(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-	assert.Nil(t, s.cleanupCancel)
-}
-
 func TestSqliteStore_GetData_Error(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 
 	require.NoError(t, s.db.Close())
@@ -242,7 +235,7 @@ func TestSqliteStore_GetData_Error(t *testing.T) {
 
 func TestSqliteStore_PutData_Error(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 
 	require.NoError(t, s.db.Close())
@@ -252,7 +245,7 @@ func TestSqliteStore_PutData_Error(t *testing.T) {
 
 func TestSqliteStore_IsDataExist_Error(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 
 	require.NoError(t, s.db.Close())
@@ -262,34 +255,17 @@ func TestSqliteStore_IsDataExist_Error(t *testing.T) {
 
 func TestSqliteStore_CleanupExpired_Error(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 
 	require.NoError(t, s.db.Close())
-	err = s.cleanupExpired(context.Background())
+	err = s.CleanupExpired(context.Background())
 	assert.Error(t, err)
-}
-
-func TestNewSqliteStorage_WithCleanup(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 50*time.Millisecond)
-	require.NoError(t, err)
-	assert.NotNil(t, s.cleanupCancel)
-	t.Cleanup(func() { _ = s.Close() })
-}
-
-func TestSqliteStore_Close_WithActiveCleanup(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 50*time.Millisecond)
-	require.NoError(t, err)
-	require.NotNil(t, s.cleanupCancel)
-	require.NoError(t, s.Close())
-	assert.Nil(t, s.cleanupCancel)
 }
 
 func TestSqliteStore_Init_AfterTableDrop(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 
 	_, execErr := s.db.ExecContext(context.Background(), "DROP TABLE cache_tab")
@@ -318,7 +294,7 @@ func openTestDB(path string) (*sql.DB, error) {
 
 func TestSqliteStore_Close_Error_DoubleClose(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache.db")
-	s, err := newSqliteStorage(context.Background(), file, 0)
+	s, err := newSqliteStorage(context.Background(), file)
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 }

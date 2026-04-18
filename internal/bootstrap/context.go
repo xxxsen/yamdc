@@ -7,6 +7,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -42,6 +43,11 @@ type DomainDeps struct {
 	CategorySearchers map[string][]searcher.ISearcher
 	Processors        []processor.IProcessor
 	MovieIDCleaner    movieidcleaner.Cleaner
+	// MovieIDCleanerMgr 留着是因为 cronscheduler 需要注册它的 remote sync job;
+	// MovieIDCleaner 字段是 Cleaner 接口 (passthrough 或 runtime swap), 无法
+	// 直接拿到 Manager.CronJob, 所以把 Manager 也挂进 Domain, nil 合法表示
+	// "配置里没有 ruleset, 对应 cron 注册会被跳过"。
+	MovieIDCleanerMgr *movieidcleaner.Manager
 	SearcherDebugger  *searcher.Debugger
 	RuntimeSearcher   *searcher.RuntimeCategorySearcher
 	HandlerDebugger   *handler.Debugger
@@ -50,15 +56,16 @@ type DomainDeps struct {
 }
 
 type AppDeps struct {
-	AppDB      *repository.SQLite
-	JobRepo    *repository.JobRepository
-	LogRepo    *repository.LogRepository
-	ScrapeRepo *repository.ScrapeDataRepository
-	ScanSvc    *scanner.Service
-	JobSvc     *job.Service
-	ReviewSvc  *review.Service
-	MediaSvc   *medialib.Service
-	API        *web.API
+	AppDB         *repository.SQLite
+	JobRepo       *repository.JobRepository
+	LogRepo       *repository.LogRepository
+	ScrapeRepo    *repository.ScrapeDataRepository
+	ScanSvc       *scanner.Service
+	JobSvc        *job.Service
+	ReviewSvc     *review.Service
+	MediaSvc      *medialib.Service
+	API           *web.API
+	CronScheduler *cronscheduler.Scheduler
 }
 
 type StartContext struct {

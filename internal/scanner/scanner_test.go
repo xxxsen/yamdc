@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/yamdc/internal/jobdef"
@@ -189,71 +188,6 @@ func TestScanRejectsReentryWhileRunning(t *testing.T) {
 
 	close(cleaner.release)
 	require.NoError(t, <-firstDone)
-}
-
-func TestStartHonorsNonPositiveIntervalAndExitsOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	scanDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "IMM-001.mp4"), []byte("x"), 0o600))
-
-	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, sqlite.Close())
-	})
-
-	repo := repository.NewJobRepository(sqlite.DB())
-	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
-
-	pollCtx := context.Background()
-	svc.Start(ctx, 0)
-	require.Eventually(t, func() bool {
-		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
-		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileName == "IMM-001.mp4"
-	}, 2*time.Second, 5*time.Millisecond, "first background scan should upsert the media file")
-
-	cancel()
-	// 等待 Start 启动的后台 goroutine 退出, 避免尚在 Scan 中的 DB 写入
-	// 与 sqlite.Close/tempdir 清理产生竞争。
-	svc.Wait()
-}
-
-func TestStartRunsPeriodicScanWithShortTicker(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	scanDir := t.TempDir()
-	mediaPath := filepath.Join(scanDir, "TICK-001.mp4")
-	require.NoError(t, os.WriteFile(mediaPath, []byte("a"), 0o600))
-
-	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, sqlite.Close())
-	})
-
-	repo := repository.NewJobRepository(sqlite.DB())
-	svc := New(scanDir, nil, repo, movieidcleaner.NewPassthroughCleaner())
-
-	pollCtx := context.Background()
-	svc.Start(ctx, 5*time.Millisecond)
-	require.Eventually(t, func() bool {
-		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
-		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 1
-	}, 2*time.Second, 5*time.Millisecond, "initial scan should record file_size=1")
-
-	require.NoError(t, os.WriteFile(mediaPath, []byte("bb"), 0o600))
-	require.Eventually(t, func() bool {
-		jobs, err := repo.ListJobs(pollCtx, nil, "", 1, 0)
-		return err == nil && len(jobs.Items) == 1 && jobs.Items[0].FileSize == 2
-	}, 2*time.Second, 5*time.Millisecond, "periodic scan should pick up new file size")
-
-	cancel()
-	// 等待后台 goroutine 退出, 避免 periodic Scan 的 DB 写入与
-	// sqlite.Close/tempdir 清理竞争。
-	svc.Wait()
 }
 
 func TestNewRegistersExtraMediaExtensionsCaseInsensitive(t *testing.T) {
