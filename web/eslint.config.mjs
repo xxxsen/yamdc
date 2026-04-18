@@ -86,6 +86,10 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-shadow": "off",
       "@typescript-eslint/consistent-type-imports": "off",
+      // 测试里 querySelector 后用 ! 断言元素存在是业界通行做法 —
+      // 若元素不存在, 后续 assert/属性访问会立刻抛出并把错误定位到具体
+      // 用例, 可读性反而比显式 `if (!x) throw ...` 强。
+      "@typescript-eslint/no-non-null-assertion": "off",
       "complexity": "off",
       "max-depth": "off",
       "no-console": "off",

@@ -12,11 +12,14 @@ const COVERED_SOURCES = [
   "src/lib/upload-debug.ts",
   "src/components/plugin-editor/plugin-editor-utils.ts",
   "src/components/plugin-editor/plugin-editor-constants.ts",
+  // components/ui/*: 项目公共原子组件 (Button / Badge / Modal ...),
+  // 每个组件带单测, 入白名单后阈值守护其行为不被后续重构改崩。
+  "src/components/ui/**/*.tsx",
 ];
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
       include: COVERED_SOURCES,

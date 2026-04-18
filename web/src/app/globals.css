@@ -1077,6 +1077,27 @@ textarea.input {
 .badge-done { color: var(--ok); }
 .badge-failed { color: var(--danger); }
 
+/* §badge-variants: 通用语义 variant, 供 components/ui/badge.tsx 使用。
+   上面一组 .badge-init/processing/... 是 JobStatus 专用命名保持不动,
+   这组 neutral/info/success/warning/danger 是面向所有非状态场景的
+   公共语义, 两套通过 class 名隔离, 并行不冲突。 */
+.badge-neutral { color: var(--muted); }
+.badge-info { color: var(--info); }
+.badge-success { color: var(--ok); }
+.badge-warning { color: var(--warn); }
+.badge-danger { color: var(--danger); }
+
+/* ui-button-spinner: components/ui/button.tsx loading 态的 spinner 旋转。
+   使用 lucide-react 的 LoaderCircle, 靠 CSS 动画转圈; 无需 icon 自身
+   动态变更。 */
+.ui-button-spinner {
+  animation: ui-button-spin 900ms linear infinite;
+}
+@keyframes ui-button-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .icon-btn-danger {
   color: var(--danger);
   border-color: transparent;
