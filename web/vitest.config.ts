@@ -15,10 +15,37 @@ const COVERED_SOURCES = [
   "src/lib/utils.ts",
   "src/components/plugin-editor/plugin-editor-utils.ts",
   "src/components/plugin-editor/plugin-editor-constants.ts",
+  // plugin-editor-state-ops.ts: usePluginEditorState 内部的 16 个 StateOp 工厂.
+  // 每个 op 是一次不可变状态更新, 一错就全错, 行为冻结在单测.
+  "src/components/plugin-editor/plugin-editor-state-ops.ts",
+  // plugin-editor/output-panels/dom-utils.ts: XPath 计算 + DOM 文本匹配 /
+  // 遍历. 算法复杂, 是 body 面板的核心逻辑, 回归风险高.
+  "src/components/plugin-editor/output-panels/dom-utils.ts",
   // library-shell/move-refresh-reducer.ts: pure state machine for library
   // shell's 移动到媒体库 / 重新扫描库 生命周期. 迁移自 §3.4, 修掉了 0KB
   // fast-path 漏刷新 bug. 行为冻结在单测里.
   "src/components/library-shell/move-refresh-reducer.ts",
+  // library-shell/utils.ts: library-shell 的纯工具集 (cloneMeta / pickVariant /
+  // normalizeMeta / handleMoveToMediaLibraryError / getMoveButtonLabel 等).
+  // §2.2 B-2 里从 library-shell.tsx 拆出来的纯函数, 行为冻结防腐.
+  "src/components/library-shell/utils.ts",
+  // media-library-shell/utils.ts: 媒体库页面派生逻辑 (getReleaseYear /
+  // extractYearOptions / mergeYearOptions / toMediaLibrarySyncMessage /
+  // formatSyncLogTime).
+  "src/components/media-library-shell/utils.ts",
+  // media-library-detail-shell/utils.ts: 媒体库详情页的纯工具集 (cloneMeta /
+  // pickVariant / normalizeMeta / getVariantCoverPath). 与 library-shell/utils
+  // 并行的一份, 未来可能合并; 先各自冻结.
+  "src/components/media-library-detail-shell/utils.ts",
+  // review-shell/utils.ts: review 页面 meta 解析与 payload 构造
+  // (parseMeta / parseRawMeta / normalizeList / buildPayload / imageTitle).
+  "src/components/review-shell/utils.ts",
+  // handler-debug-shell/utils.ts: JSON 按行 LCS diff 算法 + debug 常量.
+  // 算法边界情况多, 行为冻结.
+  "src/components/handler-debug-shell/utils.ts",
+  // job-table/helpers.ts: job 表格排序 / 选中判定 / 番号 meta 派生等.
+  // 本来就有 24 个测试, 这次补进白名单让阈值真正守护它.
+  "src/components/job-table/helpers.ts",
   // components/ui/*: 项目公共原子组件 (Button / Badge / Modal ...),
   // 每个组件带单测, 入白名单后阈值守护其行为不被后续重构改崩。
   "src/components/ui/**/*.tsx",
