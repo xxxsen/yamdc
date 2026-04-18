@@ -10,11 +10,12 @@ import { ReviewFormFields } from "@/components/review-shell/form-fields";
 import { ReviewListPanel } from "@/components/review-shell/list-panel";
 import { ReviewPreviewOverlay, type ReviewPreviewState } from "@/components/review-shell/preview-overlay";
 import { RestoreConfirmOverlay } from "@/components/review-shell/restore-confirm-overlay";
+import { useReviewAssetActions } from "@/components/review-shell/use-review-asset-actions";
 import { buildPayload, normalizeList, parseMeta } from "@/components/review-shell/utils";
 import { Button } from "@/components/ui/button";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { JobItem, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
-import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
+import { deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob } from "@/lib/api";
 
 interface Props {
   jobs: JobItem[];
@@ -49,7 +50,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
-  const uploadActiveRef = useRef(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
@@ -377,107 +377,23 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
-  const openCropper = () => {
-    if (!meta?.cover) {
-      return;
-    }
-    setCropOpen(true);
-  };
-
-  const handleCropResult = (rect: { x: number; y: number; width: number; height: number }) => {
-    if (!selected) return;
-    startTransition(async () => {
-      try {
-        setMessage("从封面截取海报...");
-        const poster = await cropPosterFromCover(selected.id, rect);
-        updateMeta({ poster });
-        metaRef.current = { ...(metaRef.current ?? {}), poster };
-        lastSavedPayloadRef.current = buildPayload(metaRef.current);
-        setCropOpen(false);
-        setMessage("海报已更新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "海报截取失败");
-      }
-    });
-  };
-
-  const handleRemoveFanart = (key: string) => {
-    if (!selected || !metaRef.current) {
-      return;
-    }
-    const nextMeta: ReviewMeta = {
-      ...metaRef.current,
-      sample_images: (metaRef.current.sample_images ?? []).filter((item) => item.key !== key),
-    };
-    persistMetaPatch(nextMeta, "已移除 fanart");
-  };
-
-  const persistMetaPatch = (nextMeta: ReviewMeta, successMessage: string) => {
-    if (!selected) {
-      return;
-    }
-    setMeta(nextMeta);
-    metaRef.current = nextMeta;
-    startTransition(async () => {
-      try {
-        const payload = buildPayload(nextMeta);
-        await saveReviewJob(selected.id, payload);
-        lastSavedPayloadRef.current = payload;
-        setMessage(successMessage);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "保存失败");
-      }
-    });
-  };
-
-  const doUpload = (file: File, target: "cover" | "poster" | "fanart") => {
-    if (!meta || !selected) {
-      return;
-    }
-    startTransition(async () => {
-      const currentMeta = metaRef.current;
-      if (!currentMeta) return;
-      try {
-        setMessage("上传图片...");
-        const asset = await uploadAsset(file);
-        let nextMeta: ReviewMeta;
-        if (target === "cover") {
-          nextMeta = { ...currentMeta, cover: asset };
-        } else if (target === "poster") {
-          nextMeta = { ...currentMeta, poster: asset };
-        } else {
-          nextMeta = {
-            ...currentMeta,
-            sample_images: [...(currentMeta.sample_images ?? []).filter((s) => s.key !== asset.key), asset],
-          };
-        }
-        persistMetaPatch(nextMeta, "图片已更新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "上传失败");
-      }
-    });
-  };
-
-  const openUploadPicker = (target: "cover" | "poster" | "fanart") => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    uploadActiveRef.current = true;
-    const unlock = () => {
-      setTimeout(() => { uploadActiveRef.current = false; }, 300);
-    };
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      unlock();
-      if (file) {
-        doUpload(file, target);
-      }
-    }, { once: true });
-    input.addEventListener("cancel", () => {
-      unlock();
-    }, { once: true });
-    input.click();
-  };
+  const {
+    uploadActiveRef,
+    openCropper,
+    handleCropResult,
+    handleRemoveFanart,
+    openUploadPicker,
+  } = useReviewAssetActions({
+    selected,
+    meta,
+    metaRef,
+    lastSavedPayloadRef,
+    setMeta,
+    updateMeta,
+    setMessage,
+    setCropOpen,
+    startTransition,
+  });
 
   return (
     <>
