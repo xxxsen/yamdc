@@ -167,6 +167,13 @@ func (m *Manager) startRemote(ctx context.Context) error {
 	return m.cb(ctx, data)
 }
 
+// watchRemote 以 syncInterval 为周期同步远程 bundle。
+//
+// TODO(cronscheduler): 迁到 internal/cronscheduler 统一管理。当前手写
+// ticker 还留着是因为每个 Manager 实例有自己的 syncInterval (由配置决
+// 定, 不同 bundle 可能用不同频率), 迁 cron 时要设计 "一个 Manager 一条
+// cron 条目 + Name 需带 bundle 标识" 的注册风格。见 internal/cronscheduler
+// 包注释。
 func (m *Manager) watchRemote(ctx context.Context) {
 	ticker := time.NewTicker(m.syncInterval)
 	defer ticker.Stop()

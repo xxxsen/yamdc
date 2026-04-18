@@ -23,23 +23,26 @@ const (
 	TaskMove = "media_library_move"
 )
 
-// 自动 sync 调度的几个硬编码参数。刻意没放 config: 对应决策详见 1.4 设计
-// 记录, 简要说明:
+// AutoSyncCronSpec 是自动 sync 的 cron 表达式, 每天本地时间 03:00 触发。
+// 对应决策见 1.4 设计记录: 03:00 避开整点备份脚本高峰, 也给 00:00 完成
+// 的磁盘合并/索引构建足够冷却时间, 且基本不会和用户活跃窗口撞车。
 //
-//   - autoSyncDailyHour / autoSyncDailyMinute: 每天本地时间 03:00 触发一次。
-//     03:00 相对 00:00 的好处是避开整点脚本/备份高峰, 且基本不会和用户活跃
-//     使用窗口撞车; 晚一点也给 00:00 完成的磁盘合并/索引构建足够冷却时间。
-//   - autoSyncStartupDelay: 进程起来后 60s 再做一次 dirty 检查。延迟是为了
-//     让 HTTP / worker 先就绪、避免启动期磁盘竞争; 60s 是一个经验值,
-//     用户几乎感知不到, 和 recover 流程没冲突。
+// 触发最终走 TriggerAutoSync -> triggerFullSyncWithReason, 和手动
+// "同步媒体库" 完全等价 (同一互斥 + bgWG 路径), 因此不会和 move 任务并发。
 //
-// 所有触发最终都会经过 triggerFullSyncWithReason 走相同的互斥 + bgWG 路径,
-// 和手动 "同步媒体库" 完全等价, 因此不会和 move 任务并发。
-const (
-	autoSyncDailyHour    = 3
-	autoSyncDailyMinute  = 0
-	autoSyncStartupDelay = 60 * time.Second
-)
+// 注意这个常量属于 "服务内部配置" 而非 "cron scheduler 接口的一部分";
+// 导出它是为了 bootstrap 可以在注册 Job 时读到。如果将来要做成 config
+// 可调, 改这里就够, 不动 cronscheduler 包。
+const AutoSyncCronSpec = "0 3 * * *"
+
+// LogCleanupCronSpec 是日志 retention 清理的 cron 表达式。和 auto sync 同
+// 在 03:00 触发是刻意的: 都挪到深夜低负载时段, 而且 cleanup 先跑 (SQLite
+// 是串行写, robfig/cron 同一时刻的 job 按注册顺序依次触发, 我们把
+// LogCleanupJob 注册在 AutoSync 之前, 保证裁旧再 sync)。
+//
+// 该 cleanup 不依赖 sync 是否触发 (避免 "用户只刮不入库 -> sync 从不跑
+// -> 日志无限累积" 的 bug), 所以必须走独立 cron 条目。
+const LogCleanupCronSpec = "0 3 * * *"
 
 var (
 	errLibraryDirNotConfigured = errors.New("library dir is not configured")
@@ -61,18 +64,17 @@ type Service struct {
 	moveRunning bool
 	bgWG        sync.WaitGroup
 
-	// shutdownCtx / shutdownCancel 控制 scheduler goroutine 的生命周期。
-	// scheduler 在 Start 里拉起, 在 Stop 里收敛; bgWG 负责阻塞外部 cleanup
-	// 等所有后台 goroutine (含 scheduler + Trigger* 派生的 sync/move)
-	// 完整返回后再让底层 sqlite / tempdir 被清理, 避免 "DB 已关闭、goroutine
-	// 还在写 DB" 的竞争。Stop 必须在 WaitBackground 之前调用。
+	// shutdownCtx / shutdownCancel 控制后台 goroutine 的生命周期。
+	// Stop 会 cancel 这个 ctx, 正在跑的 Trigger* 派生 runFullSync / runMove
+	// 能响应退出; bgWG 负责阻塞外部 cleanup 等这些 goroutine 完整返回后再让
+	// 底层 sqlite / tempdir 被清理, 避免 "DB 已关闭、goroutine 还在写 DB"
+	// 的竞争。Stop 必须在 WaitBackground 之前调用。
+	//
+	// 自动 sync 的定时调度职责 1.5 起从这里挪到 internal/cronscheduler;
+	// 本 Service 不再自管 scheduler goroutine, 对应字段 (schedulerClock /
+	// schedulerStartupDelay) 随之删除。
 	shutdownCtx    context.Context
 	shutdownCancel context.CancelFunc
-
-	// schedulerClock / schedulerStartupDelay 只在测试里被覆盖, 正式运行
-	// 一律走 time.Now 和 autoSyncStartupDelay 默认值, 参见 startScheduler 注释。
-	schedulerClock        func() time.Time
-	schedulerStartupDelay time.Duration
 }
 
 type ListItemsOptions struct {
@@ -93,14 +95,12 @@ func NewService(db *sql.DB, libraryDir, saveDir string) *Service {
 		logRepo = repository.NewLogRepository(db)
 	}
 	return &Service{
-		db:                    db,
-		logRepo:               logRepo,
-		libraryDir:            libraryDir,
-		saveDir:               saveDir,
-		shutdownCtx:           shutdownCtx,
-		shutdownCancel:        shutdownCancel,
-		schedulerClock:        time.Now,
-		schedulerStartupDelay: autoSyncStartupDelay,
+		db:             db,
+		logRepo:        logRepo,
+		libraryDir:     libraryDir,
+		saveDir:        saveDir,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
 	}
 }
 
@@ -108,6 +108,10 @@ func (s *Service) IsConfigured() bool {
 	return s.libraryDir != ""
 }
 
+// Start 做崩溃恢复: 如果进程上次是在 sync/move 跑到一半被 kill 的,
+// task_state_tab 里会留下 running 状态, Start 把它改成 interrupted 以便
+// UI 正确显示。定时调度不在这里拉起, 由 bootstrap 的 cron scheduler 统一
+// 负责 (1.5 重构)。
 func (s *Service) Start(ctx context.Context) {
 	if s.db == nil {
 		return
@@ -115,13 +119,13 @@ func (s *Service) Start(ctx context.Context) {
 	if err := s.recoverTaskStates(ctx); err != nil {
 		logutil.GetLogger(ctx).Error("recover media library task states failed", zap.Error(err))
 	}
-	s.startScheduler()
 }
 
-// Stop 取消 scheduler goroutine 的 ctx, 让它立刻退出等待; 不等待已经
-// Trigger 出去的 runFullSync / runMove, 后者交给 WaitBackground 收敛。
-// 调用顺序建议: Stop 先走, 立即切断 scheduler 后续触发; 接着 WaitBackground
-// 让仍在跑的 sync/move 收完尾; 最后关闭底层 sqlite。
+// Stop 取消 shutdownCtx, 让正在跑的 runFullSync / runMove 响应退出;
+// WaitBackground 负责等这些 goroutine 完整返回。
+// 调用顺序建议: Stop 先走, 立即发 cancel 信号; 接着 WaitBackground 阻塞
+// 等 sync/move 收完尾; 最后关闭底层 sqlite。cron scheduler 的停止职责
+// 由 bootstrap 独立管理, 顺序见 actions_app.go 的注释。
 func (s *Service) Stop() {
 	if s.shutdownCancel == nil {
 		return
@@ -413,16 +417,17 @@ func (s *Service) runFullSync(ctx context.Context, reason string) error {
 		fmt.Sprintf("媒体库同步开始 (reason=%s)", reason)); err != nil {
 		logger.Warn("append sync start log failed", zap.Error(err))
 	}
-	// finalize: 无论 sync 从哪条分支退出都清 dirty + 裁剪日志。
+	// finalize: 无论 sync 从哪条分支退出都清 dirty。
 	// "即使有 error 也清 dirty" 是刻意的: 避免 dirty 永远是 1 导致每天
 	// 03:00 重跑同一个必败 sync, 一直写同样的 error 日志, 用户只能从
 	// UI 的 '查看同步日志' 里发现并人肉处理。
+	//
+	// 日志 retention 裁剪 1.5 起挪到 LogCleanupJob (独立 cron 条目),
+	// 不再挂在 sync 收尾: sync 可能因为 dirty=false 几天都不触发, 但
+	// scrape_job 日志一直在进, cleanup 不能被 sync 绑死。
 	defer func() {
 		if err := s.clearSyncDirty(ctx); err != nil {
 			logger.Warn("clear media library sync dirty failed", zap.Error(err))
-		}
-		if err := s.cleanupSyncLogs(ctx); err != nil {
-			logger.Warn("cleanup media library sync logs failed", zap.Error(err))
 		}
 	}()
 

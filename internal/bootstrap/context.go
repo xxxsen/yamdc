@@ -7,6 +7,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/config"
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/medialib"
@@ -50,15 +51,16 @@ type DomainDeps struct {
 }
 
 type AppDeps struct {
-	AppDB      *repository.SQLite
-	JobRepo    *repository.JobRepository
-	LogRepo    *repository.LogRepository
-	ScrapeRepo *repository.ScrapeDataRepository
-	ScanSvc    *scanner.Service
-	JobSvc     *job.Service
-	ReviewSvc  *review.Service
-	MediaSvc   *medialib.Service
-	API        *web.API
+	AppDB         *repository.SQLite
+	JobRepo       *repository.JobRepository
+	LogRepo       *repository.LogRepository
+	ScrapeRepo    *repository.ScrapeDataRepository
+	ScanSvc       *scanner.Service
+	JobSvc        *job.Service
+	ReviewSvc     *review.Service
+	MediaSvc      *medialib.Service
+	API           *web.API
+	CronScheduler *cronscheduler.Scheduler
 }
 
 type StartContext struct {

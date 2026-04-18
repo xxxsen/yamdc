@@ -160,6 +160,16 @@ func NewServerActions() []InitAction { //nolint:funlen // declarative action lis
 			Run:      startMediaServiceAction,
 		},
 		{
+			Name:     "register_cron_jobs",
+			Requires: []string{ResServices},
+			Run:      registerCronJobsAction,
+		},
+		{
+			Name:     "start_cron_scheduler",
+			Requires: []string{ResServices},
+			Run:      startCronSchedulerAction,
+		},
+		{
 			Name:     "serve_http",
 			Requires: []string{ResAPI},
 			Run:      serveHTTPAction,

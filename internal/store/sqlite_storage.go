@@ -49,6 +49,12 @@ func (s *sqliteStore) cleanupExpired(ctx context.Context) error {
 	return nil
 }
 
+// startCleanupLoop 以 cleanupInterval 为周期裁剪过期缓存行。
+//
+// TODO(cronscheduler): 迁到 internal/cronscheduler 统一管理。当前保留手
+// 写 ticker 是因为 sqliteStore 的 cleanup 和 Scheduler 生命周期不同步
+// (cleanupCancel 挂在 Close 上, 不跟着全局 cron Stop), 迁之前要把两者
+// 的 shutdown 时序对齐。见 internal/cronscheduler/scheduler.go 包注释。
 func (s *sqliteStore) startCleanupLoop(ctx context.Context) {
 	if s.cleanupInterval <= 0 {
 		return

@@ -17,8 +17,9 @@ const (
 	SyncLogLevelError = "error"
 )
 
-// syncLogRetention 是保留窗口。超过这个时长的行会在每次 sync 收尾时被
-// 一条 DELETE 裁剪掉, 避免单张表无限增长吃磁盘。
+// syncLogRetention 是保留窗口。超过这个时长的行会被 LogCleanupJob
+// (每天 03:00 独立触发, 详见 scheduler.go) 一条 DELETE 裁掉, 避免
+// 单张表无限增长吃磁盘。
 //
 // 注意这是全表 retention (跨 log_type): 1.4 改造后 scrape_job 和
 // media_library_sync 共用同一张 yamdc_unified_log_tab, cleanup 按
@@ -124,14 +125,16 @@ func retentionCutoffMillis(now time.Time, window time.Duration) int64 {
 	return now.Add(-window).UnixMilli()
 }
 
-// cleanupSyncLogs 裁剪超出保留窗口的日志行, 在每次 sync 收尾时调用。
-// 合表之后这一条 DELETE 会把所有 log_type 里 created_at < cutoff 的行都
-// 收掉 (目前只有 scrape_job / media_library_sync 两种), 走
-// idx_yamdc_unified_log_type_created_at 索引, 代价可忽略。
+// cleanupSyncLogs 裁剪超出保留窗口的日志行。1.5 前由 sync 收尾调用,
+// 现在由 LogCleanupJob 每日 03:00 独立触发 (解耦于 sync 是否跑)。
 //
-// 函数名保留 "SyncLogs" 是为了调用方 (runFullSync 的 defer) 读起来自然,
-// 实际上不再局限于 sync log。后续如果需要更精细的 per-type retention,
-// 可以在 LogRepository 里加重载, 现阶段全局 7 天足够。
+// 合表之后这一条 DELETE 会把所有 log_type 里 created_at < cutoff 的行都
+// 收掉 (目前只有 scrape_job / media_library_sync 两种), DELETE 不走
+// 索引而是全表扫, 详见 LogRepository.DeleteOlderThan 里的成本分析。
+//
+// 函数名保留 "SyncLogs" 不改是因为调用点已经全部集中在 LogCleanupJob,
+// rename 没有实际收益; 后续如果需要 per-type retention 再在 LogRepository
+// 里加重载, 现阶段全局 7 天够用。
 func (s *Service) cleanupSyncLogs(ctx context.Context) error {
 	if s.logRepo == nil {
 		return nil

@@ -57,6 +57,15 @@ func New(
 	}
 }
 
+// Start 以 interval 为周期在后台扫描目录。
+//
+// TODO(cronscheduler): 1.5 引入了 internal/cronscheduler 统一管理进程级
+// 定时任务, 当前函数仍保留手写 ticker loop 是因为它有 "先跑一次再 tick"
+// 的启动语义, 直接迁到 cron 要改造成 "Start() 时触发一次 + 注册 cron"
+// 两段组合, PR 范围会被拉大。等 medialib 两条 cron job 稳下来后, 把本
+// 扫描周期也迁进去 (实现 cronscheduler.Job, Spec 用 "@every 30s", 并在
+// bootstrap 的 register_cron_jobs 中加一行), 同时保留 Start 里的 "首次
+// Scan" 作为注册前的即时触发。
 func (s *Service) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
