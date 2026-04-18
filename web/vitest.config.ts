@@ -65,6 +65,12 @@ const COVERED_SOURCES = [
   // job-table/helpers.ts: job 表格排序 / 选中判定 / 番号 meta 派生等.
   // 本来就有 24 个测试, 这次补进白名单让阈值真正守护它.
   "src/components/job-table/helpers.ts",
+  // job-table/use-job-actions.ts: job 列表页的 action 集散 hook — 8s 轮询 +
+  // 250ms 搜索 debounce + handleScan/handleRun/handleRerun/handleOpenLogs/
+  // handleDelete/handleToggleSelectAll/handleToggleSelectJob/handleStartEditNumber
+  // /handleCommitEditNumber/handleCancelEditNumber/handleRunSelectedJobs.
+  // 回归风险最高的用户交互入口, 行为冻结在单测里.
+  "src/components/job-table/use-job-actions.ts",
   // components/ui/*: 项目公共原子组件 (Button / Badge / Modal ...),
   // 每个组件带单测, 入白名单后阈值守护其行为不被后续重构改崩。
   "src/components/ui/**/*.tsx",
