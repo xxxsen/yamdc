@@ -3,6 +3,7 @@
 import { Crop, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, type SetStateAction, type SyntheticEvent, useDeferredValue, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
 import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
@@ -360,9 +361,8 @@ function CropOverlay({
               />
             ) : null}
             {showSelection ? (
-              <button
-                type="button"
-                className="btn review-crop-confirm"
+              <Button
+                className="review-crop-confirm"
                 style={{
                   left: cropRect.x + cropRect.width - 54,
                   top: cropRect.y + 8,
@@ -371,7 +371,7 @@ function CropOverlay({
                 disabled={isPending}
               >
                 截取
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -407,13 +407,20 @@ function LibraryBottomActions({
 }) {
   return (
     <div className="library-bottom-actions">
-      <button className="btn btn-primary media-library-sync-btn library-action-btn" type="button" onClick={onRefresh} disabled={refreshBusy || moveBusy}>
-        <RefreshCw size={16} className={refreshBusy ? "media-library-sync-icon-spinning" : ""} />
+      <Button
+        variant="primary"
+        className="media-library-sync-btn library-action-btn"
+        onClick={onRefresh}
+        disabled={refreshBusy || moveBusy}
+        leftIcon={
+          <RefreshCw size={16} className={refreshBusy ? "media-library-sync-icon-spinning" : ""} />
+        }
+      >
         {refreshButtonLabel}
-      </button>
-      <button
-        className="btn btn-primary media-library-sync-btn library-action-btn library-action-btn-progress"
-        type="button"
+      </Button>
+      <Button
+        variant="primary"
+        className="media-library-sync-btn library-action-btn library-action-btn-progress"
         onClick={onMove}
         disabled={refreshBusy || moveBusy || mediaSyncRunning || !configured}
       >
@@ -426,7 +433,7 @@ function LibraryBottomActions({
           {moveBusy ? <RefreshCw size={16} className="media-library-sync-icon-spinning" /> : <Plus size={16} />}
           <span>{moveButtonLabel}</span>
         </span>
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1112,10 +1119,14 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   </button>
                 </div>
                 {detail.item.conflict ? <span className="badge library-conflict-badge">已存在(冲突)</span> : null}
-                <button className="btn file-action-btn file-action-btn-ghost" type="button" onClick={handleDeleteLibraryItem} disabled={isPending}>
-                  <Trash2 size={16} />
+                <Button
+                  className="file-action-btn file-action-btn-ghost"
+                  onClick={handleDeleteLibraryItem}
+                  disabled={isPending}
+                  leftIcon={<Trash2 size={16} />}
+                >
                   删除
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1269,16 +1280,15 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
                     <div className="review-image-card-head">
                       <span className="review-image-title">海报</span>
-                      <button
-                        type="button"
-                        className="btn review-inline-icon-btn review-image-crop-btn"
+                      <Button
+                        className="review-inline-icon-btn review-image-crop-btn"
                         onClick={openCropper}
                         aria-label="从封面截取海报"
                         title="从封面截取海报"
                         disabled={!selectedCover || isPending}
                       >
                         <Crop size={14} />
-                      </button>
+                      </Button>
                     </div>
                     <div className={`review-image-box review-image-box-poster${selectedPoster ? "" : " review-upload-empty"}`}>
                       {selectedPoster ? (
@@ -1365,16 +1375,15 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                             >
                               <img src={resolveLibraryImageSrc(file.rel_path)} alt={file.name} className="library-fanart-image" />
                             </button>
-                            <button
-                              type="button"
-                              className="btn review-inline-icon-btn review-fanart-delete"
+                            <Button
+                              className="review-inline-icon-btn review-fanart-delete"
                               onClick={() => handleDeleteFanart(file.rel_path)}
                               aria-label="删除 extrafanart"
                               title="删除 extrafanart"
                               disabled={isPending}
                             >
                               <X size={12} />
-                            </button>
+                            </Button>
                             <div className="library-fanart-name">{file.name.split("/").pop()}</div>
                           </div>
                         ))}

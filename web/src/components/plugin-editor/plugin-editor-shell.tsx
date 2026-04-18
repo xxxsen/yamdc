@@ -4,7 +4,6 @@ import {
   ChevronDown,
   FileCode2,
   GripVertical,
-  LoaderCircle,
   Plus,
   ScanSearch,
   Sparkles,
@@ -14,6 +13,7 @@ import {
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   compilePluginDraft,
   debugPluginDraftRequest,
@@ -509,13 +509,19 @@ export function PluginEditorShell() {
         </div>
         <div className="plugin-editor-floating-menu-actions">
           <div ref={compileMenuRef} className="plugin-editor-split-action">
-            <button className="btn btn-primary plugin-editor-split-action-main" type="button" onClick={() => void run("compile")} disabled={busyAction !== ""}>
-              {busyAction === "compile" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <FileCode2 size={16} />}
+            <Button
+              variant="primary"
+              className="plugin-editor-split-action-main"
+              onClick={() => void run("compile")}
+              disabled={busyAction !== ""}
+              loading={busyAction === "compile"}
+              leftIcon={<FileCode2 size={16} />}
+            >
               <span>编译草稿</span>
-            </button>
-            <button
-              className="btn btn-primary plugin-editor-split-action-toggle"
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              className="plugin-editor-split-action-toggle"
               aria-label="展开编译草稿菜单"
               title="展开编译草稿菜单"
               aria-expanded={compileMenuOpen}
@@ -523,15 +529,20 @@ export function PluginEditorShell() {
               disabled={busyAction !== ""}
             >
               <ChevronDown size={14} />
-            </button>
+            </Button>
             {compileMenuOpen ? (
               <div className="plugin-editor-split-action-menu">
-                <button className="btn btn-primary plugin-editor-split-action-menu-item" type="button" onClick={handleCopyYAML} disabled={!compileResult?.yaml}>
+                <Button
+                  variant="primary"
+                  className="plugin-editor-split-action-menu-item"
+                  onClick={handleCopyYAML}
+                  disabled={!compileResult?.yaml}
+                >
                   复制 YAML
-                </button>
-                <button
-                  className="btn btn-primary plugin-editor-split-action-menu-item"
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary"
+                  className="plugin-editor-split-action-menu-item"
                   onClick={() => {
                     setCompileMenuOpen(false);
                     setImportOpen(true);
@@ -539,17 +550,26 @@ export function PluginEditorShell() {
                   disabled={busyAction !== ""}
                 >
                   导入 YAML
-                </button>
-                <button className="btn btn-primary plugin-editor-split-action-menu-item" type="button" onClick={handleClearDraft}>
+                </Button>
+                <Button
+                  variant="primary"
+                  className="plugin-editor-split-action-menu-item"
+                  onClick={handleClearDraft}
+                >
                   清空草稿
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => void run("scrape")} disabled={busyAction !== ""}>
-            {busyAction === "scrape" ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <ScanSearch size={16} />}
+          <Button
+            variant="primary"
+            onClick={() => void run("scrape")}
+            disabled={busyAction !== ""}
+            loading={busyAction === "scrape"}
+            leftIcon={<ScanSearch size={16} />}
+          >
             <span>运行调试</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -734,24 +754,22 @@ export function PluginEditorShell() {
                         {state.workflowSelectors.map((selector) => (
                           <div key={selector.id} className="plugin-editor-transform-card plugin-editor-selector-card">
                             <div className="plugin-editor-transform-actions">
-                              <button
-                                className="btn btn-secondary plugin-editor-transform-action"
-                                type="button"
+                              <Button
+                                className="plugin-editor-transform-action"
                                 aria-label="新增 selector"
                                 title="新增 selector"
                                 onClick={addWorkflowSelector}
                               >
                                 <Plus size={14} />
-                              </button>
-                              <button
-                                className="btn btn-secondary plugin-editor-transform-action"
-                                type="button"
+                              </Button>
+                              <Button
+                                className="plugin-editor-transform-action"
                                 aria-label="删除 selector"
                                 title="删除 selector"
                                 onClick={() => removeWorkflowSelector(selector.id)}
                               >
                                 <Trash2 size={14} />
-                              </button>
+                              </Button>
                             </div>
                             <label className="plugin-editor-transform-inline-field plugin-editor-selector-inline-field-name">
                               <span>Name</span>
@@ -860,16 +878,15 @@ export function PluginEditorShell() {
               ))}
             </div>
             <div className="plugin-editor-inline-actions">
-              <button
-                className="btn btn-secondary plugin-editor-transform-action"
-                type="button"
+              <Button
+                className="plugin-editor-transform-action"
                 aria-label="新增字段"
                 title="新增字段"
                 onClick={addField}
                 disabled={!canAddField}
               >
                 <Plus size={14} />
-              </button>
+              </Button>
             </div>
           </article>
           ) : null}

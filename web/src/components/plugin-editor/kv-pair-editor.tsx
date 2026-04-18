@@ -2,6 +2,8 @@
 
 import { Plus, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 import { FIELD_OPTIONS } from "./plugin-editor-constants";
 import type { KVPairForm } from "./plugin-editor-types";
 
@@ -26,12 +28,12 @@ export function KVPairEditor(props: {
         return (
           <div key={item.id} className="plugin-editor-kv-row plugin-editor-kv-row-compact">
             <div className="plugin-editor-transform-actions plugin-editor-kv-actions">
-              <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增项" title="新增项" onClick={props.onAdd}>
+              <Button className="plugin-editor-transform-action" aria-label="新增项" title="新增项" onClick={props.onAdd}>
                 <Plus size={14} />
-              </button>
-              <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="删除项" title="删除项" onClick={() => props.onRemove(item.id)}>
+              </Button>
+              <Button className="plugin-editor-transform-action" aria-label="删除项" title="删除项" onClick={() => props.onRemove(item.id)}>
                 <span aria-hidden="true">×</span>
-              </button>
+              </Button>
             </div>
             <label className="plugin-editor-field-inline plugin-editor-kv-inline-key">
               <span>{props.keyLabel}</span>
@@ -63,9 +65,9 @@ export function KVPairEditor(props: {
       })}
       {props.items.length === 0 ? (
         <div className="plugin-editor-inline-actions">
-          <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增项" title="新增项" onClick={props.onAdd}>
+          <Button className="plugin-editor-transform-action" aria-label="新增项" title="新增项" onClick={props.onAdd}>
             <Plus size={14} />
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -101,20 +103,20 @@ export function WorkflowItemVariablesEditor(props: {
             />
           </label>
           <div className="plugin-editor-transform-actions plugin-editor-kv-actions">
-            <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
+            <Button className="plugin-editor-transform-action" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
               <Plus size={14} />
-            </button>
-            <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="删除变量" title="删除变量" onClick={() => props.onRemove(item.id)}>
+            </Button>
+            <Button className="plugin-editor-transform-action" aria-label="删除变量" title="删除变量" onClick={() => props.onRemove(item.id)}>
               <Trash2 size={14} />
-            </button>
+            </Button>
           </div>
         </div>
       ))}
       {props.items.length === 0 ? (
         <div className="plugin-editor-inline-actions">
-          <button className="btn btn-secondary plugin-editor-transform-action" type="button" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
+          <Button className="plugin-editor-transform-action" aria-label="新增变量" title="新增变量" onClick={props.onAdd}>
             <Plus size={14} />
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
