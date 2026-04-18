@@ -6,6 +6,7 @@ import { useEffect, useEffectEvent, useRef, useState, useTransition } from "reac
 
 import { ImageCropper } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
+import { TokenEditor } from "@/components/ui/token-editor";
 import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
@@ -61,92 +62,6 @@ function imageTitle(type: string) {
     return "海报";
   }
   return "Extrafanart";
-}
-
-function TokenEditor({
-  label,
-  placeholder,
-  value,
-  onChange,
-  onBlurSave,
-  singleLine = false,
-}: {
-  label: string;
-  placeholder: string;
-  value: string[];
-  onChange: (next: string[]) => void;
-  onBlurSave: () => void;
-  singleLine?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  const commitDraft = () => {
-    const next = draft.trim();
-    if (!next) {
-      setDraft("");
-      return;
-    }
-    onChange([...value, next]);
-    setDraft("");
-  };
-
-  const removeAt = (idx: number) => {
-    onChange(value.filter((_, index) => index !== idx));
-    onBlurSave();
-  };
-
-  return (
-    <div className="review-field review-field-tokens">
-      <span className="review-label review-label-side">{label}</span>
-      <div className={`token-editor${singleLine ? " token-editor-single-line" : ""}`} onClick={() => document.getElementById(`token-${label}`)?.focus()}>
-        {value.map((item, idx) => (
-          <span key={`${item}-${idx}`} className="token-chip">
-            {item}
-            <button
-              type="button"
-              className="token-chip-remove"
-              aria-label={`删除${item}`}
-              onClick={() => removeAt(idx)}
-            >
-              <X size={11} />
-            </button>
-          </span>
-        ))}
-        <input
-          id={`token-${label}`}
-          className="token-input"
-          placeholder={value.length === 0 ? placeholder : ""}
-          value={draft}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (next.includes(",")) {
-              const parts = next.split(",");
-              const ready = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
-              if (ready.length > 0) {
-                onChange([...value, ...ready]);
-              }
-              setDraft(parts[parts.length - 1] ?? "");
-              return;
-            }
-            setDraft(next);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitDraft();
-              onBlurSave();
-            } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
-              onChange(value.slice(0, -1));
-            }
-          }}
-          onBlur={() => {
-            commitDraft();
-            onBlurSave();
-          }}
-        />
-      </div>
-    </div>
-  );
 }
 
 function DeleteConfirmOverlay({
@@ -861,11 +776,12 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                   <div className="review-main-side">
                     <div className="review-meta-row">
                       <TokenEditor
+                        idPrefix="token"
                         label="演员"
                         placeholder="输入演员名后输入逗号"
                         value={normalizeList(meta.actors)}
                         onChange={(next) => updateMeta({ actors: next })}
-                        onBlurSave={handleBlurSave}
+                        onCommit={handleBlurSave}
                       />
                     </div>
                   </div>
@@ -912,11 +828,12 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                 </div>
                 <div className="review-meta-row review-meta-row-full">
                   <TokenEditor
+                    idPrefix="token"
                     label="标签"
                     placeholder="输入标签后输入逗号"
                     value={normalizeList(meta.genres)}
                     onChange={(next) => updateMeta({ genres: next })}
-                    onBlurSave={handleBlurSave}
+                    onCommit={handleBlurSave}
                     singleLine
                   />
                 </div>

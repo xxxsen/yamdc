@@ -5,6 +5,7 @@ import { type SetStateAction, useDeferredValue, useEffect, useEffectEvent, useRe
 
 import { ImageCropper, type CropRect } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
+import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryDetail, LibraryListItem, LibraryMeta, MediaLibraryStatus, TaskState } from "@/lib/api";
 import { cropLibraryPosterFromCover, deleteLibraryFile, deleteLibraryItem, getLibraryFileURL, getLibraryItem, getMediaLibraryStatus, listLibraryItems, replaceLibraryAsset, triggerMoveToMediaLibrary, updateLibraryItem } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
@@ -225,87 +226,6 @@ function getInitialCopyMode(detail: LibraryDetail | null): "translated" | "origi
 
 function getInitialMessage(items: LibraryListItem[]): string {
   return items.length === 0 ? "当前 savedir 里还没有已入库内容" : "";
-}
-
-function TokenEditor({
-  label,
-  placeholder,
-  value,
-  onChange,
-  onBlurSave,
-  singleLine = false,
-}: {
-  label: string;
-  placeholder: string;
-  value: string[];
-  onChange: (next: string[]) => void;
-  onBlurSave: () => void;
-  singleLine?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  const commitDraft = () => {
-    const next = draft.trim();
-    if (!next) {
-      setDraft("");
-      return;
-    }
-    onChange([...value, next]);
-    setDraft("");
-  };
-
-  const removeAt = (idx: number) => {
-    onChange(value.filter((_, index) => index !== idx));
-    onBlurSave();
-  };
-
-  return (
-    <div className="review-field review-field-tokens">
-      <span className="review-label review-label-side">{label}</span>
-      <div className={`token-editor${singleLine ? " token-editor-single-line" : ""}`} onClick={() => document.getElementById(`library-token-${label}`)?.focus()}>
-        {value.map((item, idx) => (
-          <span key={`${item}-${idx}`} className="token-chip">
-            {item}
-            <button type="button" className="token-chip-remove" aria-label={`删除${item}`} onClick={() => removeAt(idx)}>
-              <X size={11} />
-            </button>
-          </span>
-        ))}
-        <input
-          id={`library-token-${label}`}
-          className="token-input"
-          placeholder={value.length === 0 ? placeholder : ""}
-          value={draft}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (next.includes(",")) {
-              const parts = next.split(",");
-              const ready = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
-              if (ready.length > 0) {
-                onChange([...value, ...ready]);
-              }
-              setDraft(parts[parts.length - 1] ?? "");
-              return;
-            }
-            setDraft(next);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitDraft();
-              onBlurSave();
-            } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
-              onChange(value.slice(0, -1));
-            }
-          }}
-          onBlur={() => {
-            commitDraft();
-            onBlurSave();
-          }}
-        />
-      </div>
-    </div>
-  );
 }
 
 function LibraryBottomActions({
@@ -1125,11 +1045,13 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
                   <div className="review-main-side library-actors-side">
                     <div className="review-meta-row">
                       <TokenEditor
+                        idPrefix="library-token"
                         label="演员"
                         placeholder="输入后回车或逗号确认"
                         value={draftMeta.actors}
                         onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))}
-                        onBlurSave={handleBlurSave} singleLine
+                        onCommit={handleBlurSave}
+                        singleLine
                       />
                     </div>
                   </div>
@@ -1170,11 +1092,12 @@ export function LibraryShell({ items: initialItems, initialDetail, initialMediaS
 
                 <div className="review-meta-row review-meta-row-full">
                   <TokenEditor
+                    idPrefix="library-token"
                     label="标签"
                     placeholder="输入后回车或逗号确认"
                     value={draftMeta.genres}
                     onChange={(next) => updateDraftMeta((prev) => ({ ...prev, genres: next }))}
-                    onBlurSave={handleBlurSave}
+                    onCommit={handleBlurSave}
                   />
                 </div>
 

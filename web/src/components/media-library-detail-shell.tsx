@@ -4,6 +4,7 @@ import { Check, ChevronLeft, Pencil, X } from "lucide-react";
 import Link from "next/link";
 import { type SetStateAction, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { TokenEditor } from "@/components/ui/token-editor";
 import type { LibraryMeta, MediaLibraryDetail } from "@/lib/api";
 import { getMediaLibraryFileURL, getMediaLibraryItem, updateMediaLibraryItem } from "@/lib/api";
 
@@ -73,97 +74,6 @@ function getVariantCoverPath(detail: MediaLibraryDetail | null, variantKey: stri
     detail?.meta.thumb_path ||
     detail?.item.cover_path ||
     ""
-  );
-}
-
-function TokenEditor({
-  label,
-  placeholder,
-  value,
-  onChange,
-  singleLine = false,
-  readOnly = false,
-}: {
-  label: string;
-  placeholder: string;
-  value: string[];
-  onChange: (next: string[]) => void;
-  singleLine?: boolean;
-  readOnly?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  const commitDraft = () => {
-    const next = draft.trim();
-    if (!next) {
-      setDraft("");
-      return;
-    }
-    onChange([...value, next]);
-    setDraft("");
-  };
-
-  const removeAt = (idx: number) => {
-    onChange(value.filter((_, index) => index !== idx));
-  };
-
-  return (
-    <div className="review-field review-field-tokens">
-      <span className="review-label review-label-side">{label}</span>
-      <div
-        className={`token-editor${singleLine ? " token-editor-single-line" : ""}${readOnly ? " token-editor-readonly" : ""}`}
-        onClick={() => {
-          if (!readOnly) {
-            document.getElementById(`media-library-token-${label}`)?.focus();
-          }
-        }}
-      >
-        {value.map((item, idx) => (
-          <span key={`${item}-${idx}`} className="token-chip">
-            {item}
-            {!readOnly ? (
-              <button type="button" className="token-chip-remove" aria-label={`删除${item}`} onClick={() => removeAt(idx)}>
-                <X size={11} />
-              </button>
-            ) : null}
-          </span>
-        ))}
-        {!readOnly ? (
-          <input
-            id={`media-library-token-${label}`}
-            className="token-input"
-            placeholder={value.length === 0 ? placeholder : ""}
-            value={draft}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (next.includes(",")) {
-                const parts = next.split(",");
-                const ready = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
-                if (ready.length > 0) {
-                  onChange([...value, ...ready]);
-                }
-                setDraft(parts[parts.length - 1] ?? "");
-                return;
-              }
-              setDraft(next);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitDraft();
-              } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
-                onChange(value.slice(0, -1));
-              }
-            }}
-            onBlur={() => {
-              commitDraft();
-            }}
-          />
-        ) : value.length === 0 ? (
-          <span className="library-inline-muted">{placeholder}</span>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -433,10 +343,10 @@ export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDe
                       <textarea className="input review-textarea library-textarea media-library-inline-plot-textarea" value={draftMeta.plot_translated} onChange={(e) => updateDraftMeta((prev) => ({ ...prev, plot_translated: e.target.value }))} />
                     </div>
                     <div className="media-library-field-span-2">
-                      <TokenEditor label="演员" placeholder="输入后回车或逗号确认" value={draftMeta.actors} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))} singleLine readOnly={false} />
+                      <TokenEditor idPrefix="media-library-token" label="演员" placeholder="输入后回车或逗号确认" value={draftMeta.actors} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, actors: next }))} singleLine readOnly={false} />
                     </div>
                     <div className="media-library-field-span-2">
-                      <TokenEditor label="标签" placeholder="输入后回车或逗号确认" value={draftMeta.genres} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, genres: next }))} readOnly={false} />
+                      <TokenEditor idPrefix="media-library-token" label="标签" placeholder="输入后回车或逗号确认" value={draftMeta.genres} onChange={(next) => updateDraftMeta((prev) => ({ ...prev, genres: next }))} readOnly={false} />
                     </div>
                   </div>
                 ) : (
