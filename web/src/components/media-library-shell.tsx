@@ -14,7 +14,10 @@ import { MediaLibrarySyncLogsModal } from "@/components/media-library-shell/sync
 import { useMediaLibraryDetail } from "@/components/media-library-shell/use-media-library-detail";
 import { useMediaLibrarySync } from "@/components/media-library-shell/use-media-library-sync";
 import { extractYearOptions } from "@/components/media-library-shell/utils";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
+import { Spinner } from "@/components/ui/spinner";
 import type { MediaLibraryItem, MediaLibraryStatus, MediaLibrarySyncLogEntry } from "@/lib/api";
 import { listMediaLibrarySyncLogs } from "@/lib/api";
 
@@ -169,7 +172,7 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
     <div className="media-library-page media-library-page-wide">
       <section className="panel media-library-overview media-library-overview-wide">
         {!configured ? (
-          <div className="review-empty-state">当前还没有配置 `library_dir`，媒体库页面暂不可用。</div>
+          <EmptyState title="当前还没有配置 `library_dir`，媒体库页面暂不可用。" />
         ) : (
           <div className="media-library-browser-shell">
             <MediaLibraryFilterRail
@@ -237,13 +240,11 @@ export function MediaLibraryShell({ items: initialItems, initialStatus }: Props)
       >
         {detailLoading ? (
           <div className="media-library-detail-modal-state panel">
-            <div className="list-loading-spinner" aria-hidden="true" />
+            <Spinner />
           </div>
         ) : detailError ? (
           <div className="media-library-detail-modal-state panel">
-            <span className="review-message" data-tone="danger">
-              {detailError}
-            </span>
+            <ErrorState title="加载详情失败" detail={detailError} />
           </div>
         ) : activeDetail ? (
           <MediaLibraryDetailShell

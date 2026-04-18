@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Spinner } from "@/components/ui/spinner";
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
 
 import { DeleteConfirmModal } from "./job-table/delete-confirm-modal";
@@ -199,11 +200,7 @@ export function JobTable({ initialData }: Props) {
           onScan={actions.handleScan}
         />
         <div className="table-wrap" style={{ position: "relative", flex: 1, overflow: "auto" }}>
-          {isScanning ? (
-            <div className="list-loading-overlay">
-              <div className="list-loading-spinner" />
-            </div>
-          ) : null}
+          {isScanning ? <Spinner overlay /> : null}
           <table className="table file-table">
             <thead>
               <tr>

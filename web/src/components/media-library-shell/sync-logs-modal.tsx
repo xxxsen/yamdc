@@ -2,7 +2,10 @@
 
 import { formatSyncLogTime } from "@/components/media-library-shell/utils";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
+import { Spinner } from "@/components/ui/spinner";
 import type { MediaLibrarySyncLogEntry } from "@/lib/api";
 
 export interface MediaLibrarySyncLogsModalProps {
@@ -41,17 +44,15 @@ export function MediaLibrarySyncLogsModal({
       </div>
       {loading ? (
         <div className="media-library-sync-logs-state">
-          <div className="list-loading-spinner" aria-hidden="true" />
+          <Spinner />
         </div>
       ) : error ? (
         <div className="media-library-sync-logs-state">
-          <span className="review-message" data-tone="danger">
-            {error}
-          </span>
+          <ErrorState title="加载同步日志失败" detail={error} />
         </div>
       ) : logs.length === 0 ? (
         <div className="media-library-sync-logs-state">
-          <span className="review-empty-state">暂无同步日志</span>
+          <EmptyState title="暂无同步日志" />
         </div>
       ) : (
         // 一行一条, 最新的在最上面 (后端已按 created_at DESC 返回)。
