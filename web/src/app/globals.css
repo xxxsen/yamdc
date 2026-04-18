@@ -7,6 +7,10 @@
   --panel-strong: #fffaf2;
   --line: rgba(91, 67, 44, 0.16);
   --muted: #6a5d50;
+  /* --accent + .btn-primary 白字 (#fff8f4) 对比度实测 4.96:1, 过 WCAG AA
+   * (阈值 4.5), 但余量只有 0.46。如果后续想把 accent 调亮 (如往 #c06038
+   * 偏移), 会跌破阈值, 调色前请用 contrast checker 复核。
+   * --accent-strong + 白字对比度 7.60:1, 处于 AAA 级, hover 态安全。*/
   --accent: #b44f2d;
   --accent-strong: #8b3618;
   --danger: #9d2b2b;
@@ -28,12 +32,43 @@ body {
     radial-gradient(circle at bottom right, rgba(180, 79, 45, 0.14), transparent 28%),
     linear-gradient(180deg, #fbf7f0 0%, #f3ebdf 100%);
   color: var(--foreground);
+  /* 字体栈: 西文走 Iowan/Palatino 系 (macOS 原生有, 其它系统 fallback 到
+   * Georgia, 都是暖色 serif, 风格接近); 中文显式挂 PingFang SC/思源宋体/
+   * 冬青黑体/Noto 系, 最后兜底到 Songti SC, 避免非 macOS 落回系统 sans
+   * 导致中英文粗细/字形不匹配。顺序是: 西文优先 -> 中文优先 -> 通用 serif。 */
   font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia,
+    "PingFang SC", "Hiragino Sans GB", "Source Han Serif SC",
+    "Noto Serif CJK SC", "Microsoft YaHei", "Songti SC", serif;
 }
 
 body {
   min-height: 100vh;
+}
+
+/* 全站键盘焦点环 (a11y).
+ *
+ * 用 :focus-visible 而非 :focus: 鼠标点击不触发, 仅键盘 Tab / 辅助技术
+ * 导航时才显示, 不会污染鼠标用户视觉。
+ *
+ * 只挂到常见可交互元素, 不用 *:focus-visible 避免扩散到非交互节点。
+ *
+ * 这条规则在 globals.css 顶部声明, 后续局部规则 (如 .input:focus-visible
+ * { outline: 0 }) 会按 CSS 后胜出自然覆盖, 所以已经自定义了替代焦点指示
+ * 的控件 (搜索框有 focus-within ring、input 有 border accent) 行为不变; 没
+ * 自定义的裸 <button className="btn"> 这类终于有了统一焦点环, 修了之前
+ * 键盘用户只看见浏览器虚线框 (还和 warm serif 风格冲突) 的问题。 */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 a {

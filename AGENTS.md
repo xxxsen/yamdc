@@ -74,3 +74,15 @@ make ci-check             # backend-check + web-check（与 CI 一致）
 - 测试文件在 `web/src/lib/__tests__/`
 - 运行：`cd web && npm run test`（即 `vitest run`）
 - 测试用例要求: 覆盖至少 `正常case`, `异常case`, `边缘case` 3种路径
+
+---
+
+## 前端范围与风格约定
+
+- **定位：桌面优先**。前端只保证桌面浏览器（宽度 ≥ 1024px）体验，不考虑移动端 / 平板布局。
+  - 不投入响应式适配成本；已有的 `@media` 断点代码允许随手清理，但不强制。
+  - `data-label="..."` 这类"移动端卡片化表格"兜底 pattern **不作为新组件规范**，存量可以逐步下线。
+- **视觉风格：warm serif 复古基调**（`Iowan Old Style` + 暖色底）是刻意选的，重构/重写不改主视觉语言。
+- **样式工程**：走 Tailwind v4 utility + `@theme` token。新增组件优先用 utility，尽量不往 `globals.css` 加全局 class。详见 `td/022-frontend-optimization-roadmap.md`。
+- **组件库**：手写 `components/ui/`（Button/Modal/Badge 等），不引入 shadcn/ui 或其它第三方组件库。
+- **暗色模式**：明确不做，不要引入 `prefers-color-scheme: dark` 或 `data-theme` 切换逻辑。
