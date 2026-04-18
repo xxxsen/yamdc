@@ -2,6 +2,7 @@ package medialib
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,136 +199,177 @@ func TestReleaseYear(t *testing.T) {
 	}
 }
 
-// --- matchSizeFilter ---
+// --- sizeFilterBounds ---
 
-func TestMatchSizeFilter(t *testing.T) {
+func TestSizeFilterBounds(t *testing.T) {
 	gb := int64(1024 * 1024 * 1024)
 	tests := []struct {
-		name       string
-		totalSize  int64
-		sizeFilter string
-		want       bool
+		name     string
+		filter   string
+		wantLow  int64
+		wantHigh int64
+		wantOk   bool
 	}{
-		{"empty_filter", 0, "", true},
-		{"all_filter", 0, "all", true},
-		{"lt-1_true", gb/2 - 1, "lt-1", true},
-		{"lt-1_false", gb + 1, "lt-1", false},
-		{"1-2_true", int64(float64(gb) * 1.5), "1-2", true},
-		{"1-2_false_low", gb / 2, "1-2", false},
-		{"2-5_true", 3 * gb, "2-5", true},
-		{"lt-5_true", 4 * gb, "lt-5", true},
-		{"lt-5_false", 6 * gb, "lt-5", false},
-		{"5-10_true", 7 * gb, "5-10", true},
-		{"10-20_true", 15 * gb, "10-20", true},
-		{"5-20_true", 15 * gb, "5-20", true},
-		{"20-50_true", 30 * gb, "20-50", true},
-		{"50-plus_true", 60 * gb, "50-plus", true},
-		{"50-plus_false", 40 * gb, "50-plus", false},
-		{"unknown_filter", 0, "unknown", true},
+		{"empty", "", 0, 0, false},
+		{"all", "all", 0, 0, false},
+		{"lt-1", "lt-1", 0, gb, true},
+		{"1-2", "1-2", gb, 2 * gb, true},
+		{"2-5", "2-5", 2 * gb, 5 * gb, true},
+		{"lt-5", "lt-5", 0, 5 * gb, true},
+		{"5-10", "5-10", 5 * gb, 10 * gb, true},
+		{"10-20", "10-20", 10 * gb, 20 * gb, true},
+		{"5-20", "5-20", 5 * gb, 20 * gb, true},
+		{"20-50", "20-50", 20 * gb, 50 * gb, true},
+		{"50-plus", "50-plus", 50 * gb, 0, true},
+		{"unknown", "bogus", 0, 0, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, matchSizeFilter(tc.totalSize, tc.sizeFilter))
+			low, high, ok := sizeFilterBounds(tc.filter)
+			assert.Equal(t, tc.wantOk, ok)
+			assert.Equal(t, tc.wantLow, low)
+			assert.Equal(t, tc.wantHigh, high)
 		})
 	}
 }
 
-// --- compareStrings ---
+// --- sortModeToColumn ---
 
-func TestCompareStrings(t *testing.T) {
+func TestSortModeToColumn(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b string
-		want int
+		sort string
+		want string
 	}{
-		{"less", "a", "b", -1},
-		{"greater", "b", "a", 1},
-		{"equal", "a", "a", 0},
+		{"title", "title", "CASE WHEN title = '' THEN name ELSE title END"},
+		{"size", "size", "total_size"},
+		{"year", "year", "release_year"},
+		{"ingested", "ingested", "created_at"},
+		{"updated", "updated", "updated_at"},
+		{"empty_defaults_to_updated", "", "updated_at"},
+		{"unknown_defaults_to_updated", "bogus", "updated_at"},
+		{"whitespace_stripped", "  title  ", "CASE WHEN title = '' THEN name ELSE title END"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, compareStrings(tc.a, tc.b))
+			assert.Equal(t, tc.want, sortModeToColumn(tc.sort))
 		})
 	}
 }
 
-// --- compareInt64 ---
+// --- buildListItemsQuery ---
 
-func TestCompareInt64(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b int64
-		want int
-	}{
-		{"less", 1, 2, -1},
-		{"greater", 2, 1, 1},
-		{"equal", 1, 1, 0},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, compareInt64(tc.a, tc.b))
-		})
-	}
-}
+func TestBuildListItemsQuery(t *testing.T) {
+	gb := int64(1024 * 1024 * 1024)
 
-// --- compareItemsByMode ---
-
-func TestCompareItemsByMode(t *testing.T) {
-	left := Item{Title: "A", TotalSize: 100, ReleaseDate: "2024-01-01", CreatedAt: 10, UpdatedAt: 20}
-	right := Item{Title: "B", TotalSize: 200, ReleaseDate: "2025-01-01", CreatedAt: 20, UpdatedAt: 30}
-	tests := []struct {
-		name     string
-		sortMode string
-		want     int
-	}{
-		{"title", "title", -1},
-		{"size", "size", -1},
-		{"year", "year", -1},
-		{"ingested", "ingested", -1},
-		{"default", "", -1},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, compareItemsByMode(left, right, tc.sortMode))
-		})
-	}
-}
-
-// --- sortItems ---
-
-func TestSortItems(t *testing.T) {
-	tests := []struct {
-		name     string
-		sortMode string
-		order    string
-	}{
-		{"default_desc", "", "desc"},
-		{"title_asc", "title", "asc"},
-		{"size_desc", "size", "desc"},
-		{"year_asc", "year", "asc"},
-		{"ingested_asc", "ingested", "asc"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			items := []Item{
-				{Title: "B", TotalSize: 200, ReleaseDate: "2025", CreatedAt: 20, UpdatedAt: 20, ID: 2},
-				{Title: "A", TotalSize: 100, ReleaseDate: "2024", CreatedAt: 10, UpdatedAt: 10, ID: 1},
-			}
-			sortItems(items, tc.sortMode, tc.order)
-			if tc.order == "asc" {
-				assert.True(t, items[0].ID <= items[1].ID || items[0].Title <= items[1].Title)
-			}
-		})
-	}
-
-	t.Run("tiebreaker", func(t *testing.T) {
-		items := []Item{
-			{Title: "A", UpdatedAt: 10, ID: 2},
-			{Title: "A", UpdatedAt: 10, ID: 1},
-		}
-		sortItems(items, "title", "asc")
-		assert.Equal(t, int64(1), items[0].ID)
+	t.Run("no_filter", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{})
+		assert.NotContains(t, q, "WHERE")
+		// 默认排序列就是 updated_at, 不再重复出现, 只保留一次 + id tie-breaker。
+		assert.Contains(t, q, "ORDER BY updated_at DESC, id DESC")
+		assert.NotContains(t, q, "updated_at DESC, updated_at DESC")
+		assert.Empty(t, args)
 	})
+
+	t.Run("keyword_pushes_three_like_conditions", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{Keyword: "  AbC  "})
+		assert.Contains(t, q, `LOWER(title) LIKE ? ESCAPE '\'`)
+		assert.Contains(t, q, `LOWER(number) LIKE ? ESCAPE '\'`)
+		assert.Contains(t, q, `LOWER(name) LIKE ? ESCAPE '\'`)
+		assert.Equal(t, []any{"%abc%", "%abc%", "%abc%"}, args)
+	})
+
+	t.Run("keyword_with_like_wildcards_is_escaped", func(t *testing.T) {
+		// 旧实现用 strings.Contains 做字面子串匹配, 这里验证下推后 '%' 和 '_'
+		// 仍然只匹配它们自己, 不会变成 SQL 通配符。
+		_, args := buildListItemsQuery(ListItemsOptions{Keyword: "100%_off"})
+		require.Len(t, args, 3)
+		assert.Equal(t, `%100\%\_off%`, args[0])
+	})
+
+	t.Run("year_all_is_ignored", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{Year: "all"})
+		assert.NotContains(t, q, "release_year")
+		assert.Empty(t, args)
+	})
+
+	t.Run("year_equals", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{Year: "2024"})
+		assert.Contains(t, q, "release_year = ?")
+		assert.Equal(t, []any{"2024"}, args)
+	})
+
+	t.Run("size_range_adds_two_bounds", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{SizeFilter: "2-5"})
+		assert.Contains(t, q, "total_size >= ?")
+		assert.Contains(t, q, "total_size < ?")
+		assert.Equal(t, []any{2 * gb, 5 * gb}, args)
+	})
+
+	t.Run("size_lt_adds_only_upper", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{SizeFilter: "lt-1"})
+		assert.NotContains(t, q, "total_size >= ?")
+		assert.Contains(t, q, "total_size < ?")
+		assert.Equal(t, []any{gb}, args)
+	})
+
+	t.Run("size_50_plus_adds_only_lower", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{SizeFilter: "50-plus"})
+		assert.Contains(t, q, "total_size >= ?")
+		assert.NotContains(t, q, "total_size < ?")
+		assert.Equal(t, []any{50 * gb}, args)
+	})
+
+	t.Run("combined_filters_join_with_and", func(t *testing.T) {
+		q, args := buildListItemsQuery(ListItemsOptions{
+			Keyword:    "k",
+			Year:       "2024",
+			SizeFilter: "1-2",
+			Sort:       "title",
+			Order:      "asc",
+		})
+		assert.Contains(t, q, " AND ")
+		assert.Contains(t, q, "CASE WHEN title = '' THEN name ELSE title END ASC")
+		require.Len(t, args, 3+1+2)
+		assert.Equal(t, "%k%", args[0])
+		assert.Equal(t, "2024", args[3])
+		assert.Equal(t, gb, args[4])
+		assert.Equal(t, 2*gb, args[5])
+	})
+
+	t.Run("order_asc_is_case_insensitive", func(t *testing.T) {
+		q, _ := buildListItemsQuery(ListItemsOptions{Order: "ASC"})
+		// 默认排序列 updated_at 被折叠, 所以这里直接看 tie-breaker 的方向。
+		assert.Contains(t, q, "ORDER BY updated_at ASC, id ASC")
+	})
+
+	t.Run("non_updated_sort_keeps_full_tiebreaker", func(t *testing.T) {
+		q, _ := buildListItemsQuery(ListItemsOptions{Sort: "title"})
+		assert.Contains(t, q, "CASE WHEN title = '' THEN name ELSE title END DESC, updated_at DESC, id DESC")
+	})
+}
+
+// --- escapeLikePattern ---
+
+func TestEscapeLikePattern(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no_special", "abc", "abc"},
+		{"percent_only", "50%", `50\%`},
+		{"underscore_only", "a_b", `a\_b`},
+		{"backslash_only", `a\b`, `a\\b`},
+		{"all_mixed", `1\0%0_a`, `1\\0\%0\_a`},
+		{"empty", "", ""},
+		{"unicode_untouched", "中文_混合", `中文\_混合`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, escapeLikePattern(tc.in))
+		})
+	}
 }
 
 // --- IsConfigured ---
@@ -519,10 +561,11 @@ func TestDeleteMissing(t *testing.T) {
 func TestListItems(t *testing.T) {
 	svc := newTestMediaService(t)
 	ctx := context.Background()
+	gb := int64(1024 * 1024 * 1024)
 
 	for _, item := range []Item{
-		{RelPath: "a", Title: "Alpha", Number: "N1", ReleaseDate: "2024-01-01", TotalSize: 1024 * 1024 * 1024, UpdatedAt: 10},
-		{RelPath: "b", Title: "Beta", Number: "N2", ReleaseDate: "2025-06-01", TotalSize: 3 * 1024 * 1024 * 1024, UpdatedAt: 20},
+		{RelPath: "a", Title: "Alpha", Number: "N1", ReleaseDate: "2024-01-01", TotalSize: gb, UpdatedAt: 10, CreatedAt: 1},
+		{RelPath: "b", Title: "Beta", Number: "N2", ReleaseDate: "2025-06-01", TotalSize: 3 * gb, UpdatedAt: 20, CreatedAt: 2},
 	} {
 		require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: item}))
 	}
@@ -532,16 +575,29 @@ func TestListItems(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, items, 2)
 	})
-	t.Run("keyword_filter", func(t *testing.T) {
+	t.Run("keyword_matches_title", func(t *testing.T) {
 		items, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "alpha"})
 		require.NoError(t, err)
-		assert.Len(t, items, 1)
+		require.Len(t, items, 1)
 		assert.Equal(t, "Alpha", items[0].Title)
+	})
+	t.Run("keyword_matches_number_case_insensitive", func(t *testing.T) {
+		// LOWER(number) LIKE '%n1%' 必须能命中大写 "N1"。
+		items, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "N1"})
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		assert.Equal(t, "Alpha", items[0].Title)
+	})
+	t.Run("keyword_no_match", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "gamma"})
+		require.NoError(t, err)
+		assert.Empty(t, items)
 	})
 	t.Run("year_filter", func(t *testing.T) {
 		items, err := svc.ListItems(ctx, ListItemsOptions{Year: "2024"})
 		require.NoError(t, err)
-		assert.Len(t, items, 1)
+		require.Len(t, items, 1)
+		assert.Equal(t, "Alpha", items[0].Title)
 	})
 	t.Run("year_all", func(t *testing.T) {
 		items, err := svc.ListItems(ctx, ListItemsOptions{Year: "all"})
@@ -551,13 +607,114 @@ func TestListItems(t *testing.T) {
 	t.Run("size_filter", func(t *testing.T) {
 		items, err := svc.ListItems(ctx, ListItemsOptions{SizeFilter: "2-5"})
 		require.NoError(t, err)
-		assert.Len(t, items, 1)
+		require.Len(t, items, 1)
+		assert.Equal(t, "Beta", items[0].Title)
+	})
+	t.Run("size_filter_empty_result", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{SizeFilter: "50-plus"})
+		require.NoError(t, err)
+		assert.Empty(t, items)
 	})
 	t.Run("sort_title_asc", func(t *testing.T) {
 		items, err := svc.ListItems(ctx, ListItemsOptions{Sort: "title", Order: "asc"})
 		require.NoError(t, err)
+		require.Len(t, items, 2)
 		assert.Equal(t, "Alpha", items[0].Title)
 	})
+	t.Run("sort_title_desc", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{Sort: "title", Order: "desc"})
+		require.NoError(t, err)
+		require.Len(t, items, 2)
+		assert.Equal(t, "Beta", items[0].Title)
+	})
+	t.Run("sort_size_asc", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{Sort: "size", Order: "asc"})
+		require.NoError(t, err)
+		require.Len(t, items, 2)
+		assert.Equal(t, "Alpha", items[0].Title)
+	})
+	t.Run("default_sort_is_updated_desc", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{})
+		require.NoError(t, err)
+		require.Len(t, items, 2)
+		assert.Equal(t, "Beta", items[0].Title)
+	})
+	t.Run("combined_keyword_and_year", func(t *testing.T) {
+		items, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "N", Year: "2025"})
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		assert.Equal(t, "Beta", items[0].Title)
+	})
+}
+
+func TestListItemsSortTitleFallsBackToName(t *testing.T) {
+	// sortModeToColumn("title") 的 CASE 表达式规定 title 为空时用 name 当比较键;
+	// 这里验证跨字段排序落到 SQL 里的行为和 Go 层原有 firstNonEmpty 语义一致。
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+	require.NoError(t, svc.upsertDetail(ctx, &Detail{
+		Item: Item{RelPath: "a", Name: "Zeta", Title: "", UpdatedAt: 1},
+	}))
+	require.NoError(t, svc.upsertDetail(ctx, &Detail{
+		Item: Item{RelPath: "b", Name: "", Title: "Alpha", UpdatedAt: 2},
+	}))
+	items, err := svc.ListItems(ctx, ListItemsOptions{Sort: "title", Order: "asc"})
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	assert.Equal(t, "Alpha", items[0].Title)
+	assert.Equal(t, "Zeta", items[1].Name)
+}
+
+func TestListItemsKeywordLiteralWildcards(t *testing.T) {
+	// 旧实现 strings.Contains("foo", "%") 只命中字符串里真的有 '%' 的行;
+	// 新 SQL 下推后必须维持同样的字面语义, 不能让 '%' 当作 "match anything" 泄漏行。
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	for _, item := range []Item{
+		{RelPath: "a", Title: "50% off promo", UpdatedAt: 1},
+		{RelPath: "b", Title: "plain title", UpdatedAt: 2},
+	} {
+		require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: item}))
+	}
+
+	got, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "%"})
+	require.NoError(t, err)
+	require.Len(t, got, 1, "only the row containing a literal '%%' should match")
+	assert.Equal(t, "a", got[0].RelPath)
+}
+
+func TestListItemsLegacyRowsNeedSyncToBeFilterable(t *testing.T) {
+	// 模拟 002 migration 升级老库: 构造一行 release_year 索引列为空、
+	// 但 item_json 里有可解析年份的数据。002 不做 SQL 回填, 所以 year 过滤
+	// 在 sync 之前必然漏掉这行; 跑一次 upsertDetail (等价于一次 sync)
+	// 之后, 索引列被写正确, 过滤才能命中。覆盖 "升级后必须触发同步媒体库
+	// 才能让旧行参与过滤" 的契约。
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	item := Item{RelPath: "legacy", Title: "Legacy", Number: "L1", ReleaseDate: "2023-08-01", UpdatedAt: 5}
+	raw, err := json.Marshal(item)
+	require.NoError(t, err)
+	_, err = svc.db.ExecContext(ctx, `
+		INSERT INTO yamdc_media_library_tab (
+			rel_path, title, release_date, updated_at, poster_path, cover_path,
+			item_json, detail_json, created_at,
+			number, name, release_year, total_size
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', 0)
+	`, item.RelPath, item.Title, item.ReleaseDate, item.UpdatedAt, "", "", string(raw), "{}", int64(1))
+	require.NoError(t, err)
+
+	before, err := svc.ListItems(ctx, ListItemsOptions{Year: "2023"})
+	require.NoError(t, err)
+	assert.Empty(t, before, "sync 之前 release_year 列为空, year 过滤不应该命中")
+
+	require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: item}))
+
+	after, err := svc.ListItems(ctx, ListItemsOptions{Year: "2023"})
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	assert.Equal(t, "Legacy", after[0].Title)
 }
 
 // --- GetDetail ---
@@ -1572,4 +1729,42 @@ func TestListItemsSortCombinations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, items, 2, "sort=%s order=%s", tc.sort, tc.order)
 	}
+}
+
+// TestListItemsKeywordConsistencyAfterPushdown 用实际 DB 验证: 把
+// keyword 过滤从 Go 层下推到 SQL 层后, ListItems 对 title / number / name
+// 三字段的命中语义不变 —— 这是 1.4 优化的"行为不变"契约。
+func TestListItemsKeywordConsistencyAfterPushdown(t *testing.T) {
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	items := []Item{
+		// 关键字只出现在 title
+		{RelPath: "a", Title: "Alpha Series", Number: "X-1"},
+		// 关键字只出现在 number
+		{RelPath: "b", Title: "Other", Number: "ALPHA-2"},
+		// 关键字只出现在 name
+		{RelPath: "c", Title: "Other", Number: "X-3", Name: "alpha-file.mp4"},
+		// 不含关键字
+		{RelPath: "d", Title: "Beta", Number: "Y-4", Name: "beta.mp4"},
+	}
+	for i := range items {
+		items[i].ID = int64(i + 1)
+		require.NoError(t, svc.upsertDetail(ctx, &Detail{Item: items[i]}))
+	}
+
+	got, err := svc.ListItems(ctx, ListItemsOptions{Keyword: "alpha"})
+	require.NoError(t, err)
+	require.Len(t, got, 3, "应同时匹配 title/number/name 三种字段")
+
+	paths := make(map[string]struct{}, len(got))
+	for _, it := range got {
+		paths[it.RelPath] = struct{}{}
+	}
+	for _, want := range []string{"a", "b", "c"} {
+		_, ok := paths[want]
+		assert.True(t, ok, "missing expected rel_path=%s", want)
+	}
+	_, unexpected := paths["d"]
+	assert.False(t, unexpected, "beta should not appear when keyword=alpha")
 }

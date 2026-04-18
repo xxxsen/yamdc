@@ -3,7 +3,6 @@ package client
 import (
 	"fmt"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 
 	"github.com/imroc/req/v3"
@@ -50,10 +49,9 @@ func NewClient(opts ...Option) (IHTTPClient, error) {
 			return rt.RoundTrip(req)
 		}
 	})
-	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
 		Transport: t,
-		Jar:       jar,
+		Jar:       MustCookieJar(),
 		Timeout:   c.timeout,
 	}
 	if len(c.proxy) > 0 {

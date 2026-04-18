@@ -46,19 +46,63 @@ func NewJobRepository(db *sql.DB) *JobRepository {
 	return &JobRepository{db: db}
 }
 
+// resolveConflictNumber 决定本次 upsert 重新计算 conflict_key 时使用哪个 number。
+// 当现有 job 的 number 字段处于"冻结"状态(手动改过 / 正在 processing / 等待 review
+// 用户确认)时, 继续使用 existing number 重新生成 conflict_key, 避免 scanner 重扫
+// 触发规则变动时, conflict_key 与 number 脱钩。具体冻结触发条件见
+// upsertScannedJobSQL 的 CASE 分支, 这里必须保持一致。
 func (r *JobRepository) resolveConflictNumber(ctx context.Context, relPath, number string) (string, error) {
-	var existingNumber, existingSource string
+	var existingNumber, existingSource, existingStatus string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT number, number_source FROM yamdc_job_tab WHERE rel_path = ?`, relPath,
-	).Scan(&existingNumber, &existingSource)
+		`SELECT number, number_source, status FROM yamdc_job_tab WHERE rel_path = ?`, relPath,
+	).Scan(&existingNumber, &existingSource, &existingStatus)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("load existing job before upsert failed: %w", err)
 	}
-	if err == nil && existingSource == "manual" {
+	if err != nil {
+		// ErrNoRows: 这是首次插入, 没有"历史 number"可保留, 直接用入参即可。
+		return number, nil //nolint:nilerr // sql.ErrNoRows is a not-found sentinel, not a failure
+	}
+	if numberFieldsFrozen(existingSource, existingStatus) {
 		return existingNumber, nil
 	}
 	return number, nil
 }
+
+// numberFieldsFrozen 仅对应 upsertScannedJobSQL 里 canonical 三项 ——
+// number / number_source / conflict_key 的 CASE 分支 (通过 numberFrozenCondition
+// 展开), 并被 resolveConflictNumber 使用。cleaned_number / number_clean_* 不走
+// 本函数, 见 numberFrozenCondition 注释与 SQL 中相应 CASE 的独立分支。
+//
+// 冻结触发条件: 手动改过番号 (number_source='manual'), 或 job 正在执行/等待
+// 人工 review —— 此时 scrape_data 已有一份旧 number 的 meta 快照, 若 scanner
+// 的下一次重扫把 canonical number 静默改掉, Import 落盘时 NFO 里的番号就会
+// 与目录名错位, 用户不易察觉。
+func numberFieldsFrozen(numberSource, status string) bool {
+	if numberSource == "manual" {
+		return true
+	}
+	switch status {
+	case string(jobdef.StatusProcessing), string(jobdef.StatusReviewing):
+		return true
+	}
+	return false
+}
+
+// numberFrozenCondition 描述"job 当前 number / number_source / conflict_key 这三
+// 个核心字段此次 upsert 不可被覆盖"的 SQL 条件, 与 numberFieldsFrozen (Go 侧)
+// 严格一致。触发条件:
+//   - 用户手动改过番号 (number_source='manual'), 一直以来就在保护;
+//   - job 正在 processing / 等待 reviewing: scrape_data 已有快照, 若 number 被
+//     scanner 重扫时静默改掉, Import 会和快照错位(目录名用新 number, NFO 用旧 meta)。
+//
+// 注意: cleaned_number / number_clean_* 不在本条件内, 继续保留原先的 manual-only
+// 覆盖语义(cleaned_number 永远刷新, number_clean_* 仅 manual 冻结), 因为它们只
+// 是"cleaner 当下给出的建议值", 不参与 Import 的目录构造, 让 scanner 继续跟踪。
+const numberFrozenCondition = `(` +
+	`yamdc_job_tab.number_source = 'manual'` +
+	` OR yamdc_job_tab.status IN ('processing','reviewing')` +
+	`)`
 
 const upsertScannedJobSQL = `` +
 	`INSERT INTO yamdc_job_tab (
@@ -73,18 +117,18 @@ ON CONFLICT(rel_path) DO UPDATE SET
 	file_name = excluded.file_name,
 	file_ext = excluded.file_ext,
 	conflict_key = CASE
-		WHEN yamdc_job_tab.number_source = 'manual'
-		THEN excluded.conflict_key
+		WHEN ` + numberFrozenCondition + `
+		THEN yamdc_job_tab.conflict_key
 		ELSE excluded.conflict_key END,
 	abs_path = excluded.abs_path,
 	raw_number = excluded.raw_number,
 	cleaned_number = excluded.cleaned_number,
 	number = CASE
-		WHEN yamdc_job_tab.number_source = 'manual'
+		WHEN ` + numberFrozenCondition + `
 		THEN yamdc_job_tab.number
 		ELSE excluded.number END,
 	number_source = CASE
-		WHEN yamdc_job_tab.number_source = 'manual'
+		WHEN ` + numberFrozenCondition + `
 		THEN yamdc_job_tab.number_source
 		ELSE excluded.number_source END,
 	number_clean_status = CASE
@@ -137,15 +181,15 @@ ON CONFLICT(rel_path) DO UPDATE SET
 	updated_at = CASE
 		WHEN yamdc_job_tab.file_name != excluded.file_name
 		OR yamdc_job_tab.file_ext != excluded.file_ext
-		OR yamdc_job_tab.conflict_key != excluded.conflict_key
 		OR yamdc_job_tab.abs_path != excluded.abs_path
 		OR yamdc_job_tab.raw_number != excluded.raw_number
 		OR yamdc_job_tab.cleaned_number != excluded.cleaned_number
-		OR (yamdc_job_tab.number_source != 'manual'
+		OR (NOT ` + numberFrozenCondition + `
+			AND yamdc_job_tab.conflict_key != excluded.conflict_key)
+		OR (NOT ` + numberFrozenCondition + `
 			AND yamdc_job_tab.number != excluded.number)
-		OR (yamdc_job_tab.number_source != 'manual'
-			AND yamdc_job_tab.number_source
-				!= excluded.number_source)
+		OR (NOT ` + numberFrozenCondition + `
+			AND yamdc_job_tab.number_source != excluded.number_source)
 		OR (yamdc_job_tab.number_source != 'manual'
 			AND yamdc_job_tab.number_clean_status
 				!= excluded.number_clean_status)
@@ -460,7 +504,7 @@ func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys [
 		args = append(args, key)
 	}
 	//nolint:gosec // placeholders are "?" literals, not user input
-	query := `SELECT id, rel_path, conflict_key FROM yamdc_job_tab` +
+	query := `SELECT id, rel_path, conflict_key, status FROM yamdc_job_tab` +
 		` WHERE deleted_at = 0 AND status != ? AND conflict_key IN (` +
 		strings.Join(placeholders, ",") + `)`
 	rows, err := r.db.QueryContext(ctx, query, append([]interface{}{jobdef.StatusDone}, args...)...)
@@ -473,7 +517,7 @@ func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys [
 	items := make([]jobdef.Job, 0, len(filtered))
 	for rows.Next() {
 		var item jobdef.Job
-		if err := rows.Scan(&item.ID, &item.RelPath, &item.ConflictKey); err != nil {
+		if err := rows.Scan(&item.ID, &item.RelPath, &item.ConflictKey, &item.Status); err != nil {
 			return nil, fmt.Errorf("scan active job by conflict key failed: %w", err)
 		}
 		items = append(items, item)

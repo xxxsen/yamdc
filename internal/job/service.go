@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	stdimage "image"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/xxxsen/common/logutil"
 	"github.com/xxxsen/yamdc/internal/capture"
-	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/repository"
@@ -23,36 +21,56 @@ import (
 	"go.uber.org/zap"
 )
 
+// 跨包共享的 sentinel 错误: review 包等需要通过 errors.Is 判定这些值,
+// 在此显式导出以避免两份值漂移。
+//
+// ErrJobNotFound 直接复用 repository.ErrJobNotFound: jobRepo.GetByID 在 job
+// 不存在时返回的正是这个值, 调用方无论写 errors.Is(err, job.ErrJobNotFound)
+// 还是 errors.Is(err, repository.ErrJobNotFound) 都能命中, 避免两边 sentinel
+// 漂移导致 wrap 之后匹配不上。
 var (
-	errJobNotFound             = errors.New("job not found")
-	errJobNotReviewing         = errors.New("job is not in reviewing status")
+	ErrJobNotFound       = repository.ErrJobNotFound
+	ErrJobAlreadyRunning = errors.New("job is already running")
+	ErrJobConflict       = errors.New("job conflict")
+	ErrNoConflict        = errors.New("no job conflict")
+	// ErrServiceStopped 由 Stop() 之后的 Run/Rerun 返回, 表示 worker 已关闭
+	// 不再接受新任务。调用方 (graceful shutdown 链或重复 Stop) 可以用
+	// errors.Is 识别后静默忽略。
+	ErrServiceStopped = errors.New("job service is stopped")
+)
+
+// job 包内继续用小写别名, 行为/值与导出版本完全一致, 仅命名风格差异。
+var (
+	errJobNotFound             = ErrJobNotFound
+	errJobAlreadyRunning       = ErrJobAlreadyRunning
+	errConflict                = ErrJobConflict
+	errNoConflict              = ErrNoConflict
+	errServiceStopped          = ErrServiceStopped
 	errJobNumberEditNotAllowed = errors.New("job number can only be edited in init or failed status")
-	errScrapeDataNotFound      = errors.New("scrape data not found")
-	errCoverNotFound           = errors.New("cover not found")
-	errCropRectOutOfBounds     = errors.New("crop rectangle out of bounds")
-	errJobAlreadyRunning       = errors.New("job is already running")
-	errConflict                = errors.New("job conflict")
 	errJobStatusNotDeletable   = errors.New("job status does not allow delete")
 	errJobCurrentlyRunning     = errors.New("job is currently running")
 	errJobNumberRequiresReview = errors.New("job number requires manual edit before scraping")
 	errJobStatusNotRunnable    = errors.New("job status is not runnable")
 	errJobSourcePathEmpty      = errors.New("job source path is empty")
 	errJobSourceNotFound       = errors.New("job source file not found")
-	errNoConflict              = errors.New("no job conflict")
 )
 
 type Service struct {
-	jobRepo     *repository.JobRepository
-	logRepo     *repository.LogRepository
-	scrapeRepo  *repository.ScrapeDataRepository
-	capture     *capture.Capture
-	storage     store.IStorage
-	importGuard func(context.Context) error
+	jobRepo    *repository.JobRepository
+	logRepo    *repository.LogRepository
+	scrapeRepo *repository.ScrapeDataRepository
+	capture    *capture.Capture
+	storage    store.IStorage
 
 	mu      sync.Mutex
 	running map[int64]struct{}
+	closed  bool // 由 Stop 置位, 之后 reserveEnqueue 拒绝新任务。
 	queue   chan queuedJob
-	workWG  sync.WaitGroup
+	// enqueueWG 计数"已经通过 closed 检查、但尚未把 queuedJob 送进 channel"
+	// 的生产者 goroutine。Stop 需要在 close(s.queue) 之前 Wait 这个 WG,
+	// 否则会触发 send on closed channel 的 panic。
+	enqueueWG sync.WaitGroup
+	workWG    sync.WaitGroup
 }
 
 type queuedJob struct {
@@ -199,10 +217,6 @@ func (s *Service) GetScrapeData(ctx context.Context, jobID int64) (*repository.S
 	return data, nil
 }
 
-func (s *Service) SetImportGuard(fn func(context.Context) error) {
-	s.importGuard = fn
-}
-
 func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (*jobdef.Job, error) {
 	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID), zap.String("number", strings.TrimSpace(input)))
 	j, err := s.jobRepo.GetByID(ctx, jobID)
@@ -242,224 +256,6 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 		}
 	}
 	return updated, nil
-}
-
-func (s *Service) SaveReviewData(ctx context.Context, jobID int64, reviewData string) error {
-	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
-	j, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		logger.Error("load job before saving review data failed", zap.Error(err))
-		return fmt.Errorf("load job before saving review data: %w", err)
-	}
-	if j == nil {
-		return errJobNotFound
-	}
-	if j.Status != jobdef.StatusReviewing {
-		return errJobNotReviewing
-	}
-	var meta model.MovieMeta
-	if err := json.Unmarshal([]byte(reviewData), &meta); err != nil {
-		return fmt.Errorf("invalid review json: %w", err)
-	}
-	if err := s.scrapeRepo.SaveReviewData(ctx, jobID, reviewData); err != nil {
-		logger.Error("save review data failed", zap.Error(err))
-		return fmt.Errorf("save review data: %w", err)
-	}
-	s.addJobLog(ctx, jobID, "info", "review", "review data saved", "")
-	logger.Info("review data saved", zap.String("number", meta.Number), zap.String("title", meta.Title))
-	return nil
-}
-
-func (s *Service) CropPosterFromCover(ctx context.Context, jobID int64, x, y, width, height int) (*model.File, error) {
-	logger := logutil.GetLogger(ctx).With(
-		zap.Int64("job_id", jobID),
-		zap.Int("x", x),
-		zap.Int("y", y),
-		zap.Int("width", width),
-		zap.Int("height", height),
-	)
-	meta, err := s.loadReviewingMeta(ctx, logger, jobID)
-	if err != nil {
-		return nil, err
-	}
-	if meta.Cover == nil || meta.Cover.Key == "" {
-		return nil, errCoverNotFound
-	}
-	posterKey, err := s.cropAndStorePoster(ctx, meta.Cover.Key, x, y, width, height)
-	if err != nil {
-		return nil, err
-	}
-	meta.Poster = &model.File{Name: "./poster.jpg", Key: posterKey}
-	reviewData, err := json.Marshal(&meta)
-	if err != nil {
-		return nil, fmt.Errorf("marshal review meta failed: %w", err)
-	}
-	if err := s.scrapeRepo.SaveReviewData(ctx, jobID, string(reviewData)); err != nil {
-		logger.Error("save cropped poster review data failed", zap.Error(err))
-		return nil, fmt.Errorf("save cropped poster review data: %w", err)
-	}
-	s.addJobLog(ctx, jobID, "info", "review", "poster cropped from cover", fmt.Sprintf("%d,%d,%d,%d", x, y, width, height))
-	logger.Info("poster cropped from cover", zap.String("poster_key", meta.Poster.Key))
-	return meta.Poster, nil
-}
-
-func (s *Service) loadReviewingMeta(ctx context.Context, logger *zap.Logger, jobID int64) (model.MovieMeta, error) {
-	j, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		logger.Error("load job before review action failed", zap.Error(err))
-		return model.MovieMeta{}, fmt.Errorf("load job before review action: %w", err)
-	}
-	if j == nil {
-		return model.MovieMeta{}, errJobNotFound
-	}
-	if j.Status != jobdef.StatusReviewing {
-		return model.MovieMeta{}, errJobNotReviewing
-	}
-	data, err := s.scrapeRepo.GetByJobID(ctx, jobID)
-	if err != nil {
-		return model.MovieMeta{}, fmt.Errorf("get scrape data: %w", err)
-	}
-	if data == nil {
-		return model.MovieMeta{}, errScrapeDataNotFound
-	}
-	payload := data.RawData
-	if data.ReviewData != "" {
-		payload = data.ReviewData
-	}
-	var meta model.MovieMeta
-	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
-		return model.MovieMeta{}, fmt.Errorf("parse review meta failed: %w", err)
-	}
-	return meta, nil
-}
-
-func (s *Service) cropAndStorePoster(ctx context.Context, coverKey string, x, y, width, height int) (string, error) {
-	raw, err := store.GetDataFrom(ctx, s.storage, coverKey)
-	if err != nil {
-		return "", fmt.Errorf("load cover failed: %w", err)
-	}
-	img, err := imgutil.LoadImage(raw)
-	if err != nil {
-		return "", fmt.Errorf("decode cover failed: %w", err)
-	}
-	bounds := img.Bounds()
-	rect := stdimage.Rect(x, y, x+width, y+height)
-	if rect.Min.X < bounds.Min.X || rect.Min.Y < bounds.Min.Y || rect.Max.X > bounds.Max.X || rect.Max.Y > bounds.Max.Y {
-		return "", errCropRectOutOfBounds
-	}
-	cropped, err := imgutil.CutImageViaRectangle(img, rect)
-	if err != nil {
-		return "", fmt.Errorf("crop poster failed: %w", err)
-	}
-	croppedRaw, err := imgutil.WriteImageToBytes(cropped)
-	if err != nil {
-		return "", fmt.Errorf("encode poster failed: %w", err)
-	}
-	key, err := store.AnonymousPutDataTo(ctx, s.storage, croppedRaw)
-	if err != nil {
-		return "", fmt.Errorf("store cropped poster: %w", err)
-	}
-	return key, nil
-}
-
-func (s *Service) Import(ctx context.Context, jobID int64) error {
-	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
-	if !s.claim(jobID) {
-		logger.Warn("import skipped because job is already running")
-		return errJobAlreadyRunning
-	}
-	defer s.finish(jobID)
-
-	j, err := s.validateImportPreconditions(ctx, logger, jobID)
-	if err != nil {
-		return err
-	}
-	data, err := s.scrapeRepo.GetByJobID(ctx, jobID)
-	if err != nil {
-		return fmt.Errorf("get scrape data for import: %w", err)
-	}
-	if data == nil {
-		return errScrapeDataNotFound
-	}
-	payload := data.RawData
-	if data.ReviewData != "" {
-		payload = data.ReviewData
-	}
-	var meta model.MovieMeta
-	if err := json.Unmarshal([]byte(payload), &meta); err != nil {
-		return fmt.Errorf("parse final meta failed: %w", err)
-	}
-	return s.performImport(ctx, logger, j, jobID, &meta, payload)
-}
-
-func (s *Service) validateImportPreconditions(
-	ctx context.Context, logger *zap.Logger, jobID int64,
-) (*jobdef.Job, error) {
-	j, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		logger.Error("load job before import failed", zap.Error(err))
-		return nil, fmt.Errorf("load job before import: %w", err)
-	}
-	if j == nil {
-		return nil, errJobNotFound
-	}
-	if j.Status != jobdef.StatusReviewing {
-		return nil, errJobNotReviewing
-	}
-	if s.importGuard != nil {
-		if err := s.importGuard(ctx); err != nil {
-			logger.Warn("import blocked by guard", zap.Error(err))
-			return nil, err
-		}
-	}
-	conflict, err := s.GetConflict(ctx, j)
-	if err != nil && !errors.Is(err, errNoConflict) {
-		logger.Error("check job conflict before import failed", zap.Error(err))
-		return nil, err
-	}
-	if conflict != nil {
-		logger.Warn("import blocked by conflict",
-			zap.String("reason", conflict.Reason),
-			zap.String("target", conflict.Target),
-		)
-		return nil, fmt.Errorf("%s: %s: %w", conflict.Reason, conflict.Target, errConflict)
-	}
-	return j, nil
-}
-
-func (s *Service) performImport(
-	ctx context.Context,
-	logger *zap.Logger,
-	j *jobdef.Job,
-	jobID int64,
-	meta *model.MovieMeta,
-	payload string,
-) error {
-	sourcePath, err := s.resolveJobSourcePath(ctx, j)
-	if err != nil {
-		return err
-	}
-	fc, err := s.capture.ResolveFileContext(sourcePath, j.Number)
-	if err != nil {
-		return fmt.Errorf("resolve file context failed: %w", err)
-	}
-	fc.Meta = meta
-	s.addJobLog(ctx, jobID, "info", "import", "import started", "")
-	logger.Info("import started", zap.String("number", j.Number))
-	if err := s.capture.ImportMeta(ctx, fc); err != nil {
-		s.addJobLog(ctx, jobID, "error", "import", "import failed", err.Error())
-		logger.Error("import failed", zap.Error(err))
-		return fmt.Errorf("import meta: %w", err)
-	}
-	if err := s.scrapeRepo.SaveFinalData(ctx, jobID, payload); err != nil {
-		return fmt.Errorf("save final data: %w", err)
-	}
-	if err := s.jobRepo.MarkDone(ctx, jobID); err != nil {
-		return fmt.Errorf("mark job done: %w", err)
-	}
-	s.addJobLog(ctx, jobID, "info", "import", "import completed", fc.SaveDir)
-	logger.Info("import completed", zap.String("save_dir", fc.SaveDir))
-	return nil
 }
 
 func (s *Service) Delete(ctx context.Context, jobID int64) error {
@@ -529,9 +325,11 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		return fmt.Errorf("%s: %s: %w", conflict.Reason, conflict.Target, errConflict)
 	}
 
-	if !s.claim(jobID) {
-		return errJobAlreadyRunning
+	release, err := s.reserveEnqueue(jobID)
+	if err != nil {
+		return err
 	}
+	defer release()
 
 	ok, err := s.jobRepo.UpdateStatus(ctx, jobID, allowed, jobdef.StatusProcessing, "")
 	if err != nil {
@@ -548,6 +346,64 @@ func (s *Service) start(ctx context.Context, jobID int64, allowed []jobdef.Statu
 		jobID: jobID,
 	}
 	return nil
+}
+
+// reserveEnqueue 原子地完成 "closed 检查 + claim + enqueueWG.Add(1)":
+//   - 若服务已 Stop, 返回 errServiceStopped;
+//   - 若同 jobID 已在 running, 返回 errJobAlreadyRunning;
+//   - 否则占位 running, 把自己登记到 enqueueWG, 返回一个 release 回调。
+//
+// 调用方拿到 release 后用 defer 调一次, 用来从 enqueueWG 里退出。release
+// 只关心 enqueueWG; running 的清理仍沿用 finish(jobID) —— 成功路径由 worker
+// 在 runOne 末尾 finish, 失败路径由 start 自己 finish。
+func (s *Service) reserveEnqueue(jobID int64) (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, errServiceStopped
+	}
+	if _, exists := s.running[jobID]; exists {
+		return nil, errJobAlreadyRunning
+	}
+	s.running[jobID] = struct{}{}
+	s.enqueueWG.Add(1)
+	return s.enqueueWG.Done, nil
+}
+
+// Stop 显式关闭 worker:
+//  1. 在锁内置 closed=true, 之后所有 reserveEnqueue 都会返回 ErrServiceStopped;
+//  2. 等待 enqueueWG 清零 —— 已经通过 closed 检查、正在 channel send 路径上的
+//     生产者 goroutine 必须先完成 send, close(queue) 才安全;
+//  3. close(s.queue), 让 runWorker 的 for-range 自然收尾;
+//  4. 等待 workWG 清零, 保证所有 runOne 都处理完毕。
+//
+// 第 4 步受 ctx 约束: 若 ctx 先 Done, Stop 返回 ctx.Err() wrapping, 但后台 worker
+// 仍会在当前 runOne 结束后自然退出(Go 不支持强制终止 goroutine)。
+//
+// Stop 是幂等的: 重复调用除第一次外直接返回 nil。
+func (s *Service) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.enqueueWG.Wait()
+	close(s.queue)
+
+	done := make(chan struct{})
+	go func() {
+		s.workWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("stop job service: %w", ctx.Err())
+	}
 }
 
 func (s *Service) runWorker() {
@@ -858,6 +714,66 @@ func (s *Service) GetConflict(ctx context.Context, job *jobdef.Job) (*Conflict, 
 	return buildConflict(items), nil
 }
 
+// getBlockingConflict 是 3.2.b 修复点: Import 前校验只阻塞"正在活跃占用"的
+// 同 conflict_key 兄弟 job (processing / reviewing), 不阻塞仅处于 init / failed
+// 的兄弟 —— 那些 job 没有快照, 不会抢目录。
+//
+// 与 GetConflict 的区别:
+//   - GetConflict 用于 Start/列表展示, 把所有非 done 非 deleted 同 key 兄弟都列为冲突,
+//     避免两个 init 同 key 被同时启动;
+//   - getBlockingConflict 只关心真正的并发冲突, 允许 A=reviewing+B=init 的场景下
+//     A 先 Import 落库 (B 若随后 Start 仍会被 GetConflict/A=done 之后的状态拦住)。
+//
+// 自己 (job.ID) 永远会从结果集里排除。
+func (s *Service) getBlockingConflict(ctx context.Context, job *jobdef.Job) (*Conflict, error) {
+	if job == nil {
+		return nil, errNoConflict
+	}
+	if job.Status == jobdef.StatusDone {
+		return nil, errNoConflict
+	}
+	grouped, err := s.loadConflictGroups(ctx, []jobdef.Job{*job})
+	if err != nil {
+		return nil, err
+	}
+	key := conflictKeyForJob(job)
+	items := grouped[key]
+	active := make([]jobdef.Job, 0, len(items))
+	for _, item := range items {
+		if item.ID == job.ID {
+			continue
+		}
+		if !isBlockingImportStatus(item.Status) {
+			continue
+		}
+		active = append(active, item)
+	}
+	if len(active) == 0 {
+		return nil, errNoConflict
+	}
+	active = append(active, *job)
+	return buildConflict(active), nil
+}
+
+// isBlockingImportStatus 判定一个同 conflict_key 兄弟 job 是否"正在"跟我抢资源。
+// 只有 processing / reviewing 算作活跃占用: 前者正在真的抓取, 后者已经产出快照
+// 等待用户确认, Import 一旦落盘会和对方目标目录重合。init / failed 没有快照,
+// 自然也没有目录占用。done 已经完成, 到 conflict_key 索引不命中此处仅作完整性保留。
+//
+// default 分支走"保守阻塞": 若未来新增一个未在此处枚举的"活跃"状态,
+// 宁可误报也不要静默放行 Import 导致两个 job 同时往同一个目录写 NFO。
+// 新增状态时请显式登记到 return false 的 case 以解除阻塞。
+func isBlockingImportStatus(status jobdef.Status) bool {
+	switch status {
+	case jobdef.StatusProcessing, jobdef.StatusReviewing:
+		return true
+	case jobdef.StatusInit, jobdef.StatusFailed, jobdef.StatusDone:
+		return false
+	default:
+		return true
+	}
+}
+
 func (s *Service) ApplyConflicts(ctx context.Context, jobs []jobdef.Job) error {
 	grouped, err := s.loadConflictGroups(ctx, jobs)
 	if err != nil {
@@ -934,8 +850,45 @@ func buildConflict(items []jobdef.Job) *Conflict {
 }
 
 func (s *Service) failJob(ctx context.Context, jobID int64, stage, message, detail string) {
-	_, _ = s.jobRepo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, message)
+	if _, err := s.jobRepo.UpdateStatus(
+		ctx, jobID,
+		[]jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, message,
+	); err != nil {
+		// 即使状态更新失败, 仍要继续写 job log, 否则排障时看不到失败原因。
+		logutil.GetLogger(ctx).Error("fail job: update status to failed failed",
+			zap.Int64("job_id", jobID),
+			zap.String("stage", stage),
+			zap.String("message", message),
+			zap.Error(err),
+		)
+	}
 	s.addJobLog(ctx, jobID, "error", stage, message, detail)
+}
+
+// Claim / Finish / AddJobLog / ResolveJobSourcePath / GetBlockingConflict 是为 3.2
+// 抽出的 internal/review.Service 提供的协作原语。review 包只依赖这些方法与
+// jobdef/repository, 不直接反向依赖 job.Service 的内部字段。保持这层边界,
+// 未来即便要把 review 包继续拆细也只用看这几个签名。
+func (s *Service) Claim(jobID int64) bool {
+	return s.claim(jobID)
+}
+
+func (s *Service) Finish(jobID int64) {
+	s.finish(jobID)
+}
+
+func (s *Service) AddJobLog(ctx context.Context, jobID int64, level, stage, message, detail string) {
+	s.addJobLog(ctx, jobID, level, stage, message, detail)
+}
+
+func (s *Service) ResolveJobSourcePath(ctx context.Context, j *jobdef.Job) (string, error) {
+	return s.resolveJobSourcePath(ctx, j)
+}
+
+// GetBlockingConflict 用于 Import 前置校验: 只把 processing/reviewing 状态的同
+// conflict_key 兄弟算作阻塞方, init/failed 不阻塞。detail 见 getBlockingConflict。
+func (s *Service) GetBlockingConflict(ctx context.Context, job *jobdef.Job) (*Conflict, error) {
+	return s.getBlockingConflict(ctx, job)
 }
 
 func (s *Service) finish(jobID int64) {
@@ -956,14 +909,13 @@ func (s *Service) claim(jobID int64) bool {
 
 // WaitQueuedJobs blocks until all jobs pushed into the internal worker queue
 // have been fully processed (including post-status-update DB writes and the
-// `finish` cleanup). 目前主要用于测试: 在关闭底层 sqlite / 清理 tempdir 之前
+// `finish` cleanup). 仅用于测试: 在关闭底层 sqlite / 清理 tempdir 之前
 // 同步等待 worker goroutine 完成所有异步写入, 避免 journal 文件残留导致
 // "directory not empty" 等 flaky 失败。
 //
-// 注意 worker 是常驻 goroutine (消费内部 channel, 与单个 ctx 无绑定关系),
-// 因此 "cancel 某个 ctx 自动收尾" 的心智模型并不适用。生产侧若要 graceful
-// shutdown, 应在确保不会再有新任务入队 (关闭入口 / 停止调用 Run / Import 等)
-// 之后调用本方法, 以排空已入队但未处理的任务。
+// 生产侧的 graceful shutdown 走 Stop(ctx), 该方法会先阻止新入队再排空 worker;
+// 测试要么也用 Stop (+ 预期 runOne 不再被调度), 要么用 WaitQueuedJobs 做一次
+// "只等不关" 的屏障, 保持与 Stop 互补。
 func (s *Service) WaitQueuedJobs() {
 	s.workWG.Wait()
 }

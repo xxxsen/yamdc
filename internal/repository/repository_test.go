@@ -241,6 +241,141 @@ func TestJobRepositoryUpsertScannedJobPreservesManualNumber(t *testing.T) {
 	require.Equal(t, "MANUAL-999.mp4", got.ConflictKey)
 }
 
+// TestJobRepositoryUpsertScannedJobFreezesNumberDuringReviewing 对应 3.2.a:
+// reviewing 期间 scanner 重扫 + 番号清洗规则更新, 不应静默覆盖 canonical 三项
+// (number / number_source / conflict_key), 否则 scrape_data 快照与 job.number
+// 会脱钩; cleaned_number 不在冻结范围, 仍应跟随新输入刷新。
+func TestJobRepositoryUpsertScannedJobFreezesNumberDuringReviewing(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName:              "AAA-001.mp4",
+		FileExt:               ".mp4",
+		RelPath:               "AAA-001.mp4",
+		AbsPath:               "/scan/AAA-001.mp4",
+		Number:                "AAA-001",
+		RawNumber:             "AAA001",
+		CleanedNumber:         "AAA-001",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+	list, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, list.Items, 1)
+	jobID := list.Items[0].ID
+
+	ok, err := repo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusProcessing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = repo.UpdateStatus(
+		ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusReviewing, "",
+	)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	newInput := input
+	newInput.Number = "AAA-002"
+	newInput.CleanedNumber = "AAA-002"
+	newInput.RawNumber = "AAA002"
+	require.NoError(t, repo.UpsertScannedJob(ctx, newInput))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, jobdef.StatusReviewing, got.Status, "reviewing status should be preserved")
+	require.Equal(t, "AAA-001", got.Number, "number must be frozen during reviewing")
+	require.Equal(t, "cleaner", got.NumberSource, "number_source must be frozen during reviewing")
+	require.Equal(t, "AAA-001.mp4", got.ConflictKey, "conflict_key must be frozen during reviewing")
+	require.Equal(t, "AAA-002", got.CleanedNumber, "cleaned_number tracks cleaner output")
+	require.Equal(t, "AAA002", got.RawNumber, "raw_number follows file name")
+}
+
+// TestJobRepositoryUpsertScannedJobFreezesNumberDuringProcessing 对应 3.2.a:
+// processing 状态同样要冻结 canonical 三项 (number / number_source /
+// conflict_key), 避免 scrape 跑到一半 number 被改; cleaned_number 仍随 scanner
+// 刷新, 不在冻结范围内。
+func TestJobRepositoryUpsertScannedJobFreezesNumberDuringProcessing(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName:      "BBB-010.mp4",
+		FileExt:       ".mp4",
+		RelPath:       "BBB-010.mp4",
+		AbsPath:       "/scan/BBB-010.mp4",
+		Number:        "BBB-010",
+		RawNumber:     "BBB010",
+		CleanedNumber: "BBB-010",
+		NumberSource:  "cleaner",
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+	list, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	jobID := list.Items[0].ID
+
+	ok, err := repo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusProcessing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	newInput := input
+	newInput.Number = "BBB-999"
+	newInput.CleanedNumber = "BBB-999"
+	require.NoError(t, repo.UpsertScannedJob(ctx, newInput))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.Equal(t, "BBB-010", got.Number)
+	require.Equal(t, "BBB-010.mp4", got.ConflictKey)
+}
+
+// TestJobRepositoryUpsertScannedJobUnfreezesAfterReviewingReset 对应 3.2.a 边缘 case:
+// reviewing 结束 (被 failed/init 等) 后, number 应再次允许被 cleaner 覆盖,
+// 否则一个卡住的 reviewing job 会永远锁住 number 字段。
+func TestJobRepositoryUpsertScannedJobUnfreezesAfterReviewingReset(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	input := UpsertJobInput{
+		FileName:      "CCC-300.mp4",
+		FileExt:       ".mp4",
+		RelPath:       "CCC-300.mp4",
+		AbsPath:       "/scan/CCC-300.mp4",
+		Number:        "CCC-300",
+		RawNumber:     "CCC300",
+		CleanedNumber: "CCC-300",
+		NumberSource:  "cleaner",
+	}
+	require.NoError(t, repo.UpsertScannedJob(ctx, input))
+	list, err := repo.ListJobs(ctx, nil, "", 1, 10)
+	require.NoError(t, err)
+	jobID := list.Items[0].ID
+	ok, err := repo.UpdateStatus(ctx, jobID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusProcessing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = repo.UpdateStatus(
+		ctx, jobID, []jobdef.Status{jobdef.StatusProcessing}, jobdef.StatusFailed, "boom",
+	)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	newInput := input
+	newInput.Number = "CCC-999"
+	newInput.CleanedNumber = "CCC-999"
+	require.NoError(t, repo.UpsertScannedJob(ctx, newInput))
+
+	got, err := repo.GetByID(ctx, jobID)
+	require.NoError(t, err)
+	require.Equal(t, "CCC-999", got.Number, "failed status releases number freeze")
+	require.Equal(t, "CCC-999.mp4", got.ConflictKey)
+}
+
 func TestJobRepositoryUpsertScannedJobReactivatesDoneJob(t *testing.T) {
 	ctx := context.Background()
 	sqlite := newTestSQLite(t)

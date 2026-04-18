@@ -14,6 +14,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/repository"
+	"github.com/xxxsen/yamdc/internal/review"
 	"github.com/xxxsen/yamdc/internal/scanner"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
@@ -55,6 +56,7 @@ type AppDeps struct {
 	ScrapeRepo *repository.ScrapeDataRepository
 	ScanSvc    *scanner.Service
 	JobSvc     *job.Service
+	ReviewSvc  *review.Service
 	MediaSvc   *medialib.Service
 	API        *web.API
 }
