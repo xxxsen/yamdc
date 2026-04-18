@@ -1,27 +1,26 @@
 "use client";
 
-import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
-import Image from "next/image";
+import { RotateCcw } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
 import { ImageCropper } from "@/components/image-cropper";
+import { ReviewCoverCard, ReviewFanartStrip, ReviewPosterCard } from "@/components/review-shell/asset-gallery";
 import { DeleteConfirmOverlay } from "@/components/review-shell/delete-confirm-overlay";
+import { ReviewFormFields } from "@/components/review-shell/form-fields";
+import { ReviewListPanel } from "@/components/review-shell/list-panel";
 import { ReviewPreviewOverlay, type ReviewPreviewState } from "@/components/review-shell/preview-overlay";
 import { RestoreConfirmOverlay } from "@/components/review-shell/restore-confirm-overlay";
-import { buildPayload, imageTitle, normalizeList, parseMeta } from "@/components/review-shell/utils";
+import { buildPayload, normalizeList, parseMeta } from "@/components/review-shell/utils";
 import { Button } from "@/components/ui/button";
 import { TokenEditor } from "@/components/ui/token-editor";
 import type { JobItem, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
-import { formatUnixMillis } from "@/lib/utils";
 
 interface Props {
   jobs: JobItem[];
   initialScrapeData: ScrapeDataItem | null;
   initialMediaStatus: MediaLibraryStatus | null;
 }
-
-const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
 
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
@@ -483,102 +482,24 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   return (
     <>
       <div className="two-col">
-        <aside className="panel review-list-panel">
-          <div className="review-list-head">
-            <div>
-              <div className="review-list-kicker">Review Queue</div>
-              <h2 className="review-list-title">Review 列表</h2>
-              <p className="review-list-subtitle">
-                当前 {items.length} 条待复核任务
-                {selectedIndex >= 0 ? `，正在查看第 ${selectedIndex + 1} 条` : ""}
-              </p>
-              {moveRunning ? <p className="review-list-subtitle">媒体库正在同步迁移，审批按钮已临时锁定。</p> : null}
-            </div>
-          </div>
-          <div className="review-bulk-toolbar">
-            <label className="review-bulk-select-all">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allSelectableChecked}
-                disabled={items.length === 0 || isPending || moveRunning}
-                title="选择当前列表中的全部 review 任务"
-                onChange={handleToggleSelectAll}
-              />
-              <span>全选</span>
-            </label>
-            <div className="review-bulk-toolbar-actions">
-              {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
-              <Button
-                className="review-inline-icon-btn review-bulk-approve-btn"
-                onClick={handleImportSelected}
-                disabled={selectedCount === 0 || isPending || moveRunning}
-                aria-label="批量审批"
-                title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
-              >
-                <Check size={16} />
-              </Button>
-              <Button
-                className="review-inline-icon-btn review-bulk-delete-btn"
-                onClick={handleDeleteSelected}
-                disabled={selectedCount === 0 || isPending}
-                aria-label="批量删除"
-                title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          </div>
-          <div className="review-job-list">
-            {items.length === 0 ? <div className="review-empty-state">当前没有待 review 的任务</div> : null}
-            {items.map((job, index) => (
-              <div
-                key={job.id}
-                className="panel review-job-card"
-                data-active={selected?.id === job.id}
-                data-selected={selectedJobIds.has(job.id)}
-              >
-                <div className="review-job-card-select">
-                  <input
-                    type="checkbox"
-                    checked={selectedJobIds.has(job.id)}
-                    disabled={isPending || moveRunning}
-                    title={moveRunning ? "媒体库移动进行中，暂不可选择" : "选择任务"}
-                    onChange={() => handleToggleSelectJob(job.id)}
-                  />
-                </div>
-                <button className="review-job-card-main" onClick={() => loadDetail(job)} disabled={isPending}>
-                  <div className="review-job-card-topline">
-                    <span className="review-job-card-index">#{index + 1}</span>
-                    <span className="review-job-card-time">更新于 {formatUnixMillis(job.updated_at)}</span>
-                  </div>
-                  <div className="review-job-card-path">{job.rel_path}</div>
-                  <div className="review-job-card-number">{job.number}</div>
-                </button>
-                <div className="review-job-card-actions">
-                  <Button
-                    className="review-inline-icon-btn review-action-approve"
-                    onClick={handleImport}
-                    disabled={isPending || selected?.id !== job.id || moveRunning}
-                    aria-label="入库"
-                    title={moveRunning ? "媒体库移动进行中，暂不可审批" : "入库"}
-                  >
-                    <Check size={16} />
-                  </Button>
-                  <Button
-                    className="review-inline-icon-btn"
-                    onClick={handleDelete}
-                    disabled={isPending || selected?.id !== job.id}
-                    aria-label="删除"
-                    title="删除"
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
+        <ReviewListPanel
+          items={items}
+          selectedId={selected?.id}
+          selectedIndex={selectedIndex}
+          selectedJobIds={selectedJobIds}
+          selectedCount={selectedCount}
+          allSelectableChecked={allSelectableChecked}
+          isPending={isPending}
+          moveRunning={moveRunning}
+          selectAllRef={selectAllRef}
+          onToggleSelectAll={handleToggleSelectAll}
+          onToggleSelectJob={handleToggleSelectJob}
+          onLoadDetail={loadDetail}
+          onImportSelected={handleImportSelected}
+          onDeleteSelected={handleDeleteSelected}
+          onImport={handleImport}
+          onDelete={handleDelete}
+        />
         <section className="panel review-detail-panel">
           <div className="review-header">
             <div>
@@ -603,59 +524,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
             <div className="review-content review-content-single">
               <div className="review-form">
                 <div className="review-main-layout">
-                  <div className="review-top-fields">
-                    <div className="review-field">
-                      <span className="review-label review-label-side">标题</span>
-                      <input
-                        className="input review-input-strong"
-                        value={meta.title ?? ""}
-                        onChange={(e) => updateMeta({ title: e.target.value })}
-                        onBlur={handleBlurSave}
-                      />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">翻译标题</span>
-                      <input
-                        className="input"
-                        value={meta.title_translated ?? ""}
-                        onChange={(e) => updateMeta({ title_translated: e.target.value })}
-                        onBlur={handleBlurSave}
-                      />
-                    </div>
-                    <div className="review-meta-row review-meta-row-2 review-meta-row-top">
-                      <div className="review-field">
-                        <span className="review-label review-label-side">导演</span>
-                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">制作商</span>
-                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">发行商</span>
-                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">系列</span>
-                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                    </div>
-                    <div className="review-meta-row review-meta-row-2">
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">简介</span>
-                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">翻译简介</span>
-                        <textarea
-                          className="input review-textarea"
-                          value={meta.plot_translated ?? ""}
-                          onChange={(e) => updateMeta({ plot_translated: e.target.value })}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <ReviewFormFields meta={meta} updateMeta={updateMeta} onBlurSave={handleBlurSave} />
                   <div className="review-main-side">
                     <div className="review-meta-row">
                       <TokenEditor
@@ -668,46 +537,13 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                       />
                     </div>
                   </div>
-                  {meta.poster ? (
-                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
-                      <span className="review-image-title">海报</span>
-                      <Button className="review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                        <Crop size={14} />
-                      </Button>
-                      <div className="review-image-box review-image-box-poster">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.poster) setPreview({ title: imageTitle("poster"), item: meta.poster }); }}>
-                          <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                        </button>
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("poster")}
-                          aria-label="上传海报"
-                          title="上传海报"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster review-image-empty">
-                      <span className="review-image-title">海报</span>
-                      <Button className="review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                        <Crop size={14} />
-                      </Button>
-                      <div className="review-image-box review-image-box-poster review-upload-empty">
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("poster")}
-                          aria-label="上传海报"
-                          title="上传海报"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <ReviewPosterCard
+                    poster={meta.poster}
+                    uploadActiveRef={uploadActiveRef}
+                    onOpenCropper={openCropper}
+                    onOpenUploadPicker={() => openUploadPicker("poster")}
+                    onOpenPreview={setPreview}
+                  />
                 </div>
                 <div className="review-meta-row review-meta-row-full">
                   <TokenEditor
@@ -720,79 +556,19 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                     singleLine
                   />
                 </div>
-                <div className="review-media-offset review-cover-slot">
-                  {meta.cover ? (
-                    <div className="panel review-image-card review-image-card-cover">
-                      <span className="review-image-title">封面</span>
-                      <div className="review-image-box review-image-box-cover">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.cover) setPreview({ title: imageTitle("cover"), item: meta.cover }); }}>
-                          <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                        </button>
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openUploadPicker("cover");
-                          }}
-                          aria-label="上传封面"
-                          title="上传封面"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="panel review-image-card review-image-card-cover review-image-empty">
-                      <div className="review-image-box review-image-box-cover review-upload-empty">
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("cover")}
-                          aria-label="上传封面"
-                          title="上传封面"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="review-media-offset review-fanart-slot">
-                  <div className="panel review-fanart-panel">
-                    <div
-                      className="review-fanart-strip"
-                      onWheel={(e) => {
-                        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
-                          return;
-                        }
-                        e.currentTarget.scrollLeft += e.deltaY;
-                        e.preventDefault();
-                      }}
-                    >
-                      {(meta.sample_images ?? []).map((item) => (
-                        <div key={item.key} className="review-fanart-item">
-                          <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("fanart"), item }); }}>
-                            <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
-                          </button>
-                          <Button
-                            className="review-inline-icon-btn review-fanart-delete"
-                            onClick={() => handleRemoveFanart(item.key)}
-                            aria-label="删除 fanart"
-                            title="删除 fanart"
-                          >
-                            <X size={12} />
-                          </Button>
-                        </div>
-                      ))}
-                      <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")}>
-                        <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
-                          <Plus size={18} />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ReviewCoverCard
+                  cover={meta.cover}
+                  uploadActiveRef={uploadActiveRef}
+                  onOpenUploadPicker={() => openUploadPicker("cover")}
+                  onOpenPreview={setPreview}
+                />
+                <ReviewFanartStrip
+                  sampleImages={meta.sample_images}
+                  uploadActiveRef={uploadActiveRef}
+                  onOpenUploadPicker={() => openUploadPicker("fanart")}
+                  onRemoveFanart={handleRemoveFanart}
+                  onOpenPreview={setPreview}
+                />
               </div>
             </div>
           ) : (
