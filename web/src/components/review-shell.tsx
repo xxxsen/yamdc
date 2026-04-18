@@ -4,6 +4,7 @@ import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
 import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
 import { formatUnixMillis } from "@/lib/utils";
@@ -253,14 +254,13 @@ function CropOverlay({
               />
             ) : null}
             {showSelection ? (
-              <button
-                type="button"
-                className="btn review-crop-confirm"
+              <Button
+                className="review-crop-confirm"
                 style={{ left: rect.x + rect.width - 54, top: rect.y + 8 }}
                 onClick={handleConfirm}
               >
                 截取
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -301,12 +301,10 @@ function DeleteConfirmOverlay({
           )}
         </div>
         <div className="review-confirm-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
+          <Button onClick={onCancel}>取消</Button>
+          <Button variant="primary" onClick={onConfirm} disabled={isPending}>
             删除
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -337,12 +335,10 @@ function RestoreConfirmOverlay({
           <span className="review-confirm-path">{selectedRelPath}</span>
         </div>
         <div className="review-confirm-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
+          <Button onClick={onCancel}>取消</Button>
+          <Button variant="primary" onClick={onConfirm} disabled={isPending}>
             恢复
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -835,26 +831,24 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
             </label>
             <div className="review-bulk-toolbar-actions">
               {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
-              <button
-                type="button"
-                className="btn review-inline-icon-btn review-bulk-approve-btn"
+              <Button
+                className="review-inline-icon-btn review-bulk-approve-btn"
                 onClick={handleImportSelected}
                 disabled={selectedCount === 0 || isPending || moveRunning}
                 aria-label="批量审批"
                 title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
               >
                 <Check size={16} />
-              </button>
-              <button
-                type="button"
-                className="btn review-inline-icon-btn review-bulk-delete-btn"
+              </Button>
+              <Button
+                className="review-inline-icon-btn review-bulk-delete-btn"
                 onClick={handleDeleteSelected}
                 disabled={selectedCount === 0 || isPending}
                 aria-label="批量删除"
                 title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
               >
                 <Trash2 size={14} />
-              </button>
+              </Button>
             </div>
           </div>
           <div className="review-job-list">
@@ -884,26 +878,24 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                   <div className="review-job-card-number">{job.number}</div>
                 </button>
                 <div className="review-job-card-actions">
-                  <button
-                    type="button"
-                    className="btn review-inline-icon-btn review-action-approve"
+                  <Button
+                    className="review-inline-icon-btn review-action-approve"
                     onClick={handleImport}
                     disabled={isPending || selected?.id !== job.id || moveRunning}
                     aria-label="入库"
                     title={moveRunning ? "媒体库移动进行中，暂不可审批" : "入库"}
                   >
                     <Check size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn review-inline-icon-btn"
+                  </Button>
+                  <Button
+                    className="review-inline-icon-btn"
                     onClick={handleDelete}
                     disabled={isPending || selected?.id !== job.id}
                     aria-label="删除"
                     title="删除"
                   >
                     <Trash2 size={14} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -918,16 +910,15 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
             </div>
             <div className="review-actions">
               {message ? <span className="review-message" data-tone={messageTone}>{message}</span> : null}
-              <button
-                type="button"
-                className="btn review-inline-icon-btn"
+              <Button
+                className="review-inline-icon-btn"
                 onClick={handleRestoreRaw}
                 disabled={!selected || isPending || !hasRawMeta}
                 aria-label="恢复原始刮削内容"
                 title="恢复原始刮削内容"
               >
                 <RotateCcw size={14} />
-              </button>
+              </Button>
             </div>
           </div>
           {meta ? (
@@ -1001,9 +992,9 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                   {meta.poster ? (
                     <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
                       <span className="review-image-title">海报</span>
-                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                      <Button className="review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
                         <Crop size={14} />
-                      </button>
+                      </Button>
                       <div className="review-image-box review-image-box-poster">
                         <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.poster) setPreview({ title: imageTitle("poster"), item: meta.poster }); }}>
                           <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
@@ -1022,9 +1013,9 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                   ) : (
                     <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster review-image-empty">
                       <span className="review-image-title">海报</span>
-                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
+                      <Button className="review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
                         <Crop size={14} />
-                      </button>
+                      </Button>
                       <div className="review-image-box review-image-box-poster review-upload-empty">
                         <button
                           type="button"
@@ -1104,15 +1095,14 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
                           <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("fanart"), item }); }}>
                             <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
                           </button>
-                          <button
-                            type="button"
-                            className="btn review-inline-icon-btn review-fanart-delete"
+                          <Button
+                            className="review-inline-icon-btn review-fanart-delete"
                             onClick={() => handleRemoveFanart(item.key)}
                             aria-label="删除 fanart"
                             title="删除 fanart"
                           >
                             <X size={12} />
-                          </button>
+                          </Button>
                         </div>
                       ))}
                       <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")}>

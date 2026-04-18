@@ -3,6 +3,7 @@
 import { Check, Edit3, Eye, Pencil, RefreshCw, RotateCcw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
 import { deleteJob, listJobs, listJobLogs, rerunJob, runJob, triggerScan, updateJobNumber } from "@/lib/api";
 import { formatBytes, formatUnixMillis } from "@/lib/utils";
@@ -557,10 +558,16 @@ export function JobTable({ initialData }: Props) {
             />
           </label>
           <div className="file-list-toolbar-actions">
-            <button className="btn btn-primary" onClick={handleScan} disabled={isPending || isScanning}>
-              <RefreshCw size={16} className={isScanning ? "media-library-sync-icon-spinning" : ""} />
+            <Button
+              variant="primary"
+              onClick={handleScan}
+              disabled={isPending || isScanning}
+              leftIcon={
+                <RefreshCw size={16} className={isScanning ? "media-library-sync-icon-spinning" : ""} />
+              }
+            >
               {isScanning ? "扫描中..." : "立即扫描"}
-            </button>
+            </Button>
           </div>
         </div>
         <div className="file-list-chip-row" aria-label="状态快捷筛选">
@@ -597,8 +604,8 @@ export function JobTable({ initialData }: Props) {
                       onChange={handleToggleSelectAll}
                     />
                     <span>Path</span>
-                    <button
-                      className="btn file-batch-submit-btn"
+                    <Button
+                      className="file-batch-submit-btn"
                       data-visible={selectedCount > 0}
                       onClick={handleRunSelectedJobs}
                       disabled={selectedCount === 0 || isPending}
@@ -606,7 +613,7 @@ export function JobTable({ initialData }: Props) {
                       tabIndex={selectedCount === 0 ? -1 : 0}
                     >
                       提交已选 ({selectedCount})
-                    </button>
+                    </Button>
                   </div>
                 </th>
                 <th>Number</th>
@@ -697,18 +704,17 @@ export function JobTable({ initialData }: Props) {
                         </div>
                         {canEditNumber ? (
                           editingJobId === job.id ? (
-                            <button
-                              className="btn"
+                            <Button
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={handleCancelEditNumber}
                               disabled={isPending}
                             >
                               <X size={16} />
-                            </button>
+                            </Button>
                           ) : (
-                            <button className="btn" onClick={() => handleStartEditNumber(job)} disabled={isPending}>
+                            <Button onClick={() => handleStartEditNumber(job)} disabled={isPending}>
                               <Pencil size={16} />
-                            </button>
+                            </Button>
                           )
                         ) : null}
                       </div>
@@ -745,20 +751,34 @@ export function JobTable({ initialData }: Props) {
                     <td data-label="操作" style={{ width: 230 }}>
                       <div className="file-actions-cell">
                         {canRerun ? (
-                          <button className="btn file-action-btn" onClick={() => handleRerun(job)} disabled={rerunDisabled} title={runTitle}>
-                            <RotateCcw size={16} />
+                          <Button
+                            className="file-action-btn"
+                            onClick={() => handleRerun(job)}
+                            disabled={rerunDisabled}
+                            title={runTitle}
+                            leftIcon={<RotateCcw size={16} />}
+                          >
                             重试
-                          </button>
+                          </Button>
                         ) : (
-                          <button className="btn file-action-btn" onClick={() => handleRun(job)} disabled={runDisabled} title={runTitle}>
-                            <Sparkles size={16} />
+                          <Button
+                            className="file-action-btn"
+                            onClick={() => handleRun(job)}
+                            disabled={runDisabled}
+                            title={runTitle}
+                            leftIcon={<Sparkles size={16} />}
+                          >
                             提交
-                          </button>
+                          </Button>
                         )}
-                        <button className="btn file-action-btn file-action-btn-ghost" onClick={() => handleDelete(job)} disabled={!canDelete || isPending}>
-                          <Trash2 size={16} />
+                        <Button
+                          className="file-action-btn file-action-btn-ghost"
+                          onClick={() => handleDelete(job)}
+                          disabled={!canDelete || isPending}
+                          leftIcon={<Trash2 size={16} />}
+                        >
                           删除
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -789,9 +809,9 @@ export function JobTable({ initialData }: Props) {
                 <h3 className="file-log-title">任务日志 #{logJob.id}</h3>
                 <div className="file-log-path">{logJob.rel_path}</div>
               </div>
-              <button className="btn" onClick={() => setLogJob(null)}>
+              <Button onClick={() => setLogJob(null)}>
                 <X size={16} />
-              </button>
+              </Button>
             </div>
             {logMessage ? <div className="file-log-message">{logMessage}</div> : null}
             <div className="file-log-list">
@@ -820,12 +840,12 @@ export function JobTable({ initialData }: Props) {
               <span className="review-confirm-path">{deleteConfirmJob.rel_path}</span>
             </div>
             <div className="review-confirm-actions">
-              <button type="button" className="btn" onClick={() => setDeleteConfirmJob(null)}>
+              <Button onClick={() => setDeleteConfirmJob(null)}>
                 取消
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => confirmDelete(deleteConfirmJob)} disabled={isPending}>
+              </Button>
+              <Button variant="primary" onClick={() => confirmDelete(deleteConfirmJob)} disabled={isPending}>
                 删除
-              </button>
+              </Button>
             </div>
           </div>
         </div>
