@@ -104,7 +104,9 @@ function SelectorDebugPanel({ selectors }: { selectors: Record<string, string[]>
   );
 }
 
-function WorkflowItemsPanel({ items }: { items: PluginEditorWorkflowDebugResult["steps"][number]["items"] }) {
+type WorkflowStep = NonNullable<PluginEditorWorkflowDebugResult["steps"]>[number];
+
+function WorkflowItemsPanel({ items }: { items: WorkflowStep["items"] }) {
   return (
     <div className="plugin-editor-workflow-item-list">
       {items?.map((item) => (
@@ -155,9 +157,10 @@ export function WorkflowAccordion({ result }: { result: PluginEditorWorkflowDebu
 
   const stepsJsonKey = "__steps_json__";
 
+  const steps = result.steps ?? [];
   return (
     <div className="wf-accordion">
-      {result.steps.map((step, index) => {
+      {steps.map((step, index) => {
         const key = `${step.stage}-${index}`;
         const isExpanded = expandedKey === key;
         return (
@@ -213,7 +216,7 @@ export function WorkflowAccordion({ result }: { result: PluginEditorWorkflowDebu
         <button type="button" className="wf-accordion-head" onClick={() => toggle(stepsJsonKey)}>
           <span className="wf-accordion-arrow">{expandedKey === stepsJsonKey ? "\u25BC" : "\u25B6"}</span>
           <strong>Steps JSON</strong>
-          <span className="wf-accordion-summary">{result.steps.length} steps</span>
+          <span className="wf-accordion-summary">{steps.length} steps</span>
         </button>
         {expandedKey === stepsJsonKey && (
           <div className="wf-accordion-body">

@@ -14,7 +14,8 @@ import { apiRequest, type MediaFileRef, type PluginEditorEnvelope } from "./core
 export interface MovieIDCleanerCandidate {
   number_id: string;
   score: number;
-  rule_hits: string[];
+  // Go `[]string` 零值是 nil, 序列化为 null; 这里如实标注可空。
+  rule_hits: string[] | null;
   matcher: string;
   start: number;
   end: number;
@@ -32,7 +33,7 @@ export interface MovieIDCleanerExplainStep {
   matched: boolean;
   selected: boolean;
   summary: string;
-  values: string[];
+  values: string[] | null;
   candidate?: MovieIDCleanerCandidate | null;
 }
 
@@ -41,16 +42,16 @@ export interface MovieIDCleanerResult {
   input_no_ext: string;
   normalized: string;
   number_id: string;
-  suffixes: string[];
+  suffixes: string[] | null;
   category: string;
   uncensor: boolean;
   category_matched: boolean;
   uncensor_matched: boolean;
   confidence: string;
   status: string;
-  rule_hits: string[];
-  warnings: string[];
-  candidates: MovieIDCleanerCandidate[];
+  rule_hits: string[] | null;
+  warnings: string[] | null;
+  candidates: MovieIDCleanerCandidate[] | null;
 }
 
 export interface MovieIDCleanerExplainResult {
@@ -122,21 +123,23 @@ export interface SearcherDebugPluginResult {
   found: boolean;
   error?: string;
   meta?: SearcherDebugMovieMeta | null;
-  steps: SearcherDebugStep[];
+  // Go []T 零值为 nil, json.Marshal 会得到 null; 后端虽然初始化为空切片,
+  // 类型仍如实标注以防后端回退。
+  steps: SearcherDebugStep[] | null;
 }
 
 export interface SearcherDebugResult {
   input: string;
   number_id: string;
   requested_input: string;
-  used_plugins: string[];
+  used_plugins: string[] | null;
   matched_plugin: string;
   found: boolean;
   category: string;
   uncensor: boolean;
   cleaner_result?: MovieIDCleanerResult | null;
   meta?: SearcherDebugMovieMeta | null;
-  plugin_results: SearcherDebugPluginResult[];
+  plugin_results: SearcherDebugPluginResult[] | null;
   available_tools: SearcherDebugPluginCollection;
 }
 
@@ -190,7 +193,7 @@ export interface HandlerDebugResult {
     before_meta: SearcherDebugMovieMeta;
     after_meta: SearcherDebugMovieMeta;
     error: string;
-  }>;
+  }> | null;
 }
 
 export async function getHandlerDebugHandlers(signal?: AbortSignal) {
@@ -368,8 +371,8 @@ export interface PluginEditorTransformStep {
 }
 
 export interface PluginEditorFieldDebugResult {
-  selector_values: string[];
-  transform_steps: PluginEditorTransformStep[];
+  selector_values: string[] | null;
+  transform_steps: PluginEditorTransformStep[] | null;
   parser_result?: unknown;
   required: boolean;
   matched: boolean;
@@ -408,7 +411,7 @@ export interface PluginEditorWorkflowStep {
 }
 
 export interface PluginEditorWorkflowDebugResult {
-  steps: PluginEditorWorkflowStep[];
+  steps: PluginEditorWorkflowStep[] | null;
   error?: string;
 }
 

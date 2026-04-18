@@ -14,7 +14,9 @@ export interface ChainResultViewProps {
 // 种情况都走同一个引导文案. 原组件的 `result?.steps.length` 三元表
 // 达式正好涵盖了 null / undefined / 0 / 正数 四种输入.
 export function ChainResultView({ result }: ChainResultViewProps) {
-  if (!result?.steps.length) {
+  // Go 的 []DebugStep 零值是 nil, 通过 JSON 会变成 null; `?.` 把 null /
+  // undefined / 长度 0 统一归成 "引导文案" 分支, 与原注释的语义一致。
+  if (!result?.steps?.length) {
     return <div className="ruleset-debug-empty">运行后会展示链式执行的每一步结果。</div>;
   }
   return (

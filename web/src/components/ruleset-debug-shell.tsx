@@ -126,11 +126,11 @@ export function RulesetDebugShell() {
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>命中规则</span>
-                <strong>{result.final.rule_hits.length ? result.final.rule_hits.join(", ") : "-"}</strong>
+                <strong>{result.final.rule_hits?.length ? result.final.rule_hits.join(", ") : "-"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>警告</span>
-                <strong>{result.final.warnings.length ? result.final.warnings.join(", ") : "-"}</strong>
+                <strong>{result.final.warnings?.length ? result.final.warnings.join(", ") : "-"}</strong>
               </div>
             </div>
           ) : (
@@ -168,7 +168,7 @@ export function RulesetDebugShell() {
                     </div>
                   </div>
                   {step.summary ? <p className="ruleset-debug-step-summary">{step.summary}</p> : null}
-                  {step.values.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
+                  {step.values?.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
                   {step.candidate ? (
                     <div className="ruleset-debug-step-candidate">
                       <span>candidate</span>

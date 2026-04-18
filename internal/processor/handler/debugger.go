@@ -129,6 +129,9 @@ func (d *Debugger) prepareDebugContext(req DebugRequest) (*DebugResult, *model.F
 		Uncensor:   num.GetExternalFieldUncensor(),
 		BeforeMeta: beforeMeta,
 		AfterMeta:  afterMeta,
+		// 预先初始化切片, 避免 nil 切片序列化成 null 后前端直接 .length 崩溃。
+		// chain 模式可能因 handler_ids 过滤后链路为空而始终走不进 append。
+		Steps: []DebugStep{},
 	}
 	fc := &model.FileContext{Meta: afterMeta, Number: num}
 	return result, fc, nil
