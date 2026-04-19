@@ -12,8 +12,8 @@ import (
 
 func TestNumber(t *testing.T) {
 	checkList := map[string]*Number{
-		"HEYZO-3332.mp4": {
-			numberID: "HEYZO-3332",
+		"DEMO-3332.mp4": {
+			numberID: "DEMO-3332",
 		},
 		"052624_01.mp4": {
 			numberID: "052624_01",

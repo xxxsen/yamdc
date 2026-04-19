@@ -180,8 +180,8 @@ describe("cloneMeta", () => {
   });
 
   it("preserves all scalar fields", () => {
-    const src = baseMeta({ title: "T", runtime: 42, source: "javdb" });
-    expect(cloneMeta(src)).toMatchObject({ title: "T", runtime: 42, source: "javdb" });
+    const src = baseMeta({ title: "T", runtime: 42, source: "demo" });
+    expect(cloneMeta(src)).toMatchObject({ title: "T", runtime: 42, source: "demo" });
   });
 });
 

@@ -249,14 +249,14 @@ func TestResolveFileContext(t *testing.T) {
 			name: "uses cleaner derived fields for preferred number",
 			cleaner: &staticCleaner{
 				normalized:      "ABC-123",
-				category:        "HEYZO",
+				category:        "DEMO",
 				categoryMatched: true,
 				uncensor:        true,
 				uncensorMatched: true,
 			},
 			file:            "ignored.mp4",
-			preferredNumber: "HEYZO-0040",
-			wantNumber:      "HEYZO-0040",
+			preferredNumber: "DEMO-0040",
+			wantNumber:      "DEMO-0040",
 		},
 		{
 			name:    "cleaner returns error",

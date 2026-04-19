@@ -166,7 +166,7 @@ func TestScanRejectsReentryWhileRunning(t *testing.T) {
 		require.NoError(t, sqlite.Close())
 	})
 
-	filePath := filepath.Join(scanDir, "HEYZO-0040.mp4")
+	filePath := filepath.Join(scanDir, "DEMO-0040.mp4")
 	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
 
 	cleaner := &blockingCleaner{

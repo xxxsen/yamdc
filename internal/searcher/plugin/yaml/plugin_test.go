@@ -89,7 +89,7 @@ scrape:
 	require.False(t, ok)
 }
 
-func TestYAML_Jav321_OneStep(t *testing.T) {
+func TestYAML_OneStep_PostForm(t *testing.T) {
 	var baseURL string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/img/") {
@@ -119,13 +119,13 @@ func TestYAML_Jav321_OneStep(t *testing.T) {
       </div>
     </div>
   </div>
-  <b>品番</b>: ABC-123
-  <b>出演者</b><span class="actors"><a href="/star/a">Alice</a><a href="/star/b">Bob</a></span>
-  <b>配信開始日</b>: 2024-01-02
-  <b>収録時間</b>: 120 分钟
-  <b>メーカー</b><a href="/company/a">Studio A</a>
-  <b>シリーズ</b>: Series X
-  <b>ジャンル</b><a href="/genre/a">Drama</a><a href="/genre/b">Tag2</a>
+  <b>Number</b>: ABC-123
+  <b>Cast</b><span class="actors"><a href="/star/a">Alice</a><a href="/star/b">Bob</a></span>
+  <b>Release Date</b>: 2024-01-02
+  <b>Runtime</b>: 120 分钟
+  <b>Studio</b><a href="/company/a">Studio A</a>
+  <b>Series</b>: Series X
+  <b>Genre</b><a href="/genre/a">Drama</a><a href="/genre/b">Tag2</a>
   <div class="col-md-3"><div class="col-xs-12 col-md-12"><p><a><img src="{{HOST}}/img/1.jpg"></a></p></div></div>
   <div class="col-md-3"><div class="col-xs-12 col-md-12"><p><a><img src="{{HOST}}/img/2.jpg"></a></p></div></div>
 </body></html>`, "{{HOST}}", baseURL)))
@@ -134,7 +134,7 @@ func TestYAML_Jav321_OneStep(t *testing.T) {
 	baseURL = srv.URL
 
 	plg := mustPluginFromYAML(t, strings.ReplaceAll(oneStepFixtureYAML(), "https://fixture.example", srv.URL))
-	meta := mustSearch(t, "jav321", plg, srv.Client(), "ABC-123")
+	meta := mustSearch(t, "demo-onestep", plg, srv.Client(), "ABC-123")
 	require.Equal(t, "ABC-123", meta.Number)
 	require.Equal(t, "Sample Title", meta.Title)
 	require.Equal(t, []string{"Alice", "Bob"}, meta.Actors)
@@ -150,7 +150,7 @@ func TestYAML_Jav321_OneStep(t *testing.T) {
 	require.EqualValues(t, 120*60, meta.Duration)
 }
 
-func TestYAML_JavDB_TwoStep(t *testing.T) {
+func TestYAML_TwoStep_HTMLList(t *testing.T) {
 	var baseURL string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/img/") {
@@ -180,14 +180,14 @@ func TestYAML_JavDB_TwoStep(t *testing.T) {
 			_, _ = w.Write([]byte(strings.ReplaceAll(`
 <html><body>
   <a class="button is-white copy-to-clipboard" data-clipboard-text="ABC-123"></a>
-  <h2 class="title is-4"><strong class="current-title">JavDB Title</strong></h2>
-  <div><strong>演員</strong><span class="value"><a>Alice</a><a>Bob</a></span></div>
-  <div><strong>日期</strong><span class="value">2024-05-06</span></div>
-  <div><strong>時長</strong><span class="value">150 分钟</span></div>
-  <div><strong>片商</strong><span class="value">Studio J</span></div>
-  <div><strong>系列</strong><span class="value">Series J</span></div>
-  <div><strong>類別</strong><span class="value"><a>Drama</a><a>Action</a></span></div>
-  <div class="column column-video-cover"><a><img src="{{HOST}}/img/javdb-cover.jpg"></a></div>
+  <h2 class="title is-4"><strong class="current-title">Sample Twostep Title</strong></h2>
+  <div><strong>Cast</strong><span class="value"><a>Alice</a><a>Bob</a></span></div>
+  <div><strong>Release Date</strong><span class="value">2024-05-06</span></div>
+  <div><strong>Runtime</strong><span class="value">150 分钟</span></div>
+  <div><strong>Studio</strong><span class="value">Studio J</span></div>
+  <div><strong>Series</strong><span class="value">Series J</span></div>
+  <div><strong>Genre</strong><span class="value"><a>Drama</a><a>Action</a></span></div>
+  <div class="column column-video-cover"><a><img src="{{HOST}}/img/sample-cover.jpg"></a></div>
   <div class="tile-images preview-images"><a class="tile-item" href="{{HOST}}/img/1.jpg"></a><a class="tile-item" href="{{HOST}}/img/2.jpg"></a></div>
 </body></html>`, "{{HOST}}", baseURL)))
 		default:
@@ -198,21 +198,21 @@ func TestYAML_JavDB_TwoStep(t *testing.T) {
 	baseURL = srv.URL
 
 	plg := mustPluginFromYAML(t, strings.ReplaceAll(twoStepFixtureYAML(), "https://fixture.example", srv.URL))
-	meta := mustSearch(t, "javdb", plg, srv.Client(), "ABC-123")
+	meta := mustSearch(t, "demo-twostep", plg, srv.Client(), "ABC-123")
 	require.Equal(t, "ABC-123", meta.Number)
-	require.Equal(t, "JavDB Title", meta.Title)
+	require.Equal(t, "Sample Twostep Title", meta.Title)
 	require.Equal(t, []string{"Alice", "Bob"}, meta.Actors)
 	require.Equal(t, "Studio J", meta.Studio)
 	require.Equal(t, "Series J", meta.Series)
 	require.Equal(t, []string{"Drama", "Action"}, meta.Genres)
-	require.Equal(t, srv.URL+"/img/javdb-cover.jpg", meta.Cover.Name)
+	require.Equal(t, srv.URL+"/img/sample-cover.jpg", meta.Cover.Name)
 	require.Len(t, meta.SampleImages, 2)
 	require.Equal(t, enum.MetaLangJa, meta.TitleLang)
 	require.NotZero(t, meta.ReleaseDate)
 	require.EqualValues(t, 150*60, meta.Duration)
 }
 
-func TestYAML_Airav_JSON(t *testing.T) {
+func TestYAML_JSON_OneStep(t *testing.T) {
 	var baseURL string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/img/") {
@@ -221,7 +221,7 @@ func TestYAML_Airav_JSON(t *testing.T) {
 			return
 		}
 		require.Equal(t, http.MethodGet, r.Method)
-		require.Equal(t, "/api/video/barcode/ABC-123", r.URL.Path)
+		require.Equal(t, "/api/video/code/ABC-123", r.URL.Path)
 		require.Equal(t, "zh-TW", r.URL.Query().Get("lng"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(strings.ReplaceAll(`{
@@ -229,8 +229,8 @@ func TestYAML_Airav_JSON(t *testing.T) {
   "status": "ok",
   "result": {
     "barcode": "ABC-123",
-    "name": "Airav Title",
-    "description": "Airav Plot",
+    "name": "Sample JSON Title",
+    "description": "Sample JSON Plot",
     "img_url": "{{HOST}}/img/cover.jpg",
     "publish_date": "2024-05-06",
     "actors": [{"name": "Alice"}, {"name": "Bob"}],
@@ -244,10 +244,10 @@ func TestYAML_Airav_JSON(t *testing.T) {
 	baseURL = srv.URL
 
 	plg := mustPluginFromYAML(t, strings.ReplaceAll(jsonFixtureYAML(), "https://fixture.example", srv.URL))
-	meta := mustSearch(t, "airav", plg, srv.Client(), "ABC-123")
+	meta := mustSearch(t, "demo-jsonapi", plg, srv.Client(), "ABC-123")
 	require.Equal(t, "ABC-123", meta.Number)
-	require.Equal(t, "Airav Title", meta.Title)
-	require.Equal(t, "Airav Plot", meta.Plot)
+	require.Equal(t, "Sample JSON Title", meta.Title)
+	require.Equal(t, "Sample JSON Plot", meta.Plot)
 	require.Equal(t, []string{"Alice", "Bob"}, meta.Actors)
 	require.Equal(t, "Studio A", meta.Studio)
 	require.Equal(t, []string{"Drama", "Action"}, meta.Genres)
@@ -298,7 +298,7 @@ scrape:
     number:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"品番")]/following-sibling::node()[1]
+        expr: //b[contains(text(),"Number")]/following-sibling::node()[1]
       transforms:
         - kind: trim_charset
           cutset: ": \t"
@@ -324,7 +324,7 @@ scrape:
     release_date:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"配信開始日")]/following-sibling::node()[1]
+        expr: //b[contains(text(),"Release Date")]/following-sibling::node()[1]
       transforms:
         - kind: trim_charset
           cutset: ": \t"
@@ -334,7 +334,7 @@ scrape:
     duration:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"収録時間")]/following-sibling::node()[1]
+        expr: //b[contains(text(),"Runtime")]/following-sibling::node()[1]
       transforms:
         - kind: trim_charset
           cutset: ": \t"
@@ -342,17 +342,17 @@ scrape:
     studio:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"メーカー")]/following-sibling::a[1]/text()
+        expr: //b[contains(text(),"Studio")]/following-sibling::a[1]/text()
       parser: string
     label:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"メーカー")]/following-sibling::a[1]/text()
+        expr: //b[contains(text(),"Studio")]/following-sibling::a[1]/text()
       parser: string
     series:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"シリーズ")]/following-sibling::node()[1]
+        expr: //b[contains(text(),"Series")]/following-sibling::node()[1]
       transforms:
         - kind: trim_charset
           cutset: ": \t"
@@ -360,7 +360,7 @@ scrape:
     genres:
       selector:
         kind: xpath
-        expr: //b[contains(text(),"ジャンル")]/following-sibling::a/text()
+        expr: //b[contains(text(),"Genre")]/following-sibling::a/text()
         multi: true
       parser: string_list
     cover:
@@ -429,35 +429,35 @@ scrape:
     actors:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"演員")]/following-sibling::span[@class="value"]/a/text()
+        expr: //strong[contains(text(),"Cast")]/following-sibling::span[@class="value"]/a/text()
         multi: true
       parser: string_list
     release_date:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"日期")]/following-sibling::span[@class="value"]/text()
+        expr: //strong[contains(text(),"Release Date")]/following-sibling::span[@class="value"]/text()
       parser:
         kind: time_format
         layout: "2006-01-02"
     duration:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"時長")]/following-sibling::span[@class="value"]/text()
+        expr: //strong[contains(text(),"Runtime")]/following-sibling::span[@class="value"]/text()
       parser: duration_default
     studio:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"片商")]/following-sibling::span[@class="value"]/text()
+        expr: //strong[contains(text(),"Studio")]/following-sibling::span[@class="value"]/text()
       parser: string
     series:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"系列")]/following-sibling::span[@class="value"]/text()
+        expr: //strong[contains(text(),"Series")]/following-sibling::span[@class="value"]/text()
       parser: string
     genres:
       selector:
         kind: xpath
-        expr: //strong[contains(text(),"類別")]/following-sibling::span[@class="value"]/a/text()
+        expr: //strong[contains(text(),"Genre")]/following-sibling::span[@class="value"]/a/text()
         multi: true
       parser: string_list
     cover:
@@ -486,7 +486,7 @@ hosts:
   - https://fixture.example
 request:
   method: GET
-  path: /api/video/barcode/${number}
+  path: /api/video/code/${number}
   query:
     lng: zh-TW
 scrape:

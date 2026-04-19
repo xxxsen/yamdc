@@ -35,9 +35,9 @@ func TestTagPadderHandler(t *testing.T) {
 		},
 		{
 			name:       "underscore separator",
-			numberID:   "HEYZO_1234",
+			numberID:   "PREFIX_1234",
 			genres:     nil,
-			wantPrefix: "HEYZO",
+			wantPrefix: "PREFIX",
 			wantHas:    true,
 		},
 	}
