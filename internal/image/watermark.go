@@ -17,6 +17,14 @@ var (
 	errWatermarkNotFound   = errors.New("watermark not found")
 )
 
+// Watermark 枚举每一种可画在封面上的水印类型.
+//
+// 消费方: internal/processor/handler/watermark_handler.go 按
+// MovieMeta.Genres 里的 tag 决定应该打哪些 Watermark, 匹配表见
+// 该 handler 中的 defaultWatermarkRules. 新增一种水印时:
+//  1. 在此处追加枚举值;
+//  2. 在 registerResource 里挂上图像资源;
+//  3. 在 watermark_handler 的 rule 表中加一行 tag -> Watermark 映射.
 type Watermark int
 
 const (
