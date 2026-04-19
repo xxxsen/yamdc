@@ -41,7 +41,7 @@ type DebugSearchResult struct {
 	MatchedPlugin  string                 `json:"matched_plugin"`
 	Found          bool                   `json:"found"`
 	Category       string                 `json:"category"`
-	Uncensor       bool                   `json:"uncensor"`
+	Unrated        bool                   `json:"unrated"`
 	CleanerResult  *movieidcleaner.Result `json:"cleaner_result,omitempty"`
 	Meta           *model.MovieMeta       `json:"meta,omitempty"`
 	PluginResults  []PluginDebugResult    `json:"plugin_results"`
@@ -214,9 +214,9 @@ func (d *Debugger) tryCleanInput(input string, result *DebugSearchResult) (*numb
 		num.SetExternalFieldCategory(cleanRes.Category)
 		result.Category = cleanRes.Category
 	}
-	if cleanRes.UncensorMatched {
-		num.SetExternalFieldUncensor(cleanRes.Uncensor)
-		result.Uncensor = cleanRes.Uncensor
+	if cleanRes.UnratedMatched {
+		num.SetExternalFieldUnrated(cleanRes.Unrated)
+		result.Unrated = cleanRes.Unrated
 	}
 	return num, nil
 }

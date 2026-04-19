@@ -289,7 +289,7 @@ func TestBuildNumberFromCleanResult(t *testing.T) {
 			result: &movieidcleaner.Result{
 				NumberID: "ABC-123",
 				Category: "testcat",
-				Uncensor: true,
+				Unrated:  true,
 			},
 			wantNil: false,
 		},
@@ -310,8 +310,8 @@ func TestBuildNumberFromCleanResult(t *testing.T) {
 				if tt.result.Category != "" {
 					assert.Equal(t, tt.result.Category, num.GetExternalFieldCategory())
 				}
-				if tt.result.Uncensor {
-					assert.True(t, num.GetExternalFieldUncensor())
+				if tt.result.Unrated {
+					assert.True(t, num.GetExternalFieldUnrated())
 				}
 			}
 		})
@@ -471,7 +471,7 @@ func TestDebugWithCleaner(t *testing.T) {
 		result: &movieidcleaner.Result{
 			NumberID: "DEF-456",
 			Category: "testcat",
-			Uncensor: true,
+			Unrated:  true,
 		},
 	}
 	d := NewDebugger(appdeps.Runtime{}, cleaner, []string{HNumberTitle}, nil)
@@ -483,7 +483,7 @@ func TestDebugWithCleaner(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "DEF-456", result.NumberID)
 	assert.Equal(t, "testcat", result.Category)
-	assert.True(t, result.Uncensor)
+	assert.True(t, result.Unrated)
 }
 
 func TestDebugEmptyModeWithHandlerID(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 )
 
 type externalField struct {
-	isUncensor bool
-	cat        string
+	isUnrated bool
+	cat       string
 }
 
 type Number struct {
@@ -24,12 +24,12 @@ type Number struct {
 	extField          externalField
 }
 
-func (n *Number) SetExternalFieldUncensor(v bool) {
-	n.extField.isUncensor = v
+func (n *Number) SetExternalFieldUnrated(v bool) {
+	n.extField.isUnrated = v
 }
 
-func (n *Number) GetExternalFieldUncensor() bool {
-	return n.extField.isUncensor
+func (n *Number) GetExternalFieldUnrated() bool {
+	return n.extField.isUnrated
 }
 
 func (n *Number) SetExternalFieldCategory(cat string) {
@@ -103,7 +103,7 @@ func (n *Number) GenerateSuffix(base string) string {
 
 func (n *Number) GenerateTags() []string {
 	rs := make([]string, 0, 5)
-	if n.GetExternalFieldUncensor() {
+	if n.GetExternalFieldUnrated() {
 		rs = append(rs, tag.Unrated)
 	}
 	if n.GetIsChineseSubtitle() {

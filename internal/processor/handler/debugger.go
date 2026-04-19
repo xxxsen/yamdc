@@ -46,7 +46,7 @@ type DebugResult struct {
 	HandlerName string           `json:"handler_name"`
 	NumberID    string           `json:"number_id"`
 	Category    string           `json:"category"`
-	Uncensor    bool             `json:"uncensor"`
+	Unrated     bool             `json:"unrated"`
 	BeforeMeta  *model.MovieMeta `json:"before_meta"`
 	AfterMeta   *model.MovieMeta `json:"after_meta"`
 	Error       string           `json:"error"`
@@ -126,7 +126,7 @@ func (d *Debugger) prepareDebugContext(req DebugRequest) (*DebugResult, *model.F
 		Mode:       mode,
 		NumberID:   num.GetNumberID(),
 		Category:   num.GetExternalFieldCategory(),
-		Uncensor:   num.GetExternalFieldUncensor(),
+		Unrated:    num.GetExternalFieldUnrated(),
 		BeforeMeta: beforeMeta,
 		AfterMeta:  afterMeta,
 		// 预先初始化切片, 避免 nil 切片序列化成 null 后前端直接 .length 崩溃。
@@ -315,8 +315,8 @@ func buildNumberFromCleanResult(res *movieidcleaner.Result) (*number.Number, err
 	if res.Category != "" {
 		num.SetExternalFieldCategory(res.Category)
 	}
-	if res.Uncensor {
-		num.SetExternalFieldUncensor(true)
+	if res.Unrated {
+		num.SetExternalFieldUnrated(true)
 	}
 	return num, nil
 }

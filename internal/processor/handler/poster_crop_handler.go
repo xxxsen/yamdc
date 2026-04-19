@@ -55,7 +55,7 @@ func (c *posterCropHandler) censorCutter(ctx context.Context) imageCutter {
 	}
 }
 
-func (c *posterCropHandler) uncensorCutter(ctx context.Context) imageCutter {
+func (c *posterCropHandler) unratedCutter(ctx context.Context) imageCutter {
 	if c.faceRec == nil {
 		return image.CutCensoredImageFromBytes
 	}
@@ -79,9 +79,9 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 		logger.Error("no cover found, skip process poster")
 		return nil
 	}
-	cutter := c.censorCutter(ctx)             // 默认情况下使用基础封面裁剪
-	if fc.Number.GetExternalFieldUncensor() { // 带有附加标记时优先尝试人脸识别方案
-		cutter = c.uncensorCutter(ctx)
+	cutter := c.censorCutter(ctx)            // 默认情况下使用基础封面裁剪
+	if fc.Number.GetExternalFieldUnrated() { // 带有附加标记时优先尝试人脸识别方案
+		cutter = c.unratedCutter(ctx)
 	}
 	raw, err := c.storage.GetData(ctx, fc.Meta.Cover.Key)
 	if err != nil {

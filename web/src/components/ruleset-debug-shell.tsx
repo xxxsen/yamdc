@@ -126,7 +126,7 @@ export function RulesetDebugShell() {
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>附加标记</span>
-                <strong>{result.final.uncensor ? "true" : "false"}</strong>
+                <strong>{result.final.unrated ? "true" : "false"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>命中规则</span>

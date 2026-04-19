@@ -155,14 +155,14 @@ func TestDebugSearch_CleanerNilResult(t *testing.T) {
 	require.False(t, result.Found)
 }
 
-func TestDebugSearch_WithUncensor(t *testing.T) {
+func TestDebugSearch_WithUnrated(t *testing.T) {
 	ctx := factory.NewRegisterContext()
 	ctx.Register("test-plg", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	cleaner := &mockCleaner{
 		res: &movieidcleaner.Result{
-			Normalized:      "ABC-123",
-			UncensorMatched: true,
-			Uncensor:        true,
+			Normalized:     "ABC-123",
+			UnratedMatched: true,
+			Unrated:        true,
 		},
 	}
 	d := &Debugger{
@@ -176,7 +176,7 @@ func TestDebugSearch_WithUncensor(t *testing.T) {
 		UseCleaner: true,
 	})
 	require.NoError(t, err)
-	require.True(t, result.Uncensor)
+	require.True(t, result.Unrated)
 }
 
 func TestDebugSearch_ResolvePluginsWithCategory(t *testing.T) {

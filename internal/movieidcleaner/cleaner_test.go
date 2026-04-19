@@ -28,8 +28,8 @@ func TestCleanerClean(t *testing.T) {
 		status          Status
 		category        string
 		categoryMatched bool
-		uncensor        bool
-		uncensorMatched bool
+		unrated         bool
+		unratedMatched  bool
 		suffixes        []string
 	}{
 		"rawx": {
@@ -39,8 +39,8 @@ func TestCleanerClean(t *testing.T) {
 			status:          StatusSuccess,
 			category:        "RAWX",
 			categoryMatched: true,
-			uncensor:        true,
-			uncensorMatched: true,
+			unrated:         true,
+			unratedMatched:  true,
 			suffixes:        []string{"C"},
 		},
 		"generic": {
@@ -50,8 +50,8 @@ func TestCleanerClean(t *testing.T) {
 			status:          StatusSuccess,
 			category:        "",
 			categoryMatched: false,
-			uncensor:        false,
-			uncensorMatched: false,
+			unrated:         false,
+			unratedMatched:  false,
 			suffixes:        []string{"CD2"},
 		},
 		"open": {
@@ -61,8 +61,8 @@ func TestCleanerClean(t *testing.T) {
 			status:          StatusSuccess,
 			category:        "",
 			categoryMatched: false,
-			uncensor:        true,
-			uncensorMatched: true,
+			unrated:         true,
+			unratedMatched:  true,
 			suffixes:        []string{"LEAK"},
 		},
 	}
@@ -76,8 +76,8 @@ func TestCleanerClean(t *testing.T) {
 			require.Equal(t, tc.status, res.Status)
 			require.Equal(t, tc.category, res.Category)
 			require.Equal(t, tc.categoryMatched, res.CategoryMatched)
-			require.Equal(t, tc.uncensor, res.Uncensor)
-			require.Equal(t, tc.uncensorMatched, res.UncensorMatched)
+			require.Equal(t, tc.unrated, res.Unrated)
+			require.Equal(t, tc.unratedMatched, res.UnratedMatched)
 			require.Equal(t, tc.suffixes, res.Suffixes)
 		})
 	}
@@ -168,7 +168,7 @@ rewrite_rules:
     pattern: '(?i)^RAWX[-_\s]?([0-9]{4,})$'
     replace: 'RAWX-PPV-$1'
 matchers:
-  - name: generic_censored
+  - name: format_generic
     pattern: '(?i)\b([A-Z]{3,10})[-_\s]?([0-9]{2,6})\b'
     normalize_template: '$1-$2'
     score: 99
@@ -187,7 +187,7 @@ post_processors:
 
 	found := false
 	for _, item := range merged.Matchers {
-		if item.Name == "generic_censored" {
+		if item.Name == "format_generic" {
 			found = true
 			require.Equal(t, 99, item.Score)
 		}
@@ -208,7 +208,7 @@ func TestPassthroughCleaner(t *testing.T) {
 		assert.Empty(t, res.Normalized)
 		assert.Empty(t, res.NumberID)
 		assert.False(t, res.CategoryMatched)
-		assert.False(t, res.UncensorMatched)
+		assert.False(t, res.UnratedMatched)
 		assert.Contains(t, res.Warnings, "movieid cleaner disabled")
 	})
 
@@ -521,13 +521,13 @@ func TestDedupeCandidates(t *testing.T) {
 			},
 		},
 		{
-			name: "merge_uncensor",
+			name: "merge_unrated",
 			input: []Candidate{
-				{NumberID: "A-1", Score: 10, RuleHits: []string{"r1"}, UncensorMatched: false},
-				{NumberID: "A-1", Score: 10, RuleHits: []string{"r2"}, Uncensor: true, UncensorMatched: true},
+				{NumberID: "A-1", Score: 10, RuleHits: []string{"r1"}, UnratedMatched: false},
+				{NumberID: "A-1", Score: 10, RuleHits: []string{"r2"}, Unrated: true, UnratedMatched: true},
 			},
 			expected: []Candidate{
-				{NumberID: "A-1", Score: 10, RuleHits: []string{"r1", "r2"}, Uncensor: true, UncensorMatched: true},
+				{NumberID: "A-1", Score: 10, RuleHits: []string{"r1", "r2"}, Unrated: true, UnratedMatched: true},
 			},
 		},
 	}
@@ -853,16 +853,58 @@ func TestCompileRuleSetErrorPaths(t *testing.T) {
 	})
 }
 
-func TestCompileMatcherRulesUncensor(t *testing.T) {
+func TestCompileMatcherRulesUnrated(t *testing.T) {
 	boolTrue := true
 	rules := []MatcherRule{
-		{Name: "m1", Pattern: `(?i)([A-Z]+)(\d+)`, NormalizeTemplate: "$1-$2", Score: 80, Uncensor: &boolTrue},
+		{Name: "m1", Pattern: `(?i)([A-Z]+)(\d+)`, NormalizeTemplate: "$1-$2", Score: 80, Unrated: &boolTrue},
 	}
 	compiled, err := compileMatcherRules(rules)
 	require.NoError(t, err)
 	require.Len(t, compiled, 1)
-	assert.True(t, compiled[0].uncensorSet)
-	assert.True(t, compiled[0].uncensorValue)
+	assert.True(t, compiled[0].unratedSet)
+	assert.True(t, compiled[0].unratedValue)
+}
+
+// TestCompileMatcherRulesLegacyUncensorField verifies the backward compatibility
+// layer that promotes `uncensor:` from legacy rulesets to the new `unrated:` field.
+func TestCompileMatcherRulesLegacyUncensorField(t *testing.T) {
+	boolTrue := true
+	rules := []MatcherRule{
+		{
+			Name:               "legacy",
+			Pattern:            `(?i)([A-Z]+)(\d+)`,
+			NormalizeTemplate:  "$1-$2",
+			Score:              80,
+			UncensorDeprecated: &boolTrue,
+		},
+	}
+	compiled, err := compileMatcherRules(rules)
+	require.NoError(t, err)
+	require.Len(t, compiled, 1)
+	assert.True(t, compiled[0].unratedSet)
+	assert.True(t, compiled[0].unratedValue)
+}
+
+// TestCompileMatcherRulesUnratedTakesPrecedence ensures that when both the new
+// `unrated:` and the legacy `uncensor:` fields are present, the new one wins.
+func TestCompileMatcherRulesUnratedTakesPrecedence(t *testing.T) {
+	boolTrue := true
+	boolFalse := false
+	rules := []MatcherRule{
+		{
+			Name:               "mixed",
+			Pattern:            `(?i)([A-Z]+)(\d+)`,
+			NormalizeTemplate:  "$1-$2",
+			Score:              80,
+			Unrated:            &boolFalse,
+			UncensorDeprecated: &boolTrue,
+		},
+	}
+	compiled, err := compileMatcherRules(rules)
+	require.NoError(t, err)
+	require.Len(t, compiled, 1)
+	assert.True(t, compiled[0].unratedSet)
+	assert.False(t, compiled[0].unratedValue)
 }
 
 func TestCompileSuffixRulesToken(t *testing.T) {

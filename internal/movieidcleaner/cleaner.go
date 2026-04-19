@@ -46,8 +46,8 @@ type compiledNoiseRule struct {
 type compiledMatcherRule struct {
 	name              string
 	category          string
-	uncensorValue     bool
-	uncensorSet       bool
+	unratedValue      bool
+	unratedSet        bool
 	re                *regexp.Regexp
 	normalizeTemplate string
 	score             int
@@ -161,7 +161,7 @@ func (p *passthroughCleaner) Clean(input string) (*Result, error) {
 		Confidence:      ConfidenceLow,
 		Warnings:        []string{"movieid cleaner disabled"},
 		CategoryMatched: false,
-		UncensorMatched: false,
+		UnratedMatched:  false,
 	}, nil
 }
 
@@ -292,18 +292,25 @@ func compileMatcherRules(items []MatcherRule) ([]compiledMatcherRule, error) {
 				Rule: item.Name, Cause: err,
 			}
 		}
+		// 旧 bundle 只写了 `uncensor:` 没写 `unrated:` 时, 把值抬升到
+		// 新字段, 保证下游 compiled 视图里只认一种形态。这是对外部
+		// ruleset (例如 yamdc-script) 的兼容层; 新 bundle 应统一用 `unrated:`。
+		unrated := item.Unrated
+		if unrated == nil && item.UncensorDeprecated != nil {
+			unrated = item.UncensorDeprecated
+		}
 		m := compiledMatcherRule{
 			name:              item.Name,
 			category:          item.Category,
-			uncensorSet:       item.Uncensor != nil,
+			unratedSet:        unrated != nil,
 			re:                re,
 			normalizeTemplate: item.NormalizeTemplate,
 			score:             item.Score,
 			requireBoundary:   item.RequireBoundary,
 			prefixes:          item.Prefixes,
 		}
-		if item.Uncensor != nil {
-			m.uncensorValue = *item.Uncensor
+		if unrated != nil {
+			m.unratedValue = *unrated
 		}
 		out = append(out, m)
 	}
@@ -429,8 +436,8 @@ func buildMatchResult(
 			Candidates:      candidates,
 			Category:        best.Category,
 			CategoryMatched: best.CategoryMatched,
-			Uncensor:        best.Uncensor,
-			UncensorMatched: best.UncensorMatched,
+			Unrated:         best.Unrated,
+			UnratedMatched:  best.UnratedMatched,
 		}
 	}
 	confidence := confidenceByScore(best.Score)
@@ -451,9 +458,9 @@ func buildMatchResult(
 		NumberID:        parsed.GetNumberID(),
 		Suffixes:        state.suffixes,
 		Category:        best.Category,
-		Uncensor:        best.Uncensor,
+		Unrated:         best.Unrated,
 		CategoryMatched: best.CategoryMatched,
-		UncensorMatched: best.UncensorMatched,
+		UnratedMatched:  best.UnratedMatched,
 		Confidence:      confidence,
 		Status:          status,
 		RuleHits:        append(state.allHits(), best.RuleHits...),
@@ -667,8 +674,8 @@ func collectCandidatesWithExplain(in string, rules []compiledMatcherRule, collec
 				End:             end,
 				Category:        strings.TrimSpace(rule.category),
 				CategoryMatched: strings.TrimSpace(rule.category) != "",
-				Uncensor:        rule.uncensorValue,
-				UncensorMatched: rule.uncensorSet,
+				Unrated:         rule.unratedValue,
+				UnratedMatched:  rule.unratedSet,
 			}
 			candidates = append(candidates, candidate)
 			if collector != nil {
@@ -690,9 +697,9 @@ func dedupeCandidates(items []Candidate) []Candidate {
 				out[i].Category = item.Category
 				out[i].CategoryMatched = true
 			}
-			if !out[i].UncensorMatched && item.UncensorMatched {
-				out[i].Uncensor = item.Uncensor
-				out[i].UncensorMatched = true
+			if !out[i].UnratedMatched && item.UnratedMatched {
+				out[i].Unrated = item.Unrated
+				out[i].UnratedMatched = true
 			}
 			out[i].RuleHits = append(out[i].RuleHits, item.RuleHits...)
 			continue

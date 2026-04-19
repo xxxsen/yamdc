@@ -112,10 +112,10 @@ func TestAlnumber(t *testing.T) {
 func TestSetFiledByExternal(t *testing.T) {
 	n, err := Parse("abc-123")
 	assert.NoError(t, err)
-	n.SetExternalFieldUncensor(true)
+	n.SetExternalFieldUnrated(true)
 	n.SetExternalFieldCategory("abc")
 	assert.Equal(t, "abc", n.GetExternalFieldCategory())
-	assert.True(t, n.GetExternalFieldUncensor())
+	assert.True(t, n.GetExternalFieldUnrated())
 }
 
 func TestParseErrors(t *testing.T) {
@@ -153,7 +153,7 @@ func TestGenerateSuffixTagsFileName(t *testing.T) {
 	assert.Equal(t, wantSuffix, n.GenerateSuffix(n.GetNumberID()))
 	assert.Equal(t, wantSuffix, n.GenerateFileName())
 
-	n.SetExternalFieldUncensor(true)
+	n.SetExternalFieldUnrated(true)
 	tags := n.GenerateTags()
 	assert.Contains(t, tags, tag.Unrated)
 	assert.Contains(t, tags, tag.ChineseSubtitle)
