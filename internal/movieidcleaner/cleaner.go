@@ -292,25 +292,18 @@ func compileMatcherRules(items []MatcherRule) ([]compiledMatcherRule, error) {
 				Rule: item.Name, Cause: err,
 			}
 		}
-		// 旧 bundle 只写了 `uncensor:` 没写 `unrated:` 时, 把值抬升到
-		// 新字段, 保证下游 compiled 视图里只认一种形态。这是对外部
-		// ruleset (例如 yamdc-script) 的兼容层; 新 bundle 应统一用 `unrated:`。
-		unrated := item.Unrated
-		if unrated == nil && item.UncensorDeprecated != nil {
-			unrated = item.UncensorDeprecated
-		}
 		m := compiledMatcherRule{
 			name:              item.Name,
 			category:          item.Category,
-			unratedSet:        unrated != nil,
+			unratedSet:        item.Unrated != nil,
 			re:                re,
 			normalizeTemplate: item.NormalizeTemplate,
 			score:             item.Score,
 			requireBoundary:   item.RequireBoundary,
 			prefixes:          item.Prefixes,
 		}
-		if unrated != nil {
-			m.unratedValue = *unrated
+		if item.Unrated != nil {
+			m.unratedValue = *item.Unrated
 		}
 		out = append(out, m)
 	}

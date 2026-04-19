@@ -865,48 +865,6 @@ func TestCompileMatcherRulesUnrated(t *testing.T) {
 	assert.True(t, compiled[0].unratedValue)
 }
 
-// TestCompileMatcherRulesLegacyUncensorField verifies the backward compatibility
-// layer that promotes `uncensor:` from legacy rulesets to the new `unrated:` field.
-func TestCompileMatcherRulesLegacyUncensorField(t *testing.T) {
-	boolTrue := true
-	rules := []MatcherRule{
-		{
-			Name:               "legacy",
-			Pattern:            `(?i)([A-Z]+)(\d+)`,
-			NormalizeTemplate:  "$1-$2",
-			Score:              80,
-			UncensorDeprecated: &boolTrue,
-		},
-	}
-	compiled, err := compileMatcherRules(rules)
-	require.NoError(t, err)
-	require.Len(t, compiled, 1)
-	assert.True(t, compiled[0].unratedSet)
-	assert.True(t, compiled[0].unratedValue)
-}
-
-// TestCompileMatcherRulesUnratedTakesPrecedence ensures that when both the new
-// `unrated:` and the legacy `uncensor:` fields are present, the new one wins.
-func TestCompileMatcherRulesUnratedTakesPrecedence(t *testing.T) {
-	boolTrue := true
-	boolFalse := false
-	rules := []MatcherRule{
-		{
-			Name:               "mixed",
-			Pattern:            `(?i)([A-Z]+)(\d+)`,
-			NormalizeTemplate:  "$1-$2",
-			Score:              80,
-			Unrated:            &boolFalse,
-			UncensorDeprecated: &boolTrue,
-		},
-	}
-	compiled, err := compileMatcherRules(rules)
-	require.NoError(t, err)
-	require.Len(t, compiled, 1)
-	assert.True(t, compiled[0].unratedSet)
-	assert.False(t, compiled[0].unratedValue)
-}
-
 func TestCompileSuffixRulesToken(t *testing.T) {
 	rules := []SuffixRule{
 		{Name: "s1", Type: "token", Aliases: []string{"SUB"}, Canonical: "C"},
