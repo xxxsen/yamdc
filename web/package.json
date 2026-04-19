@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
+    "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -36,6 +36,19 @@
     "typescript-eslint": "^8.58.2",
     "vitest": "^3.2.4"
   },
+  "//dev-webpack": [
+    "Next 16 起 next dev/build 默认走 Turbopack. 当前版本 (16.2.x) 的",
+    "Turbopack 仍会在冷启动高并发编译路径上偶发 panic, 形如:",
+    "  turbo-tasks-backend aggregation_update.rs",
+    "  inner_of_upper_lost_followers ... side_effects_from_package_json",
+    "属于上游 task graph 聚合态不一致 (vercel/next.js #85769 / #86207 / #91928).",
+    "本项目 build 一侧已用 --webpack, dev 一侧也统一走 --webpack:",
+    "(1) 避开 Turbopack panic 导致开发时页面空白;",
+    "(2) 让 dev 与 build 使用同一种模块解析 / tree-shaking 实现, 避免",
+    "    'dev 跑通 build 失败' 类差异 bug.",
+    "历史上这里用过 NEXT_DISABLE_TURBOPACK=1 去尝试禁用, 但该环境变量",
+    "在 Next 16 下无效 (非官方支持 env), 只有 --webpack flag 是正规通道."
+  ],
   "//knip-oxc": [
     "knip@5 依赖 oxc-parser 做 TS AST 分析, oxc-parser 的 native binding 走",
     "optionalDependencies 分发。部分 npm 版本存在 https://github.com/npm/cli/issues/4828",
