@@ -422,7 +422,7 @@ func buildMatchResult(
 	}
 	confidence := confidenceByScore(best.Score)
 	status := StatusSuccess
-	var warnings []string
+	warnings := []string{}
 	if confidence == ConfidenceLow {
 		status = StatusLowQuality
 		warnings = append(warnings, "low confidence candidate")

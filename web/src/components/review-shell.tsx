@@ -1,12 +1,30 @@
 "use client";
 
-import { Check, Crop, Plus, RotateCcw, Trash2, X } from "lucide-react";
-import Image from "next/image";
-import { type PointerEvent as ReactPointerEvent, type SyntheticEvent, useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 
-import type { JobItem, MediaFileRef, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
-import { cropPosterFromCover, deleteJob, getAssetURL, getMediaLibraryStatus, getReviewJob, importReviewJob, saveReviewJob, uploadAsset } from "@/lib/api";
-import { formatUnixMillis } from "@/lib/utils";
+// ImageCropper 只在用户点 "裁剪封面" 按钮 (或 review 页特定裁图流程) 后才
+// 真的挂上. 初次打开 /review 路由时 200+ 行的 cropper 模块 + 指针/canvas
+// 交互代码都不该进首屏 JS chunk. ssr: false 保证不给没交互的用户 SSR 这
+// 个组件. 详见 td/022-frontend-optimization-roadmap.md §5.2.
+const ImageCropper = dynamic(
+  () => import("@/components/image-cropper").then((m) => m.ImageCropper),
+  { ssr: false },
+);
+
+import { ReviewCoverCard, ReviewFanartStrip, ReviewPosterCard } from "@/components/review-shell/asset-gallery";
+import { DeleteConfirmOverlay } from "@/components/review-shell/delete-confirm-overlay";
+import { ReviewDetailHeader } from "@/components/review-shell/detail-header";
+import { ReviewFormFields } from "@/components/review-shell/form-fields";
+import { ReviewListPanel } from "@/components/review-shell/list-panel";
+import { ReviewPreviewOverlay, type ReviewPreviewState } from "@/components/review-shell/preview-overlay";
+import { RestoreConfirmOverlay } from "@/components/review-shell/restore-confirm-overlay";
+import { useReviewAssetActions } from "@/components/review-shell/use-review-asset-actions";
+import { useReviewBatchActions } from "@/components/review-shell/use-review-batch-actions";
+import { buildPayload, normalizeList, parseMeta, parseRawMeta } from "@/components/review-shell/utils";
+import { TokenEditor } from "@/components/ui/token-editor";
+import type { JobItem, MediaLibraryStatus, ReviewMeta, ScrapeDataItem } from "@/lib/api";
+import { getAssetURL, getMediaLibraryStatus, getReviewJob, saveReviewJob } from "@/lib/api";
 
 interface Props {
   jobs: JobItem[];
@@ -14,356 +32,20 @@ interface Props {
   initialMediaStatus: MediaLibraryStatus | null;
 }
 
-const THUMB_IMAGE_STYLE = { objectFit: "cover", objectPosition: "center" } as const;
-const PREVIEW_IMAGE_STYLE = { objectFit: "contain", objectPosition: "center" } as const;
-const POSTER_ASPECT = 2 / 3;
-
-function parseMeta(data: ScrapeDataItem | null): ReviewMeta | null {
-  if (!data) {
-    return null;
-  }
-  const raw = data.review_data || data.raw_data;
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw) as ReviewMeta;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeList(items?: string[]) {
-  return (items ?? []).map((item) => item.trim()).filter(Boolean);
-}
-
-function buildPayload(meta: ReviewMeta | null) {
-  if (!meta) {
-    return "";
-  }
-  return JSON.stringify(
-    {
-      ...meta,
-      actors: normalizeList(meta.actors),
-      genres: normalizeList(meta.genres),
-    },
-    null,
-    2,
-  );
-}
-
-function imageTitle(type: string) {
-  if (type === "cover") {
-    return "封面";
-  }
-  if (type === "poster") {
-    return "海报";
-  }
-  return "Extrafanart";
-}
-
-function TokenEditor({
-  label,
-  placeholder,
-  value,
-  onChange,
-  onBlurSave,
-  singleLine = false,
-}: {
-  label: string;
-  placeholder: string;
-  value: string[];
-  onChange: (next: string[]) => void;
-  onBlurSave: () => void;
-  singleLine?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  const commitDraft = () => {
-    const next = draft.trim();
-    if (!next) {
-      setDraft("");
-      return;
-    }
-    onChange([...value, next]);
-    setDraft("");
-  };
-
-  const removeAt = (idx: number) => {
-    onChange(value.filter((_, index) => index !== idx));
-    onBlurSave();
-  };
-
-  return (
-    <div className="review-field review-field-tokens">
-      <span className="review-label review-label-side">{label}</span>
-      <div className={`token-editor${singleLine ? " token-editor-single-line" : ""}`} onClick={() => document.getElementById(`token-${label}`)?.focus()}>
-        {value.map((item, idx) => (
-          <span key={`${item}-${idx}`} className="token-chip">
-            {item}
-            <button
-              type="button"
-              className="token-chip-remove"
-              aria-label={`删除${item}`}
-              onClick={() => removeAt(idx)}
-            >
-              <X size={11} />
-            </button>
-          </span>
-        ))}
-        <input
-          id={`token-${label}`}
-          className="token-input"
-          placeholder={value.length === 0 ? placeholder : ""}
-          value={draft}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (next.includes(",")) {
-              const parts = next.split(",");
-              const ready = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
-              if (ready.length > 0) {
-                onChange([...value, ...ready]);
-              }
-              setDraft(parts[parts.length - 1] ?? "");
-              return;
-            }
-            setDraft(next);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitDraft();
-              onBlurSave();
-            } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
-              onChange(value.slice(0, -1));
-            }
-          }}
-          onBlur={() => {
-            commitDraft();
-            onBlurSave();
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CropOverlay({
-  coverKey,
-  onClose,
-  onCrop,
-}: {
-  coverKey: string;
-  onClose: () => void;
-  onCrop: (rect: { x: number; y: number; width: number; height: number }) => void;
-}) {
-  const [rect, setRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [imgSize, setImgSize] = useState({ displayWidth: 0, displayHeight: 0, naturalWidth: 0, naturalHeight: 0 });
-  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
-
-  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const img = event.currentTarget;
-    const nw = img.naturalWidth;
-    const nh = img.naturalHeight;
-    const dw = img.clientWidth;
-    const dh = img.clientHeight;
-    let w = 0;
-    let h = 0;
-    let x = 0;
-    let y = 0;
-    if (nw >= nh) {
-      h = dh;
-      w = h * POSTER_ASPECT;
-      x = Math.max(0, (dw - w) / 2);
-    } else {
-      w = dw;
-      h = w / POSTER_ASPECT;
-      y = Math.max(0, (dh - h) / 2);
-    }
-    setImgSize({ displayWidth: dw, displayHeight: dh, naturalWidth: nw, naturalHeight: nh });
-    setRect({ x, y, width: w, height: h });
-  };
-
-  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = { startX: event.clientX, startY: event.clientY, originX: rect.x, originY: rect.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const ds = dragRef.current;
-    if (!ds) return;
-    const dx = event.clientX - ds.startX;
-    const dy = event.clientY - ds.startY;
-    setRect((prev) => {
-      const next = { ...prev };
-      if (imgSize.naturalWidth >= imgSize.naturalHeight) {
-        next.x = Math.min(Math.max(0, ds.originX + dx), imgSize.displayWidth - prev.width);
-      } else {
-        next.y = Math.min(Math.max(0, ds.originY + dy), imgSize.displayHeight - prev.height);
-      }
-      return next;
-    });
-  };
-
-  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current) {
-      dragRef.current = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    }
-  };
-
-  const handleConfirm = () => {
-    if (imgSize.displayWidth === 0 || imgSize.displayHeight === 0) return;
-    const sx = imgSize.naturalWidth / imgSize.displayWidth;
-    const sy = imgSize.naturalHeight / imgSize.displayHeight;
-    onCrop({
-      x: Math.round(rect.x * sx),
-      y: Math.round(rect.y * sy),
-      width: Math.round(rect.width * sx),
-      height: Math.round(rect.height * sy),
-    });
-  };
-
-  const showSelection = rect.width > 0 && rect.height > 0;
-
-  return (
-    <div className="review-preview-overlay" onClick={onClose}>
-      <div className="review-preview-dialog panel review-crop-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-crop-head">
-          <div className="review-preview-title">从封面截取海报</div>
-        </div>
-        <div className="review-crop-stage">
-          <div className="review-crop-canvas">
-            <img
-              src={getAssetURL(coverKey)}
-              alt="cover crop preview"
-              className="review-crop-image"
-              onLoad={handleImageLoad}
-            />
-            {showSelection ? (
-              <div
-                className="review-crop-selection"
-                style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
-                onPointerDown={beginDrag}
-                onPointerMove={moveDrag}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
-              />
-            ) : null}
-            {showSelection ? (
-              <button
-                type="button"
-                className="btn review-crop-confirm"
-                style={{ left: rect.x + rect.width - 54, top: rect.y + 8 }}
-                onClick={handleConfirm}
-              >
-                截取
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DeleteConfirmOverlay({
-  targetIds,
-  selectedRelPath,
-  onCancel,
-  onConfirm,
-  isPending,
-}: {
-  targetIds: number[] | null;
-  selectedRelPath: string | undefined;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  if (!targetIds || targetIds.length === 0) return null;
-  return (
-    <div className="review-preview-overlay" onClick={onCancel}>
-      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-confirm-title">确认删除</div>
-        <div className="review-confirm-body">
-          {targetIds.length > 1 ? (
-            <>
-              这会删除已选中的 {targetIds.length} 个任务以及各自对应的源文件。
-            </>
-          ) : (
-            <>
-              这会删除当前任务以及对应的源文件。
-              <br />
-              <span className="review-confirm-path">{selectedRelPath}</span>
-            </>
-          )}
-        </div>
-        <div className="review-confirm-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
-            删除
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RestoreConfirmOverlay({
-  open,
-  selectedRelPath,
-  onCancel,
-  onConfirm,
-  isPending,
-}: {
-  open: boolean;
-  selectedRelPath: string | undefined;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="review-preview-overlay" onClick={onCancel}>
-      <div className="panel review-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="review-confirm-title">恢复原始内容</div>
-        <div className="review-confirm-body">
-          这会用最初刮削得到的原始内容覆盖当前修改。
-          <br />
-          <span className="review-confirm-path">{selectedRelPath}</span>
-        </div>
-        <div className="review-confirm-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={isPending}>
-            恢复
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ReviewShell 是 Review 页顶层编排: 左侧 JobList + 右侧 meta 编辑 + 底部
+// 批量操作. 所有纯逻辑 (useReviewBatchActions / useReviewAssetActions / utils)
+// 已经拆出去; 本函数剩下的全是本地 useState + 子组件 JSX 粘合, 继续切分
+// 会破坏顶层布局与状态的就近性.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
-  const initialRawMeta = initialScrapeData?.raw_data ? (() => {
-    try {
-      return JSON.parse(initialScrapeData.raw_data) as ReviewMeta;
-    } catch {
-      return null;
-    }
-  })() : null;
+  const initialRawMeta = parseRawMeta(initialScrapeData);
   const [items, setItems] = useState<JobItem[]>(jobs);
   const [selected, setSelected] = useState<JobItem | null>(jobs[0] ?? null);
   const [meta, setMeta] = useState<ReviewMeta | null>(initialMeta);
   const [hasRawMeta, setHasRawMeta] = useState(initialRawMeta !== null);
   const [message, setMessage] = useState<string>(jobs.length === 0 ? "当前没有待 review 的任务" : "");
-  const [preview, setPreview] = useState<{ title: string; item: MediaFileRef } | null>(null);
+  const [preview, setPreview] = useState<ReviewPreviewState>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaLibraryStatus | null>(initialMediaStatus);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [cropOpen, setCropOpen] = useState(false);
@@ -376,7 +58,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
   const selectedRef = useRef<JobItem | null>(jobs[0] ?? null);
   const metaRef = useRef<ReviewMeta | null>(initialMeta);
   const rawMetaRef = useRef<ReviewMeta | null>(initialRawMeta);
-  const uploadActiveRef = useRef(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const messageTone = /失败|error|删除|failed/i.test(message) ? "danger" : "info";
@@ -418,14 +99,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
 
   const syncStateWithData = (data: ScrapeDataItem | null) => {
     const nextMeta = parseMeta(data);
-    let nextRawMeta: ReviewMeta | null = null;
-    if (data?.raw_data) {
-      try {
-        nextRawMeta = JSON.parse(data.raw_data) as ReviewMeta;
-      } catch {
-        nextRawMeta = null;
-      }
-    }
+    const nextRawMeta = parseRawMeta(data);
     const payload = buildPayload(nextMeta);
     setMeta(nextMeta);
     metaRef.current = nextMeta;
@@ -534,30 +208,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
-  const handleImport = () => {
-    if (!selected || !meta) {
-      return;
-    }
-    if (moveRunning) {
-      setMessage("媒体库移动进行中，暂不可审批入库");
-      return;
-    }
-    startTransition(async () => {
-      const ok = await persistReview({ silent: true });
-      if (!ok) {
-        return;
-      }
-      try {
-        setMessage("执行入库...");
-        await importReviewJob(selected.id);
-        removeJobFromList(selected.id);
-        setMessage("入库完成，任务已移出 review 列表");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "入库失败");
-      }
-    });
-  };
-
   const handleToggleSelectAll = () => {
     setSelectedJobIds((prev) => {
       if (selectableJobs.length === 0) {
@@ -580,66 +230,6 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
       }
       return next;
     });
-  };
-
-  const handleImportSelected = () => {
-    if (selectedCount === 0) {
-      return;
-    }
-    if (moveRunning) {
-      setMessage("媒体库移动进行中，暂不可批量审批入库");
-      return;
-    }
-    startTransition(async () => {
-      const targetIDs = Array.from(selectedJobIds);
-      if (targetIDs.length === 0) {
-        return;
-      }
-      if (selected && meta && selectedJobIds.has(selected.id)) {
-        const ok = await persistReview({ silent: true });
-        if (!ok) {
-          return;
-        }
-      }
-      const successIDs: number[] = [];
-      const failures: string[] = [];
-      for (let index = 0; index < targetIDs.length; index += 1) {
-        const id = targetIDs[index];
-        try {
-          setMessage(`批量审批中 ${index + 1}/${targetIDs.length}...`);
-          await importReviewJob(id);
-          successIDs.push(id);
-        } catch (error) {
-          failures.push(error instanceof Error ? error.message : `任务 #${id} 入库失败`);
-        }
-      }
-      if (successIDs.length > 0) {
-        removeJobsFromList(successIDs);
-      }
-      if (failures.length === 0) {
-        setMessage(`批量审批完成，已入库 ${successIDs.length} 项`);
-        return;
-      }
-      if (successIDs.length === 0) {
-        setMessage(failures[0] ?? "批量审批失败");
-        return;
-      }
-      setMessage(`已入库 ${successIDs.length} 项，${failures.length} 项失败`);
-    });
-  };
-
-  const handleDelete = () => {
-    if (!selected) {
-      return;
-    }
-    setDeleteTargetIds([selected.id]);
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedCount === 0) {
-      return;
-    }
-    setDeleteTargetIds(Array.from(selectedJobIds));
   };
 
   const handleRestoreRaw = () => {
@@ -670,459 +260,123 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     });
   };
 
-  const confirmDelete = () => {
-    if (!deleteTargetIds || deleteTargetIds.length === 0) {
-      return;
-    }
-    const targetIDs = deleteTargetIds;
-    setDeleteTargetIds(null);
-    startTransition(async () => {
-      const successIDs: number[] = [];
-      const failures: string[] = [];
-      for (let index = 0; index < targetIDs.length; index += 1) {
-        const id = targetIDs[index];
-        try {
-          setMessage(targetIDs.length > 1 ? `批量删除中 ${index + 1}/${targetIDs.length}...` : "删除任务...");
-          await deleteJob(id);
-          successIDs.push(id);
-        } catch (error) {
-          failures.push(error instanceof Error ? error.message : `任务 #${id} 删除失败`);
-        }
-      }
-      if (successIDs.length > 0) {
-        removeJobsFromList(successIDs);
-      }
-      if (failures.length === 0) {
-        setMessage(targetIDs.length > 1 ? `已删除 ${successIDs.length} 项` : "任务已删除");
-        return;
-      }
-      if (successIDs.length === 0) {
-        setMessage(failures[0] ?? "删除失败");
-        return;
-      }
-      setMessage(`已删除 ${successIDs.length} 项，${failures.length} 项失败`);
-    });
-  };
+  const {
+    handleImport,
+    handleImportSelected,
+    handleDelete,
+    handleDeleteSelected,
+    confirmDelete,
+  } = useReviewBatchActions({
+    selected,
+    meta,
+    moveRunning,
+    selectedJobIds,
+    deleteTargetIds,
+    setDeleteTargetIds,
+    setMessage,
+    startTransition,
+    persistReview,
+    removeJobFromList,
+    removeJobsFromList,
+  });
 
-  const openCropper = () => {
-    if (!meta?.cover) {
-      return;
-    }
-    setCropOpen(true);
-  };
-
-  const handleCropResult = (rect: { x: number; y: number; width: number; height: number }) => {
-    if (!selected) return;
-    startTransition(async () => {
-      try {
-        setMessage("从封面截取海报...");
-        const poster = await cropPosterFromCover(selected.id, rect);
-        updateMeta({ poster });
-        metaRef.current = { ...(metaRef.current ?? {}), poster };
-        lastSavedPayloadRef.current = buildPayload(metaRef.current);
-        setCropOpen(false);
-        setMessage("海报已更新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "海报截取失败");
-      }
-    });
-  };
-
-  const handleRemoveFanart = (key: string) => {
-    if (!selected || !metaRef.current) {
-      return;
-    }
-    const nextMeta: ReviewMeta = {
-      ...metaRef.current,
-      sample_images: (metaRef.current.sample_images ?? []).filter((item) => item.key !== key),
-    };
-    persistMetaPatch(nextMeta, "已移除 fanart");
-  };
-
-  const persistMetaPatch = (nextMeta: ReviewMeta, successMessage: string) => {
-    if (!selected) {
-      return;
-    }
-    setMeta(nextMeta);
-    metaRef.current = nextMeta;
-    startTransition(async () => {
-      try {
-        const payload = buildPayload(nextMeta);
-        await saveReviewJob(selected.id, payload);
-        lastSavedPayloadRef.current = payload;
-        setMessage(successMessage);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "保存失败");
-      }
-    });
-  };
-
-  const doUpload = (file: File, target: "cover" | "poster" | "fanart") => {
-    if (!meta || !selected) {
-      return;
-    }
-    startTransition(async () => {
-      const currentMeta = metaRef.current;
-      if (!currentMeta) return;
-      try {
-        setMessage("上传图片...");
-        const asset = await uploadAsset(file);
-        let nextMeta: ReviewMeta;
-        if (target === "cover") {
-          nextMeta = { ...currentMeta, cover: asset };
-        } else if (target === "poster") {
-          nextMeta = { ...currentMeta, poster: asset };
-        } else {
-          nextMeta = {
-            ...currentMeta,
-            sample_images: [...(currentMeta.sample_images ?? []).filter((s) => s.key !== asset.key), asset],
-          };
-        }
-        persistMetaPatch(nextMeta, "图片已更新");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "上传失败");
-      }
-    });
-  };
-
-  const openUploadPicker = (target: "cover" | "poster" | "fanart") => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    uploadActiveRef.current = true;
-    const unlock = () => {
-      setTimeout(() => { uploadActiveRef.current = false; }, 300);
-    };
-    input.addEventListener("change", () => {
-      const file = input.files?.[0];
-      unlock();
-      if (file) {
-        doUpload(file, target);
-      }
-    }, { once: true });
-    input.addEventListener("cancel", () => {
-      unlock();
-    }, { once: true });
-    input.click();
-  };
+  const {
+    uploadActiveRef,
+    openCropper,
+    handleCropResult,
+    handleRemoveFanart,
+    openUploadPicker,
+  } = useReviewAssetActions({
+    selected,
+    meta,
+    metaRef,
+    lastSavedPayloadRef,
+    setMeta,
+    updateMeta,
+    setMessage,
+    setCropOpen,
+    startTransition,
+  });
 
   return (
     <>
       <div className="two-col">
-        <aside className="panel review-list-panel">
-          <div className="review-list-head">
-            <div>
-              <div className="review-list-kicker">Review Queue</div>
-              <h2 className="review-list-title">Review 列表</h2>
-              <p className="review-list-subtitle">
-                当前 {items.length} 条待复核任务
-                {selectedIndex >= 0 ? `，正在查看第 ${selectedIndex + 1} 条` : ""}
-              </p>
-              {moveRunning ? <p className="review-list-subtitle">媒体库正在同步迁移，审批按钮已临时锁定。</p> : null}
-            </div>
-          </div>
-          <div className="review-bulk-toolbar">
-            <label className="review-bulk-select-all">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allSelectableChecked}
-                disabled={items.length === 0 || isPending || moveRunning}
-                title="选择当前列表中的全部 review 任务"
-                onChange={handleToggleSelectAll}
-              />
-              <span>全选</span>
-            </label>
-            <div className="review-bulk-toolbar-actions">
-              {selectedCount > 0 ? <span className="review-bulk-count">已选 {selectedCount} 项</span> : null}
-              <button
-                type="button"
-                className="btn review-inline-icon-btn review-bulk-approve-btn"
-                onClick={handleImportSelected}
-                disabled={selectedCount === 0 || isPending || moveRunning}
-                aria-label="批量审批"
-                title={selectedCount > 0 ? `批量审批已选 ${selectedCount} 项` : "批量审批"}
-              >
-                <Check size={16} />
-              </button>
-              <button
-                type="button"
-                className="btn review-inline-icon-btn review-bulk-delete-btn"
-                onClick={handleDeleteSelected}
-                disabled={selectedCount === 0 || isPending}
-                aria-label="批量删除"
-                title={selectedCount > 0 ? `删除已选 ${selectedCount} 项` : "批量删除"}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="review-job-list">
-            {items.length === 0 ? <div className="review-empty-state">当前没有待 review 的任务</div> : null}
-            {items.map((job, index) => (
-              <div
-                key={job.id}
-                className="panel review-job-card"
-                data-active={selected?.id === job.id}
-                data-selected={selectedJobIds.has(job.id)}
-              >
-                <div className="review-job-card-select">
-                  <input
-                    type="checkbox"
-                    checked={selectedJobIds.has(job.id)}
-                    disabled={isPending || moveRunning}
-                    title={moveRunning ? "媒体库移动进行中，暂不可选择" : "选择任务"}
-                    onChange={() => handleToggleSelectJob(job.id)}
-                  />
-                </div>
-                <button className="review-job-card-main" onClick={() => loadDetail(job)} disabled={isPending}>
-                  <div className="review-job-card-topline">
-                    <span className="review-job-card-index">#{index + 1}</span>
-                    <span className="review-job-card-time">更新于 {formatUnixMillis(job.updated_at)}</span>
-                  </div>
-                  <div className="review-job-card-path">{job.rel_path}</div>
-                  <div className="review-job-card-number">{job.number}</div>
-                </button>
-                <div className="review-job-card-actions">
-                  <button
-                    type="button"
-                    className="btn review-inline-icon-btn review-action-approve"
-                    onClick={handleImport}
-                    disabled={isPending || selected?.id !== job.id || moveRunning}
-                    aria-label="入库"
-                    title={moveRunning ? "媒体库移动进行中，暂不可审批" : "入库"}
-                  >
-                    <Check size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn review-inline-icon-btn"
-                    onClick={handleDelete}
-                    disabled={isPending || selected?.id !== job.id}
-                    aria-label="删除"
-                    title="删除"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
+        <ReviewListPanel
+          items={items}
+          selectedId={selected?.id}
+          selectedIndex={selectedIndex}
+          selectedJobIds={selectedJobIds}
+          selectedCount={selectedCount}
+          allSelectableChecked={allSelectableChecked}
+          isPending={isPending}
+          moveRunning={moveRunning}
+          selectAllRef={selectAllRef}
+          onToggleSelectAll={handleToggleSelectAll}
+          onToggleSelectJob={handleToggleSelectJob}
+          onLoadDetail={loadDetail}
+          onImportSelected={handleImportSelected}
+          onDeleteSelected={handleDeleteSelected}
+          onImport={handleImport}
+          onDelete={handleDelete}
+        />
         <section className="panel review-detail-panel">
-          <div className="review-header">
-            <div>
-              <div className="review-list-kicker">Review Editor</div>
-              <h2 className="review-detail-title">Review 内容</h2>
-              {selected ? <div className="review-subtitle">当前任务 #{selected.id} / {selected.rel_path}</div> : null}
-            </div>
-            <div className="review-actions">
-              {message ? <span className="review-message" data-tone={messageTone}>{message}</span> : null}
-              <button
-                type="button"
-                className="btn review-inline-icon-btn"
-                onClick={handleRestoreRaw}
-                disabled={!selected || isPending || !hasRawMeta}
-                aria-label="恢复原始刮削内容"
-                title="恢复原始刮削内容"
-              >
-                <RotateCcw size={14} />
-              </button>
-            </div>
-          </div>
+          <ReviewDetailHeader
+            selected={selected}
+            message={message}
+            messageTone={messageTone}
+            hasRawMeta={hasRawMeta}
+            isPending={isPending}
+            onRestoreRaw={handleRestoreRaw}
+          />
           {meta ? (
             <div className="review-content review-content-single">
               <div className="review-form">
                 <div className="review-main-layout">
-                  <div className="review-top-fields">
-                    <div className="review-field">
-                      <span className="review-label review-label-side">标题</span>
-                      <input
-                        className="input review-input-strong"
-                        value={meta.title ?? ""}
-                        onChange={(e) => updateMeta({ title: e.target.value })}
-                        onBlur={handleBlurSave}
-                      />
-                    </div>
-                    <div className="review-field">
-                      <span className="review-label review-label-side">翻译标题</span>
-                      <input
-                        className="input"
-                        value={meta.title_translated ?? ""}
-                        onChange={(e) => updateMeta({ title_translated: e.target.value })}
-                        onBlur={handleBlurSave}
-                      />
-                    </div>
-                    <div className="review-meta-row review-meta-row-2 review-meta-row-top">
-                      <div className="review-field">
-                        <span className="review-label review-label-side">导演</span>
-                        <input className="input" value={meta.director ?? ""} onChange={(e) => updateMeta({ director: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">制作商</span>
-                        <input className="input" value={meta.studio ?? ""} onChange={(e) => updateMeta({ studio: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">发行商</span>
-                        <input className="input" value={meta.label ?? ""} onChange={(e) => updateMeta({ label: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field">
-                        <span className="review-label review-label-side">系列</span>
-                        <input className="input" value={meta.series ?? ""} onChange={(e) => updateMeta({ series: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                    </div>
-                    <div className="review-meta-row review-meta-row-2">
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">简介</span>
-                        <textarea className="input review-textarea" value={meta.plot ?? ""} onChange={(e) => updateMeta({ plot: e.target.value })} onBlur={handleBlurSave} />
-                      </div>
-                      <div className="review-field review-field-area">
-                        <span className="review-label review-label-side">翻译简介</span>
-                        <textarea
-                          className="input review-textarea"
-                          value={meta.plot_translated ?? ""}
-                          onChange={(e) => updateMeta({ plot_translated: e.target.value })}
-                          onBlur={handleBlurSave}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <ReviewFormFields meta={meta} updateMeta={updateMeta} onBlurSave={handleBlurSave} />
                   <div className="review-main-side">
                     <div className="review-meta-row">
                       <TokenEditor
+                        idPrefix="token"
                         label="演员"
                         placeholder="输入演员名后输入逗号"
                         value={normalizeList(meta.actors)}
                         onChange={(next) => updateMeta({ actors: next })}
-                        onBlurSave={handleBlurSave}
+                        onCommit={handleBlurSave}
                       />
                     </div>
                   </div>
-                  {meta.poster ? (
-                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster">
-                      <span className="review-image-title">海报</span>
-                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                        <Crop size={14} />
-                      </button>
-                      <div className="review-image-box review-image-box-poster">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.poster) setPreview({ title: imageTitle("poster"), item: meta.poster }); }}>
-                          <Image src={getAssetURL(meta.poster.key)} alt="poster" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                        </button>
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("poster")}
-                          aria-label="上传海报"
-                          title="上传海报"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="panel review-image-card review-image-card-poster review-top-poster review-main-poster review-image-empty">
-                      <span className="review-image-title">海报</span>
-                      <button type="button" className="btn review-inline-icon-btn review-image-crop-btn" onClick={openCropper} aria-label="从封面截取海报" title="从封面截取海报">
-                        <Crop size={14} />
-                      </button>
-                      <div className="review-image-box review-image-box-poster review-upload-empty">
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("poster")}
-                          aria-label="上传海报"
-                          title="上传海报"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <ReviewPosterCard
+                    poster={meta.poster}
+                    uploadActiveRef={uploadActiveRef}
+                    onOpenCropper={openCropper}
+                    onOpenUploadPicker={() => openUploadPicker("poster")}
+                    onOpenPreview={setPreview}
+                  />
                 </div>
                 <div className="review-meta-row review-meta-row-full">
                   <TokenEditor
+                    idPrefix="token"
                     label="标签"
                     placeholder="输入标签后输入逗号"
                     value={normalizeList(meta.genres)}
                     onChange={(next) => updateMeta({ genres: next })}
-                    onBlurSave={handleBlurSave}
+                    onCommit={handleBlurSave}
                     singleLine
                   />
                 </div>
-                <div className="review-media-offset review-cover-slot">
-                  {meta.cover ? (
-                    <div className="panel review-image-card review-image-card-cover">
-                      <span className="review-image-title">封面</span>
-                      <div className="review-image-box review-image-box-cover">
-                        <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current && meta.cover) setPreview({ title: imageTitle("cover"), item: meta.cover }); }}>
-                          <Image src={getAssetURL(meta.cover.key)} alt="cover" fill style={THUMB_IMAGE_STYLE} unoptimized />
-                        </button>
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openUploadPicker("cover");
-                          }}
-                          aria-label="上传封面"
-                          title="上传封面"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="panel review-image-card review-image-card-cover review-image-empty">
-                      <div className="review-image-box review-image-box-cover review-upload-empty">
-                        <button
-                          type="button"
-                          className="review-upload-overlay"
-                          onClick={() => openUploadPicker("cover")}
-                          aria-label="上传封面"
-                          title="上传封面"
-                        >
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="review-media-offset review-fanart-slot">
-                  <div className="panel review-fanart-panel">
-                    <div
-                      className="review-fanart-strip"
-                      onWheel={(e) => {
-                        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
-                          return;
-                        }
-                        e.currentTarget.scrollLeft += e.deltaY;
-                        e.preventDefault();
-                      }}
-                    >
-                      {(meta.sample_images ?? []).map((item) => (
-                        <div key={item.key} className="review-fanart-item">
-                          <button type="button" className="review-image-hit" onClick={() => { if (!uploadActiveRef.current) setPreview({ title: imageTitle("fanart"), item }); }}>
-                            <Image src={getAssetURL(item.key)} alt={item.name} fill style={THUMB_IMAGE_STYLE} unoptimized />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn review-inline-icon-btn review-fanart-delete"
-                            onClick={() => handleRemoveFanart(item.key)}
-                            aria-label="删除 fanart"
-                            title="删除 fanart"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                      <button type="button" className="review-fanart-item review-upload-empty" onClick={() => openUploadPicker("fanart")}>
-                        <span className="review-upload-overlay review-upload-overlay-static" aria-hidden="true">
-                          <Plus size={18} />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ReviewCoverCard
+                  cover={meta.cover}
+                  uploadActiveRef={uploadActiveRef}
+                  onOpenUploadPicker={() => openUploadPicker("cover")}
+                  onOpenPreview={setPreview}
+                />
+                <ReviewFanartStrip
+                  sampleImages={meta.sample_images}
+                  uploadActiveRef={uploadActiveRef}
+                  onOpenUploadPicker={() => openUploadPicker("fanart")}
+                  onRemoveFanart={handleRemoveFanart}
+                  onOpenPreview={setPreview}
+                />
               </div>
             </div>
           ) : (
@@ -1130,23 +384,17 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
           )}
         </section>
       </div>
-      {preview ? (
-        <div className="review-preview-overlay" onClick={() => setPreview(null)}>
-          <button type="button" className="review-preview-close" aria-label="关闭预览" onClick={() => setPreview(null)}>
-            <X size={18} />
-          </button>
-          <div className="review-preview-dialog panel" onClick={(e) => e.stopPropagation()}>
-            <div className="review-preview-title">{preview.title}</div>
-            <div className="review-preview-frame">
-              <Image src={getAssetURL(preview.item.key)} alt={preview.item.name} fill style={PREVIEW_IMAGE_STYLE} unoptimized />
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ReviewPreviewOverlay preview={preview} onClose={() => setPreview(null)} />
 
       {cropOpen && meta?.cover ? (
-        <CropOverlay coverKey={meta.cover.key} onClose={() => setCropOpen(false)} onCrop={handleCropResult} />
+        <ImageCropper
+          open
+          imageSrc={getAssetURL(meta.cover.key)}
+          onClose={() => setCropOpen(false)}
+          onConfirm={handleCropResult}
+        />
       ) : null}
+
       <DeleteConfirmOverlay
         targetIds={deleteTargetIds}
         selectedRelPath={selected?.rel_path}

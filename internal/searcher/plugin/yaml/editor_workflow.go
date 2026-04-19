@@ -44,7 +44,8 @@ func DebugWorkflow(
 	if plg.spec.workflow == nil && plg.spec.multiRequest == nil {
 		return nil, errWorkflowNotConfigured
 	}
-	result := &WorkflowDebugResult{}
+	// 预先初始化 Steps 避免 nil 切片序列化成 null, 影响前端直接 .length / .map。
+	result := &WorkflowDebugResult{Steps: []WorkflowDebugStep{}}
 	host := selectedHost(nil, plg.spec.hosts)
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, host)
 	evalCtx := &evalContext{number: number, host: host, vars: readVarsFromContext(ctx)}

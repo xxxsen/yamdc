@@ -146,6 +146,10 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 		Input:          input,
 		RequestedInput: input,
 		AvailableTools: d.Plugins(),
+		// 预先初始化切片, 避免 Go nil 切片被 encoding/json 序列化成 null 后
+		// 前端直接 .length / .map 崩溃。
+		UsedPlugins:   []string{},
+		PluginResults: []PluginDebugResult{},
 	}
 
 	num, err := d.resolveNumber(input, opts.UseCleaner, result)
@@ -158,7 +162,7 @@ func (d *Debugger) DebugSearch(ctx context.Context, opts DebugSearchOptions) (*D
 	if len(plugins) == 0 {
 		plugins = d.resolvePlugins(num)
 	}
-	result.UsedPlugins = append([]string(nil), plugins...)
+	result.UsedPlugins = append([]string{}, plugins...)
 
 	for _, name := range plugins {
 		trace, err := d.debugOnePlugin(ctx, name, num, opts.SkipAssets)
@@ -309,7 +313,7 @@ func cloneCreators(in map[string]factory.CreatorFunc) map[string]factory.Creator
 }
 
 func (p *DefaultSearcher) debugSearch(ctx context.Context, num *number.Number, skipAssets bool) *PluginDebugResult {
-	trace := &PluginDebugResult{Plugin: p.name}
+	trace := &PluginDebugResult{Plugin: p.name, Steps: []PluginDebugStep{}}
 	ctx = pluginapi.InitContainer(ctx)
 	ctx = meta.SetNumberID(ctx, num.GetNumberID())
 

@@ -1,0 +1,562 @@
+/* review.css — .review-* 审核页.
+ * 由 globals.css 统一通过 @layer components @import, 本文件不自己
+ * 声明 @layer. 详见 td/022-frontend-optimization-roadmap.md §2.2.
+ */
+
+.review-list-panel,
+.review-detail-panel {
+  padding: 18px;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.review-list-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 246, 234, 0.92)),
+    radial-gradient(circle at top left, rgba(180, 79, 45, 0.1), transparent 28%);
+}
+.review-list-head {
+  margin-bottom: 14px;
+}
+.review-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(91, 67, 44, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+.review-bulk-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-bulk-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.review-bulk-count {
+  font-size: 13px;
+  color: var(--muted);
+}
+.review-bulk-approve-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-color: rgba(180, 79, 45, 0.3);
+  background: linear-gradient(180deg, rgba(198, 94, 54, 0.96), rgba(180, 79, 45, 0.94));
+  color: #fff8f4;
+  box-shadow: 0 8px 18px rgba(180, 79, 45, 0.18);
+}
+.review-bulk-approve-btn:hover {
+  background: linear-gradient(180deg, rgba(166, 63, 28, 0.98), rgba(139, 54, 24, 0.96));
+}
+.review-bulk-delete-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-color: rgba(157, 43, 43, 0.18);
+  color: var(--danger);
+}
+.review-list-kicker {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.review-list-title,
+.review-detail-title {
+  margin: 8px 0 0;
+  font-size: 28px;
+  line-height: 1.05;
+}
+.review-list-subtitle,
+.review-empty-state {
+  color: var(--muted);
+}
+.review-list-subtitle {
+  margin: 8px 0 0;
+  line-height: 1.55;
+}
+.review-empty-state {
+  padding: 22px 16px;
+  border-radius: 16px;
+  border: 1px dashed rgba(91, 67, 44, 0.18);
+  background: rgba(255, 255, 255, 0.48);
+  text-align: center;
+}
+.review-job-list {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.review-job-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  text-align: left;
+  border: 1px solid rgba(91, 67, 44, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+.review-job-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(180, 79, 45, 0.18);
+  background: rgba(255, 255, 255, 0.88);
+}
+.review-job-card[data-active="true"] {
+  border-color: rgba(180, 79, 45, 0.26);
+  background: rgba(180, 79, 45, 0.1);
+  box-shadow: 0 10px 22px rgba(180, 79, 45, 0.08);
+}
+.review-job-card[data-selected="true"] {
+  border-color: rgba(180, 79, 45, 0.2);
+  background: rgba(180, 79, 45, 0.08);
+}
+.review-job-card-select {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 3px;
+}
+.review-job-card-main {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.review-job-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.review-job-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.review-job-card-path {
+  font-weight: 600;
+}
+.review-job-card-index {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(31, 26, 20, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+}
+.review-job-card-number,
+.review-job-card-time,
+.review-subtitle,
+.review-message,
+.review-label {
+  color: var(--muted);
+}
+.review-job-card-number,
+.review-job-card-time,
+.review-subtitle,
+.review-message {
+  font-size: 13px;
+}
+.review-job-card-number,
+.review-job-card-time {
+  margin-top: 4px;
+}
+.review-job-card-number {
+  font-family: "Fira Code", "Iowan Old Style", monospace;
+}
+.review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex: 0 0 auto;
+}
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.review-message {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(39, 93, 138, 0.14);
+  background: rgba(39, 93, 138, 0.08);
+  color: var(--info);
+}
+.review-message[data-tone="danger"] {
+  border-color: rgba(157, 43, 43, 0.12);
+  background: rgba(157, 43, 43, 0.08);
+  color: var(--danger);
+}
+.review-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) 320px;
+  gap: 16px;
+  overflow: hidden;
+  align-items: start;
+}
+.review-content-single {
+  grid-template-columns: 1fr;
+  height: 100%;
+}
+.review-form,
+.review-media {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.review-stack {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.review-field {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.review-field-area,
+.review-field-tokens {
+  align-items: start;
+}
+.review-field-media {
+  align-items: start;
+}
+.review-field-tokens .review-label-side {
+  align-self: center;
+  padding-top: 0;
+}
+.review-media-offset {
+  padding-left: 94px;
+}
+.review-cover-slot {
+  flex: 1 1 auto;
+  min-height: 180px;
+  display: flex;
+}
+.review-cover-slot .review-image-card-cover {
+  flex: 1 1 auto;
+}
+.review-cover-slot .review-image-box-cover {
+  height: 100%;
+  min-height: 180px;
+}
+.review-fanart-slot {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+.review-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.review-label-side {
+  text-align: right;
+  padding-top: 2px;
+}
+.review-input-strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.review-meta-row {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  align-items: start;
+}
+.review-meta-row-full {
+  width: 100%;
+}
+.review-meta-row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.review-meta-row-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.review-meta-row-top {
+  align-content: start;
+}
+.review-textarea {
+  min-height: 108px;
+  max-height: 108px;
+  resize: none;
+  line-height: 1.45;
+}
+.review-media {
+  grid-template-rows: auto auto;
+}
+.review-main-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 14px;
+  align-items: start;
+}
+.review-top-fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.review-main-side {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.review-image-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.review-image-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.review-inline-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.review-inline-icon-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  padding: 0;
+}
+.review-action-approve {
+  color: var(--ok);
+}
+.review-job-card[data-active="true"] .review-action-approve {
+  background: rgba(47, 107, 69, 0.12);
+}
+.review-image-crop-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 2;
+}
+.review-image-card-cover {
+  min-height: 0;
+  width: 100%;
+}
+.review-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.review-image-title {
+  display: block;
+  min-height: 16px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.review-image-box {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.review-image-hit {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.review-upload-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 248, 244, 0.4);
+  border-radius: 999px;
+  background: rgba(31, 26, 20, 0.34);
+  color: #fff8f4;
+  appearance: none;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.review-upload-overlay-static {
+  position: static;
+  transform: none;
+}
+.review-upload-empty {
+  background: rgba(255, 255, 255, 0.72);
+}
+.review-image-box-poster {
+  aspect-ratio: 2 / 3;
+  height: auto;
+}
+.review-image-card-poster {
+  width: 100%;
+}
+.review-top-poster {
+  width: 100%;
+  box-shadow: 0 16px 34px rgba(58, 35, 20, 0.1);
+}
+.review-main-poster {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+.review-fanart-panel {
+  padding: 10px;
+  min-height: 0;
+  width: 100%;
+}
+.review-fanart-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+.review-fanart-item {
+  position: relative;
+  flex: 0 0 210px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.62);
+}
+.review-fanart-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  padding: 0;
+  background: rgba(31, 26, 20, 0.72);
+  color: #fff8f4;
+  border: 1px solid rgba(255, 248, 244, 0.18);
+}
+.review-fanart-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.review-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(26, 18, 14, 0.6);
+}
+.review-preview-dialog {
+  position: relative;
+  width: min(80vw, 1200px);
+  padding: 16px;
+}
+.review-preview-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.review-preview-frame {
+  position: relative;
+  width: 100%;
+  height: min(78vh, 720px);
+}
+.review-preview-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 55;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.92);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.review-confirm-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 18px;
+}
+.review-confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.review-confirm-body {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.review-confirm-path {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--foreground);
+  word-break: break-all;
+}
+.review-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}

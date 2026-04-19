@@ -394,10 +394,7 @@ chains:
 {
   "flare_solverr_config": {
     "enable": true,
-    "host": "http://127.0.0.1:8191",
-    "domains": {
-      "abc.com": true
-    }
+    "host": "http://127.0.0.1:8191"
   }
 }
 ```

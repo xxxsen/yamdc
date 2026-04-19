@@ -1,0 +1,32 @@
+/* base.css — 基线动画 / 其它 @keyframes.
+ * 由 globals.css 统一通过 @layer components @import, 本文件不自己
+ * 声明 @layer. 详见 td/022-frontend-optimization-roadmap.md §2.2.
+ */
+
+/* 全站复用的 @keyframes. 按名字引用的声明, 不依赖 cascade 顺序. */
+
+/* 通用 spinner: list-loading 溢出层 + 其它旋转指示. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ui-button-spinner: components/ui/button.tsx loading 态的 spinner 旋转.
+ * 使用 lucide-react 的 LoaderCircle, 靠 CSS 动画转圈; 无需 icon 自身
+ * 动态变更. */
+@keyframes ui-button-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* handler-debug 链路名 marquee: 名字过长时水平滚动, 距离由 JS 算好后
+ * 通过 CSS custom property --handler-chain-scroll-distance 注入. */
+@keyframes handler-debug-chain-name-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--handler-chain-scroll-distance, 0px) * -1));
+  }
+}

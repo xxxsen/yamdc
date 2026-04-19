@@ -64,9 +64,25 @@ const eslintConfig = defineConfig([
         fixStyle: "separate-type-imports",
       }],
 
-      // maintainability — equivalent to Go gocyclo / nestif
-      "complexity": ["error", 50],
-      "max-depth": ["error", 5],
+      // maintainability — equivalent to Go gocyclo / nestif / funlen / lll
+      "complexity": ["error", 15],
+      "max-depth": ["error", 4],
+      "max-lines-per-function": ["error", { max: 200, skipBlankLines: true, skipComments: true }],
+      "max-lines": ["error", { max: 500, skipBlankLines: true, skipComments: true }],
+      "max-params": ["error", 5],
+
+      // correctness — catch subtle bugs that TS 类型系统覆盖不到
+      "eqeqeq": ["error", "always"],
+      // React 惯用的 xxxRef.current = ... 在 ignorePropertyModificationsForRegex 中豁免,
+      // 其余 prop / arg 仍严禁原地改写, 避免隐式的副作用流.
+      "no-param-reassign": ["error", {
+        props: true,
+        ignorePropertyModificationsForRegex: ["Ref$"],
+      }],
+      "prefer-const": "error",
+      "no-unused-expressions": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "@typescript-eslint/no-misused-spread": "error",
 
       // engineering discipline — equivalent to Go forbidigo
       "no-console": ["error", { allow: ["warn", "error", "debug"] }],
@@ -86,8 +102,15 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-shadow": "off",
       "@typescript-eslint/consistent-type-imports": "off",
+      // 测试里 querySelector 后用 ! 断言元素存在是业界通行做法 —
+      // 若元素不存在, 后续 assert/属性访问会立刻抛出并把错误定位到具体
+      // 用例, 可读性反而比显式 `if (!x) throw ...` 强。
+      "@typescript-eslint/no-non-null-assertion": "off",
       "complexity": "off",
       "max-depth": "off",
+      "max-lines-per-function": "off",
+      "max-lines": "off",
+      "max-params": "off",
       "no-console": "off",
     },
   },

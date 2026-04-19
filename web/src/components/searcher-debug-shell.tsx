@@ -1,9 +1,10 @@
 "use client";
 
-import { Search, LoaderCircle, WandSparkles, Copy, ArrowRight } from "lucide-react";
+import { Search, WandSparkles, Copy, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   debugSearcher,
   getSearcherDebugPlugins,
@@ -16,6 +17,10 @@ const SEARCHER_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.searcher.input";
 const SEARCHER_DEBUG_PLUGIN_STORAGE_KEY = "yamdc.debug.searcher.plugin";
 const SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY = "yamdc.debug.searcher.use_cleaner";
 
+// SearcherDebugShell: Searcher 调试页 - 输入 / plugin 选择 / cleaner 开关
+// 3x localStorage 持久化 + run/handler-debug 两态 + 多种不同 result 面板;
+// 继续拆会让状态和面板分离.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function SearcherDebugShell() {
   const router = useRouter();
   const [input, setInput] = useState(() => {
@@ -155,10 +160,16 @@ export function SearcherDebugShell() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="例如：MOVIE-12345"
             />
-            <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isRunning}>
-              {isRunning ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Search size={16} />}
+            <Button
+              variant="primary"
+              className="ruleset-debug-run-button"
+              onClick={handleRun}
+              disabled={isRunning}
+              loading={isRunning}
+              leftIcon={<Search size={16} />}
+            >
               <span>{isRunning ? "检索中..." : "开始检索"}</span>
-            </button>
+            </Button>
           </div>
 
           <label className="ruleset-debug-label" htmlFor="searcher-debug-plugin">
@@ -206,7 +217,7 @@ export function SearcherDebugShell() {
                 </div>
                 <div className="ruleset-debug-summary-row">
                   <span>插件链</span>
-                  <strong>{result.used_plugins.length ? result.used_plugins.join(", ") : "-"}</strong>
+                  <strong>{result.used_plugins?.length ? result.used_plugins.join(", ") : "-"}</strong>
                 </div>
                 <div className="ruleset-debug-summary-row">
                   <span>命中插件</span>
@@ -230,14 +241,20 @@ export function SearcherDebugShell() {
               {result.meta ? (
                 <div className="searcher-debug-summary-footer">
                   <div className="searcher-debug-summary-actions">
-                    <button className="btn btn-primary" type="button" onClick={() => void handleCopyMeta()}>
-                      <Copy size={16} />
+                    <Button
+                      variant="primary"
+                      onClick={() => void handleCopyMeta()}
+                      leftIcon={<Copy size={16} />}
+                    >
                       <span>复制 Meta JSON</span>
-                    </button>
-                    <button className="btn btn-primary" type="button" onClick={handleOpenHandlerDebug}>
-                      <ArrowRight size={16} />
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={handleOpenHandlerDebug}
+                      leftIcon={<ArrowRight size={16} />}
+                    >
                       <span>发送到 Handler 测试</span>
-                    </button>
+                    </Button>
                   </div>
                   {metaActionMessage ? <div className="handler-debug-message">{metaActionMessage}</div> : null}
                 </div>
@@ -251,11 +268,11 @@ export function SearcherDebugShell() {
         <section className="panel searcher-debug-results-panel">
           <div className="ruleset-debug-panel-head">
             <h3>插件执行链路</h3>
-            <span>{result ? `${result.plugin_results.length} plugins` : "等待运行"}</span>
+            <span>{result ? `${result.plugin_results?.length ?? 0} plugins` : "等待运行"}</span>
           </div>
           {result ? (
             <div className="searcher-debug-plugin-results">
-              {result.plugin_results.map((pluginResult) => (
+              {(result.plugin_results ?? []).map((pluginResult) => (
                 <article key={pluginResult.plugin} className={`searcher-debug-plugin-card ${pluginResult.found ? "searcher-debug-plugin-card-hit" : ""}`}>
                   <div className="searcher-debug-plugin-head">
                     <div>
@@ -287,7 +304,7 @@ export function SearcherDebugShell() {
                   ) : null}
 
                   <div className="searcher-debug-step-list">
-                    {pluginResult.steps.map((step, index) => (
+                    {(pluginResult.steps ?? []).map((step, index) => (
                       <div key={`${pluginResult.plugin}-${step.stage}-${index}`} className="searcher-debug-step">
                         <div className="searcher-debug-step-head">
                           <span className="ruleset-debug-step-stage">{step.stage}</span>

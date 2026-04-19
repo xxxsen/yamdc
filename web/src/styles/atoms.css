@@ -1,0 +1,264 @@
+/* atoms.css — .btn / .input / .badge / .status / .token / .ui-* / .list / .native / 原子组件.
+ * 由 globals.css 统一通过 @layer components @import, 本文件不自己
+ * 声明 @layer. 详见 td/022-frontend-optimization-roadmap.md §2.2.
+ */
+
+.panel {
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(58, 35, 20, 0.08);
+}
+/* .btn family — 一并留在外层 @layer components 里, 与其余 class
+ * 规则共享同一层. 注释保留作为 P0-A 踩坑史料, 参见 §2.1.
+ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 10px 16px;
+    background: var(--panel-strong);
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+      transform 120ms ease,
+      background 120ms ease,
+      border-color 120ms ease;
+  }
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff8f4;
+  }
+  .btn-primary:hover {
+    background: var(--accent-strong);
+  }
+  /* .btn-ghost: 透明背景 + 透明边框, 仅悬停时浮起来一层弱底色。
+     适合作为次级动作 (例如关闭、取消) 与已有内容区融合。 */
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+  }
+  .btn-ghost:hover {
+    background: rgba(91, 67, 44, 0.06);
+  }
+.input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--foreground);
+  padding: 10px 12px;
+  min-height: 44px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+input.input {
+  display: block;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 12px;
+  line-height: normal;
+  font-family:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Segoe UI", sans-serif;
+}
+textarea.input {
+  line-height: 1.45;
+}
+.input:focus,
+.input:focus-visible {
+  outline: 0;
+  border-color: rgba(39, 93, 138, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(39, 93, 138, 0.3),
+    0 0 0 0 rgba(0, 0, 0, 0);
+}
+.list-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 250, 242, 0.72);
+  backdrop-filter: blur(3px);
+}
+.list-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(180, 79, 45, 0.16);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: center;
+  border-radius: 999px;
+  min-width: 84px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.5);
+}
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.badge-init { color: var(--muted); }
+.badge-processing { color: var(--info); }
+.badge-reviewing { color: var(--warn); }
+.badge-done { color: var(--ok); }
+.badge-failed { color: var(--danger); }
+/* §badge-variants: 通用语义 variant, 供 components/ui/badge.tsx 使用。
+   上面一组 .badge-init/processing/... 是 JobStatus 专用命名保持不动,
+   这组 neutral/info/success/warning/danger 是面向所有非状态场景的
+   公共语义, 两套通过 class 名隔离, 并行不冲突。 */
+.badge-neutral { color: var(--muted); }
+.badge-info { color: var(--info); }
+.badge-success { color: var(--ok); }
+.badge-warning { color: var(--warn); }
+.badge-danger { color: var(--danger); }
+.ui-button-spinner {
+  animation: ui-button-spin 900ms linear infinite;
+}
+.status-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.status-chip-view {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.status-chip:hover .status-chip-view[data-enabled="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.status-chip:hover .badge[data-view-enabled="true"] {
+  opacity: 0.18;
+}
+.status-chip-view.icon-btn-danger {
+  color: var(--danger);
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  height: 100%;
+  min-height: 0;
+}
+.token-editor {
+  display: flex;
+  align-items: center;
+  align-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  cursor: text;
+}
+.token-editor-single-line {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.token-chip {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 999px;
+  background: rgba(180, 79, 45, 0.12);
+  color: var(--foreground);
+  font-size: 13px;
+}
+.token-chip-remove {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff8f4;
+  cursor: pointer;
+  padding: 0;
+}
+.token-input {
+  flex: 1 1 140px;
+  min-width: 140px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--foreground);
+}
+.native-file-input {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.token-editor-readonly {
+  min-height: 38px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+/* split button: 两个 .btn 紧贴成一颗按钮, 中间用半透明分隔线区分主区和
+   caret, 而不是靠 gap 切开 (gap 会让两颗胶囊各自露端, 视觉上像 "两个
+   不相干的按钮"). */
+/* 菜单本体直接穿上 accent 主色, 视觉上和 split 主按钮是 "同一个 primary
+   按钮延伸出来的一片", 而不是一个独立风格的下拉面板。border 用半透明白
+   替代 .panel 默认的灰 line, 落在 accent 底色上才不会糊。 */
+/* hover/focus 用 accent-strong (和 .btn-primary:hover 对齐), 这样菜单项
+   点击反馈和主按钮 hover 是同一种 "变深" 语言。 */

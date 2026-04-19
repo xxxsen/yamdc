@@ -1,13 +1,18 @@
 "use client";
 
-import { Bug, LoaderCircle, Play } from "lucide-react";
+import { Bug, Play } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
 import { explainMovieIDCleaner, type MovieIDCleanerExplainResult } from "@/lib/api";
 
 const DEFAULT_INPUT = "MOVIE12345 SUBTITLE.mp4";
 const RULESET_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.ruleset.input";
 
+// RulesetDebugShell: 规则集调试页, 一页包含 input 表单 / localStorage 持久化
+// / run 状态机 / result panel (多个不同形状的输出). 所有片段都很短但都跟
+// input/result 强耦合, 拆到 hook 会让行为难追.
+// eslint-disable-next-line complexity
 export function RulesetDebugShell() {
   const [input, setInput] = useState(() => {
     if (typeof window === "undefined") {
@@ -72,10 +77,16 @@ export function RulesetDebugShell() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="例如：MOVIE12345 SUBTITLE.mp4"
             />
-            <button className="btn btn-primary ruleset-debug-run-button" type="button" onClick={handleRun} disabled={isPending}>
-              {isPending ? <LoaderCircle size={16} className="ruleset-debug-spinner" /> : <Play size={16} />}
+            <Button
+              variant="primary"
+              className="ruleset-debug-run-button"
+              onClick={handleRun}
+              disabled={isPending}
+              loading={isPending}
+              leftIcon={<Play size={16} />}
+            >
               <span>{isPending ? "解析中..." : "开始测试"}</span>
-            </button>
+            </Button>
           </div>
           {error ? <div className="ruleset-debug-error">{error}</div> : null}
         </div>
@@ -119,11 +130,11 @@ export function RulesetDebugShell() {
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>命中规则</span>
-                <strong>{result.final.rule_hits.length ? result.final.rule_hits.join(", ") : "-"}</strong>
+                <strong>{result.final.rule_hits?.length ? result.final.rule_hits.join(", ") : "-"}</strong>
               </div>
               <div className="ruleset-debug-summary-row">
                 <span>警告</span>
-                <strong>{result.final.warnings.length ? result.final.warnings.join(", ") : "-"}</strong>
+                <strong>{result.final.warnings?.length ? result.final.warnings.join(", ") : "-"}</strong>
               </div>
             </div>
           ) : (
@@ -161,7 +172,7 @@ export function RulesetDebugShell() {
                     </div>
                   </div>
                   {step.summary ? <p className="ruleset-debug-step-summary">{step.summary}</p> : null}
-                  {step.values.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
+                  {step.values?.length ? <p className="ruleset-debug-step-values">values: {step.values.join(", ")}</p> : null}
                   {step.candidate ? (
                     <div className="ruleset-debug-step-candidate">
                       <span>candidate</span>

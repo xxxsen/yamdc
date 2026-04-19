@@ -88,11 +88,11 @@ func (p *SearchPlugin) traceFieldHTML(ctx context.Context, mv *model.MovieMeta, 
 		steps := make([]TransformStep, 0, len(field.transforms))
 		out := traceListTransforms(values, field.transforms, &steps)
 		dbg := FieldDebugResult{
-			SelectorValues: values,
+			SelectorValues: ensureStringSlice(values),
 			TransformSteps: steps,
 			Required:       field.required,
 			Matched:        len(out) > 0,
-			ParserResult:   append([]string(nil), out...),
+			ParserResult:   append([]string{}, out...),
 		}
 		if len(out) > 0 {
 			if err := assignListField(ctx, mv, field.name, out, field.parser); err != nil {
@@ -121,17 +121,17 @@ func (p *SearchPlugin) traceFieldJSON(ctx context.Context, mv *model.MovieMeta, 
 ) {
 	values, err := evalJSONPathStrings(doc, field.selector.expr)
 	if err != nil {
-		return FieldDebugResult{}, err
+		return FieldDebugResult{SelectorValues: []string{}, TransformSteps: []TransformStep{}}, err
 	}
 	if isListField(field.name) {
 		steps := make([]TransformStep, 0, len(field.transforms))
 		out := traceListTransforms(values, field.transforms, &steps)
 		dbg := FieldDebugResult{
-			SelectorValues: values,
+			SelectorValues: ensureStringSlice(values),
 			TransformSteps: steps,
 			Required:       field.required,
 			Matched:        len(out) > 0,
-			ParserResult:   append([]string(nil), out...),
+			ParserResult:   append([]string{}, out...),
 		}
 		if len(out) > 0 {
 			if err := assignListField(ctx, mv, field.name, out, field.parser); err != nil {
@@ -147,7 +147,7 @@ func (p *SearchPlugin) traceFieldJSON(ctx context.Context, mv *model.MovieMeta, 
 	steps := make([]TransformStep, 0, len(field.transforms))
 	out := traceStringTransforms(value, field.transforms, &steps)
 	dbg := FieldDebugResult{
-		SelectorValues: values,
+		SelectorValues: ensureStringSlice(values),
 		TransformSteps: steps,
 		Required:       field.required,
 		Matched:        strings.TrimSpace(out) != "",
@@ -155,6 +155,15 @@ func (p *SearchPlugin) traceFieldJSON(ctx context.Context, mv *model.MovieMeta, 
 	parserResult, err := traceAssignStringField(ctx, mv, field.name, out, field.parser)
 	dbg.ParserResult = parserResult
 	return dbg, err
+}
+
+// ensureStringSlice 确保切片非 nil, 防止 encoding/json 把 nil 序列化成 null
+// 导致前端在 .length / .map 直接崩溃。
+func ensureStringSlice(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 func isListField(field string) bool {
