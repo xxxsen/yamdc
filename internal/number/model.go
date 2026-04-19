@@ -2,6 +2,8 @@ package number
 
 import (
 	"strconv"
+
+	"github.com/xxxsen/yamdc/internal/tag"
 )
 
 type externalField struct {
@@ -102,25 +104,25 @@ func (n *Number) GenerateSuffix(base string) string {
 func (n *Number) GenerateTags() []string {
 	rs := make([]string, 0, 5)
 	if n.GetExternalFieldUncensor() {
-		rs = append(rs, defaultTagUncensored)
+		rs = append(rs, tag.Uncensored)
 	}
 	if n.GetIsChineseSubtitle() {
-		rs = append(rs, defaultTagChineseSubtitle)
+		rs = append(rs, tag.ChineseSubtitle)
 	}
 	if n.GetIs4K() {
-		rs = append(rs, defaultTag4K)
+		rs = append(rs, tag.Res4K)
 	}
 	if n.GetIs8K() {
-		rs = append(rs, defaultTag8K)
+		rs = append(rs, tag.Res8K)
 	}
 	if n.GetIsVR() {
-		rs = append(rs, defaultTagVR)
+		rs = append(rs, tag.VR)
 	}
 	if n.GetIsLeak() {
-		rs = append(rs, defaultTagLeak)
+		rs = append(rs, tag.Leak)
 	}
 	if n.GetIsHack() {
-		rs = append(rs, defaultTagHack)
+		rs = append(rs, tag.Hack)
 	}
 	return rs
 }

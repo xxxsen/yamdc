@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/xxxsen/yamdc/internal/tag"
 )
 
 func TestNumber(t *testing.T) {
@@ -153,13 +155,13 @@ func TestGenerateSuffixTagsFileName(t *testing.T) {
 
 	n.SetExternalFieldUncensor(true)
 	tags := n.GenerateTags()
-	assert.Contains(t, tags, defaultTagUncensored)
-	assert.Contains(t, tags, defaultTagChineseSubtitle)
-	assert.Contains(t, tags, defaultTag4K)
-	assert.Contains(t, tags, defaultTag8K)
-	assert.Contains(t, tags, defaultTagVR)
-	assert.Contains(t, tags, defaultTagLeak)
-	assert.Contains(t, tags, defaultTagHack)
+	assert.Contains(t, tags, tag.Uncensored)
+	assert.Contains(t, tags, tag.ChineseSubtitle)
+	assert.Contains(t, tags, tag.Res4K)
+	assert.Contains(t, tags, tag.Res8K)
+	assert.Contains(t, tags, tag.VR)
+	assert.Contains(t, tags, tag.Leak)
+	assert.Contains(t, tags, tag.Hack)
 }
 
 func TestGenerateSuffixMinimal(t *testing.T) {
