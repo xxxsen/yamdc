@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -19,6 +20,19 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/store"
 )
+
+// TestHDCoverLinkTemplateShape 验证运行时解码得到的模板具备我们依赖的
+// 结构特征 — 以 `https://` 开头、含两个 `%s` 占位符、可成功拼接成合法 URL。
+// 不断言具体 host, 保证模板替换不会破这个 handler 的前提假设。
+func TestHDCoverLinkTemplateShape(t *testing.T) {
+	require.True(t, strings.HasPrefix(defaultHDCoverLinkTemplate, "https://"),
+		"template must start with https://, got %q", defaultHDCoverLinkTemplate)
+	require.Equal(t, 2, strings.Count(defaultHDCoverLinkTemplate, "%s"),
+		"template must contain exactly two %%s placeholders, got %q", defaultHDCoverLinkTemplate)
+	url := fmt.Sprintf(defaultHDCoverLinkTemplate, "abc00123", "abc00123")
+	require.True(t, strings.HasPrefix(url, "https://"), "resolved url must be https")
+	require.NotContains(t, url, "%s", "resolved url must have no remaining placeholders")
+}
 
 type mockHTTPClient struct {
 	resp *http.Response

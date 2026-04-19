@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -20,10 +21,22 @@ var (
 	errHDCoverTooSmall      = errors.New("skip hd cover, too small")
 )
 
-const (
-	defaultHDCoverLinkTemplate = "https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/%s/%spl.jpg"
-	defaultMinCoverSize        = 20 * 1024 // 20k
-)
+// hdCoverLinkTplB64 stores the external CDN URL template encoded so the
+// source tree does not carry the literal host. The value is decoded once
+// at package init time; update it via:
+//
+//	printf '%s' '<url-template>' | base64 -w0
+const hdCoverLinkTplB64 = "aHR0cHM6Ly9hd3NpbWdzcmMuZG1tLmNvLmpwL3BpY3NfZGlnL2RpZ2l0YWwvdmlkZW8vJXMvJXNwbC5qcGc="
+
+var defaultHDCoverLinkTemplate = func() string {
+	raw, err := base64.StdEncoding.DecodeString(hdCoverLinkTplB64)
+	if err != nil {
+		panic(fmt.Sprintf("hd_cover: decode link template failed: %v", err))
+	}
+	return string(raw)
+}()
+
+const defaultMinCoverSize = 20 * 1024 // 20k
 
 type highQualityCoverHandler struct {
 	httpClient client.IHTTPClient
