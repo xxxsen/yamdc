@@ -291,6 +291,74 @@ describe("run() - action branches", () => {
 
     expect(result.current.error).toBe("插件调试失败");
   });
+
+  // 回归: 两个按钮 (编译草稿 / 运行调试) 的结果不应相互擦写.
+  // 先跑 scrape (会填 scrapeResult + requestResult), 再跑 compile,
+  // compile 只应覆写 compileResult, 不得把前一次 scrape 的产物清成 null.
+  it("cross-action preservation: compile does not wipe scrape/request results", async () => {
+    mockScrape.mockResolvedValue({
+      data: { request: { url: "u" }, response: { status: 200 } },
+    } as never);
+    mockCompile.mockResolvedValue({ data: { yaml: "compiled" } } as never);
+
+    const { result } = renderHook(() => usePluginEditorState());
+    await flushAsync();
+
+    await act(async () => {
+      await result.current.run("scrape");
+    });
+    expect(result.current.scrapeResult).not.toBeNull();
+    expect(result.current.requestResult).not.toBeNull();
+
+    await act(async () => {
+      await result.current.run("compile");
+    });
+    expect(result.current.compileResult).toEqual({ yaml: "compiled" });
+    expect(result.current.scrapeResult).not.toBeNull();
+    expect(result.current.requestResult).toEqual({ request: { url: "u" }, response: { status: 200 } });
+  });
+
+  // 反向: 先跑 compile, 再跑 scrape, compileResult 应被保留.
+  it("cross-action preservation: scrape does not wipe compileResult", async () => {
+    mockCompile.mockResolvedValue({ data: { yaml: "compiled" } } as never);
+    mockScrape.mockResolvedValue({
+      data: { request: { url: "u" }, response: { status: 200 } },
+    } as never);
+
+    const { result } = renderHook(() => usePluginEditorState());
+    await flushAsync();
+
+    await act(async () => {
+      await result.current.run("compile");
+    });
+    expect(result.current.compileResult).toEqual({ yaml: "compiled" });
+
+    await act(async () => {
+      await result.current.run("scrape");
+    });
+    expect(result.current.compileResult).toEqual({ yaml: "compiled" });
+    expect(result.current.scrapeResult).not.toBeNull();
+  });
+
+  // 边缘: 先单独跑 workflow debug, 再跑 scrape (workflowEnabled=false),
+  // 之前单独调试的 workflowResult 不应被 scrape 动作清掉.
+  it("cross-action preservation: scrape with workflowEnabled=false keeps prior workflowResult", async () => {
+    mockWf.mockResolvedValue({ data: { steps: ["a"] } } as never);
+    mockScrape.mockResolvedValue({ data: { request: null, response: null } } as never);
+
+    const { result } = renderHook(() => usePluginEditorState());
+    await flushAsync();
+
+    await act(async () => {
+      await result.current.run("workflow");
+    });
+    expect(result.current.workflowResult).toEqual({ steps: ["a"] });
+
+    await act(async () => {
+      await result.current.run("scrape");
+    });
+    expect(result.current.workflowResult).toEqual({ steps: ["a"] });
+  });
 });
 
 describe("handleCopyYAML", () => {
