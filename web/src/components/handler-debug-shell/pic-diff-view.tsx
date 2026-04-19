@@ -66,6 +66,34 @@ function SingleImageCompare({ label, changed, beforeKey, afterKey, beforeAlt, af
   );
 }
 
+interface SampleImageGridProps {
+  items: { key: string; name: string }[];
+  keyPrefix: "before" | "after";
+  altPrefix: string;
+}
+
+function SampleImageGrid({ items, keyPrefix, altPrefix }: SampleImageGridProps) {
+  if (items.length === 0) {
+    return <div className="ruleset-debug-empty">No Image</div>;
+  }
+  return (
+    <>
+      {items.map((item) =>
+        item.key ? (
+          <Image
+            key={`${keyPrefix}-${item.key}`}
+            src={getAssetURL(item.key)}
+            alt={item.name || `${altPrefix} sample`}
+            width={220}
+            height={140}
+            unoptimized
+          />
+        ) : null,
+      )}
+    </>
+  );
+}
+
 export function PicDiffView({ result, picDiffState }: PicDiffViewProps) {
   if (!result) {
     return <div className="ruleset-debug-empty">运行后会按 Before / After 展示图片资源差异。</div>;
@@ -104,40 +132,10 @@ export function PicDiffView({ result, picDiffState }: PicDiffViewProps) {
         </div>
         <div className="handler-debug-pic-diff-compare">
           <div className="handler-debug-pic-grid">
-            {beforeSamples.length ? (
-              beforeSamples.map((item) =>
-                item.key ? (
-                  <Image
-                    key={`before-${item.key}`}
-                    src={getAssetURL(item.key)}
-                    alt={item.name || "before sample"}
-                    width={220}
-                    height={140}
-                    unoptimized
-                  />
-                ) : null,
-              )
-            ) : (
-              <div className="ruleset-debug-empty">No Image</div>
-            )}
+            <SampleImageGrid items={beforeSamples} keyPrefix="before" altPrefix="before" />
           </div>
           <div className="handler-debug-pic-grid">
-            {afterSamples.length ? (
-              afterSamples.map((item) =>
-                item.key ? (
-                  <Image
-                    key={`after-${item.key}`}
-                    src={getAssetURL(item.key)}
-                    alt={item.name || "after sample"}
-                    width={220}
-                    height={140}
-                    unoptimized
-                  />
-                ) : null,
-              )
-            ) : (
-              <div className="ruleset-debug-empty">No Image</div>
-            )}
+            <SampleImageGrid items={afterSamples} keyPrefix="after" altPrefix="after" />
           </div>
         </div>
       </article>

@@ -9,6 +9,10 @@ import { explainMovieIDCleaner, type MovieIDCleanerExplainResult } from "@/lib/a
 const DEFAULT_INPUT = "MOVIE12345 SUBTITLE.mp4";
 const RULESET_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.ruleset.input";
 
+// RulesetDebugShell: 规则集调试页, 一页包含 input 表单 / localStorage 持久化
+// / run 状态机 / result panel (多个不同形状的输出). 所有片段都很短但都跟
+// input/result 强耦合, 拆到 hook 会让行为难追.
+// eslint-disable-next-line complexity
 export function RulesetDebugShell() {
   const [input, setInput] = useState(() => {
     if (typeof window === "undefined") {

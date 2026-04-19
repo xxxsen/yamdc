@@ -42,6 +42,9 @@ export interface OutputShellProps {
   draftPreview: string;
 }
 
+// OutputShell: 根据 tab 切换渲染 5 种输出 (compile/request/workflow/scrape/
+// draftPreview + error 覆盖), 每个分支都是独立子 panel 调用, 不值得再切分.
+// eslint-disable-next-line complexity
 export function OutputShell({
   tab,
   onTabChange,

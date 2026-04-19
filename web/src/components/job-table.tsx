@@ -27,6 +27,12 @@ interface Props {
 //   - 纯函数 (排序 / 番号 meta / 路径切分) → ./job-table/helpers.ts (带单测).
 //   - 行 / 表头 / 两个 Modal → ./job-table/*.tsx.
 // 详见 td/022-frontend-optimization-roadmap.md §3.4.
+//
+// max-lines-per-function + complexity: JobTable 是 shell 组件, 职责是本地
+// 状态声明 + useMemo 派生 + 单次 effect + JSX 编排; 进一步拆分会把紧密耦合
+// 的 state/derived/JSX 三者打散, 反而降低可读性. 所有可拆的部分 (handler /
+// 行 / 表头 / modal) 已经拆出去了. 此处留 disable + 说明作为技术债标记.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function JobTable({ initialData }: Props) {
   const [allJobs, setAllJobs] = useState(initialData.items);
   const [total, setTotal] = useState(initialData.total);
@@ -49,8 +55,7 @@ export function JobTable({ initialData }: Props) {
 
   const counts = useMemo(() => {
     return allJobs.reduce<Partial<Record<string, number>>>((acc, item) => {
-      acc[item.status] = (acc[item.status] ?? 0) + 1;
-      return acc;
+      return { ...acc, [item.status]: (acc[item.status] ?? 0) + 1 };
     }, {});
   }, [allJobs]);
   const processingCount = counts.processing ?? 0;

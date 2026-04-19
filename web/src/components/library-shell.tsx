@@ -51,6 +51,11 @@ interface Props {
   initialMediaStatus: MediaLibraryStatus | null;
 }
 
+// LibraryShell 负责 Library 页的整体编排: 列表 + 详情 + 编辑草稿 + 移动/刷新
+// 状态机, 所有纯逻辑 (useLibraryAssetActions / move-refresh-reducer / utils)
+// 都已拆到 ./library-shell/*; 本函数本质上是大量 useState + 几个顶层 JSX
+// 的粘合剂, 再切分会把紧耦合的 state/JSX 拆开反而降低可读性.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function LibraryShell({ items: initialItems, initialDetail, initialMediaStatus }: Props) {
   const initialDraftMeta = cloneMeta(initialDetail?.meta);
   const [items, setItems] = useState(initialItems);

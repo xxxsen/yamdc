@@ -46,6 +46,9 @@ const DEFAULT_NUMBER_STORAGE_KEY = "yamdc.debug.plugin-editor.number";
 
 type KVPairKey = ops.KVPairKey;
 
+// usePluginEditorState: 插件编辑器页面的状态聚合 hook, 内部包含 fields /
+// runResult / outputTab / yaml / warnings 等多个相互依赖的 state.
+// eslint-disable-next-line max-lines-per-function
 export function usePluginEditorState() {
   const [tab, setTab] = useState<EditorTab>("compile");
   const [activeSection, setActiveSection] = useState<EditorSection>("basic");

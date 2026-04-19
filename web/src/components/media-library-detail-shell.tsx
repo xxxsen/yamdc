@@ -23,6 +23,10 @@ interface Props {
   onDetailChange?: (detail: MediaLibraryDetail) => void;
 }
 
+// MediaLibraryDetailShell 是一个大 JSX 编排层: 从 useMediaLibraryDetailState
+// 拿到一堆字段 + handler, 然后按 stageOnly 开关把它们分别注入到舞台 / 侧栏
+// 两套排版里. 分支多但每条都是 inline JSX, 继续切分只会把顶层布局拆散.
+// eslint-disable-next-line complexity
 export function MediaLibraryDetailShell({ initialDetail, stageOnly = false, onDetailChange }: Props) {
   const {
     detail,

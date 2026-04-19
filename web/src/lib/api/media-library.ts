@@ -70,29 +70,40 @@ function normalizeMediaLibraryDetail(detail: MediaLibraryDetail): MediaLibraryDe
   };
 }
 
-export async function listMediaLibraryItems(params?: {
+interface MediaLibraryListParams {
   keyword?: string;
   year?: string;
   size?: string;
   sort?: string;
   order?: string;
-}, signal?: AbortSignal) {
+}
+
+// 哨兵值 default: 如果 param 的 trim 值等于该值, 就不写入 query; 传 ""
+// 表示"只要 trim 后非空就写入".
+const LIST_PARAM_DEFAULTS: Record<keyof MediaLibraryListParams, string> = {
+  keyword: "",
+  year: "all",
+  size: "all",
+  sort: "ingested",
+  order: "desc",
+};
+
+function buildListQuery(params?: MediaLibraryListParams): URLSearchParams {
   const query = new URLSearchParams();
-  if (params?.keyword?.trim()) {
-    query.set("keyword", params.keyword.trim());
+  if (!params) {
+    return query;
   }
-  if (params?.year?.trim() && params.year !== "all") {
-    query.set("year", params.year.trim());
+  for (const [key, fallback] of Object.entries(LIST_PARAM_DEFAULTS) as [keyof MediaLibraryListParams, string][]) {
+    const raw = params[key]?.trim();
+    if (raw && raw !== fallback) {
+      query.set(key, raw);
+    }
   }
-  if (params?.size?.trim() && params.size !== "all") {
-    query.set("size", params.size.trim());
-  }
-  if (params?.sort?.trim() && params.sort !== "ingested") {
-    query.set("sort", params.sort.trim());
-  }
-  if (params?.order?.trim() && params.order !== "desc") {
-    query.set("order", params.order.trim());
-  }
+  return query;
+}
+
+export async function listMediaLibraryItems(params?: MediaLibraryListParams, signal?: AbortSignal) {
+  const query = buildListQuery(params);
   const data = await apiRequest<MediaLibraryItem[]>(buildPath("/api/media-library", query), {
     cache: "no-store",
     signal,

@@ -3,6 +3,11 @@
 import { handleEditorTextareaKeyDown, jsonKeyCount } from "./plugin-editor-utils";
 import type { RequestFormState } from "./plugin-editor-types";
 
+// RequestForm 是大 JSX 表单: method / path / rawURL / query / headers /
+// cookies / body / accept_status / not_found_status / decode_charset /
+// browser wait 三件套 等 13+ 字段的 controlled input 堆叠, 按字段分组做了
+// expandAdvanced 折叠; 每个字段都是独立 row, 拆分会把布局分散.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function RequestForm(props: {
   state: RequestFormState;
   onChange: (updater: (prev: RequestFormState) => RequestFormState) => void;

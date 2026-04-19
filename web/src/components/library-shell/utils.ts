@@ -69,17 +69,17 @@ export function getVariantPosterPath(detail: LibraryDetail | null, variantKey: s
 
 export function getVariantCoverPath(detail: LibraryDetail | null, variantKey: string) {
   const variant = pickVariant(detail, variantKey);
-  return (
-    variant?.cover_path ||
-    variant?.meta.cover_path ||
-    variant?.meta.fanart_path ||
-    variant?.meta.thumb_path ||
-    detail?.meta.cover_path ||
-    detail?.meta.fanart_path ||
-    detail?.meta.thumb_path ||
-    detail?.item.cover_path ||
-    ""
-  );
+  const candidates = [
+    variant?.cover_path,
+    variant?.meta.cover_path,
+    variant?.meta.fanart_path,
+    variant?.meta.thumb_path,
+    detail?.meta.cover_path,
+    detail?.meta.fanart_path,
+    detail?.meta.thumb_path,
+    detail?.item.cover_path,
+  ];
+  return candidates.find((path) => !!path) ?? "";
 }
 
 export function hasTranslatedCopy(meta: LibraryMeta | null) {

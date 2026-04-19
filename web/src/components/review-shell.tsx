@@ -32,6 +32,11 @@ interface Props {
   initialMediaStatus: MediaLibraryStatus | null;
 }
 
+// ReviewShell 是 Review 页顶层编排: 左侧 JobList + 右侧 meta 编辑 + 底部
+// 批量操作. 所有纯逻辑 (useReviewBatchActions / useReviewAssetActions / utils)
+// 已经拆出去; 本函数剩下的全是本地 useState + 子组件 JSX 粘合, 继续切分
+// 会破坏顶层布局与状态的就近性.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Props) {
   const initialMeta = parseMeta(initialScrapeData);
   const initialRawMeta = parseRawMeta(initialScrapeData);

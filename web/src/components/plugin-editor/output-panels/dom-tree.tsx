@@ -94,6 +94,10 @@ function DomCloseTag({ tag }: { tag: string }) {
   return <span className="dom-tag">&lt;/{tag}&gt;</span>;
 }
 
+// DomTreeNode: 递归渲染 DOM 树节点, 需要根据 nodeType (Text / Element /
+// Comment / CDATA...) 做不同的 render + 控制展开/高亮状态, 本质上是一个
+// "pattern match 密集型" 组件, 拆分会破坏递归/引用的连贯性.
+// eslint-disable-next-line complexity
 function DomTreeNode({ node, depth, onCtxMenu, matchedNodes, forceExpand, textSearch, currentNode }: {
   node: ChildNode;
   depth: number;

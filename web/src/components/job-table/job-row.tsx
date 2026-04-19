@@ -35,6 +35,10 @@ interface Props {
   onOpenLogs: (job: JobItem) => void;
 }
 
+// JobRow: 单行 JSX, 内部有大量 status/confidence/手动改番号 三选一分支. 每
+// 条 status badge / 置信度徽标 / 行内 input 都是小独立片段, 继续拆分会让
+// 行级 layout 被扯散到多个文件. 保持一个函数 + inline disable.
+// eslint-disable-next-line complexity
 export function JobRow({
   job,
   isSelected,

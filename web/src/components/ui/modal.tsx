@@ -57,6 +57,60 @@ export interface ModalProps {
 const DEFAULT_BACKDROP_CLASS = "plugin-editor-modal-backdrop";
 const DEFAULT_FRAME_CLASS = "panel plugin-editor-modal";
 
+interface ModalChromeProps {
+  title?: string;
+  subtitle?: string;
+  badge?: ModalBadge;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  disableClose: boolean;
+  closeAriaLabel: string;
+  onClose: () => void;
+}
+
+function ModalChrome({
+  title,
+  subtitle,
+  badge,
+  actions,
+  children,
+  disableClose,
+  closeAriaLabel,
+  onClose,
+}: ModalChromeProps) {
+  return (
+    <>
+      <div className="plugin-editor-modal-head">
+        <div className="plugin-editor-modal-title-group">
+          {badge ? (
+            <div className="plugin-editor-modal-badge">
+              {badge.icon}
+              <span>{badge.label}</span>
+            </div>
+          ) : null}
+          <div className="plugin-editor-modal-title-copy">
+            <h3>{title}</h3>
+            {subtitle ? <span>{subtitle}</span> : null}
+          </div>
+        </div>
+        {disableClose ? null : (
+          <button
+            className="btn plugin-editor-modal-close"
+            type="button"
+            aria-label={closeAriaLabel}
+            title={closeAriaLabel}
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      <div className="plugin-editor-modal-body">{children}</div>
+      {actions ? <div className="plugin-editor-modal-actions">{actions}</div> : null}
+    </>
+  );
+}
+
 export function Modal({
   open,
   onClose,
@@ -142,37 +196,17 @@ export function Modal({
         {bare ? (
           children
         ) : (
-          <>
-            <div className="plugin-editor-modal-head">
-              <div className="plugin-editor-modal-title-group">
-                {badge ? (
-                  <div className="plugin-editor-modal-badge">
-                    {badge.icon}
-                    <span>{badge.label}</span>
-                  </div>
-                ) : null}
-                <div className="plugin-editor-modal-title-copy">
-                  <h3>{title}</h3>
-                  {subtitle ? <span>{subtitle}</span> : null}
-                </div>
-              </div>
-              {disableClose ? null : (
-                <button
-                  className="btn plugin-editor-modal-close"
-                  type="button"
-                  aria-label={closeAriaLabel}
-                  title={closeAriaLabel}
-                  onClick={onClose}
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-            <div className="plugin-editor-modal-body">{children}</div>
-            {actions ? (
-              <div className="plugin-editor-modal-actions">{actions}</div>
-            ) : null}
-          </>
+          <ModalChrome
+            title={title}
+            subtitle={subtitle}
+            badge={badge}
+            actions={actions}
+            disableClose={disableClose}
+            closeAriaLabel={closeAriaLabel}
+            onClose={onClose}
+          >
+            {children}
+          </ModalChrome>
         )}
       </div>
     </div>,

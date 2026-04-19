@@ -17,6 +17,10 @@ const SEARCHER_DEBUG_INPUT_STORAGE_KEY = "yamdc.debug.searcher.input";
 const SEARCHER_DEBUG_PLUGIN_STORAGE_KEY = "yamdc.debug.searcher.plugin";
 const SEARCHER_DEBUG_USE_CLEANER_STORAGE_KEY = "yamdc.debug.searcher.use_cleaner";
 
+// SearcherDebugShell: Searcher 调试页 - 输入 / plugin 选择 / cleaner 开关
+// 3x localStorage 持久化 + run/handler-debug 两态 + 多种不同 result 面板;
+// 继续拆会让状态和面板分离.
+// eslint-disable-next-line complexity, max-lines-per-function
 export function SearcherDebugShell() {
   const router = useRouter();
   const [input, setInput] = useState(() => {

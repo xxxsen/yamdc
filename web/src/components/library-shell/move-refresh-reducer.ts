@@ -74,51 +74,62 @@ export function getInitialMoveRefreshState(initial: MediaLibraryStatus | null): 
   };
 }
 
+// split 成 move / refresh 两条独立子 reducer: 每条只响应自己关心的 action,
+// 其余 action 走 fallthrough 把值原样返回. 用完全枚举 case 满足
+// switch-exhaustiveness-check.
+// reduceMove 针对所有 MoveRefreshAction 做穷尽分派以满足
+// switch-exhaustiveness-check, REFRESH_* 只是 fallthrough, 不参与实际分支
+// 却被 complexity 计为 +1, 这里显式豁免一次.
+// eslint-disable-next-line complexity
+function reduceMove(move: MoveRefreshState["move"], action: MoveRefreshAction): MoveRefreshState["move"] {
+  switch (action.type) {
+    case "MOVE_CLICK":
+      return move === "idle" || move === "completed-flash" ? "starting" : move;
+    case "MOVE_SERVER_RUNNING":
+      return move === "idle" || move === "starting" ? "running" : move;
+    case "MOVE_SERVER_NOT_RUNNING":
+      return move === "starting" || move === "running" ? "completed-flash" : move;
+    case "MOVE_ERROR":
+      return "idle";
+    case "MOVE_FLASH_DONE":
+      return move === "completed-flash" ? "idle" : move;
+    case "REFRESH_START":
+    case "REFRESH_SUCCESS":
+    case "REFRESH_ERROR":
+    case "REFRESH_FLASH_DONE":
+      return move;
+  }
+}
+
+function reduceRefresh(refresh: MoveRefreshState["refresh"], action: MoveRefreshAction): MoveRefreshState["refresh"] {
+  switch (action.type) {
+    case "REFRESH_START":
+      return "running";
+    case "REFRESH_SUCCESS":
+      return "completed-flash";
+    case "REFRESH_ERROR":
+      return "idle";
+    case "REFRESH_FLASH_DONE":
+      return refresh === "completed-flash" ? "idle" : refresh;
+    case "MOVE_CLICK":
+    case "MOVE_SERVER_RUNNING":
+    case "MOVE_SERVER_NOT_RUNNING":
+    case "MOVE_ERROR":
+    case "MOVE_FLASH_DONE":
+      return refresh;
+  }
+}
+
 export function moveRefreshReducer(
   state: MoveRefreshState,
   action: MoveRefreshAction,
 ): MoveRefreshState {
-  switch (action.type) {
-    case "MOVE_CLICK":
-      if (state.move === "idle" || state.move === "completed-flash") {
-        return { ...state, move: "starting" };
-      }
-      return state;
-
-    case "MOVE_SERVER_RUNNING":
-      if (state.move === "idle" || state.move === "starting") {
-        return { ...state, move: "running" };
-      }
-      return state;
-
-    case "MOVE_SERVER_NOT_RUNNING":
-      if (state.move === "starting" || state.move === "running") {
-        return { ...state, move: "completed-flash" };
-      }
-      return state;
-
-    case "MOVE_ERROR":
-      return { ...state, move: "idle" };
-
-    case "MOVE_FLASH_DONE":
-      if (state.move === "completed-flash") {
-        return { ...state, move: "idle" };
-      }
-      return state;
-
-    case "REFRESH_START":
-      return { ...state, refresh: "running" };
-
-    case "REFRESH_SUCCESS":
-      return { ...state, refresh: "completed-flash" };
-
-    case "REFRESH_ERROR":
-      return { ...state, refresh: "idle" };
-
-    case "REFRESH_FLASH_DONE":
-      if (state.refresh === "completed-flash") {
-        return { ...state, refresh: "idle" };
-      }
-      return state;
+  const move = reduceMove(state.move, action);
+  const refresh = reduceRefresh(state.refresh, action);
+  // preserve reference identity when nothing changed — 避免 useReducer
+  // 下游 re-render 时拿到新对象误判.
+  if (move === state.move && refresh === state.refresh) {
+    return state;
   }
+  return { move, refresh };
 }

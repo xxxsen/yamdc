@@ -51,6 +51,9 @@ export interface JobActions {
   confirmDelete: (job: JobItem) => void;
 }
 
+// useJobActions: 聚合任务表的所有按钮回调 (编辑 / 运行 / 删除 / 审核 ...);
+// 每个 handler 都依赖相同的 deps, 抽 hook 是为了让组件 JSX 更精简.
+// eslint-disable-next-line max-lines-per-function
 export function useJobActions(deps: JobActionsDeps): JobActions {
   const {
     jobs,

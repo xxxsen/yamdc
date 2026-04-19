@@ -40,6 +40,10 @@ interface Props {
 
 const PAGE_SIZE = 30;
 
+// MediaLibraryShell: 媒体库页面 shell - 表格 + 搜索 + 过滤 + 分页 + 扫描按钮
+// 多个 useState / useEffect / derived value 聚合在一起, 再拆会让 JSX 与
+// 状态管理被无意义地切开.
+// eslint-disable-next-line max-lines-per-function
 export function MediaLibraryShell({ items: initialItems, initialStatus }: Props) {
   const [items, setItems] = useState(initialItems);
   const [yearOptions, setYearOptions] = useState(() => extractYearOptions(initialItems));

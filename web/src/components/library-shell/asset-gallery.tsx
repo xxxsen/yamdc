@@ -175,7 +175,8 @@ export function LibraryFanartStrip({
               if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
                 return;
               }
-              e.currentTarget.scrollLeft += e.deltaY;
+              const target = e.currentTarget;
+              target.scrollLeft += e.deltaY;
               e.preventDefault();
             }}
           >
