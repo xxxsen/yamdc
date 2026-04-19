@@ -24,6 +24,8 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/capture"
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/job"
@@ -32,7 +34,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
-	"go.uber.org/zap"
 )
 
 // 错误集合: review 独占的几个语义错误。跨包共享的错误 (如 job 不存在 /

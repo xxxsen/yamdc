@@ -10,12 +10,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/store"
-	"go.uber.org/zap"
 )
 
+// 这里与 registerEngineMediaLibraryRoutes 在"一串 group.METHOD 调用"这个形状上
+// 结构相似, dupl 会把二者识别为重复. 但语义不同: 一个负责 job / review 生命周期,
+// 一个负责媒体库路由, 把它们抽成 "data + loop" 反而弱化了声明式可读性.
+//
+//nolint:dupl // declarative route table; extracting would harm readability
 func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
 	group.POST("/api/scan", a.handleScan)
 	group.GET("/api/jobs", a.handleListJobs)

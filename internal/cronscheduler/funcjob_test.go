@@ -21,7 +21,7 @@ func TestFuncJobRunDelegatesToConfiguredFunc(t *testing.T) {
 	var gotCtx context.Context
 	j := NewFuncJob("run_delegate", "@every 5s", func(ctx context.Context) error {
 		called = true
-		gotCtx = ctx
+		gotCtx = ctx //nolint:fatcontext // test 刻意捕获回调内 ctx 到外层做断言
 		return nil
 	})
 

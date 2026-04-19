@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/antchfx/htmlquery"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"

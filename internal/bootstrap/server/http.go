@@ -8,8 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/xxxsen/yamdc/internal/web"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/web"
 )
 
 // defaultShutdownTimeout 是收到退出信号后等待 HTTP server 收尾的最大时间。

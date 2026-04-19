@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -161,7 +162,7 @@ func TestCheck(t *testing.T) {
 				hosts = []string{srv.URL}
 				if tt.doFn == nil {
 					cli = &mockHTTPClient{do: func(req *http.Request) (*http.Response, error) {
-						return http.DefaultClient.Do(req) //nolint:gosec
+						return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 					}}
 				}
 			}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -36,13 +37,15 @@ func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
 	svc := NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
-	// Cleanup 注册顺序: 先 sqlite.Close, 再 WaitQueuedJobs。按 LIFO 执行时会先
+	// Cleanup 注册顺序: 先 sqlite.Close, 再 svc.Stop。按 LIFO 执行时会先
 	// 等待所有通过 queue 分发到 worker 的异步任务完成 (包括状态更新之后的
-	// addJobLog 与 finish), 然后再关闭 sqlite, 最后 testing 框架清理 tempdir。
-	// 否则 worker 仍在写 DB 时就关闭 sqlite/删除 tempdir, 会残留 journal 文件
-	// 导致 "directory not empty" 的 flaky 失败。
+	// addJobLog 与 finish), 并显式 close(queue) 让 runWorker goroutine 自然
+	// 退出 (否则 goleak 会把 <-s.queue 长驻 goroutine 报为泄漏), 然后再关闭
+	// sqlite, 最后 testing 框架清理 tempdir。否则 worker 仍在写 DB 时就关闭
+	// sqlite/删除 tempdir, 会残留 journal 文件导致 "directory not empty" 的
+	// flaky 失败。
 	t.Cleanup(func() {
-		svc.WaitQueuedJobs()
+		require.NoError(t, svc.Stop(context.Background()))
 	})
 	return svc, jobRepo
 }
@@ -399,7 +402,7 @@ func TestServiceRunOneWritesDetailedFailureLogs(t *testing.T) {
 		FileSize:              1,
 	}, jobdef.StatusProcessing)
 	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
-		err: fmt.Errorf("search backend timeout: upstream 504"),
+		err: errors.New("search backend timeout: upstream 504"),
 	})
 
 	svc.runOne(context.Background(), jobID)
@@ -962,7 +965,7 @@ func TestBuildJobFailureDetail(t *testing.T) {
 				ExtInfo:      model.ExtInfo{ScrapeInfo: model.ScrapeInfo{Source: "src"}},
 			},
 		}, contains: []string{"save_file_base=SFB", "meta_source=src", "meta_title=T", "meta_samples=1"}},
-		{name: "with error", err: fmt.Errorf("boom"), contains: []string{"error=boom"}},
+		{name: "with error", err: errors.New("boom"), contains: []string{"error=boom"}},
 		{name: "fc without meta", fc: &model.FileContext{SaveFileBase: "X"}, contains: []string{"save_file_base=X"}},
 	}
 	for _, tc := range tests {
@@ -1675,7 +1678,7 @@ func TestExecuteScrapeAndFinalizeSearchFailed(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
 	}, jobdef.StatusProcessing)
 
-	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{err: fmt.Errorf("search error")})
+	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{err: errors.New("search error")})
 	svc.runOne(context.Background(), jobID)
 
 	j, err := repo.GetByID(context.Background(), jobID)
@@ -2024,7 +2027,7 @@ func TestServiceStartUpdateStatusFails(t *testing.T) {
 
 // ---------- Error paths via closed DB ----------
 
-func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam
+func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
@@ -2123,7 +2126,7 @@ func TestRunOneWithDBError(t *testing.T) {
 
 // ---------- Error paths via targeted table drops ----------
 
-func dropTable(t *testing.T, svc *Service, _ string) { //nolint:unused
+func dropTable(t *testing.T, svc *Service, _ string) { //nolint:unused // 留作后续测试复用
 	t.Helper()
 	db := svc.jobRepo
 	_ = db
@@ -2635,7 +2638,7 @@ func TestFailJobWithClosedDBDoesNotPanic(t *testing.T) {
 		repository.NewScrapeDataRepository(sqlite.DB()),
 		nil, store.NewMemStorage(),
 	)
-	t.Cleanup(func() { closedSvc.WaitQueuedJobs() })
+	t.Cleanup(func() { _ = closedSvc.Stop(context.Background()) })
 
 	assert.NotPanics(t, func() {
 		closedSvc.failJob(context.Background(), 12345, "job", "boom", "detail")
@@ -2681,7 +2684,7 @@ func (s *gatedSearcher) Search(ctx context.Context, n *number.Number) (*model.Mo
 	select {
 	case <-s.release:
 	case <-ctx.Done():
-		return nil, false, fmt.Errorf("gated search cancelled: %w", ctx.Err())
+		return nil, false, fmt.Errorf("gated search canceled: %w", ctx.Err())
 	}
 	meta := *s.meta
 	meta.Number = n.GetNumberID()
@@ -2822,7 +2825,7 @@ func TestServiceStopReturnsCtxErrorButWorkerStillCompletes(t *testing.T) {
 	err := svc.Stop(ctx)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled),
-		"Stop with cancelled ctx must wrap ctx.Err; got: %v", err)
+		"Stop with canceled ctx must wrap ctx.Err; got: %v", err)
 
 	// ctx 已取消让 Stop 先返回, 但 worker 仍在 gate 里 → 释放后必须能自然退出。
 	close(gate.release)
@@ -2841,7 +2844,7 @@ func TestServiceStopConcurrentRunNoPanic(t *testing.T) {
 	// 用会立刻失败的 searcher: 并发路径里即便 worker 真消费到了任务, 也只会
 	// 走 failJob 分支, 不会因为 nil capture 触发 panic, 干扰我们观察 race。
 	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
-		err: fmt.Errorf("race-test: searcher short-circuit"),
+		err: errors.New("race-test: searcher short-circuit"),
 	})
 
 	const n = 20

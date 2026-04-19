@@ -29,7 +29,7 @@ func TestCreate_UnknownEngine(t *testing.T) {
 }
 
 func TestCreate_RegisteredEngine_Gemini(t *testing.T) {
-	_, err := aiengine.Create("gemini", map[string]interface{}{
+	_, err := aiengine.Create("gemini", map[string]any{
 		"key":   "test-key",
 		"model": "test-model",
 	})
@@ -38,8 +38,8 @@ func TestCreate_RegisteredEngine_Gemini(t *testing.T) {
 
 func TestRegister_DuplicatePanics(t *testing.T) {
 	require.Panics(t, func() {
-		aiengine.Register("gemini", func(_ interface{}, _ ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
-			return nil, nil //nolint:nilnil
+		aiengine.Register("gemini", func(_ any, _ ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		})
 	})
 }

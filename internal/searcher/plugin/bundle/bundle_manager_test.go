@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,7 +118,7 @@ chains:
 	var latest *ResolvedBundle
 	manager, err := NewManager("searcher_plugin", dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
 		if fail {
-			return nil, fmt.Errorf("network down")
+			return nil, errors.New("network down")
 		}
 		switch {
 		case req.URL.Host == "api.github.com" && req.URL.Path == "/repos/xxxsen/yamdc-plugins/tags":
@@ -142,7 +143,7 @@ chains:
 	fail = true
 	latest = nil
 	manager, err = NewManager("searcher_plugin", dataDir, stubHTTPClient{do: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network down")
+		return nil, errors.New("network down")
 	}}, []Source{{SourceType: SourceTypeRemote, Location: "https://github.com/xxxsen/yamdc-plugins"}}, func(_ context.Context, resolved *ResolvedBundle, _ []string) error {
 		latest = resolved
 		return nil
@@ -876,7 +877,7 @@ chains:
 func TestManagerEmit_CallbackError(t *testing.T) {
 	manager := &Manager{
 		cb: func(_ context.Context, _ *ResolvedBundle, _ []string) error {
-			return fmt.Errorf("callback error")
+			return errors.New("callback error")
 		},
 		bundles: map[int]*Bundle{
 			0: {
@@ -1111,7 +1112,7 @@ func TestNewManager_ValidWithSources(t *testing.T) {
 func TestManagerStart_EmitError(t *testing.T) {
 	manager := &Manager{
 		cb: func(_ context.Context, _ *ResolvedBundle, _ []string) error {
-			return fmt.Errorf("emit failed")
+			return errors.New("emit failed")
 		},
 		bundles: map[int]*Bundle{
 			0: {

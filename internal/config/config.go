@@ -32,8 +32,8 @@ type NetworkConfig struct {
 }
 
 type AIEngineConfig struct {
-	Name string      `json:"name"`
-	Args interface{} `json:"args"`
+	Name string `json:"name"`
+	Args any    `json:"args"`
 }
 
 type TranslateConfig struct {
@@ -61,8 +61,8 @@ type AITranslateEngineConfig struct {
 }
 
 type HandlerConfig struct {
-	Disable bool        `json:"disable"`
-	Args    interface{} `json:"args"`
+	Disable bool `json:"disable"`
+	Args    any  `json:"args"`
 }
 
 type PluginConfig struct {

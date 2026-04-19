@@ -140,20 +140,14 @@ func (p *DefaultSearcher) decorateRequest(ctx context.Context, req *http.Request
 	if err := p.plg.OnDecorateRequest(ctx, req); err != nil {
 		return fmt.Errorf("decorate request: %w", err)
 	}
-	if err := p.setDefaultHTTPOptions(req); err != nil {
-		return err
-	}
-	return nil
+	return p.setDefaultHTTPOptions(req)
 }
 
 func (p *DefaultSearcher) decorateImageRequest(ctx context.Context, req *http.Request) error {
 	if err := p.plg.OnDecorateMediaRequest(ctx, req); err != nil {
 		return fmt.Errorf("decorate media request: %w", err)
 	}
-	if err := p.setDefaultHTTPOptions(req); err != nil {
-		return err
-	}
-	return nil
+	return p.setDefaultHTTPOptions(req)
 }
 
 func (p *DefaultSearcher) invokeHTTPRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
@@ -248,7 +242,8 @@ func (p *DefaultSearcher) Search(ctx context.Context, number *number.Number) (*m
 	// 将远程数据保存到本地, 并替换文件key
 	p.storeImageData(ctx, meta)
 	if err := p.verifyMeta(meta); err != nil {
-		logutil.GetLogger(ctx).Error("verify meta not pass, treat as not found", zap.Error(err), zap.String("plugin", p.name))
+		logutil.GetLogger(ctx).Error("verify meta not pass, treat as not found",
+			zap.Error(err), zap.String("plugin", p.name))
 		return nil, false, nil
 	}
 	meta.ExtInfo.ScrapeInfo.Source = p.name

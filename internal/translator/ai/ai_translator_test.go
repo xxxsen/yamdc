@@ -16,12 +16,12 @@ type mockEngine struct {
 	completeRes string
 	completeErr error
 	capturedP   string
-	capturedA   map[string]interface{}
+	capturedA   map[string]any
 }
 
 func (m *mockEngine) Name() string { return m.name }
 
-func (m *mockEngine) Complete(_ context.Context, prompt string, args map[string]interface{}) (string, error) {
+func (m *mockEngine) Complete(_ context.Context, prompt string, args map[string]any) (string, error) {
 	m.capturedP = prompt
 	m.capturedA = args
 	return m.completeRes, m.completeErr

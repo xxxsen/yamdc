@@ -3,7 +3,7 @@ package yaml
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -579,7 +579,7 @@ func TestDebugScrape_TwoStep_WorkflowHandled(t *testing.T) {
 
 func TestDebugScrape_ScrapeFetch_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network error")
+		return nil, errors.New("network error")
 	}}
 	spec := simpleOneStepSpec("https://example.com")
 	_, err := DebugScrape(context.Background(), cli, spec, "ABC-123")

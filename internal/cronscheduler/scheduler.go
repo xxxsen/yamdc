@@ -258,6 +258,10 @@ func (a *jobAdapter) Run() {
 //
 // 返回的 error 统一 wrap 自 errJobPanic / errJobRunFailed, 调用方 (adapter.Run)
 // 只用来打日志, 不做分支处理; wrap 是为了满足项目 err113 / wrapcheck 约束。
+// recover() 需要向调用方返回错误, 必须通过 named return 赋值; 换成 var err error
+// + 显式 return 会失去 panic → err 翻译能力, 因此保留 named return.
+//
+//nolint:nonamedreturns // recover in defer needs to set err
 func (a *jobAdapter) runWithRecover() (err error) {
 	defer func() {
 		if r := recover(); r != nil {

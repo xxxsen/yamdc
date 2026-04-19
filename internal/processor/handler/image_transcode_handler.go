@@ -70,7 +70,7 @@ func (p *imageTranscodeHandler) transcode(ctx context.Context, name string, f *m
 }
 
 func init() {
-	Register(HImageTranscoder, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HImageTranscoder, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &imageTranscodeHandler{storage: deps.Storage}, nil
 	})
 }

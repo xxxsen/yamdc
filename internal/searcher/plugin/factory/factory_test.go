@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
@@ -19,7 +20,7 @@ func restoreRegistry(t *testing.T, saved map[string]CreatorFunc) {
 
 func TestRegisterContext_RegisterAndSnapshot(t *testing.T) {
 	rc := NewRegisterContext()
-	fn := func(_ interface{}) (api.IPlugin, error) { return &api.DefaultPlugin{}, nil }
+	fn := func(_ any) (api.IPlugin, error) { return &api.DefaultPlugin{}, nil }
 	rc.Register("alpha", fn)
 	rc.Register("beta", fn)
 
@@ -39,7 +40,7 @@ func TestSwapCreatePluginLookupPlugins(t *testing.T) {
 	t.Cleanup(func() { restoreRegistry(t, saved) })
 
 	rc := NewRegisterContext()
-	rc.Register("factory_unit", func(args interface{}) (api.IPlugin, error) {
+	rc.Register("factory_unit", func(args any) (api.IPlugin, error) {
 		s, _ := args.(string)
 		if s == "err" {
 			return nil, assert.AnError

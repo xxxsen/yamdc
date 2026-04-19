@@ -87,7 +87,7 @@ func TestIntegration_HTTPClientWrap_ContextDriven(t *testing.T) {
 	var implCalls int
 	impl := &mockHTTPClient{doFn: func(req *http.Request) (*http.Response, error) {
 		implCalls++
-		return http.DefaultClient.Do(req) //nolint:gosec
+		return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 	}}
 	cli := NewHTTPClient(impl, endpoint)
 

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/capture"
 	imgutil "github.com/xxxsen/yamdc/internal/image"
 	"github.com/xxxsen/yamdc/internal/job"
@@ -23,7 +25,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
-	"go.uber.org/zap"
 )
 
 // ---------- helpers ----------
@@ -556,7 +557,7 @@ func TestServiceImportBlockedByGuard(t *testing.T) {
 	meta := &model.MovieMeta{Title: "T", Number: "IMP-G"}
 	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
 
-	guardErr := fmt.Errorf("guard blocked")
+	guardErr := errors.New("guard blocked")
 	rig.svc.SetImportGuard(func(_ context.Context) error { return guardErr })
 
 	err := rig.svc.Import(context.Background(), jobID)

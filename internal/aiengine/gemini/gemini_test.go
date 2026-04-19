@@ -30,7 +30,7 @@ func geminiHTTPClientToLocal(t *testing.T, srv *httptest.Server) client.IHTTPCli
 	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		req.URL.Scheme = baseURL.Scheme
 		req.URL.Host = baseURL.Host
-		return srv.Client().Do(req) //nolint:gosec
+		return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 	})
 }
 
@@ -88,7 +88,7 @@ func TestComplete_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	out, err := eng.Complete(context.Background(), "hello {X}", map[string]interface{}{"X": "world"})
+	out, err := eng.Complete(context.Background(), "hello {X}", map[string]any{"X": "world"})
 	require.NoError(t, err)
 	assert.Equal(t, "translated", out)
 }
@@ -204,7 +204,7 @@ func TestBuildRequest_EdgeCases(t *testing.T) {
 	require.Len(t, r.Contents, 1)
 	assert.Equal(t, "plain", r.Contents[0].Parts[0].Text)
 
-	r2 := buildRequest("a {K} b", map[string]interface{}{"K": "v"})
+	r2 := buildRequest("a {K} b", map[string]any{"K": "v"})
 	assert.Equal(t, "a v b", r2.Contents[0].Parts[0].Text)
 }
 
@@ -226,7 +226,7 @@ func TestCreateGeminiEngine_viaAIEngineCreate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	eng, err := aiengine.Create("gemini", map[string]interface{}{
+	eng, err := aiengine.Create("gemini", map[string]any{
 		"key":   "k",
 		"model": "m",
 	}, aiengine.WithHTTPClient(geminiHTTPClientToLocal(t, srv)))
@@ -251,7 +251,7 @@ func TestNewGeminiEngine_DefaultHTTPClient_Used(t *testing.T) {
 }
 
 func TestCreateGeminiEngine_WithoutHTTPClient(t *testing.T) {
-	eng, err := aiengine.Create("gemini", map[string]interface{}{
+	eng, err := aiengine.Create("gemini", map[string]any{
 		"key":   "k",
 		"model": "m",
 	})
@@ -270,7 +270,7 @@ func TestComplete_WithHTTPClientOption(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	eng, err := createGeminiEngine(
-		map[string]interface{}{"key": "k", "model": "m"},
+		map[string]any{"key": "k", "model": "m"},
 		aiengine.WithHTTPClient(geminiHTTPClientToLocal(t, srv)),
 	)
 	require.NoError(t, err)

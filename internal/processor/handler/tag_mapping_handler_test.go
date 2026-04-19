@@ -70,7 +70,7 @@ func createTestTagMappingConfig(t *testing.T) string {
 
 func TestTagMappingHandler_Disabled(t *testing.T) {
 	// 创建禁用状态的处理器
-	handler, err := createTagMappingHandler(map[string]interface{}{
+	handler, err := createTagMappingHandler(map[string]any{
 		"enable": false,
 	}, appdeps.Runtime{})
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestTagMappingHandler_Disabled(t *testing.T) {
 
 func TestTagMappingHandler_EmptyTags(t *testing.T) {
 	filePath := createTestTagMappingConfig(t)
-	handler, err := createTagMappingHandler(map[string]interface{}{
+	handler, err := createTagMappingHandler(map[string]any{
 		"enable":    true,
 		"file_path": filePath,
 	}, appdeps.Runtime{})
@@ -116,7 +116,7 @@ func TestTagMappingHandler_EmptyTags(t *testing.T) {
 
 func TestTagMappingHandler_AliasMapping(t *testing.T) {
 	filePath := createTestTagMappingConfig(t)
-	handler, err := createTagMappingHandler(map[string]interface{}{
+	handler, err := createTagMappingHandler(map[string]any{
 		"file_path": filePath,
 	}, appdeps.Runtime{})
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestTagMappingHandler_AliasMapping(t *testing.T) {
 
 func TestTagMappingHandler_FileNotFound(t *testing.T) {
 	// 配置文件不存在时，应该创建禁用状态的处理器
-	handler, err := createTagMappingHandler(map[string]interface{}{
+	handler, err := createTagMappingHandler(map[string]any{
 		"enable":    true,
 		"file_path": "/nonexistent/file.json",
 	}, appdeps.Runtime{})
@@ -215,7 +215,7 @@ func TestTagMappingHandler_InvalidFileContent(t *testing.T) {
 	badFile := filepath.Join(tmpDir, "bad-mappings.json")
 	require.NoError(t, os.WriteFile(badFile, []byte("not valid json"), 0o600))
 
-	_, err := createTagMappingHandler(map[string]interface{}{
+	_, err := createTagMappingHandler(map[string]any{
 		"file_path": badFile,
 	}, appdeps.Runtime{})
 	assert.Error(t, err)
@@ -223,7 +223,7 @@ func TestTagMappingHandler_InvalidFileContent(t *testing.T) {
 
 func TestTagMappingHandler_NoConfig(t *testing.T) {
 	// 测试没有配置参数时的行为
-	handler, err := createTagMappingHandler(map[string]interface{}{}, appdeps.Runtime{})
+	handler, err := createTagMappingHandler(map[string]any{}, appdeps.Runtime{})
 	require.NoError(t, err)
 
 	num, err := number.Parse("test-001")

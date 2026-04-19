@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/client"
@@ -22,7 +24,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/web"
-	"go.uber.org/zap"
 )
 
 type InfraDeps struct {

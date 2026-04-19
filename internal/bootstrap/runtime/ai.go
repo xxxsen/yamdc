@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xxxsen/common/logutil"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/client"
 )
@@ -13,7 +14,7 @@ func BuildAIEngine(
 	ctx context.Context,
 	cli client.IHTTPClient,
 	name string,
-	args interface{},
+	args any,
 ) (aiengine.IAIEngine, error) {
 	if name == "" {
 		logutil.GetLogger(ctx).Info("ai engine is disabled, skip init")

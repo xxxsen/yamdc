@@ -76,6 +76,11 @@ func compileTemplateMap(raw map[string]string) (map[string]*template, error) {
 	return out, nil
 }
 
+// compileRequest 把 yaml 请求描述逐字段编译进 compiledRequest, 每个字段的
+// 预处理彼此独立 (method / url / headers / body / transforms). 拆函数会让
+// 读者要跳转 N 次才能确认"一条请求描述最终是什么形状", 收益不足.
+//
+//nolint:gocyclo // sequential field compile; each branch encodes one yaml field
 func compileRequest(raw *RequestSpec) (*compiledRequest, error) {
 	if raw == nil {
 		return nil, nil //nolint:nilnil // nil spec means no request configured

@@ -8,8 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/repository"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/repository"
 )
 
 // TestTryAutoSyncSkipsWhenClean 覆盖正常 case: dirty flag 为 false 时

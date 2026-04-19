@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/resource"
-	"go.uber.org/zap"
 )
 
 type chineseTitleTranslateOptimizer struct {
@@ -38,7 +39,8 @@ func (c *chineseTitleTranslateOptimizer) tryInitCNumber(ctx context.Context) {
 			return
 		}
 		c.m = m
-		logutil.GetLogger(ctx).Info("cnumber init succ", zap.Int("count", len(c.m)), zap.Duration("cost", time.Since(start)))
+		logutil.GetLogger(ctx).Info("cnumber init succ",
+			zap.Int("count", len(c.m)), zap.Duration("cost", time.Since(start)))
 	})
 }
 
@@ -93,7 +95,7 @@ func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.F
 }
 
 func init() {
-	Register(HChineseTitleTranslateOptimizer, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HChineseTitleTranslateOptimizer, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &chineseTitleTranslateOptimizer{cli: deps.HTTPClient}, nil
 	})
 }

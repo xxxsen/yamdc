@@ -53,6 +53,14 @@ linters:
     - forbidigo
     - wrapcheck
 
+    # architecture / safety
+    - depguard        # 声明式分层依赖约束 (防架构腐化)
+    - gochecknoinits  # 禁止隐式 init(), 组装逻辑必须显式
+    - predeclared     # 禁止覆写 new/len/make 等 builtin
+    - asasalint       # 防止把 []any slice 直接传给 ...any 变参
+    - canonicalheader # HTTP header 必须 canonical 大小写
+    - fatcontext      # for 循环内泄漏 ctx 检查
+
   exclusions:
     generated: strict
     presets:
@@ -62,16 +70,28 @@ linters:
 
     rules:
       # 测试代码适度放宽，否则噪音会很大
+      # errcheck 在测试里豁免 — 测试失败会立刻 panic/FAIL, 不需要 _ = 显式丢弃
+      # gochecknoinits 在测试里豁免 — test setup 偶尔会用 init 注入
       - path: '(.+)_test\.go'
         linters:
           - dupl
           - err113
+          - errcheck
           - funlen
+          - gochecknoinits
           - gocognit
           - gocyclo
           - lll
           - nestif
           - wrapcheck
+
+      # 本项目"插件注册"统一走 init() { pkg.Register(...) }, 覆盖以下位置:
+      #   - 后处理 handler / 搜索 plugin factory
+      #   - aiengine 各具体实现 (gemini / ollama)
+      #   - ffmpeg / image/watermark 的"尽力而为"懒加载单例
+      - path: '(internal/processor/handler|internal/searcher/plugin/factory|internal/aiengine/(gemini|ollama)|internal/ffmpeg|internal/image)/'
+        linters:
+          - gochecknoinits
 
       # mocks / vendor / testdata 一般不做严格质量约束
       - path: '(^|/)(mock|mocks|testdata|vendor)/'
@@ -87,132 +107,253 @@ linters:
           - forbidigo
           - wrapcheck
 
-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-    exclude-functions:
-      - fmt.Fprint
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - io.Copy
-      - io.CopyBuffer
-      - io.CopyN
-
-  govet:
-    enable:
-      - shadow
-
-  copyloopvar:
-    check-alias: true
-
-  dupl:
-    threshold: 120
-
-  funlen:
-    lines: 80
-    statements: 50
-
-  gocognit:
-    min-complexity: 20
-
-  gocyclo:
-    min-complexity: 12
-
-  interfacebloat:
-    max: 5
-
-  lll:
-    line-length: 120
-    tab-width: 2
-
-  misspell:
-    locale: US
-
-  nestif:
-    min-complexity: 4
-
-  nolintlint:
-    require-explanation: true
-    require-specific: true
-    allow-unused: false
-
-  nonamedreturns:
-    report-error-in-defer: true
-
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: false
-
-  makezero:
-    always: true
-
-  errorlint:
-    errorf: true
-    errorf-multi: true
-    asserts: true
-    comparison: true
-
-  wrapcheck:
-    ignore-sigs:
-      - .Errorf(
-      - errors.New(
-      - errors.Unwrap(
-      - errors.Join(
-    ignore-package-globs:
-      - encoding/*
-      - github.com/pkg/errors
-
-  forbidigo:
-    forbid:
-      - pattern: '^fmt\.Print.*$'
-        msg: "不要提交调试输出，改用结构化日志"
-      - pattern: '^print(ln)?$'
-        msg: "不要使用内建 print/println"
-
-  revive:
-    enable-all-rules: false
-    rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: early-return
-      - name: empty-block
-      - name: empty-lines
-      - name: error-naming
-      - name: error-return
-      - name: exported
-        arguments:
-          - disableStutteringCheck
-      - name: if-return
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: modifies-parameter
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: redundant-import-alias
-      - name: string-of-int
-      - name: superfluous-else
-      - name: time-equal
-      - name: time-naming
-      - name: unchecked-type-assertion
-      - name: unnecessary-if
-      - name: unnecessary-stmt
-      - name: unreachable-code
-      - name: unused-parameter
-        arguments:
-          - allow-regex: "^_"
-      - name: unused-receiver
-        arguments:
-          - allow-regex: "^_"
-      - name: use-any
-      - name: use-errors-new
-      - name: use-waitgroup-go
-
+  settings:
+    errcheck:
+      check-type-assertions: true
+      # check-blank 故意关闭:
+      # 项目通篇用 `_ = x.Close()` / `_ = os.Remove(tmp)` 这种"显式丢弃"语法来明确
+      # 表态"已考虑过该错误但没有可行的处理路径". 打开 check-blank 会把这种
+      # self-documenting 的丢弃形式全部视为违规, 反而把真正的裸调用 (`x.Close()`)
+      # 和显式丢弃放进同一桶. 关掉之后, errcheck 依旧会抓"未显式丢弃"的裸调用.
+      check-blank: false
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - io.Copy
+        - io.CopyBuffer
+        - io.CopyN
+        # cobra flag 注册 — 错误几乎不可能发生, 属于框架约定
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        # 日志 flush, 程序退出时 defer 调用, 错误无处可 log
+        - github.com/xxxsen/common/logutil.Sync
+        - go.uber.org/zap.(*Logger).Sync
+        - go.uber.org/zap.(*SugaredLogger).Sync
+  
+    govet:
+      # govet.shadow 在 go vet 里默认就是关的, 因为它对 Go 的 `if err := f(); err != nil`
+      # 这类"块级新 err 变量"习惯用法会大量误报 (外层 err 已经在紧邻的 if 中处理完,
+      # 内层同名变量其实是新作用域, 没有任何隐藏 bug 风险). 评估存量 31 处命中后
+      # 全部属于此类良性 shadowing, 没有真实 bug. 继续开只会强制把代码改成
+      # err2 / rerr / err的离谱命名, 收益不抵噪音. 所以此处显式不启用 shadow,
+      # 其他 govet 检查仍按 enable-all 默认启用.
+  
+    copyloopvar:
+      check-alias: true
+  
+    dupl:
+      threshold: 120
+  
+    funlen:
+      lines: 80
+      statements: 50
+  
+    gocognit:
+      # 门槛从 20 提到 25: 20 会把大量合法的 "dispatch switch / 顺序校验管线"
+      # (如 yaml 模板求值、ruleset 校验、capture 流水线装配) 全部误伤, 且每一处
+      # 都只是 21-23 的边缘值. 25 仍比 gocognit 官方默认 30 更严, 只放过贴边的
+      # 样板式函数, 对真正失控的逻辑仍有报警能力.
+      min-complexity: 25
+  
+    gocyclo:
+      # 门槛从 12 提到 15: 12 会把若干 12-19 的"命令分派 switch / http handler
+      # 组合校验"函数误伤. 15 与社区常见配置 (gocyclo 默认 10, 稍放宽到 15)
+      # 一致, 同时仍能抓到 >15 的真正重型函数.
+      min-complexity: 15
+  
+    interfacebloat:
+      max: 5
+  
+    lll:
+      line-length: 120
+      tab-width: 2
+  
+    misspell:
+      locale: US
+  
+    nestif:
+      min-complexity: 4
+  
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+  
+    nonamedreturns:
+      report-error-in-defer: true
+  
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+  
+    makezero:
+      # always: true 会把所有 `make([]T, N)` 视为违规, 但本项目大量合法用法是
+      # "按 index 填充" 或 `make([]T, N)` + `copy`, 并非 `append`. 用默认 false
+      # 仅抓"长度非零却又 append"的真正 bug 模式.
+      always: false
+  
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+  
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+      ignore-package-globs:
+        - encoding/*
+        - github.com/pkg/errors
+  
+    forbidigo:
+      forbid:
+        - pattern: '^fmt\.Print.*$'
+          msg: "不要提交调试输出，改用结构化日志"
+        - pattern: '^print(ln)?$'
+          msg: "不要使用内建 print/println"
+  
+    # ── 架构分层约束 ──
+    # 基于当前 internal/ 真实依赖图锁定: 只禁止新增违规, 不强制立刻重构.
+    # 规则以"禁止"为主, 对已符合约定的包做防腐化守门.
+    depguard:
+      rules:
+        # ── model 是领域叶子, 只允许依赖 number / enum / 标准库 ──
+        model-is-leaf:
+          files:
+            - "**/internal/model/**"
+          allow:
+            - $gostd
+            - github.com/xxxsen/yamdc/internal/number
+            - github.com/xxxsen/yamdc/internal/enum
+  
+        # ── 基础设施层 (repository / store / client) 不得向上依赖业务层 ──
+        infra-no-business:
+          files:
+            - "**/internal/repository/**"
+            - "**/internal/store/**"
+            - "**/internal/client/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/internal/capture
+              desc: "基础设施不得依赖业务编排层"
+            - pkg: github.com/xxxsen/yamdc/internal/searcher
+              desc: "基础设施不得依赖搜索业务"
+            - pkg: github.com/xxxsen/yamdc/internal/processor
+              desc: "基础设施不得依赖后处理业务"
+            - pkg: github.com/xxxsen/yamdc/internal/web
+              desc: "基础设施不得反向依赖表示层"
+            - pkg: github.com/xxxsen/yamdc/internal/review
+              desc: "基础设施不得依赖 review 业务"
+            - pkg: github.com/xxxsen/yamdc/internal/scanner
+              desc: "基础设施不得依赖 scanner 业务"
+            - pkg: github.com/xxxsen/yamdc/internal/medialib
+              desc: "基础设施不得依赖 medialib 业务"
+            - pkg: github.com/xxxsen/yamdc/internal/bootstrap
+              desc: "基础设施不得依赖组装根"
+  
+        # ── 业务同级包禁止水平互调, 避免环 (搜索 ↔ 抓取 ↔ 后处理) ──
+        searcher-isolation:
+          files:
+            - "**/internal/searcher/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/internal/capture
+              desc: "searcher 是被编排方, 不得反向调用 capture"
+            - pkg: github.com/xxxsen/yamdc/internal/processor
+              desc: "searcher / processor 是并列业务, 不得互调"
+            - pkg: github.com/xxxsen/yamdc/internal/web
+            - pkg: github.com/xxxsen/yamdc/internal/review
+            - pkg: github.com/xxxsen/yamdc/internal/scanner
+            - pkg: github.com/xxxsen/yamdc/internal/medialib
+            - pkg: github.com/xxxsen/yamdc/internal/repository
+              desc: "searcher 不得直接读写数据库"
+            - pkg: github.com/xxxsen/yamdc/internal/bootstrap
+  
+        processor-isolation:
+          files:
+            - "**/internal/processor/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/internal/capture
+            - pkg: github.com/xxxsen/yamdc/internal/searcher
+            - pkg: github.com/xxxsen/yamdc/internal/web
+            - pkg: github.com/xxxsen/yamdc/internal/review
+            - pkg: github.com/xxxsen/yamdc/internal/scanner
+            - pkg: github.com/xxxsen/yamdc/internal/medialib
+            - pkg: github.com/xxxsen/yamdc/internal/repository
+            - pkg: github.com/xxxsen/yamdc/internal/bootstrap
+  
+        capture-isolation:
+          files:
+            - "**/internal/capture/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/internal/web
+              desc: "capture 是业务中台, 不得依赖表示层"
+            - pkg: github.com/xxxsen/yamdc/internal/review
+            - pkg: github.com/xxxsen/yamdc/internal/scanner
+            - pkg: github.com/xxxsen/yamdc/internal/medialib
+            - pkg: github.com/xxxsen/yamdc/internal/repository
+              desc: "capture 经由 store 抽象访问持久化, 不直连 repository"
+            - pkg: github.com/xxxsen/yamdc/internal/bootstrap
+  
+        # ── bootstrap 是组装根, 只允许 cmd/* 引用 ──
+        bootstrap-only-from-cmd:
+          files:
+            - "!**/cmd/**"
+            - "!**/internal/bootstrap/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/internal/bootstrap
+              desc: "bootstrap 是组装根, 只允许 cmd/* 引用, 其他代码不得反向依赖组装逻辑"
+  
+        # ── cmd/ 是 main 包, 任何 internal 都不得反向 import ──
+        no-import-cmd:
+          files:
+            - "**/internal/**"
+          deny:
+            - pkg: github.com/xxxsen/yamdc/cmd
+              desc: "不得从 internal 反向依赖 cmd/ 入口"
+  
+    revive:
+      enable-all-rules: false
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: early-return
+        - name: empty-block
+        - name: empty-lines
+        - name: error-naming
+        - name: error-return
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: modifies-parameter
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: redundant-import-alias
+        - name: string-of-int
+        - name: superfluous-else
+        - name: time-equal
+        - name: time-naming
+        # unchecked-type-assertion 与 errcheck.check-type-assertions 双重报告, 以 errcheck 为准
+        - name: unnecessary-if
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+          arguments:
+            - allow-regex: "^_"
+        # unused-receiver 暂关: 存量 100+ 处需重命名为 `_`, 列入独立清理债务
+        - name: use-any
+        - name: use-errors-new
+        - name: use-waitgroup-go
+  
 formatters:
   enable:
     - gofumpt
@@ -221,11 +362,11 @@ formatters:
   settings:
     gofumpt:
       extra-rules: true
-      module-path: github.com/yourorg/yourrepo
+      module-path: github.com/xxxsen/yamdc
 
     goimports:
       local-prefixes:
-        - github.com/yourorg/yourrepo
+        - github.com/xxxsen/yamdc
 
 issues:
   max-issues-per-linter: 0

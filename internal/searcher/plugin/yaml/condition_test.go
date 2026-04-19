@@ -9,6 +9,7 @@ import (
 	"github.com/antchfx/htmlquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 )

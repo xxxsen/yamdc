@@ -65,16 +65,18 @@ func LoadRuleSetFromPath(path string) (*RuleSet, error) {
 	}
 	if info.IsDir() {
 		fsys := os.DirFS(path)
-		if manifest, ok, err := readManifest(fsys, "."); err != nil {
+		manifest, ok, err := readManifest(fsys, ".")
+		if err != nil {
 			return nil, err
-		} else if ok {
-			entry, err := cleanBundleEntry(manifest.Entry)
-			if err != nil {
-				return nil, err
-			}
-			return LoadRuleSetFromFS(fsys, entry)
 		}
-		return LoadRuleSetFromFS(fsys, ".")
+		if !ok {
+			return LoadRuleSetFromFS(fsys, ".")
+		}
+		entry, err := cleanBundleEntry(manifest.Entry)
+		if err != nil {
+			return nil, err
+		}
+		return LoadRuleSetFromFS(fsys, entry)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -353,7 +355,9 @@ func validateNormalizers(items []NormalizerRule) error {
 		if item.Type == "builtin" {
 			if _, ok := allowedBuiltinNormalizers[item.Builtin]; !ok {
 				return &CleanError{
-					Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin), Rule: item.Name,
+					Code:    ErrInvalidRuleSet,
+					Message: fmt.Sprintf("unsupported normalizer builtin: %s", item.Builtin),
+					Rule:    item.Name,
 				}
 			}
 		}
@@ -407,7 +411,9 @@ func validateSuffixRules(items []SuffixRule) error {
 			upper := strings.ToUpper(item.Canonical)
 			if _, ok := allowedSuffixes[upper]; !ok && !strings.HasPrefix(upper, "CD") {
 				return &CleanError{
-					Code: ErrInvalidRuleSet, Message: fmt.Sprintf("unsupported suffix canonical: %s", item.Canonical), Rule: item.Name,
+					Code:    ErrInvalidRuleSet,
+					Message: fmt.Sprintf("unsupported suffix canonical: %s", item.Canonical),
+					Rule:    item.Name,
 				}
 			}
 		}

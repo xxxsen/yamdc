@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/utils"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/client"
 )
@@ -35,7 +36,7 @@ func (g *geminiEngine) Name() string {
 	return defaultGeminiEngineName
 }
 
-func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[string]interface{}) (string, error) {
+func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[string]any) (string, error) {
 	bodyRes := buildRequest(prompt, args)
 	raw, err := json.Marshal(bodyRes)
 	if err != nil {
@@ -44,7 +45,10 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.c.Model, g.c.Key),
+		fmt.Sprintf(
+			"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+			g.c.Model, g.c.Key,
+		),
 		bytes.NewReader(raw),
 	)
 	if err != nil {
@@ -67,7 +71,8 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 	if len(res.Candidates) == 0 {
-		return "", fmt.Errorf("%w, maybe blocked, prompt feedback: %s", errNoTranslateResult, res.PromptFeedback.BlockReason)
+		return "", fmt.Errorf("%w, maybe blocked, prompt feedback: %s",
+			errNoTranslateResult, res.PromptFeedback.BlockReason)
 	}
 	if len(res.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("%w, reason: %s", errNoTranslateResultPart, res.Candidates[0].FinishReason)
@@ -97,7 +102,7 @@ func newGeminiEngine(c *config) (*geminiEngine, error) {
 	return &geminiEngine{c: c}, nil
 }
 
-func createGeminiEngine(args interface{}, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
+func createGeminiEngine(args any, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
 	c := &config{}
 	if err := utils.ConvStructJson(args, c); err != nil {
 		return nil, fmt.Errorf("convert gemini config: %w", err)

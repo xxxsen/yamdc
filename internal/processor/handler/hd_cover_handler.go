@@ -70,7 +70,7 @@ func (h *highQualityCoverHandler) Handle(ctx context.Context, fc *model.FileCont
 }
 
 func init() {
-	Register(HHDCoverHandler, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HHDCoverHandler, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &highQualityCoverHandler{
 			httpClient: deps.HTTPClient,
 			storage:    deps.Storage,

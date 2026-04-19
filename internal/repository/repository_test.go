@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/jobdef"
 )
 
@@ -514,7 +515,7 @@ func newClosedTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func newTestSQLiteWithRawDB(t *testing.T) (*SQLite, *sql.DB) { //nolint:unparam
+func newTestSQLiteWithRawDB(t *testing.T) (*SQLite, *sql.DB) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	s := newTestSQLite(t)
 	return s, s.DB()

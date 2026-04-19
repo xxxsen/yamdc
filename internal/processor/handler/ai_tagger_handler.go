@@ -60,7 +60,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 		utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
 		return nil
 	}
-	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
+	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]any{
 		"TITLE": title,
 		"PLOT":  plot,
 	})
@@ -70,7 +70,8 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 	taglist := strings.Split(res, ",")
 	for _, tag := range taglist {
 		if utf8.RuneCountInString(tag) > defaultMaxAllowAITagLength {
-			logutil.GetLogger(ctx).Warn("warning: tag is too long, may has err in ai engine, ignore it", zap.String("tag", tag))
+			logutil.GetLogger(ctx).Warn("warning: tag is too long, may has err in ai engine, ignore it",
+				zap.String("tag", tag))
 			continue
 		}
 		fc.Meta.Genres = append(fc.Meta.Genres, "AI-"+strings.TrimSpace(tag))
@@ -79,7 +80,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 }
 
 func init() {
-	Register(HAITagger, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HAITagger, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &aiTaggerHandler{engine: deps.AIEngine}, nil
 	})
 }

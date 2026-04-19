@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	"github.com/xxxsen/yamdc/internal/store"
-	"go.uber.org/zap"
 )
 
 func BuildSearcher(

@@ -228,7 +228,7 @@ func TestParseCall_NonIdentifierName(t *testing.T) {
 }
 
 func TestParseCall_InvalidArgs(t *testing.T) {
-	_, _, _, err := parseCall(`fn("unterminated)`) //nolint:dogsled
+	_, _, _, err := parseCall(`fn("unterminated)`) //nolint:dogsled // 测试只关心前若干返回值
 	require.Error(t, err)
 }
 
@@ -366,10 +366,10 @@ func TestParseCall(t *testing.T) {
 	assert.Equal(t, "fn", name)
 	assert.Equal(t, []string{"a", "b"}, args)
 
-	_, _, ok, _ = parseCall("not_a_call") //nolint:dogsled
+	_, _, ok, _ = parseCall("not_a_call") //nolint:dogsled // 测试只关心前若干返回值
 	assert.False(t, ok)
 
-	_, _, ok, _ = parseCall("123(a)") //nolint:dogsled
+	_, _, ok, _ = parseCall("123(a)") //nolint:dogsled // 测试只关心前若干返回值
 	assert.False(t, ok)
 }
 

@@ -12,8 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/medialib"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/medialib"
 )
 
 func (a *API) handleMediaLibraryList(c *gin.Context) {
@@ -322,7 +323,7 @@ func parseInt64Query(c *gin.Context) (int64, bool) {
 	return value, true
 }
 
-func readJSON(r *http.Request, v interface{}) error {
+func readJSON(r *http.Request, v any) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return fmt.Errorf("decode json body failed: %w", err)
 	}

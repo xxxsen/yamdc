@@ -79,10 +79,10 @@ func (s *Service) buildScanEntry(path string, info fs.FileInfo) (repository.Upse
 			numberCleanStatus = string(res.Status)
 			numberCleanConfidence = string(res.Confidence)
 			numberCleanWarnings = strings.Join(res.Warnings, "; ")
-			if res.Normalized != "" {
-				number = res.Normalized
-				numberSource = "cleaner"
-			}
+		}
+		if res != nil && res.Normalized != "" {
+			number = res.Normalized
+			numberSource = "cleaner"
 		}
 	}
 	return repository.UpsertJobInput{

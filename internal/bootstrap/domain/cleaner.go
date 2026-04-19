@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
-	"go.uber.org/zap"
 )
 
 func BuildMovieIDCleaner(

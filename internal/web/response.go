@@ -6,12 +6,12 @@ import (
 )
 
 type responseBody struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
 }
 
-func writeSuccess(w http.ResponseWriter, message string, data interface{}) {
+func writeSuccess(w http.ResponseWriter, message string, data any) {
 	writeJSON(w, http.StatusOK, responseBody{
 		Code:    0,
 		Message: message,
@@ -30,7 +30,7 @@ func writeFail(w http.ResponseWriter, code int, message string) {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)

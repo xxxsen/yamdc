@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	"github.com/xxxsen/yamdc/internal/bootstrap/infra"
@@ -15,7 +17,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/config"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
-	"go.uber.org/zap"
 )
 
 func newRunCmd() *cobra.Command {

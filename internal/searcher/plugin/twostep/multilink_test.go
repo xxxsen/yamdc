@@ -2,7 +2,7 @@ package twostep
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
@@ -18,7 +19,7 @@ func TestHandleMultiLinkSearch_ReqBuilderError(t *testing.T) {
 		Numbers:         []string{"a"},
 		ValidStatusCode: []int{200},
 		ReqBuilder: func(_ string) (*http.Request, error) {
-			return nil, fmt.Errorf("build fail")
+			return nil, errors.New("build fail")
 		},
 		ResultTester: func(_ []byte) (bool, error) { return true, nil },
 	}
@@ -40,7 +41,7 @@ func TestHandleMultiLinkSearch_InvokerError(t *testing.T) {
 		ResultTester: func(_ []byte) (bool, error) { return true, nil },
 	}
 	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("dial error")
+		return nil, errors.New("dial error")
 	}
 	rsp, err := HandleMultiLinkSearch(context.Background(), api.HTTPInvoker(invoker), xctx)
 	if rsp != nil && rsp.Body != nil {
@@ -110,7 +111,7 @@ func TestHandleMultiLinkSearch_ReadBodyFails(t *testing.T) {
 type errReader struct{}
 
 func (errReader) Read(_ []byte) (int, error) {
-	return 0, fmt.Errorf("read err")
+	return 0, errors.New("read err")
 }
 
 func TestHandleMultiLinkSearch_ResultTesterError(t *testing.T) {
@@ -121,7 +122,7 @@ func TestHandleMultiLinkSearch_ResultTesterError(t *testing.T) {
 			return http.NewRequestWithContext(context.Background(), http.MethodGet, "http://x/"+nid, nil)
 		},
 		ResultTester: func(_ []byte) (bool, error) {
-			return false, fmt.Errorf("tester boom")
+			return false, errors.New("tester boom")
 		},
 	}
 	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {

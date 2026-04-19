@@ -12,7 +12,7 @@ import (
 
 var errFactoryPluginNotFound = errors.New("plugin not found")
 
-type CreatorFunc func(args interface{}) (api.IPlugin, error)
+type CreatorFunc func(args any) (api.IPlugin, error)
 
 type RegisterContext struct {
 	mp map[string]CreatorFunc
@@ -44,7 +44,7 @@ func Swap(ctx *RegisterContext) {
 	registry.Store(next)
 }
 
-func CreatePlugin(name string, args interface{}) (api.IPlugin, error) {
+func CreatePlugin(name string, args any) (api.IPlugin, error) {
 	cr, ok := Lookup(name)
 	if !ok {
 		return nil, fmt.Errorf("plugin:%s: %w", name, errFactoryPluginNotFound)
@@ -58,7 +58,7 @@ func Lookup(name string) (CreatorFunc, bool) {
 }
 
 func PluginToCreator(plg api.IPlugin) CreatorFunc {
-	return func(_ interface{}) (api.IPlugin, error) {
+	return func(_ any) (api.IPlugin, error) {
 		return plg, nil
 	}
 }

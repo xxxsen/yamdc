@@ -73,7 +73,7 @@ func TestTranslate_SuccessPath(t *testing.T) {
 
 	host := srv.Listener.Addr().String()
 	tr := New(WithServiceHosts(host))
-	result, err := tr.Translate(nil, "hello", "en", "zh") //nolint:staticcheck
+	result, err := tr.Translate(nil, "hello", "en", "zh") //nolint:staticcheck // 测试特意演练废弃行为
 	require.NoError(t, err)
 	assert.Equal(t, "你好", result)
 }
@@ -90,7 +90,7 @@ func TestTranslate_ErrorPath(t *testing.T) {
 
 	host := srv.Listener.Addr().String()
 	tr := New(WithServiceHosts(host))
-	_, err := tr.Translate(nil, "hello", "en", "zh") //nolint:staticcheck
+	_, err := tr.Translate(nil, "hello", "en", "zh") //nolint:staticcheck // 测试特意演练废弃行为
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "google translate failed")
 }

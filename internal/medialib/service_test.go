@@ -12,9 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xxxsen/common/logger"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/nfo"
 	"github.com/xxxsen/yamdc/internal/repository"
-	"go.uber.org/zap"
 )
 
 func newTestMediaService(t *testing.T) *Service {

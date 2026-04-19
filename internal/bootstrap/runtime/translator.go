@@ -5,11 +5,12 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/translator"
 	"github.com/xxxsen/yamdc/internal/translator/ai"
 	"github.com/xxxsen/yamdc/internal/translator/google"
-	"go.uber.org/zap"
 )
 
 type TranslatorConfig struct {

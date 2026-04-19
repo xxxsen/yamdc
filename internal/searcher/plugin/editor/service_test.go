@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	plugyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
 )

@@ -36,7 +36,7 @@ func TestResolve_SingleDep_Success(t *testing.T) {
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	deps := []*Dependency{
@@ -52,14 +52,14 @@ func TestResolve_SingleDep_Success(t *testing.T) {
 
 func TestResolve_MultipleDeps_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("content-" + r.URL.Path)) //nolint:gosec
+		_, _ = w.Write([]byte("content-" + r.URL.Path)) //nolint:gosec // 测试场景, 无生产风险
 	}))
 	defer srv.Close()
 
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	deps := []*Dependency{
@@ -84,7 +84,7 @@ func TestResolve_DownloadError(t *testing.T) {
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	deps := []*Dependency{
@@ -110,7 +110,7 @@ func TestResolve_Refresh_AlreadyExists(t *testing.T) {
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 
@@ -134,7 +134,7 @@ func TestResolve_NoRefresh_AlreadyExists(t *testing.T) {
 
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	deps := []*Dependency{
@@ -157,7 +157,7 @@ func TestResolve_PartialFailure(t *testing.T) {
 	dir := t.TempDir()
 	cli := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	deps := []*Dependency{

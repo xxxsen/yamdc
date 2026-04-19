@@ -45,15 +45,15 @@ type RequestDebugResult struct {
 }
 
 type TransformStep struct {
-	Kind   string      `json:"kind"`
-	Input  interface{} `json:"input"`
-	Output interface{} `json:"output"`
+	Kind   string `json:"kind"`
+	Input  any    `json:"input"`
+	Output any    `json:"output"`
 }
 
 type FieldDebugResult struct {
 	SelectorValues []string        `json:"selector_values"`
 	TransformSteps []TransformStep `json:"transform_steps"`
-	ParserResult   interface{}     `json:"parser_result,omitempty"`
+	ParserResult   any             `json:"parser_result,omitempty"`
 	Required       bool            `json:"required"`
 	Matched        bool            `json:"matched"`
 }

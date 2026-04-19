@@ -128,12 +128,12 @@ func TestEvalJSONPathStrings_ObjectField(t *testing.T) {
 }
 
 func TestEvalJSONPathStrings(t *testing.T) {
-	doc := map[string]interface{}{
+	doc := map[string]any{
 		"str":  "hello",
 		"num":  42.0,
 		"bool": true,
-		"arr":  []interface{}{"a", "b"},
-		"nested": map[string]interface{}{
+		"arr":  []any{"a", "b"},
+		"nested": map[string]any{
 			"key": "val",
 		},
 	}

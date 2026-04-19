@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/job"
 	"github.com/xxxsen/yamdc/internal/jobdef"
@@ -49,7 +50,7 @@ type stubCleaner struct {
 	explainErr    error
 }
 
-func (*stubCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return nil, nil } //nolint:nilnil
+func (*stubCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return nil, nil } //nolint:nilnil // 测试桩显式返回 (nil, nil)
 func (s *stubCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
 	return s.explainResult, s.explainErr
 }
@@ -90,7 +91,7 @@ func decodeResponse(t *testing.T, rec *httptest.ResponseRecorder) responseBody {
 	return out
 }
 
-func buildMultipartImage(t *testing.T, fieldName, fileName string, data []byte) (*bytes.Buffer, string) { //nolint:unparam
+func buildMultipartImage(t *testing.T, fieldName, fileName string, data []byte) (*bytes.Buffer, string) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -110,7 +111,7 @@ func jpegBytes() []byte {
 	return []byte{0xff, 0xd8, 0xff, 0xdb}
 }
 
-func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) { //nolint:unparam
+func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	sqlite, err := repository.NewSQLite(context.Background(), dbPath)
@@ -207,11 +208,11 @@ func createValidJPEG(t *testing.T, width, height int) []byte {
 type failingStore struct{}
 
 func (f *failingStore) GetData(_ context.Context, _ string) ([]byte, error) {
-	return nil, fmt.Errorf("store get error")
+	return nil, errors.New("store get error")
 }
 
 func (f *failingStore) PutData(_ context.Context, _ string, _ []byte, _ time.Duration) error {
-	return fmt.Errorf("store put error")
+	return errors.New("store put error")
 }
 
 func (f *failingStore) IsDataExist(_ context.Context, _ string) (bool, error) {
@@ -220,7 +221,7 @@ func (f *failingStore) IsDataExist(_ context.Context, _ string) (bool, error) {
 
 type errReader struct{}
 
-func (e *errReader) Read(_ []byte) (int, error) { return 0, fmt.Errorf("read error") }
+func (e *errReader) Read(_ []byte) (int, error) { return 0, errors.New("read error") }
 
 func setupClosedMediaLibDB(t *testing.T) *medialib.Service {
 	t.Helper()

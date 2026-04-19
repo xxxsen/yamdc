@@ -7,9 +7,10 @@ import (
 	"io"
 	"net/http"
 
+	"golang.org/x/net/html"
+
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
-	"golang.org/x/net/html"
 )
 
 func (w *compiledSearchSelectWorkflow) handleRequest(

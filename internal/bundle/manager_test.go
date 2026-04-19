@@ -392,7 +392,7 @@ func TestStart_Remote_Success(t *testing.T) {
 		doFunc: func(req *http.Request) (*http.Response, error) {
 			req.URL.Scheme = "http"
 			req.URL.Host = srv.Listener.Addr().String()
-			return http.DefaultClient.Do(req) //nolint:gosec
+			return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}, "remote", "https://github.com/owner/repo", "cache", func(_ context.Context, d *Data) error {
 		received = d
@@ -464,7 +464,7 @@ func TestFetchLatestGitHubTag_Success(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -485,7 +485,7 @@ func TestFetchLatestGitHubTag_NonOKStatus(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -507,7 +507,7 @@ func TestFetchLatestGitHubTag_EmptyTags(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -528,7 +528,7 @@ func TestFetchLatestGitHubTag_InvalidJSON(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -561,7 +561,7 @@ func TestDownloadBundle_Success(t *testing.T) {
 	m := &Manager{
 		cli: &mockHTTPClient{
 			doFunc: func(req *http.Request) (*http.Response, error) {
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -579,7 +579,7 @@ func TestDownloadBundle_Non200(t *testing.T) {
 	m := &Manager{
 		cli: &mockHTTPClient{
 			doFunc: func(req *http.Request) (*http.Response, error) {
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -645,7 +645,7 @@ func TestSyncAndActivate_UpdatedTrue(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, d *Data) error {
@@ -689,7 +689,7 @@ func TestSyncAndActivate_SameContent_NotUpdated(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -719,7 +719,7 @@ func TestFetchLatestGitHubTag_BlankTagName(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 	}
@@ -804,7 +804,7 @@ func TestStartRemote_NotUpdated_LoadsExistingZip(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -926,7 +926,7 @@ func TestSyncAndActivate_DownloadError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = tagSrv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1116,7 +1116,7 @@ func TestFetchLatestGitHubTag_CancelledContext(t *testing.T) {
 		location: "https://github.com/owner/repo",
 		cli: &mockHTTPClient{
 			doFunc: func(_ *http.Request) (*http.Response, error) {
-				return nil, errors.New("cancelled")
+				return nil, errors.New("canceled")
 			},
 		},
 	}
@@ -1165,7 +1165,7 @@ func TestSyncAndActivate_WriteFileError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1208,7 +1208,7 @@ func TestSyncAndActivate_RenameError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {
@@ -1296,7 +1296,7 @@ func TestSyncAndActivate_FileExistsError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1348,7 +1348,7 @@ func TestSyncAndActivate_InvalidTempZip(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return nil },
@@ -1390,7 +1390,7 @@ func TestStartRemote_NotUpdated_ZipOpenError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error { return errors.New("cb error on not-updated") },
@@ -1457,7 +1457,7 @@ func TestSyncAndActivate_CBError(t *testing.T) {
 			doFunc: func(req *http.Request) (*http.Response, error) {
 				req.URL.Scheme = "http"
 				req.URL.Host = srv.Listener.Addr().String()
-				return http.DefaultClient.Do(req) //nolint:gosec
+				return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 			},
 		},
 		cb: func(_ context.Context, _ *Data) error {

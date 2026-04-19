@@ -7,10 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	plugyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
-	"go.uber.org/zap"
 )
 
 type pluginEditorRequest struct {
@@ -21,9 +22,9 @@ type pluginEditorRequest struct {
 }
 
 type pluginEditorResponse struct {
-	OK       bool        `json:"ok"`
-	Warnings []string    `json:"warnings"`
-	Data     interface{} `json:"data"`
+	OK       bool     `json:"ok"`
+	Warnings []string `json:"warnings"`
+	Data     any      `json:"data"`
 }
 
 func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
@@ -153,7 +154,7 @@ func (a *API) handlePluginEditorImport(c *gin.Context) {
 	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"draft": result,
 		},
 	})
@@ -161,7 +162,7 @@ func (a *API) handlePluginEditorImport(c *gin.Context) {
 
 type pluginEditorDraftNumberFunc func(
 	ctx context.Context, draft *plugyaml.PluginSpec, number string,
-) (interface{}, error)
+) (any, error)
 
 func (a *API) handlePluginEditorDraftNumberOp(
 	c *gin.Context, opName string, failCode int, fn pluginEditorDraftNumberFunc,
@@ -203,21 +204,21 @@ func (a *API) handlePluginEditorDraftNumberOp(
 
 func (a *API) handlePluginEditorRequest(c *gin.Context) {
 	a.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed,
-		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (any, error) {
 			return a.editor.RequestDebug(ctx, draft, number)
 		})
 }
 
 func (a *API) handlePluginEditorScrape(c *gin.Context) {
 	a.handlePluginEditorDraftNumberOp(c, "scrape", errCodePluginEditorScrapeFailed,
-		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (any, error) {
 			return a.editor.ScrapeDebug(ctx, draft, number)
 		})
 }
 
 func (a *API) handlePluginEditorWorkflow(c *gin.Context) {
 	a.handlePluginEditorDraftNumberOp(c, "workflow", errCodePluginEditorWorkflowFailed,
-		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (interface{}, error) {
+		func(ctx context.Context, draft *plugyaml.PluginSpec, number string) (any, error) {
 			return a.editor.WorkflowDebug(ctx, draft, number)
 		})
 }
@@ -253,7 +254,7 @@ func (a *API) handlePluginEditorCase(c *gin.Context) {
 	writeSuccess(c.Writer, "ok", pluginEditorResponse{
 		OK:       true,
 		Warnings: []string{},
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"result": result,
 		},
 	})

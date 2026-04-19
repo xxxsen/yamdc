@@ -9,8 +9,9 @@ import (
 
 	"github.com/antchfx/htmlquery"
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/model"
 	"golang.org/x/net/html"
+
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type testHTTPClient struct {
@@ -77,7 +78,7 @@ func simpleOneStepSpecRequired(host string) *PluginSpec {
 	return spec
 }
 
-func multiRequestSpec(host string) *PluginSpec { //nolint:unparam
+func multiRequestSpec(host string) *PluginSpec { //nolint:unparam // 签名由接口 / 测试期望固定
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-multi",
@@ -104,7 +105,7 @@ func multiRequestSpec(host string) *PluginSpec { //nolint:unparam
 	}
 }
 
-func multiRequestWorkflowSpec(host string) *PluginSpec { //nolint:unparam
+func multiRequestWorkflowSpec(host string) *PluginSpec { //nolint:unparam // 签名由接口 / 测试期望固定
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-multi-wf",
@@ -165,7 +166,7 @@ func jsonScrapeSpec(host string) *PluginSpec {
 
 var _ = model.MovieMeta{}
 
-func twoStepWorkflowSpec(host string) *PluginSpec { //nolint:unparam
+func twoStepWorkflowSpec(host string) *PluginSpec { //nolint:unparam // 签名由接口 / 测试期望固定
 	return &PluginSpec{
 		Version: 1,
 		Name:    "test-twostep",

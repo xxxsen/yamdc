@@ -80,7 +80,7 @@ func TestComplete_Success(t *testing.T) {
 
 	eng, err := New(WithHost(srv.URL), WithModel("llama3"), WithHTTPClient(&httpClientMock{client: srv.Client()}))
 	require.NoError(t, err)
-	res, err := eng.Complete(context.Background(), "hello {NAME}", map[string]interface{}{"NAME": "ollama"})
+	res, err := eng.Complete(context.Background(), "hello {NAME}", map[string]any{"NAME": "ollama"})
 	require.NoError(t, err)
 	assert.Equal(t, "hi there", res)
 	assert.Equal(t, "llama3", gotReq.Model)
@@ -171,7 +171,7 @@ func TestCreateOllamaEngine_viaAIEngineCreate(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	eng, err := aiengine.Create("ollama", map[string]interface{}{
+	eng, err := aiengine.Create("ollama", map[string]any{
 		"host":  srv.URL,
 		"model": "llama3",
 	}, aiengine.WithHTTPClient(&httpClientMock{client: srv.Client()}))
@@ -187,7 +187,7 @@ func TestCreateOllamaEngine_InvalidArgs(t *testing.T) {
 }
 
 func TestCreateOllamaEngine_InvalidEngineConfig(t *testing.T) {
-	_, err := aiengine.Create("ollama", map[string]interface{}{
+	_, err := aiengine.Create("ollama", map[string]any{
 		"host":  "",
 		"model": "m",
 	})

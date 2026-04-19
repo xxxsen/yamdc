@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	plugyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
-	"gopkg.in/yaml.v3"
 )
 
 var errHTTPClientRequired = errors.New("http client is required")

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	bootinfra "github.com/xxxsen/yamdc/internal/bootstrap/infra"
 	bootrt "github.com/xxxsen/yamdc/internal/bootstrap/runtime"
@@ -21,7 +23,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/translator"
-	"go.uber.org/zap"
 )
 
 // CaptureRuntimeConfig holds the parameters needed to build a CaptureRuntime,
@@ -34,7 +35,7 @@ type CaptureRuntimeConfig struct {
 	FlareSolverr      *bootinfra.FlareSolverrConfig
 	Dependencies      []bootinfra.DependencySpec
 	AIEngineName      string
-	AIEngineArgs      interface{}
+	AIEngineArgs      any
 	Translator        bootrt.TranslatorConfig
 	EnablePigoFaceRec bool
 }

@@ -12,14 +12,15 @@ import (
 	"time"
 
 	"github.com/antchfx/htmlquery"
+	"golang.org/x/net/html"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
-	"golang.org/x/net/html"
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/transform"
 )
 
 func checkAcceptedStatus(spec *compiledRequest, code int) error {

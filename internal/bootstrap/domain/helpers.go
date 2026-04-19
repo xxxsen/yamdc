@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
-	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	"go.uber.org/zap"
+
+	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 )
 
 func ResolveRuleSourcePath(datadir, raw string) (string, error) {

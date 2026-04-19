@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	"github.com/antchfx/htmlquery"
-	"github.com/xxxsen/yamdc/internal/model"
 	"golang.org/x/net/html"
+
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type XPathHTMLDecoder struct {

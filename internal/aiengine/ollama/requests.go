@@ -17,7 +17,7 @@ type Response struct {
 	Error      string `json:"error"`
 }
 
-func buildRequest(prompt string, args map[string]interface{}, model string) *Request {
+func buildRequest(prompt string, args map[string]any, model string) *Request {
 	p := replacer.ReplaceByMap(prompt, args)
 	return &Request{
 		Model:  model,

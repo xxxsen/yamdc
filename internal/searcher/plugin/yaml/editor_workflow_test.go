@@ -2,7 +2,7 @@ package yaml
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
 )
@@ -246,7 +247,7 @@ func TestDebugCollectSelectors_Mismatch(t *testing.T) {
 
 func TestDebugWorkflow_MultiRequest_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("connection refused")
+		return nil, errors.New("connection refused")
 	}}
 	spec := &PluginSpec{
 		Version: 1, Name: "test", Type: "one-step",
@@ -517,7 +518,7 @@ func TestDebugWorkflow_CompileError(t *testing.T) {
 
 func TestDebugWorkflow_NilBaseResp(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("always fail")
+		return nil, errors.New("always fail")
 	}}
 	spec := &PluginSpec{
 		Version: 1, Name: "test", Type: "two-step",
@@ -583,7 +584,7 @@ func TestDebugWorkflow_FollowNextRequest_HTTPError(t *testing.T) {
 		if callCount == 1 {
 			return makeResponse(200, `<html><body><a href="/detail/1">ABC-123</a></body></html>`), nil
 		}
-		return nil, fmt.Errorf("detail page unreachable")
+		return nil, errors.New("detail page unreachable")
 	}}
 	spec := twoStepWorkflowSpec("https://example.com")
 	result, err := DebugWorkflow(context.Background(), cli, spec, "ABC-123")
@@ -621,7 +622,7 @@ func TestDebugWorkflow_PrecheckNotMatched(t *testing.T) {
 
 func TestTryDebugWorkflowCandidate_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network error")
+		return nil, errors.New("network error")
 	}}
 	plg := compileTestPlugin(t, multiRequestWorkflowSpec("https://example.com"))
 	evalCtx := &evalContext{number: "ABC-123", host: "https://example.com"}
@@ -691,7 +692,7 @@ func TestDebugWorkflowSingleRequestPhase_CaptureError(t *testing.T) {
 
 func TestDebugFollowNextRequest_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network error")
+		return nil, errors.New("network error")
 	}}
 	plg := compileTestPlugin(t, twoStepWorkflowSpec("https://example.com"))
 	matched := []*evalContext{{
@@ -982,7 +983,7 @@ func TestDebugCollectSelectors_CountMismatch(t *testing.T) {
 		},
 	}
 	node := helperParseHTMLForEditor(t, `<html><body><a href="/a">A</a><a href="/b">B</a><h2>Only one</h2></body></html>`)
-	_, _, _, err := debugCollectSelectors(node, w) //nolint:dogsled
+	_, _, _, err := debugCollectSelectors(node, w) //nolint:dogsled // 测试只关心前若干返回值
 	require.ErrorIs(t, err, errSelectorCountMismatch)
 }
 

@@ -15,6 +15,7 @@ import (
 	pigocore "github.com/esimov/pigo/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/face"
 )
 
@@ -241,9 +242,9 @@ func TestPigo_SearchFaces_RandomNoiseForLowQ(t *testing.T) {
 		for x := 0; x < sz; x++ {
 			seed = seed*6364136223846793005 + 1
 			img.Set(x, y, color.RGBA{
-				R: uint8(seed >> 16), //nolint:gosec
-				G: uint8(seed >> 8),  //nolint:gosec
-				B: uint8(seed),       //nolint:gosec
+				R: uint8(seed >> 16), //nolint:gosec // 测试场景, 无生产风险
+				G: uint8(seed >> 8),  //nolint:gosec // 测试场景, 无生产风险
+				B: uint8(seed),       //nolint:gosec // 测试场景, 无生产风险
 				A: 255,
 			})
 		}

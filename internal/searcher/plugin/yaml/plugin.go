@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"gopkg.in/yaml.v3"
+
+	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 var (
@@ -172,6 +173,11 @@ func NewFromBytes(data []byte) (pluginapi.IPlugin, error) {
 	return &SearchPlugin{spec: spec}, nil
 }
 
+// validatePluginSpec 是按顺序叠加的 yaml 结构校验, 每条 if 对应一种不同配置错误,
+// 拆分后每个 helper 只剩 1-2 行校验, 反而让读者要跳多个函数才能看完一份 spec 的
+// 合法性规则.
+//
+//nolint:gocyclo // sequential validation pipeline, each branch reports a distinct spec error
 func validatePluginSpec(raw *PluginSpec) (string, error) {
 	if raw.Version != 1 {
 		return "", fmt.Errorf("%w: %d", errUnsupportedVersion, raw.Version)

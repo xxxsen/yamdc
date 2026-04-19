@@ -58,7 +58,7 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 }
 
 func init() {
-	Register(HWatermakrMaker, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HWatermakrMaker, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &watermark{storage: deps.Storage}, nil
 	})
 }
