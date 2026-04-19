@@ -19,8 +19,8 @@ type Number struct {
 	is4k              bool
 	is8k              bool
 	isVr              bool
-	isLeak            bool
-	isHack            bool
+	isSpecialEdition  bool
+	isRestored        bool
 	extField          externalField
 }
 
@@ -68,12 +68,12 @@ func (n *Number) GetIsVR() bool {
 	return n.isVr
 }
 
-func (n *Number) GetIsLeak() bool {
-	return n.isLeak
+func (n *Number) GetIsSpecialEdition() bool {
+	return n.isSpecialEdition
 }
 
-func (n *Number) GetIsHack() bool {
-	return n.isHack
+func (n *Number) GetIsRestored() bool {
+	return n.isRestored
 }
 
 func (n *Number) GenerateSuffix(base string) string {
@@ -89,11 +89,11 @@ func (n *Number) GenerateSuffix(base string) string {
 	if n.GetIsChineseSubtitle() {
 		base += "-" + defaultSuffixChineseSubtitle
 	}
-	if n.GetIsLeak() {
-		base += "-" + defaultSuffixLeak
+	if n.GetIsSpecialEdition() {
+		base += "-" + defaultSuffixSpecialEdition
 	}
-	if n.GetIsHack() {
-		base += "-" + defaultSuffixHack2
+	if n.GetIsRestored() {
+		base += "-" + defaultSuffixRestored2
 	}
 	if n.GetIsMultiCD() {
 		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
@@ -104,7 +104,7 @@ func (n *Number) GenerateSuffix(base string) string {
 func (n *Number) GenerateTags() []string {
 	rs := make([]string, 0, 5)
 	if n.GetExternalFieldUncensor() {
-		rs = append(rs, tag.Uncensored)
+		rs = append(rs, tag.Unrated)
 	}
 	if n.GetIsChineseSubtitle() {
 		rs = append(rs, tag.ChineseSubtitle)
@@ -118,11 +118,11 @@ func (n *Number) GenerateTags() []string {
 	if n.GetIsVR() {
 		rs = append(rs, tag.VR)
 	}
-	if n.GetIsLeak() {
-		rs = append(rs, tag.Leak)
+	if n.GetIsSpecialEdition() {
+		rs = append(rs, tag.SpecialEdition)
 	}
-	if n.GetIsHack() {
-		rs = append(rs, tag.Hack)
+	if n.GetIsRestored() {
+		rs = append(rs, tag.Restored)
 	}
 	return rs
 }

@@ -29,12 +29,12 @@ type Watermark int
 
 const (
 	WMChineseSubtitle Watermark = 1
-	WMUncensored      Watermark = 2
+	WMUnrated         Watermark = 2
 	WM4K              Watermark = 3
-	WMLeak            Watermark = 4
+	WMSpecialEdition  Watermark = 4
 	WM8K              Watermark = 5
 	WMVR              Watermark = 6
-	WMHack            Watermark = 7
+	WMRestored        Watermark = 7
 )
 
 var resMap = make(map[Watermark][]byte)
@@ -42,11 +42,11 @@ var resMap = make(map[Watermark][]byte)
 func registerResource() {
 	resMap[WMChineseSubtitle] = resource.ResIMGSubtitle
 	resMap[WM4K] = resource.ResIMG4K
-	resMap[WMUncensored] = resource.ResIMGUncensored
-	resMap[WMLeak] = resource.ResIMGLeak
+	resMap[WMUnrated] = resource.ResIMGUnrated
+	resMap[WMSpecialEdition] = resource.ResIMGSpecialEdition
 	resMap[WM8K] = resource.ResIMG8K
 	resMap[WMVR] = resource.ResIMGVR
-	resMap[WMHack] = resource.ResIMGHack
+	resMap[WMRestored] = resource.ResIMGRestored
 }
 
 func init() {

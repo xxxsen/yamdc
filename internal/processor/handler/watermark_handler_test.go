@@ -54,7 +54,7 @@ func TestWatermarkHandlerStorageError(t *testing.T) {
 	fc := &model.FileContext{
 		Meta: &model.MovieMeta{
 			Poster: &model.File{Name: "poster.jpg", Key: "nonexistent"},
-			Genres: []string{tag.Uncensored},
+			Genres: []string{tag.Unrated},
 		},
 	}
 	assert.Error(t, h.Handle(context.Background(), fc))
@@ -89,9 +89,9 @@ func TestWatermarkHandlerAllTagTypes(t *testing.T) {
 		{"8k", []string{tag.Res8K}},
 		{"VR", []string{tag.VR}},
 		{"chinese subtitle", []string{tag.ChineseSubtitle}},
-		{"leak", []string{tag.Leak}},
-		{"hack", []string{tag.Hack}},
-		{"uncensor", []string{tag.Uncensored}},
+		{"special_edition", []string{tag.SpecialEdition}},
+		{"restored", []string{tag.Restored}},
+		{"unrated", []string{tag.Unrated}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,14 +115,14 @@ func TestMatchWatermarksOrder(t *testing.T) {
 	h := newWatermarkHandler(nil)
 	// 所有 tag 都命中时, 顺序严格等于 defaultWatermarkRules.
 	genres := []string{
-		tag.Hack, tag.Leak, tag.ChineseSubtitle,
-		tag.Uncensored, tag.VR, tag.Res8K, tag.Res4K,
+		tag.Restored, tag.SpecialEdition, tag.ChineseSubtitle,
+		tag.Unrated, tag.VR, tag.Res8K, tag.Res4K,
 	}
 	got := h.matchWatermarks(genres)
 	expect := []yimage.Watermark{
 		yimage.WM4K, yimage.WM8K, yimage.WMVR,
-		yimage.WMUncensored, yimage.WMChineseSubtitle,
-		yimage.WMLeak, yimage.WMHack,
+		yimage.WMUnrated, yimage.WMChineseSubtitle,
+		yimage.WMSpecialEdition, yimage.WMRestored,
 	}
 	assert.Equal(t, expect, got)
 }
@@ -196,10 +196,10 @@ func TestMatchWatermarksCustomRules(t *testing.T) {
 	h := &watermark{
 		rules: []watermarkRule{
 			{tag.VR, yimage.WMVR},
-			{tag.Hack, yimage.WMHack},
+			{tag.Restored, yimage.WMRestored},
 		},
 	}
 	// 命中两条, 其它 tag 被忽略.
-	got := h.matchWatermarks([]string{tag.VR, tag.Hack, tag.Res4K})
-	assert.Equal(t, []yimage.Watermark{yimage.WMVR, yimage.WMHack}, got)
+	got := h.matchWatermarks([]string{tag.VR, tag.Restored, tag.Res4K})
+	assert.Equal(t, []yimage.Watermark{yimage.WMVR, yimage.WMRestored}, got)
 }

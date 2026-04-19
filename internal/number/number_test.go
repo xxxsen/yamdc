@@ -64,7 +64,7 @@ func TestNumber(t *testing.T) {
 		},
 		"abc-leak-c.mp4": {
 			numberID:          "ABC",
-			isLeak:            true,
+			isSpecialEdition:  true,
 			isChineseSubtitle: true,
 		},
 		"xyz-8k-vr.mp4": {
@@ -73,12 +73,12 @@ func TestNumber(t *testing.T) {
 			isVr:     true,
 		},
 		"hack1-u.mp4": {
-			numberID: "HACK1",
-			isHack:   true,
+			numberID:   "HACK1",
+			isRestored: true,
 		},
 		"hack2-uc.mp4": {
-			numberID: "HACK2",
-			isHack:   true,
+			numberID:   "HACK2",
+			isRestored: true,
 		},
 		"uhd-2160p.mp4": {
 			numberID: "UHD",
@@ -98,8 +98,8 @@ func TestNumber(t *testing.T) {
 		assert.Equal(t, info.GetIs4K(), rs.GetIs4K())
 		assert.Equal(t, info.GetIs8K(), rs.GetIs8K())
 		assert.Equal(t, info.GetIsVR(), rs.GetIsVR())
-		assert.Equal(t, info.GetIsLeak(), rs.GetIsLeak())
-		assert.Equal(t, info.GetIsHack(), rs.GetIsHack())
+		assert.Equal(t, info.GetIsSpecialEdition(), rs.GetIsSpecialEdition())
+		assert.Equal(t, info.GetIsRestored(), rs.GetIsRestored())
 	}
 }
 
@@ -143,8 +143,8 @@ func TestGenerateSuffixTagsFileName(t *testing.T) {
 	assert.True(t, n.GetIs4K())
 	assert.True(t, n.GetIs8K())
 	assert.True(t, n.GetIsVR())
-	assert.True(t, n.GetIsLeak())
-	assert.True(t, n.GetIsHack())
+	assert.True(t, n.GetIsSpecialEdition())
+	assert.True(t, n.GetIsRestored())
 	assert.True(t, n.GetIsChineseSubtitle())
 	assert.True(t, n.GetIsMultiCD())
 	assert.Equal(t, 7, n.GetMultiCDIndex())
@@ -155,13 +155,13 @@ func TestGenerateSuffixTagsFileName(t *testing.T) {
 
 	n.SetExternalFieldUncensor(true)
 	tags := n.GenerateTags()
-	assert.Contains(t, tags, tag.Uncensored)
+	assert.Contains(t, tags, tag.Unrated)
 	assert.Contains(t, tags, tag.ChineseSubtitle)
 	assert.Contains(t, tags, tag.Res4K)
 	assert.Contains(t, tags, tag.Res8K)
 	assert.Contains(t, tags, tag.VR)
-	assert.Contains(t, tags, tag.Leak)
-	assert.Contains(t, tags, tag.Hack)
+	assert.Contains(t, tags, tag.SpecialEdition)
+	assert.Contains(t, tags, tag.Restored)
 }
 
 func TestGenerateSuffixMinimal(t *testing.T) {

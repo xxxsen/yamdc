@@ -10,12 +10,16 @@
 // 不要往这里塞。
 package tag
 
+// 常量名刻意使用电影发行行业通用术语 (Unrated / SpecialEdition /
+// Restored), 与 MPAA / 院线发行常见分类对齐。展示值保持既有中文
+// 字符串以保证向后兼容: 已入库的 MovieMeta.Genres、用户 tag_mapper
+// 配置、watermark 规则都能继续命中。
 const (
-	Uncensored      = "未审查"
+	Unrated         = "未审查"
 	ChineseSubtitle = "字幕版"
 	Res4K           = "4K"
 	Res8K           = "8K"
 	VR              = "VR"
-	Leak            = "特别版"
-	Hack            = "修复版"
+	SpecialEdition  = "特别版"
+	Restored        = "修复版"
 )

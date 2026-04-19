@@ -45,7 +45,7 @@ func TestWatermarkWithRes(t *testing.T) {
 	assert.NoError(t, err)
 	raw, err := AddWatermarkFromBytes(data, []Watermark{
 		WMChineseSubtitle,
-		WMUncensored,
+		WMUnrated,
 		WM4K,
 	})
 	assert.NoError(t, err)
@@ -104,7 +104,7 @@ func TestAddWatermark_canvasTooShortForStack(t *testing.T) {
 	t.Parallel()
 	short := MakeColorImage(image.Rect(0, 0, 400, 80), color.RGBA{A: 255})
 	_, err := AddWatermark(short, []Watermark{
-		WMChineseSubtitle, WMUncensored, WM4K, WMLeak, WM8K, WMVR,
+		WMChineseSubtitle, WMUnrated, WM4K, WMSpecialEdition, WM8K, WMVR,
 	})
 	assert.ErrorIs(t, err, errImageHeightTooSmall)
 }
