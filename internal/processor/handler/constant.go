@@ -8,6 +8,7 @@ const (
 	HWatermakrMaker                 = "watermark_maker"
 	HTagPadder                      = "tag_padder"
 	HTagMapper                      = "tag_mapper"
+	HTagDedup                       = "tag_dedup"
 	HNumberTitle                    = "number_title"
 	HActorSpliter                   = "actor_spliter"
 	HAITagger                       = "ai_tagger"
