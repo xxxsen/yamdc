@@ -11,13 +11,3 @@ const (
 	defaultSuffixHack1           = "U"
 	defaultSuffixHack2           = "UC"
 )
-
-const (
-	defaultTagUncensored      = "未审查"
-	defaultTagChineseSubtitle = "字幕版"
-	defaultTag4K              = "4K"
-	defaultTagLeak            = "特别版"
-	defaultTagHack            = "修复版"
-	defaultTag8K              = "8K"
-	defaultTagVR              = "VR"
-)

@@ -63,6 +63,7 @@ func TestCreateAllRegisteredHandlers(t *testing.T) {
 		HTranslater,
 		HWatermakrMaker,
 		HTagPadder,
+		HTagDedup,
 		HNumberTitle,
 		HActorSpliter,
 		HAITagger,
