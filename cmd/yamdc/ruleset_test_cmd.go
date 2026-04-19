@@ -23,27 +23,11 @@ type rulesetCaseItem struct {
 }
 
 type rulesetCaseOutput struct {
-	Number  string `json:"number"`
-	Unrated *bool  `json:"unrated,omitempty"`
-	// UncensorDeprecated 仅为兼容既有 case 文件 (例如外部仓库 yamdc-script/
-	// cases/default.json 里大量 `"uncensor": true/false` 的断言) 保留。
-	// 解析期若 Unrated 未显式给出而此字段非 nil, 会把值提升到 Unrated,
-	// 下游 assertRulesetCaseOutput 统一按 Unrated 比对。
-	UncensorDeprecated *bool    `json:"uncensor,omitempty"`
-	Suffixes           []string `json:"suffix-set"`
-	Category           string   `json:"category"`
-	Status             string   `json:"status"`
-}
-
-// normalizeRulesetCaseOutput 把老 case 文件里的 `uncensor:` 字段抬升到
-// `unrated:`, 保证下游只认一种形态。这个迁移是幂等的, 重复调用安全。
-func normalizeRulesetCaseOutput(out *rulesetCaseOutput) {
-	if out == nil {
-		return
-	}
-	if out.Unrated == nil && out.UncensorDeprecated != nil {
-		out.Unrated = out.UncensorDeprecated
-	}
+	Number   string   `json:"number"`
+	Unrated  *bool    `json:"unrated,omitempty"`
+	Suffixes []string `json:"suffix-set"`
+	Category string   `json:"category"`
+	Status   string   `json:"status"`
 }
 
 // 与 newPluginTestCmd 在 cobra 样板 (flag 声明 / RunE 桥接) 上结构相似,
@@ -186,7 +170,6 @@ func verifyRulesetCase(cleaner movieidcleaner.Cleaner, index int, item *rulesetC
 	if item == nil {
 		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "case is null"}
 	}
-	normalizeRulesetCaseOutput(&item.Output)
 	input := strings.TrimSpace(item.Input)
 	if input == "" {
 		return &bundleVerifyCaseItem{Name: name, Pass: false, Errmsg: "input is required"}
