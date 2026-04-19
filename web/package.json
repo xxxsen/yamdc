@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "knip": "knip",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
@@ -19,6 +20,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@oxc-parser/binding-linux-x64-gnu": "^0.121.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
@@ -28,11 +30,21 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "jsdom": "^24.1.3",
+    "knip": "^5.88.1",
     "tailwindcss": "^4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.2",
     "vitest": "^3.2.4"
   },
+  "//knip-oxc": [
+    "knip@5 依赖 oxc-parser 做 TS AST 分析, oxc-parser 的 native binding 走",
+    "optionalDependencies 分发。部分 npm 版本存在 https://github.com/npm/cli/issues/4828",
+    "在清晰的 node_modules 下首次安装会漏掉 optional native binding, 导致",
+    "npx knip 启动即报 'Cannot find native binding'。因此这里显式钉死",
+    "@oxc-parser/binding-linux-x64-gnu (CI runner 是 linux x64), 让它按普通",
+    "devDependency 走, 绕开 optional-deps 分发的 flakiness; knip 自身已在",
+    "knip.json 的 ignoreDependencies 里把它豁免, 防止它又反过来报 unused。"
+  ],
   "//vitest-jsdom": [
     "jsdom / happy-dom 均为 vitest 3.x 的 optional peer dep, 只有",
     "plugin-editor-utils-coverage.test.ts 顶部 '// @vitest-environment jsdom'",

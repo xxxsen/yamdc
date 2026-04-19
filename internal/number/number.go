@@ -148,14 +148,23 @@ func Parse(str string) (*Number, error) {
 	return rs, nil
 }
 
-// GetCleanID 将影片 ID 中 `-`, `_` 进行移除
+// GetCleanID 将影片 ID 中 `-`, `_` 进行移除。
+//
+// 注意: 按字节遍历而非 for-range (rune 级) 遍历, 刻意的选择:
+// 老实现 "for _, c := range str { sb.WriteRune(c) }" 会把非法 UTF-8 字节
+// 悄悄替换成 U+FFFD (3 字节), 导致 "剥掉分隔符" 这个纯 byte-level 的语义
+// 附带一层 UTF-8 normalization; 这会让像 media title 这样的可能含非法字节
+// 的调用方输出膨胀甚至损坏。`-` / `_` 都是 ASCII, 不存在和 multi-byte rune
+// 碰撞的可能, 直接按字节处理最简单也最安全 (已有 FuzzGetCleanID 守护不变量)。
 func GetCleanID(str string) string {
 	sb := strings.Builder{}
-	for _, c := range str {
+	sb.Grow(len(str))
+	for i := 0; i < len(str); i++ {
+		c := str[i]
 		if c == '-' || c == '_' {
 			continue
 		}
-		sb.WriteRune(c)
+		sb.WriteByte(c)
 	}
 	return sb.String()
 }

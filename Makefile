@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-test web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
+.PHONY: build test test-coverage install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-knip web-test web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker
 
 BIN ?= yamdc
 BACKEND_IMAGE ?= xxxsen/yamdc:latest
@@ -15,7 +15,7 @@ build:
 	GOCACHE=$(GOCACHE) go build -o $(BIN) ./cmd/yamdc
 
 test:
-	GOCACHE=$(GOCACHE) go test $(GO_TEST_PKGS)
+	GOCACHE=$(GOCACHE) go test -race $(GO_TEST_PKGS)
 
 test-coverage:
 	GOCACHE=$(GOCACHE) bash scripts/check-go-coverage.sh $(GO_COVERAGE_THRESHOLD)
@@ -38,13 +38,18 @@ web-install:
 web-lint:
 	cd web && npm run lint
 
+# web-knip: 扫死代码 / 僵尸依赖 / 未解析 import. eslint 只看单文件,
+# knip 看跨文件 export 是否被 import, 两者互补。详见 web/knip.json。
+web-knip:
+	cd web && npm run knip
+
 web-test:
 	cd web && npm run test:coverage
 
 web-build:
 	cd web && npm run build
 
-web-check: web-install web-lint web-test web-build
+web-check: web-install web-lint web-knip web-test web-build
 
 ci-check: backend-check web-check
 

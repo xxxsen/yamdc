@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/app/**/{page,layout,loading,error,not-found,route,global-error,default,template}.{ts,tsx}",
+    "src/**/*.test.{ts,tsx}"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignoreDependencies": [
+    "@oxc-parser/binding-linux-x64-gnu",
+    "tailwindcss",
+    "postcss"
+  ],
+  "include": [
+    "files",
+    "binaries",
+    "dependencies",
+    "devDependencies",
+    "unlisted",
+    "unresolved",
+    "duplicates"
+  ]
+}

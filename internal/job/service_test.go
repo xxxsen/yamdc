@@ -37,13 +37,15 @@ func newTestServiceWithSQLite(t *testing.T) (*Service, *repository.JobRepository
 	logRepo := repository.NewLogRepository(sqlite.DB())
 	scrapeRepo := repository.NewScrapeDataRepository(sqlite.DB())
 	svc := NewService(jobRepo, logRepo, scrapeRepo, nil, store.NewMemStorage())
-	// Cleanup 注册顺序: 先 sqlite.Close, 再 WaitQueuedJobs。按 LIFO 执行时会先
+	// Cleanup 注册顺序: 先 sqlite.Close, 再 svc.Stop。按 LIFO 执行时会先
 	// 等待所有通过 queue 分发到 worker 的异步任务完成 (包括状态更新之后的
-	// addJobLog 与 finish), 然后再关闭 sqlite, 最后 testing 框架清理 tempdir。
-	// 否则 worker 仍在写 DB 时就关闭 sqlite/删除 tempdir, 会残留 journal 文件
-	// 导致 "directory not empty" 的 flaky 失败。
+	// addJobLog 与 finish), 并显式 close(queue) 让 runWorker goroutine 自然
+	// 退出 (否则 goleak 会把 <-s.queue 长驻 goroutine 报为泄漏), 然后再关闭
+	// sqlite, 最后 testing 框架清理 tempdir。否则 worker 仍在写 DB 时就关闭
+	// sqlite/删除 tempdir, 会残留 journal 文件导致 "directory not empty" 的
+	// flaky 失败。
 	t.Cleanup(func() {
-		svc.WaitQueuedJobs()
+		require.NoError(t, svc.Stop(context.Background()))
 	})
 	return svc, jobRepo
 }
@@ -2636,7 +2638,7 @@ func TestFailJobWithClosedDBDoesNotPanic(t *testing.T) {
 		repository.NewScrapeDataRepository(sqlite.DB()),
 		nil, store.NewMemStorage(),
 	)
-	t.Cleanup(func() { closedSvc.WaitQueuedJobs() })
+	t.Cleanup(func() { _ = closedSvc.Stop(context.Background()) })
 
 	assert.NotPanics(t, func() {
 		closedSvc.failJob(context.Background(), 12345, "job", "boom", "detail")
