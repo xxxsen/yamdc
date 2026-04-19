@@ -39,7 +39,8 @@ func (c *chineseTitleTranslateOptimizer) tryInitCNumber(ctx context.Context) {
 			return
 		}
 		c.m = m
-		logutil.GetLogger(ctx).Info("cnumber init succ", zap.Int("count", len(c.m)), zap.Duration("cost", time.Since(start)))
+		logutil.GetLogger(ctx).Info("cnumber init succ",
+			zap.Int("count", len(c.m)), zap.Duration("cost", time.Since(start)))
 	})
 }
 

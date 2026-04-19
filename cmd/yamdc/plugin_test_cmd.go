@@ -51,6 +51,9 @@ type pluginCaseOutput struct {
 	Status   string   `json:"status"`
 }
 
+// 与 newRulesetTestCmd 在 cobra 样板上结构同形但目标不同.
+//
+//nolint:dupl // cobra boilerplate; shared shape, different subcommands
 func newPluginTestCmd() *cobra.Command {
 	var (
 		pluginDir string
@@ -266,7 +269,8 @@ func resolvePluginRuntimeName(resolved *pluginbundle.ResolvedBundle, pluginName 
 	if len(matched) == 0 {
 		return "", fmt.Errorf("plugin %s not found in bundle: %w", name, errPluginNotFoundInBundle)
 	}
-	return "", fmt.Errorf("plugin %s resolves to multiple runtime chains: %v: %w", name, matched, errMultipleRuntimeChains)
+	return "", fmt.Errorf("plugin %s resolves to multiple runtime chains: %v: %w",
+		name, matched, errMultipleRuntimeChains)
 }
 
 func debugSearchStatus(result *searcher.DebugSearchResult) string {

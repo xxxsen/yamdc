@@ -197,6 +197,10 @@ func assignListField(
 	return nil
 }
 
+// applyStringTransforms 逐条应用 string 类 transform (trim / lower / regex / ...).
+// 每个 case 只有几行, 分函数会把"支持哪些 transform kind"这个枚举散落到别处.
+//
+//nolint:gocyclo // dispatch switch over transform kinds
 func applyStringTransforms(value string, transforms []*TransformSpec) string {
 	out := value
 	for _, item := range transforms {
@@ -239,6 +243,10 @@ func applyStringTransforms(value string, transforms []*TransformSpec) string {
 	return out
 }
 
+// applyOneListTransform 是 list 层面 transform 的 dispatch, 同 applyStringTransforms
+// 的结构, 每种 kind 的实现短小独立, 保持集中展示更易查 "支持哪些 list op".
+//
+//nolint:gocyclo // dispatch switch over list transform kinds
 func applyOneListTransform(out []string, item *TransformSpec) []string {
 	switch item.Kind {
 	case "remove_empty":

@@ -45,7 +45,10 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.c.Model, g.c.Key),
+		fmt.Sprintf(
+			"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+			g.c.Model, g.c.Key,
+		),
 		bytes.NewReader(raw),
 	)
 	if err != nil {
@@ -68,7 +71,8 @@ func (g *geminiEngine) Complete(ctx context.Context, prompt string, args map[str
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 	if len(res.Candidates) == 0 {
-		return "", fmt.Errorf("%w, maybe blocked, prompt feedback: %s", errNoTranslateResult, res.PromptFeedback.BlockReason)
+		return "", fmt.Errorf("%w, maybe blocked, prompt feedback: %s",
+			errNoTranslateResult, res.PromptFeedback.BlockReason)
 	}
 	if len(res.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("%w, reason: %s", errNoTranslateResultPart, res.Candidates[0].FinishReason)

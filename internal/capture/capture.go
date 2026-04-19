@@ -176,16 +176,16 @@ func (c *Capture) ResolveFileContext(file string, preferredNumber ...string) (*m
 	return fc, nil
 }
 
-func (c *Capture) ScrapeMeta(ctx context.Context, fc *model.FileContext) error {
-	steps := []struct {
-		name string
-		fn   fcProcessFunc
-	}{
-		{"search", c.doSearch},
-		{"process", c.doProcess},
-		{"metaverify", c.doMetaVerify},
-		{"datadiscard", c.doDataDiscard},
-	}
+type pipelineStep struct {
+	name string
+	fn   fcProcessFunc
+}
+
+// runPipeline 把一组命名步骤按顺序依次作用到 fc 上,
+// 任意步骤失败立刻返回, 附带步骤名 / 序号日志.
+// 抽出来是为了让 ScrapeMeta / ImportMeta 这类 "配不同 step list 的同构管线"
+// 共享同一套 logging + short-circuit 语义, 避免 dupl / 漂移.
+func (c *Capture) runPipeline(ctx context.Context, fc *model.FileContext, steps []pipelineStep) error {
 	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
 	for idx, step := range steps {
 		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
@@ -199,27 +199,22 @@ func (c *Capture) ScrapeMeta(ctx context.Context, fc *model.FileContext) error {
 	return nil
 }
 
+func (c *Capture) ScrapeMeta(ctx context.Context, fc *model.FileContext) error {
+	return c.runPipeline(ctx, fc, []pipelineStep{
+		{"search", c.doSearch},
+		{"process", c.doProcess},
+		{"metaverify", c.doMetaVerify},
+		{"datadiscard", c.doDataDiscard},
+	})
+}
+
 func (c *Capture) ImportMeta(ctx context.Context, fc *model.FileContext) error {
-	steps := []struct {
-		name string
-		fn   fcProcessFunc
-	}{
+	return c.runPipeline(ctx, fc, []pipelineStep{
 		{"metaverify", c.doMetaVerify},
 		{"naming", c.doNaming},
 		{"savedata", c.doSaveData},
 		{"nfo", c.doExport},
-	}
-	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
-	for idx, step := range steps {
-		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
-		log.Debug("step start")
-		if err := step.fn(ctx, fc); err != nil {
-			log.Error("proc step failed", zap.Error(err))
-			return err
-		}
-		log.Debug("step end")
-	}
-	return nil
+	})
 }
 
 func (c *Capture) displayNumberInfo(ctx context.Context, fcs []*model.FileContext) {

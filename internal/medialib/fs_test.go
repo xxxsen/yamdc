@@ -17,7 +17,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/repository"
 )
 
-func newTestService(t *testing.T) (*Service, string, string) { //nolint:unparam
+func newTestService(t *testing.T) (*Service, string, string) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	libraryDir := t.TempDir()
 	saveDir := t.TempDir()

@@ -27,7 +27,7 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 func defaultMockClient(srv *httptest.Server) *mockHTTPClient {
 	return &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return srv.Client().Do(req) //nolint:gosec
+			return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 }
@@ -184,7 +184,7 @@ func TestDownload_FileExistsNoSync(t *testing.T) {
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not download")
-			return nil, nil //nolint:nilnil
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		},
 	})
 	updated, err := m.Download(context.Background(), "http://example.com/file.bin", dst, false)
@@ -365,7 +365,7 @@ func TestDownload_EnsureDirError(t *testing.T) {
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not reach")
-			return nil, nil //nolint:nilnil
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		},
 	})
 	_, err := m.Download(context.Background(), "http://example.com/f", "/dev/null/bad/file.bin", false)
@@ -381,7 +381,7 @@ func TestDownload_AttachETagError(t *testing.T) {
 	m := NewManager(&mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("should not reach")
-			return nil, nil //nolint:nilnil
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		},
 	})
 	_, err := m.Download(context.Background(), "http://example.com/f", dst, true)

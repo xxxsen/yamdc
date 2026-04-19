@@ -43,7 +43,6 @@ func NewManager(name, dataDir string, cli client.IHTTPClient, sources []Source, 
 	}
 	managers := make([]*basebundle.Manager, 0, len(sources))
 	for index, source := range sources {
-		sourceIndex := index
 		// 给每个 sub-manager 一个带 index 的唯一 name。这个 name 同时决定
 		// 两件事: (1) basebundle 内部报错消息的前缀 ("sync remote %s bundle
 		// failed"), 加 index 排障时能一眼看出是哪一路 source 出问题; (2) 经
@@ -54,12 +53,13 @@ func NewManager(name, dataDir string, cli client.IHTTPClient, sources []Source, 
 		subName := fmt.Sprintf("%s_source%d", name, index)
 		manager, err := basebundle.NewManager(subName, dataDir, cli, source.SourceType, source.Location, "remote-plugins",
 			func(ctx context.Context, data *basebundle.Data) error {
-				bundle, err := LoadBundleFromData(data, sourceIndex)
+				// Go 1.22+ 每轮迭代独立作用域, 闭包直接捕获 index 即可
+				bundle, err := LoadBundleFromData(data, index)
 				if err != nil {
 					return err
 				}
 				out.mu.Lock()
-				out.bundles[sourceIndex] = bundle
+				out.bundles[index] = bundle
 				initialized := out.initialized
 				out.mu.Unlock()
 				if !initialized {

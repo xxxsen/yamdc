@@ -153,20 +153,19 @@ func resolveBundleEntry(fsys fs.FS, base, defaultEntry string) (string, error) {
 func readManifest(fsys fs.FS, base string) (*BundleManifest, bool, error) {
 	candidates := []string{"manifest.yaml", "manifest.yml"}
 	for _, name := range candidates {
-		target := name
 		if base != "" && base != "." {
-			target = path.Join(base, name)
+			name = path.Join(base, name)
 		}
-		raw, err := fs.ReadFile(fsys, target)
+		raw, err := fs.ReadFile(fsys, name)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, false, fmt.Errorf("read manifest %s failed: %w", target, err)
+			return nil, false, fmt.Errorf("read manifest %s failed: %w", name, err)
 		}
 		manifest := &BundleManifest{}
 		if err := yaml.Unmarshal(raw, manifest); err != nil {
-			return nil, false, fmt.Errorf("unmarshal manifest %s failed: %w", target, err)
+			return nil, false, fmt.Errorf("unmarshal manifest %s failed: %w", name, err)
 		}
 		return manifest, true, nil
 	}

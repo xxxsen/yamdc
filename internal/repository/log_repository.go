@@ -107,7 +107,9 @@ func (r *LogRepository) List(ctx context.Context, filter LogListFilter) ([]LogEn
 		query strings.Builder
 		args  = make([]any, 0, 3)
 	)
-	query.WriteString(`SELECT id, log_type, task_id, level, msg, created_at FROM yamdc_unified_log_tab WHERE log_type = ?`)
+	query.WriteString(
+		`SELECT id, log_type, task_id, level, msg, created_at FROM yamdc_unified_log_tab WHERE log_type = ?`,
+	)
 	args = append(args, filter.LogType)
 	if filter.TaskID != "" {
 		query.WriteString(` AND task_id = ?`)

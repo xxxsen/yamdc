@@ -42,17 +42,17 @@ func (c *erroringCleaner) Clean(string) (*movieidcleaner.Result, error) {
 }
 
 func (c *erroringCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 type nilResultCleaner struct{}
 
 func (nilResultCleaner) Clean(string) (*movieidcleaner.Result, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 func (nilResultCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 type emptyNormalizedCleaner struct{}
@@ -68,7 +68,7 @@ func (emptyNormalizedCleaner) Clean(input string) (*movieidcleaner.Result, error
 }
 
 func (emptyNormalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 type normalizedCleaner struct {
@@ -84,7 +84,7 @@ func (c normalizedCleaner) Clean(string) (*movieidcleaner.Result, error) {
 }
 
 func (normalizedCleaner) Explain(string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 func TestScanCleansMissingInitAndFailedJobsAndMarksReviewingMissing(t *testing.T) {

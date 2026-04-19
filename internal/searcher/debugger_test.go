@@ -39,7 +39,7 @@ type mockCleaner struct {
 
 func (m *mockCleaner) Clean(_ string) (*movieidcleaner.Result, error) { return m.res, m.err }
 func (m *mockCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 func TestDebuggerUsesSnapshotCreators(t *testing.T) {
@@ -313,8 +313,8 @@ func TestBoolMessage(t *testing.T) {
 
 func TestCollectVisiblePlugins(t *testing.T) {
 	creators := map[string]factory.CreatorFunc{
-		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
-		"b": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil // 测试桩显式返回 (nil, nil)
+		"b": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil // 测试桩显式返回 (nil, nil)
 	}
 	result := collectVisiblePlugins(
 		[]string{"a", "b", "  ", "a", "nonexistent"},
@@ -399,7 +399,7 @@ func TestDebugSearch_HandleHTTPReturnsNilResponse(t *testing.T) {
 				return http.NewRequestWithContext(ctx2, http.MethodGet, "http://example.com/", nil)
 			},
 			handleHTTPReqFn: func(_ context.Context, _ api.HTTPInvoker, _ *http.Request) (*http.Response, error) {
-				return nil, nil //nolint:nilnil
+				return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 			},
 		}, nil
 	})
@@ -548,7 +548,7 @@ func TestDebugSearch_VerifyMetaFails(t *testing.T) {
 
 func TestCloneCreators(t *testing.T) {
 	in := map[string]factory.CreatorFunc{
-		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil // 测试桩显式返回 (nil, nil)
 	}
 	out := cloneCreators(in)
 	require.Len(t, out, 1)

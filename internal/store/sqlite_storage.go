@@ -40,10 +40,7 @@ func (s *sqliteStore) init(ctx context.Context) error {
 	if err := applyMigrations(ctx, s.db); err != nil {
 		return err
 	}
-	if err := s.CleanupExpired(ctx); err != nil {
-		return err
-	}
-	return nil
+	return s.CleanupExpired(ctx)
 }
 
 // CleanupExpired 删掉所有 expire_at <= now 的缓存行。
@@ -124,7 +121,9 @@ func (s *sqliteStore) PutData(ctx context.Context, key string, value []byte, exp
 func (s *sqliteStore) IsDataExist(ctx context.Context, key string) (bool, error) {
 	var cnt int64
 	now := time.Now().Unix()
-	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM cache_tab WHERE key = ? and expire_at > ?", key, now).Scan(&cnt)
+	err := s.db.QueryRowContext(ctx,
+		"SELECT count(*) FROM cache_tab WHERE key = ? and expire_at > ?", key, now,
+	).Scan(&cnt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

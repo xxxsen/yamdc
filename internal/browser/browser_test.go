@@ -51,13 +51,13 @@ func TestNewHTTPClient_NoParams_DelegatesToImpl(t *testing.T) {
 
 	impl := &mockHTTPClient{
 		doFunc: func(req *http.Request) (*http.Response, error) {
-			return http.DefaultClient.Do(req) //nolint:gosec
+			return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 		},
 	}
 	nav := &mockNavigator{
 		navigateFunc: func(_ context.Context, _ string, _ *Params) (*NavigateResult, error) {
 			t.Fatal("navigator should not be called without params")
-			return nil, nil //nolint:nilnil
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		},
 	}
 	client := NewHTTPClient(impl, nav)
@@ -92,7 +92,7 @@ func TestNewHTTPClient_WithParams_DelegatesToNavigator(t *testing.T) {
 	impl := &mockHTTPClient{
 		doFunc: func(_ *http.Request) (*http.Response, error) {
 			t.Fatal("impl should not be called when params present")
-			return nil, nil //nolint:nilnil
+			return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 		},
 	}
 	nav := &mockNavigator{

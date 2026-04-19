@@ -3,7 +3,7 @@ package yaml
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -228,7 +228,7 @@ func TestDebugRequest_SingleRequest(t *testing.T) {
 
 func TestDebugRequest_MultiRequest_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("connection refused")
+		return nil, errors.New("connection refused")
 	}}
 	spec := &PluginSpec{
 		Version: 1, Name: "test", Type: "one-step",
@@ -328,7 +328,7 @@ func TestCompileDraft_CompileError(t *testing.T) {
 
 func TestTryDebugMultiRequestCandidate_HTTPError(t *testing.T) {
 	cli := &testHTTPClient{roundTrip: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("connection refused")
+		return nil, errors.New("connection refused")
 	}}
 	plg := compileTestPlugin(t, multiRequestSpec("https://example.com"))
 	evalCtx := &evalContext{number: "ABC-123", host: "https://example.com"}

@@ -89,7 +89,7 @@ func (m *mockSearcher) Search(ctx context.Context, n *number.Number) (*model.Mov
 }
 func (m *mockSearcher) Check(_ context.Context) error { return nil }
 
-func mustParseNumber(t *testing.T, s string) *number.Number { //nolint:unparam
+func mustParseNumber(t *testing.T, s string) *number.Number { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	n, err := number.Parse(s)
 	require.NoError(t, err)

@@ -29,7 +29,7 @@ func (m *mockFaceRec) SearchFaces(_ context.Context, _ []byte) ([]image.Rectangl
 	return m.faces, m.err
 }
 
-func makeTestImage(t *testing.T, w, h int) []byte { //nolint:unparam
+func makeTestImage(t *testing.T, w, h int) []byte { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for x := 0; x < w; x++ {

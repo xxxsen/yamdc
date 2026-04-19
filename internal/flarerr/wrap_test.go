@@ -77,7 +77,7 @@ func TestHTTPClientWrap_WithParams_RoutesToSolver(t *testing.T) {
 
 	impl := &mockHTTPClient{doFn: func(_ *http.Request) (*http.Response, error) {
 		t.Fatal("impl should not be called for solver requests")
-		return nil, nil //nolint:nilnil
+		return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 	}}
 	cli := NewHTTPClient(impl, ts.URL)
 

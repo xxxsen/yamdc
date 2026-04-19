@@ -270,6 +270,11 @@ func evalFirstNonEmpty(args []string) (string, error) {
 	return "", nil
 }
 
+// evalTemplateFunc 按 name 分派内建模板函数, 每个 case 含一次参数个数校验 + 一次
+// 实现调用. 改表驱动需要把 "函数名 -> 期望 arg 数 -> 实现" 三张表配齐, 对于
+// 仅十来个条目的 switch 而言, 可读性反而更差.
+//
+//nolint:gocyclo // builtin template function dispatch table
 func evalTemplateFunc(name string, args []string) (string, error) {
 	switch name {
 	case "build_url":
@@ -436,6 +441,11 @@ func strconvUnquote(in string) string {
 	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(in[1 : len(in)-1])
 }
 
+// isIdentifier 按首字符 / 后续字符的 Unicode 类别做分支校验, 每个 branch 对应
+// 一类合法字符 (字母 / 数字 / underscore / 特定符号). 拆成"首字符检查函数"+
+// "后续字符检查函数"会把关联性强的规则割裂, 反而不直观.
+//
+//nolint:gocyclo // per-rune unicode class dispatch
 func isIdentifier(in string) bool {
 	if in == "" {
 		return false

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -225,7 +226,7 @@ matchers:
 	var latestFiles []string
 	manager, err := NewManager(dataDir, stubHTTPClient{do: func(req *http.Request) (*http.Response, error) {
 		if fail {
-			return nil, fmt.Errorf("network down")
+			return nil, errors.New("network down")
 		}
 		switch {
 		case req.URL.Host == "api.github.com" && req.URL.Path == "/repos/xxxsen/yamdc-script/tags":
@@ -257,7 +258,7 @@ matchers:
 	latest = nil
 	latestFiles = nil
 	manager, err = NewManager(dataDir, stubHTTPClient{do: func(_ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network down")
+		return nil, errors.New("network down")
 	}}, SourceTypeRemote, "https://github.com/xxxsen/yamdc-script", func(_ context.Context, rs *RuleSet, files []string) error {
 		latest = rs
 		latestFiles = append([]string(nil), files...)

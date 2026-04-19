@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,7 @@ func TestHandleMovieIDCleanerExplain(t *testing.T) {
 		{"invalid json", &stubCleaner{}, `{bad`, errCodeInvalidJSONBody},
 		{"empty input", &stubCleaner{}, `{"input":""}`, errCodeInputRequired},
 		{"whitespace input", &stubCleaner{}, `{"input":"  "}`, errCodeInputRequired},
-		{"explain error", &stubCleaner{explainErr: fmt.Errorf("boom")}, `{"input":"abc"}`, errCodeMovieIDCleanerExplainFailed},
+		{"explain error", &stubCleaner{explainErr: errors.New("boom")}, `{"input":"abc"}`, errCodeMovieIDCleanerExplainFailed},
 		{"success", &stubCleaner{explainResult: &movieidcleaner.ExplainResult{
 			Input: "abc",
 			Final: &movieidcleaner.Result{NumberID: "ABC-123", Status: "success"},
@@ -179,7 +180,7 @@ func TestHandlePluginEditorDraftNumberOp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, rec := newGinContext(http.MethodPost, "/api/debug/plugin-editor/request", strings.NewReader(tt.body))
 			tt.api.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (any, error) {
-				return nil, nil //nolint:nilnil
+				return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 			})
 			resp := decodeResponse(t, rec)
 			assert.Equal(t, tt.wantCode, resp.Code)
@@ -319,7 +320,7 @@ func TestHandleHandlerDebugRunChain(t *testing.T) {
 	phandler.Register("test_chain_fail_v2", func(_ any, _ appdeps.Runtime) (phandler.IHandler, error) {
 		return testHandlerFn(func(_ context.Context, fc *model.FileContext) error {
 			fc.Meta.Title += "-failed"
-			return fmt.Errorf("boom")
+			return errors.New("boom")
 		}), nil
 	})
 	phandler.Register("test_chain_ok_v2", func(_ any, _ appdeps.Runtime) (phandler.IHandler, error) {
@@ -371,7 +372,7 @@ func TestHandlePluginEditorDraftNumberOpError(t *testing.T) {
 	api := &API{editor: editorSvc}
 	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(`{"draft":{"version":1},"number":"ABC-123"}`))
 	api.handlePluginEditorDraftNumberOp(c, "test_op", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (any, error) {
-		return nil, fmt.Errorf("op failed")
+		return nil, errors.New("op failed")
 	})
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodePluginEditorRequestFailed, resp.Code)

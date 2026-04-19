@@ -64,7 +64,7 @@ func TestParseIDParam(t *testing.T) {
 }
 
 func TestHandleScan(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled // 测试只关心前若干返回值
 	scanDir := t.TempDir()
 	scanSvc := scanner.New(scanDir, nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
 
@@ -86,7 +86,7 @@ func TestHandleScan(t *testing.T) {
 }
 
 func TestHandleScanWithFile(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled // 测试只关心前若干返回值
 	scanDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "test.mp4"), []byte("data"), 0o600))
 	scanSvc := scanner.New(scanDir, nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
@@ -547,7 +547,7 @@ func TestLoadReviewMeta(t *testing.T) {
 }
 
 func TestHandleScanError(t *testing.T) {
-	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled
+	_, jobRepo, _, _ := setupTestDB(t) //nolint:dogsled // 测试只关心前若干返回值
 	scanSvc := scanner.New("/nonexistent/path/that/does/not/exist", nil, jobRepo, movieidcleaner.NewPassthroughCleaner())
 	api := &API{scanner: scanSvc}
 	c, rec := newGinContext(http.MethodPost, "/api/scan", nil)

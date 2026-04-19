@@ -30,7 +30,7 @@ func geminiHTTPClientToLocal(t *testing.T, srv *httptest.Server) client.IHTTPCli
 	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		req.URL.Scheme = baseURL.Scheme
 		req.URL.Host = baseURL.Host
-		return srv.Client().Do(req) //nolint:gosec
+		return srv.Client().Do(req) //nolint:gosec // 测试场景, 无生产风险
 	})
 }
 

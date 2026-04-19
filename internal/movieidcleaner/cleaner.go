@@ -239,7 +239,10 @@ func compileSuffixRules(items []SuffixRule) ([]compiledSuffixRule, error) {
 		if item.Type == "regex" {
 			re, err := regexp.Compile(item.Pattern)
 			if err != nil {
-				return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile suffix rule failed", Rule: item.Name, Cause: err}
+				return nil, &CleanError{
+					Code: ErrInvalidRuleSet, Message: "compile suffix rule failed",
+					Rule: item.Name, Cause: err,
+				}
 			}
 			r.re = re
 		}
@@ -261,7 +264,10 @@ func compileNoiseRules(items []NoiseRule) ([]compiledNoiseRule, error) {
 		if item.Type == "regex" {
 			re, err := regexp.Compile(item.Pattern)
 			if err != nil {
-				return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile noise rule failed", Rule: item.Name, Cause: err}
+				return nil, &CleanError{
+					Code: ErrInvalidRuleSet, Message: "compile noise rule failed",
+					Rule: item.Name, Cause: err,
+				}
 			}
 			r.re = re
 		}
@@ -281,7 +287,10 @@ func compileMatcherRules(items []MatcherRule) ([]compiledMatcherRule, error) {
 		}
 		re, err := regexp.Compile(item.Pattern)
 		if err != nil {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile matcher rule failed", Rule: item.Name, Cause: err}
+			return nil, &CleanError{
+				Code: ErrInvalidRuleSet, Message: "compile matcher rule failed",
+				Rule: item.Name, Cause: err,
+			}
 		}
 		m := compiledMatcherRule{
 			name:              item.Name,
@@ -314,7 +323,10 @@ func compileRuleSet(rs *RuleSet) (*compiledRuleSet, error) {
 		}
 		re, err := regexp.Compile(item.Pattern)
 		if err != nil {
-			return nil, &CleanError{Code: ErrInvalidRuleSet, Message: "compile rewrite rule failed", Rule: item.Name, Cause: err}
+			return nil, &CleanError{
+				Code: ErrInvalidRuleSet, Message: "compile rewrite rule failed",
+				Rule: item.Name, Cause: err,
+			}
 		}
 		out.rewriteRules = append(out.rewriteRules, compiledRewriteRule{
 			name: item.Name, re: re, replace: item.Replace,
@@ -481,6 +493,10 @@ func (c *cleaner) run(input string, withExplain bool) (*Result, *explainCollecto
 	return result, collector
 }
 
+// applyNormalizer 针对 rule.typ 做 dispatch, 每个 case 是一种 normalize 策略,
+// 拆分成多函数只会把同一张策略表打散在多个文件, 反而难看清支持哪些 typ.
+//
+//nolint:gocyclo // dispatch switch over normalizer types
 func applyNormalizer(in string, rule compiledNormalizerRule, opts Options) string {
 	switch rule.typ {
 	case "replace":

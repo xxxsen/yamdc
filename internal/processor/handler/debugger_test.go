@@ -328,7 +328,7 @@ func (c *testCleaner) Clean(_ string) (*movieidcleaner.Result, error) {
 }
 
 func (c *testCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
-	return nil, nil //nolint:nilnil
+	return nil, nil //nolint:nilnil // 测试桩显式返回 (nil, nil)
 }
 
 func TestParseNumberWithCleaner(t *testing.T) {

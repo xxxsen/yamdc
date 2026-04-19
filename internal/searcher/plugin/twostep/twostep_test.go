@@ -2,7 +2,7 @@ package twostep
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -41,7 +41,7 @@ func TestHandleXPathTwoStepSearch_FirstInvokerError(t *testing.T) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/start", nil)
 	require.NoError(t, err)
 	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network down")
+		return nil, errors.New("network down")
 	}
 	xctx := &XPathTwoStepContext{ValidStatusCode: []int{200}}
 	rsp, err := HandleXPathTwoStepSearch(context.Background(), invoker, req, xctx)
@@ -150,7 +150,7 @@ func TestHandleXPathTwoStepSearch_LinkSelectorError(t *testing.T) {
 			{Name: "hrefs", XPath: `//*[@id='links']//a/@href`},
 		},
 		LinkSelector: func(_ []*XPathPair) (string, bool, error) {
-			return "", false, fmt.Errorf("user reject")
+			return "", false, errors.New("user reject")
 		},
 	}
 	rsp, err := HandleXPathTwoStepSearch(context.Background(), api.HTTPInvoker(invoker), req, xctx)
@@ -216,7 +216,7 @@ func TestHandleXPathTwoStepSearch_SecondInvokerError(t *testing.T) {
 		if calls == 1 {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(listPageHTML()))}, nil
 		}
-		return nil, fmt.Errorf("second hop failed")
+		return nil, errors.New("second hop failed")
 	}
 	xctx := &XPathTwoStepContext{
 		ValidStatusCode: []int{200},

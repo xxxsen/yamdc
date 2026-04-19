@@ -3,7 +3,7 @@ package yaml
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -16,7 +16,7 @@ import (
 type errorReader struct{}
 
 func (r *errorReader) Read(_ []byte) (int, error) {
-	return 0, fmt.Errorf("read error")
+	return 0, errors.New("read error")
 }
 
 func TestRequestDebug_WithBody(t *testing.T) {

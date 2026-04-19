@@ -168,21 +168,20 @@ func (tm *TagMapper) ProcessTags(tags []string) []string {
 			continue
 		}
 
-		// 查找是否是别名
-		standardTag := tag
+		// 查找是否是别名, 有则直接用标准名替代
 		if mapped, isAlias := tm.aliasToStandard[tag]; isAlias {
-			standardTag = mapped
+			tag = mapped
 		}
 
 		// 查找是否有完整路径
-		if path, hasPath := tm.tagToPath[standardTag]; hasPath && len(path) > 0 {
+		if path, hasPath := tm.tagToPath[tag]; hasPath && len(path) > 0 {
 			// 添加完整路径中的所有标签
 			for _, t := range path {
 				resultSet[t] = true
 			}
 		} else {
 			// 没有路径信息，只添加标准标签本身
-			resultSet[standardTag] = true
+			resultSet[tag] = true
 		}
 	}
 

@@ -2,7 +2,7 @@ package yaml
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -327,7 +327,7 @@ scrape:
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
 
 	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("network error")
+		return nil, errors.New("network error")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
 	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
@@ -368,7 +368,7 @@ scrape:
 	pluginapi.SetContainerValue(ctx, ctxKeyHost, "https://example.com")
 
 	invoker := func(_ context.Context, _ *http.Request) (*http.Response, error) {
-		return nil, fmt.Errorf("connection timeout")
+		return nil, errors.New("connection timeout")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
 	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)
@@ -473,7 +473,7 @@ scrape:
 				Header:     make(http.Header),
 			}, nil
 		}
-		return nil, fmt.Errorf("detail page unreachable")
+		return nil, errors.New("detail page unreachable")
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/search/ABC-123", nil)
 	rsp, err := plg.OnHandleHTTPRequest(ctx, invoker, req)

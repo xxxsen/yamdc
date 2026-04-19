@@ -402,7 +402,7 @@ func TestServiceRunOneWritesDetailedFailureLogs(t *testing.T) {
 		FileSize:              1,
 	}, jobdef.StatusProcessing)
 	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
-		err: fmt.Errorf("search backend timeout: upstream 504"),
+		err: errors.New("search backend timeout: upstream 504"),
 	})
 
 	svc.runOne(context.Background(), jobID)
@@ -965,7 +965,7 @@ func TestBuildJobFailureDetail(t *testing.T) {
 				ExtInfo:      model.ExtInfo{ScrapeInfo: model.ScrapeInfo{Source: "src"}},
 			},
 		}, contains: []string{"save_file_base=SFB", "meta_source=src", "meta_title=T", "meta_samples=1"}},
-		{name: "with error", err: fmt.Errorf("boom"), contains: []string{"error=boom"}},
+		{name: "with error", err: errors.New("boom"), contains: []string{"error=boom"}},
 		{name: "fc without meta", fc: &model.FileContext{SaveFileBase: "X"}, contains: []string{"save_file_base=X"}},
 	}
 	for _, tc := range tests {
@@ -1678,7 +1678,7 @@ func TestExecuteScrapeAndFinalizeSearchFailed(t *testing.T) {
 		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high", FileSize: 1,
 	}, jobdef.StatusProcessing)
 
-	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{err: fmt.Errorf("search error")})
+	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{err: errors.New("search error")})
 	svc.runOne(context.Background(), jobID)
 
 	j, err := repo.GetByID(context.Background(), jobID)
@@ -2027,7 +2027,7 @@ func TestServiceStartUpdateStatusFails(t *testing.T) {
 
 // ---------- Error paths via closed DB ----------
 
-func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam
+func newTestServiceWithClosedDB(t *testing.T) (*Service, *repository.JobRepository, int64) { //nolint:unparam // 签名由接口 / 测试期望固定
 	t.Helper()
 	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
 	require.NoError(t, err)
@@ -2126,7 +2126,7 @@ func TestRunOneWithDBError(t *testing.T) {
 
 // ---------- Error paths via targeted table drops ----------
 
-func dropTable(t *testing.T, svc *Service, _ string) { //nolint:unused
+func dropTable(t *testing.T, svc *Service, _ string) { //nolint:unused // 留作后续测试复用
 	t.Helper()
 	db := svc.jobRepo
 	_ = db
@@ -2844,7 +2844,7 @@ func TestServiceStopConcurrentRunNoPanic(t *testing.T) {
 	// 用会立刻失败的 searcher: 并发路径里即便 worker 真消费到了任务, 也只会
 	// 走 failJob 分支, 不会因为 nil capture 触发 panic, 干扰我们观察 race。
 	svc.capture = newLoggingTestCapture(t, &loggingTestSearcher{
-		err: fmt.Errorf("race-test: searcher short-circuit"),
+		err: errors.New("race-test: searcher short-circuit"),
 	})
 
 	const n = 20

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -557,7 +557,7 @@ func TestServiceImportBlockedByGuard(t *testing.T) {
 	meta := &model.MovieMeta{Title: "T", Number: "IMP-G"}
 	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
 
-	guardErr := fmt.Errorf("guard blocked")
+	guardErr := errors.New("guard blocked")
 	rig.svc.SetImportGuard(func(_ context.Context) error { return guardErr })
 
 	err := rig.svc.Import(context.Background(), jobID)

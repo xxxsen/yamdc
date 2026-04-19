@@ -2,7 +2,7 @@ package utils
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -16,7 +16,7 @@ import (
 type errReader struct{}
 
 func (errReader) Read(_ []byte) (int, error) {
-	return 0, fmt.Errorf("simulated read failure")
+	return 0, errors.New("simulated read failure")
 }
 
 func TestReadDataAsHTMLTree_Success(t *testing.T) {

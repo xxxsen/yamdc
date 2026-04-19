@@ -30,6 +30,11 @@ type rulesetCaseOutput struct {
 	Status   string   `json:"status"`
 }
 
+// 与 newPluginTestCmd 在 cobra 样板 (flag 声明 / RunE 桥接) 上结构相似,
+// 但面向不同的子命令产物, 抽通用工厂会强制把 "参数名/flag help text/校验入口"
+// 等具体差异塞进一张额外的 config 表, 可读性反而变差.
+//
+//nolint:dupl // cobra boilerplate; shared shape, different subcommands
 func newRulesetTestCmd() *cobra.Command {
 	var (
 		ruleset  string

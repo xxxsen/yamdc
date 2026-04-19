@@ -162,7 +162,7 @@ func TestCheck(t *testing.T) {
 				hosts = []string{srv.URL}
 				if tt.doFn == nil {
 					cli = &mockHTTPClient{do: func(req *http.Request) (*http.Response, error) {
-						return http.DefaultClient.Do(req) //nolint:gosec
+						return http.DefaultClient.Do(req) //nolint:gosec // 测试场景, 无生产风险
 					}}
 				}
 			}
