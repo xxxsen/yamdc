@@ -11,7 +11,7 @@
 2. `advanced-ruleset/`
    - 较复杂规则集示例
    - 展示 `rewrite_rules`、`suffix_rules`、`noise_rules`、`matchers`、`post_processors`
-   - 展示 `require_boundary`、`score`、`category`、`uncensor`
+   - 展示 `require_boundary`、`score`、`category`、`unrated`
 
 3. `override-bundle/`
    - 演示规则包结构

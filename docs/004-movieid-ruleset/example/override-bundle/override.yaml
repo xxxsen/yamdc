@@ -3,7 +3,7 @@ matchers:
   # override 层按规则名覆盖系统规则，提高优先级并收紧 pattern
   - name: source_a
     category: SOURCE_A
-    uncensor: true
+    unrated: true
     pattern: '(?i)SRCA[-_\s]?([0-9]{5,})'
     normalize_template: 'SRCA-$1'
     score: 140

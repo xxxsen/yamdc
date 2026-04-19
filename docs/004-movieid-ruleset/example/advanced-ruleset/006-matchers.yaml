@@ -2,7 +2,7 @@ matchers:
   # 示例一：来源 A 影片族，直接推导 category 和附加标记
   - name: source_a
     category: SOURCE_A
-    uncensor: true
+    unrated: true
     pattern: '(?i)SRCA[-_\s]?([0-9]{3,})'
     normalize_template: 'SRCA-$1'
     score: 120
@@ -19,7 +19,7 @@ matchers:
   # 示例三：按前缀限制适用范围，避免宽泛规则误中
   - name: source_b_archive
     category: SOURCE_B
-    uncensor: true
+    unrated: true
     pattern: '(?i)([0-9]{6})[-_\s]?([0-9]{3})'
     normalize_template: '$1-$2'
     score: 90

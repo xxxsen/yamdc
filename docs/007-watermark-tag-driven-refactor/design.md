@@ -34,17 +34,17 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 	if fc.Number.GetIsVR() {
 		tags = append(tags, image.WMVR)
 	}
-	if fc.Number.GetExternalFieldUncensor() {
-		tags = append(tags, image.WMUncensored)
+	if fc.Number.GetExternalFieldUnrated() {
+		tags = append(tags, image.WMUnrated)
 	}
 	if fc.Number.GetIsChineseSubtitle() {
 		tags = append(tags, image.WMChineseSubtitle)
 	}
-	if fc.Number.GetIsLeak() {
-		tags = append(tags, image.WMLeak)
+	if fc.Number.GetIsSpecialEdition() {
+		tags = append(tags, image.WMSpecialEdition)
 	}
-	if fc.Number.GetIsHack() {
-		tags = append(tags, image.WMHack)
+	if fc.Number.GetIsRestored() {
+		tags = append(tags, image.WMRestored)
 	}
 	...
 }
@@ -56,11 +56,11 @@ func (h *watermark) Handle(ctx context.Context, fc *model.FileContext) error {
 
 ```15:23:internal/number/constant.go
 const (
-	defaultTagUncensored      = "未审查"
+	defaultTagUnrated      = "未审查"
 	defaultTagChineseSubtitle = "字幕版"
 	defaultTag4K              = "4K"
-	defaultTagLeak            = "特别版"
-	defaultTagHack            = "修复版"
+	defaultTagSpecialEdition            = "特别版"
+	defaultTagRestored            = "修复版"
 	defaultTag8K              = "8K"
 	defaultTagVR              = "VR"
 )
@@ -130,27 +130,27 @@ var sysHandler = []string{
 package tag
 
 const (
-	Uncensored      = "未审查"
+	Unrated         = "未审查"
 	ChineseSubtitle = "字幕版"
 	K4              = "4K"
 	K8              = "8K"
 	VR              = "VR"
-	Leak            = "特别版"
-	Hack            = "修复版"
+	SpecialEdition  = "特别版"
+	Restored        = "修复版"
 )
 ```
 
-命名纠结点：Go identifier 不能以数字开头，`4K` → `K4` 可以接受；也可以用 `Res4K` / `Tag4K` 风格。**倾向 `Res4K` / `Res8K` + `VR` / `ChineseSubtitle` / `Uncensored` / `Leak` / `Hack`**，语义更自然：
+命名纠结点：Go identifier 不能以数字开头，`4K` → `K4` 可以接受；也可以用 `Res4K` / `Tag4K` 风格。**倾向 `Res4K` / `Res8K` + `VR` / `ChineseSubtitle` / `Unrated` / `SpecialEdition` / `Restored`**，语义更自然：
 
 ```go
 const (
-	Uncensored      = "未审查"
+	Unrated         = "未审查"
 	ChineseSubtitle = "字幕版"
 	Res4K           = "4K"
 	Res8K           = "8K"
 	VR              = "VR"
-	Leak            = "特别版"
-	Hack            = "修复版"
+	SpecialEdition  = "特别版"
+	Restored        = "修复版"
 )
 ```
 
@@ -169,8 +169,8 @@ import "github.com/xxxsen/yamdc/internal/tag"
 
 func (n *Number) GenerateTags() []string {
 	rs := make([]string, 0, 5)
-	if n.GetExternalFieldUncensor() {
-		rs = append(rs, tag.Uncensored)
+	if n.GetExternalFieldUnrated() {
+		rs = append(rs, tag.Unrated)
 	}
 	if n.GetIsChineseSubtitle() {
 		rs = append(rs, tag.ChineseSubtitle)
@@ -227,10 +227,10 @@ var defaultWatermarkRules = []watermarkRule{
 	{tag.Res4K, image.WM4K},
 	{tag.Res8K, image.WM8K},
 	{tag.VR, image.WMVR},
-	{tag.Uncensored, image.WMUncensored},
+	{tag.Unrated, image.WMUnrated},
 	{tag.ChineseSubtitle, image.WMChineseSubtitle},
-	{tag.Leak, image.WMLeak},
-	{tag.Hack, image.WMHack},
+	{tag.SpecialEdition, image.WMSpecialEdition},
+	{tag.Restored, image.WMRestored},
 }
 
 type watermark struct {
@@ -489,7 +489,7 @@ var sysHandler = []string{
 
 - `TestWatermarkHandlerNilPoster` / `TestWatermarkHandlerEmptyPosterKey`: 不依赖 Number 字段，保留。
 - `TestWatermarkHandlerNoTags`: 逻辑不变，保留（只是"没 tag 就跳过"从 Number 空转成 Genres 空）。
-- `TestWatermarkHandlerStorageError`: 改成设置 `fc.Meta.Genres = []string{tag.Uncensored}`，不再 `SetExternalFieldUncensor`。
+- `TestWatermarkHandlerStorageError`: 改成设置 `fc.Meta.Genres = []string{tag.Unrated}`，不再 `SetExternalFieldUnrated`。
 - `TestWatermarkHandlerWithValidImage`: 同上，用 `Genres` 替代 `number.Parse("ABC-123-C")`。
 - `TestWatermarkHandlerAllTagTypes`: 改成 table-driven，每行直接给一个 tag 字符串。
 

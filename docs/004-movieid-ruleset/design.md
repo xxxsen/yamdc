@@ -62,9 +62,9 @@ internal/movieidcleaner/model.go
 2. `NumberID`
 3. `Suffixes`
 4. `Category`
-5. `Uncensor`
+5. `Unrated`
 6. `CategoryMatched`
-7. `UncensorMatched`
+7. `UnratedMatched`
 8. `Confidence`
 9. `Status`
 10. `RuleHits`
@@ -160,7 +160,7 @@ internal/movieidcleaner/model.go
       matchers:
         - name: source_a
           category: SOURCE_A
-          uncensor: true
+          unrated: true
           pattern: '(?i)SRCA[-_\\s]?([0-9]{3,})'
           normalize_template: 'SRCA-$1'
           score: 100
@@ -170,7 +170,7 @@ internal/movieidcleaner/model.go
       `Normalized = SRCA-123456`
       `NumberID = SRCA-123456`
       `Category = SOURCE_A`
-      `Uncensor = true`
+      `Unrated = true`
 7. `PostProcessors`
    1. 负责在主匹配完成后做统一后处理。
    2. 适合处理后缀排序、连接符归一化等全局一致性问题。
@@ -411,7 +411,7 @@ func MergeRuleSets(base *RuleSet, override *RuleSet) (*RuleSet, error)
 2. 通过 `normalize_template` 生成规范化输出。
 3. 通过 `score` 控制候选优先级。
 4. 通过 `category` 生成分类信息。
-5. 通过 `uncensor` 生成附加布尔标记。
+5. 通过 `unrated` 生成附加布尔标记。
 6. 通过 `require_boundary` 与 `prefixes` 控制匹配边界和适用前缀。
 
 示例：
@@ -444,7 +444,7 @@ XFILM123Y
 `MatcherRule` 当前已支持：
 
 1. `category`
-2. `uncensor`
+2. `unrated`
 3. `pattern`
 4. `normalize_template`
 5. `score`
