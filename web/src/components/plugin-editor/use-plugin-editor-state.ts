@@ -164,29 +164,35 @@ export function usePluginEditorState() {
       setBusyAction(action);
       setError("");
       setToast(null);
-      setCompileResult(null);
-      setRequestResult(null);
-      setWorkflowResult(null);
-      setScrapeResult(null);
+      // 每个 action 只清它自己会写入的 result bucket, 保持不同按钮产出的
+      // 数据互不擦写 — 比如先 "运行调试" 再 "编译草稿" 时, scrape/request/
+      // workflow 结果应当保留可见.
       if (action === "compile") {
+        setCompileResult(null);
         const result = await compilePluginDraft(draft);
         setCompileResult(result.data);
         setTab("compile");
         return;
       }
       if (action === "request") {
+        setRequestResult(null);
         const result = await debugPluginDraftRequest(draft, state.number.trim());
         setRequestResult(result.data);
         setTab("request");
         return;
       }
       if (action === "workflow") {
+        setWorkflowResult(null);
         const result = await debugPluginDraftWorkflow(draft, state.number.trim());
         setWorkflowResult(result.data);
         setTab("workflow");
         return;
       }
+      // scrape: 一定会覆写 scrape+request, 仅当启用 workflow 时才覆写 workflow.
+      setScrapeResult(null);
+      setRequestResult(null);
       if (state.workflowEnabled) {
+        setWorkflowResult(null);
         const workflowDebug = await debugPluginDraftWorkflow(draft, state.number.trim());
         setWorkflowResult(workflowDebug.data);
         if (workflowDebug.data.error) {
@@ -203,7 +209,6 @@ export function usePluginEditorState() {
       } else {
         setRequestResult({ request: scrapeDebug.data.request, response: scrapeDebug.data.response });
       }
-      if (!state.workflowEnabled) setWorkflowResult(null);
       setScrapeResult(scrapeDebug.data);
       setTab(state.workflowEnabled ? "scrape" : "basic");
       if (state.fetchType === "browser" && !state.request.browserWaitSelector.trim()) {
