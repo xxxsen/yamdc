@@ -1,4 +1,4 @@
-# 023 — 封面水印 Handler 改造：从 Number 字段驱动到 Tag 驱动
+# 封面水印 Handler 改造：从 Number 字段驱动到 Tag 驱动
 
 ## 0. 文档定位
 
