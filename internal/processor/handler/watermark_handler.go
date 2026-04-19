@@ -34,10 +34,10 @@ var defaultWatermarkRules = []watermarkRule{
 	{tag.Res4K, image.WM4K},
 	{tag.Res8K, image.WM8K},
 	{tag.VR, image.WMVR},
-	{tag.Uncensored, image.WMUncensored},
+	{tag.Unrated, image.WMUnrated},
 	{tag.ChineseSubtitle, image.WMChineseSubtitle},
-	{tag.Leak, image.WMLeak},
-	{tag.Hack, image.WMHack},
+	{tag.SpecialEdition, image.WMSpecialEdition},
+	{tag.Restored, image.WMRestored},
 }
 
 // watermark handler 按 MovieMeta.Genres 驱动水印绘制, 不再读 Number

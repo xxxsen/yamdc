@@ -226,7 +226,7 @@ export function SearcherDebugShell() {
                 <div className="ruleset-debug-summary-row">
                   <span>分类 / 附加标记</span>
                   <strong>
-                    {result.category || "-"} / {result.uncensor ? "true" : "false"}
+                    {result.category || "-"} / {result.unrated ? "true" : "false"}
                   </strong>
                 </div>
                 <div className="ruleset-debug-summary-row">

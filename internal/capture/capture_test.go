@@ -49,8 +49,8 @@ type staticCleaner struct {
 	normalized      string
 	category        string
 	categoryMatched bool
-	uncensor        bool
-	uncensorMatched bool
+	unrated         bool
+	unratedMatched  bool
 }
 
 func (c *staticCleaner) Clean(input string) (*movieidcleaner.Result, error) {
@@ -59,8 +59,8 @@ func (c *staticCleaner) Clean(input string) (*movieidcleaner.Result, error) {
 		Normalized:      c.normalized,
 		Category:        c.category,
 		CategoryMatched: c.categoryMatched,
-		Uncensor:        c.uncensor,
-		UncensorMatched: c.uncensorMatched,
+		Unrated:         c.unrated,
+		UnratedMatched:  c.unratedMatched,
 		Status:          movieidcleaner.StatusSuccess,
 		Confidence:      movieidcleaner.ConfidenceHigh,
 	}, nil
@@ -249,14 +249,14 @@ func TestResolveFileContext(t *testing.T) {
 			name: "uses cleaner derived fields for preferred number",
 			cleaner: &staticCleaner{
 				normalized:      "ABC-123",
-				category:        "HEYZO",
+				category:        "DEMO",
 				categoryMatched: true,
-				uncensor:        true,
-				uncensorMatched: true,
+				unrated:         true,
+				unratedMatched:  true,
 			},
 			file:            "ignored.mp4",
-			preferredNumber: "HEYZO-0040",
-			wantNumber:      "HEYZO-0040",
+			preferredNumber: "DEMO-0040",
+			wantNumber:      "DEMO-0040",
 		},
 		{
 			name:    "cleaner returns error",

@@ -39,7 +39,7 @@ function makeResult(overrides: Partial<HandlerDebugResult> = {}): HandlerDebugRe
     handler_name: "",
     number_id: "ABC-123",
     category: "",
-    uncensor: false,
+    unrated: false,
     before_meta: { number: "ABC-123" } as HandlerDebugResult["before_meta"],
     after_meta: { number: "ABC-123", title: "new" } as HandlerDebugResult["after_meta"],
     error: "",

@@ -637,7 +637,7 @@ describe("debug API", () => {
       matched_plugin: "",
       found: false,
       category: "",
-      uncensor: false,
+      unrated: false,
       plugin_results: [],
       available_tools: {} as never,
     };
@@ -660,7 +660,7 @@ describe("debug API", () => {
       matched_plugin: "",
       found: false,
       category: "",
-      uncensor: false,
+      unrated: false,
       plugin_results: [],
       available_tools: {} as never,
     };
@@ -690,7 +690,7 @@ describe("debug API", () => {
       handler_name: "Trim",
       number_id: "",
       category: "",
-      uncensor: false,
+      unrated: false,
       before_meta: {},
       after_meta: {},
       error: "",

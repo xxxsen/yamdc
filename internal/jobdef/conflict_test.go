@@ -61,6 +61,8 @@ func TestBuildConflictKey_EmptyExtFileNameWithoutExt(t *testing.T) {
 
 func TestBuildConflictKey_ExtWithLeadingTrailingSpaces(t *testing.T) {
 	t.Parallel()
+	// 典型含多段连字符的历史命名格式, 保留此形态以覆盖 Parse 对 "prefix-suffix-id"
+	// 的切分边界。
 	parsed, err := number.Parse("fc2-ppv-1234567")
 	require.NoError(t, err)
 	wantBase := strings.ToUpper(parsed.GenerateFileName())

@@ -58,10 +58,10 @@ type Result struct {
 	NumberID   string   `json:"number_id"`
 	Suffixes   []string `json:"suffixes"`
 	Category   string   `json:"category"`
-	Uncensor   bool     `json:"uncensor"`
+	Unrated    bool     `json:"unrated"`
 
 	CategoryMatched bool        `json:"category_matched"`
-	UncensorMatched bool        `json:"uncensor_matched"`
+	UnratedMatched  bool        `json:"unrated_matched"`
 	Confidence      Confidence  `json:"confidence"`
 	Status          Status      `json:"status"`
 	RuleHits        []string    `json:"rule_hits"`
@@ -98,8 +98,8 @@ type Candidate struct {
 
 	Category        string `json:"category"`
 	CategoryMatched bool   `json:"category_matched"`
-	Uncensor        bool   `json:"uncensor"`
-	UncensorMatched bool   `json:"uncensor_matched"`
+	Unrated         bool   `json:"unrated"`
+	UnratedMatched  bool   `json:"unrated_matched"`
 }
 
 type Options struct {
@@ -187,15 +187,23 @@ func (r NoiseRule) IsDisabled() bool {
 }
 
 type MatcherRule struct {
-	Name              string   `yaml:"name"`
-	Category          string   `yaml:"category"`
-	Uncensor          *bool    `yaml:"uncensor"`
-	Pattern           string   `yaml:"pattern"`
-	NormalizeTemplate string   `yaml:"normalize_template"`
-	Score             int      `yaml:"score"`
-	RequireBoundary   bool     `yaml:"require_boundary"`
-	Prefixes          []string `yaml:"prefixes"`
-	Disabled          bool     `yaml:"disabled"`
+	Name     string `yaml:"name"`
+	Category string `yaml:"category"`
+	// Unrated 标记规则命中时是否把 Result.Unrated / Candidate.Unrated
+	// 翻成 true, 是给下游 (封面水印 / 展示分类) 看的标签提示。
+	Unrated *bool `yaml:"unrated,omitempty"`
+	// UncensorDeprecated 仅为兼容历史 bundle 保留: 老的 ruleset
+	// (含外部 yamdc-script 以及本仓老示例) 用的是 `uncensor:` 字段。
+	// 解析期若 Unrated 未显式给出而 UncensorDeprecated != nil,
+	// compile 层会把它抬升到 Unrated 并打一条 deprecation 警告。
+	// 新 ruleset 一律只写 `unrated:`, 这个字段不暴露给使用方。
+	UncensorDeprecated *bool    `yaml:"uncensor,omitempty"`
+	Pattern            string   `yaml:"pattern"`
+	NormalizeTemplate  string   `yaml:"normalize_template"`
+	Score              int      `yaml:"score"`
+	RequireBoundary    bool     `yaml:"require_boundary"`
+	Prefixes           []string `yaml:"prefixes"`
+	Disabled           bool     `yaml:"disabled"`
 }
 
 func (r MatcherRule) GetName() string {

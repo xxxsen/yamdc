@@ -21,8 +21,8 @@ var defaultSuffixResolverList = []suffixInfoResolveFunc{
 	resolve4K,
 	resolve8K,
 	resolveVr,
-	resolveLeak,
-	resolveHack,
+	resolveSpecialEdition,
+	resolveRestored,
 }
 
 func extractSuffix(str string) (string, bool) {
@@ -71,19 +71,19 @@ func resolveCDInfo(info *Number, str string) bool {
 	return true
 }
 
-func resolveLeak(info *Number, str string) bool {
-	if str != defaultSuffixLeak {
+func resolveSpecialEdition(info *Number, str string) bool {
+	if str != defaultSuffixSpecialEdition {
 		return false
 	}
-	info.isLeak = true
+	info.isSpecialEdition = true
 	return true
 }
 
-func resolveHack(info *Number, str string) bool {
-	if str != defaultSuffixHack1 && str != defaultSuffixHack2 {
+func resolveRestored(info *Number, str string) bool {
+	if str != defaultSuffixRestored1 && str != defaultSuffixRestored2 {
 		return false
 	}
-	info.isHack = true
+	info.isRestored = true
 	return true
 }
 

@@ -247,7 +247,7 @@ func TestPosterCropHandlerCensorCutterMultipleFacesInOriginal(t *testing.T) {
 	assert.NotNil(t, fc.Meta.Poster)
 }
 
-func TestPosterCropHandlerUncensorCutterNoFaceRec(t *testing.T) {
+func TestPosterCropHandlerUnratedCutterNoFaceRec(t *testing.T) {
 	ctx := context.Background()
 	storage := store.NewMemStorage()
 	imgData := makeTestImage(t, 800, 600)
@@ -255,7 +255,7 @@ func TestPosterCropHandlerUncensorCutterNoFaceRec(t *testing.T) {
 
 	h := &posterCropHandler{storage: storage}
 	num, _ := number.Parse("ABC-123")
-	num.SetExternalFieldUncensor(true)
+	num.SetExternalFieldUnrated(true)
 	fc := &model.FileContext{
 		Number: num,
 		Meta: &model.MovieMeta{
@@ -268,7 +268,7 @@ func TestPosterCropHandlerUncensorCutterNoFaceRec(t *testing.T) {
 	assert.NotNil(t, fc.Meta.Poster)
 }
 
-func TestPosterCropHandlerUncensorCutterWithFaceRecError(t *testing.T) {
+func TestPosterCropHandlerUnratedCutterWithFaceRecError(t *testing.T) {
 	ctx := context.Background()
 	storage := store.NewMemStorage()
 	imgData := makeTestImage(t, 800, 600)
@@ -277,7 +277,7 @@ func TestPosterCropHandlerUncensorCutterWithFaceRecError(t *testing.T) {
 	faceRec := &mockFaceRec{err: errors.New("face rec error")}
 	h := &posterCropHandler{storage: storage, faceRec: faceRec}
 	num, _ := number.Parse("ABC-123")
-	num.SetExternalFieldUncensor(true)
+	num.SetExternalFieldUnrated(true)
 	fc := &model.FileContext{
 		Number: num,
 		Meta: &model.MovieMeta{
@@ -320,7 +320,7 @@ func TestPosterCropHandlerCensorCutterWithFaceRecCutError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestPosterCropHandlerUncensorCutterWithFaceRecSuccess(t *testing.T) {
+func TestPosterCropHandlerUnratedCutterWithFaceRecSuccess(t *testing.T) {
 	ctx := context.Background()
 	storage := store.NewMemStorage()
 	imgData := makeTestImage(t, 800, 600)
@@ -331,7 +331,7 @@ func TestPosterCropHandlerUncensorCutterWithFaceRecSuccess(t *testing.T) {
 	}
 	h := &posterCropHandler{storage: storage, faceRec: faceRec}
 	num, _ := number.Parse("ABC-123")
-	num.SetExternalFieldUncensor(true)
+	num.SetExternalFieldUnrated(true)
 	fc := &model.FileContext{
 		Number: num,
 		Meta: &model.MovieMeta{

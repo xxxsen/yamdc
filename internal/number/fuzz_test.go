@@ -18,7 +18,7 @@ import (
 func FuzzParse(f *testing.F) {
 	seeds := []string{
 		"",
-		"HEYZO-3332",
+		"DEMO-3332",
 		"052624_01",
 		"052624_01-CD2",
 		"abc-leak-c",
@@ -64,7 +64,7 @@ func FuzzParse(f *testing.F) {
 // 应导致下游 Parse 接收越界切片或 panic。
 func FuzzParseWithFileName(f *testing.F) {
 	seeds := []string{
-		"HEYZO-3332.mp4",
+		"DEMO-3332.mp4",
 		"a.mp4",
 		".mp4",
 		"noext",

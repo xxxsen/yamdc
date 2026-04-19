@@ -106,8 +106,8 @@ func (c *Capture) resolveFileInfo(fc *model.FileContext, file, preferredNumber s
 		return fmt.Errorf("parse number failed, err:%w", err)
 	}
 	if cleaned != nil {
-		if cleaned.UncensorMatched {
-			info.SetExternalFieldUncensor(cleaned.Uncensor)
+		if cleaned.UnratedMatched {
+			info.SetExternalFieldUnrated(cleaned.Unrated)
 		}
 		if cleaned.CategoryMatched {
 			info.SetExternalFieldCategory(cleaned.Category)

@@ -21,8 +21,8 @@ export interface MovieIDCleanerCandidate {
   end: number;
   category: string;
   category_matched: boolean;
-  uncensor: boolean;
-  uncensor_matched: boolean;
+  unrated: boolean;
+  unrated_matched: boolean;
 }
 
 export interface MovieIDCleanerExplainStep {
@@ -44,9 +44,9 @@ export interface MovieIDCleanerResult {
   number_id: string;
   suffixes: string[] | null;
   category: string;
-  uncensor: boolean;
+  unrated: boolean;
   category_matched: boolean;
-  uncensor_matched: boolean;
+  unrated_matched: boolean;
   confidence: string;
   status: string;
   rule_hits: string[] | null;
@@ -136,7 +136,7 @@ export interface SearcherDebugResult {
   matched_plugin: string;
   found: boolean;
   category: string;
-  uncensor: boolean;
+  unrated: boolean;
   cleaner_result?: MovieIDCleanerResult | null;
   meta?: SearcherDebugMovieMeta | null;
   plugin_results: SearcherDebugPluginResult[] | null;
@@ -183,7 +183,7 @@ export interface HandlerDebugResult {
   handler_name: string;
   number_id: string;
   category: string;
-  uncensor: boolean;
+  unrated: boolean;
   before_meta: SearcherDebugMovieMeta;
   after_meta: SearcherDebugMovieMeta;
   error: string;

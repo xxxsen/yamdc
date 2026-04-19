@@ -213,17 +213,17 @@ func TestServiceRunProcessesJobsSequentially(t *testing.T) {
 func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
 	svc, repo := newTestService(t)
 	dir := t.TempDir()
-	newFile := filepath.Join(dir, "HEYZO-0040.mp4")
+	newFile := filepath.Join(dir, "DEMO-0040.mp4")
 	require.NoError(t, os.WriteFile(newFile, []byte("x"), 0o600))
 
 	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
-		FileName:              "HEYZO-040.mp4",
+		FileName:              "DEMO-040.mp4",
 		FileExt:               ".mp4",
-		RelPath:               "HEYZO-040.mp4",
-		AbsPath:               filepath.Join(dir, "HEYZO-040.mp4"),
-		Number:                "HEYZO-0040",
-		RawNumber:             "HEYZO-040",
-		CleanedNumber:         "HEYZO-0040",
+		RelPath:               "DEMO-040.mp4",
+		AbsPath:               filepath.Join(dir, "DEMO-040.mp4"),
+		Number:                "DEMO-0040",
+		RawNumber:             "DEMO-040",
+		CleanedNumber:         "DEMO-0040",
 		NumberSource:          "manual",
 		NumberCleanStatus:     "success",
 		NumberCleanConfidence: "high",
@@ -243,8 +243,8 @@ func TestServiceResolveJobSourcePathFallsBackToRenamedNumberFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, newFile, got.AbsPath)
-	require.Equal(t, "HEYZO-0040.mp4", got.FileName)
-	require.Equal(t, "HEYZO-0040.mp4", got.RelPath)
+	require.Equal(t, "DEMO-0040.mp4", got.FileName)
+	require.Equal(t, "DEMO-0040.mp4", got.RelPath)
 }
 
 type sequentialTestSearcher struct {
