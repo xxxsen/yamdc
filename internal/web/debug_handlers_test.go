@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -177,7 +178,7 @@ func TestHandlePluginEditorDraftNumberOp(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, rec := newGinContext(http.MethodPost, "/api/debug/plugin-editor/request", strings.NewReader(tt.body))
-			tt.api.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (interface{}, error) {
+			tt.api.handlePluginEditorDraftNumberOp(c, "request", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (any, error) {
 				return nil, nil //nolint:nilnil
 			})
 			resp := decodeResponse(t, rec)
@@ -315,13 +316,13 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 }
 
 func TestHandleHandlerDebugRunChain(t *testing.T) {
-	phandler.Register("test_chain_fail_v2", func(_ interface{}, _ appdeps.Runtime) (phandler.IHandler, error) {
+	phandler.Register("test_chain_fail_v2", func(_ any, _ appdeps.Runtime) (phandler.IHandler, error) {
 		return testHandlerFn(func(_ context.Context, fc *model.FileContext) error {
 			fc.Meta.Title += "-failed"
 			return fmt.Errorf("boom")
 		}), nil
 	})
-	phandler.Register("test_chain_ok_v2", func(_ interface{}, _ appdeps.Runtime) (phandler.IHandler, error) {
+	phandler.Register("test_chain_ok_v2", func(_ any, _ appdeps.Runtime) (phandler.IHandler, error) {
 		return testHandlerFn(func(_ context.Context, fc *model.FileContext) error {
 			fc.Meta.Title += "-ok"
 			return nil
@@ -369,7 +370,7 @@ func TestHandlePluginEditorDraftNumberOpError(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(`{"draft":{"version":1},"number":"ABC-123"}`))
-	api.handlePluginEditorDraftNumberOp(c, "test_op", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (interface{}, error) {
+	api.handlePluginEditorDraftNumberOp(c, "test_op", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (any, error) {
 		return nil, fmt.Errorf("op failed")
 	})
 	resp := decodeResponse(t, rec)
@@ -381,7 +382,7 @@ func TestHandlePluginEditorDraftNumberOpSuccess(t *testing.T) {
 	require.NoError(t, err)
 	api := &API{editor: editorSvc}
 	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(`{"draft":{"version":1},"number":"ABC-123"}`))
-	api.handlePluginEditorDraftNumberOp(c, "test_op", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (interface{}, error) {
+	api.handlePluginEditorDraftNumberOp(c, "test_op", errCodePluginEditorRequestFailed, func(_ context.Context, _ *plugyaml.PluginSpec, _ string) (any, error) {
 		return map[string]string{"ok": "true"}, nil
 	})
 	resp := decodeResponse(t, rec)

@@ -10,10 +10,11 @@ import (
 	"path"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/cronscheduler"
-	"gopkg.in/yaml.v3"
 )
 
 // cronJobPrefix 给本包的 bundle manager 产出的 remote sync job 加一个固定

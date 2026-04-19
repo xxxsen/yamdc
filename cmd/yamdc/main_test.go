@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	bootrt "github.com/xxxsen/yamdc/internal/bootstrap/runtime"
 	"github.com/xxxsen/yamdc/internal/client"

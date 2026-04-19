@@ -40,11 +40,11 @@ func ResolveCreateConfig(opts ...CreateOption) CreateConfig {
 	}
 }
 
-type Creator func(args interface{}, opts ...CreateOption) (IAIEngine, error)
+type Creator func(args any, opts ...CreateOption) (IAIEngine, error)
 
 var errUnknownEngine = errors.New("unknown ai engine")
 
-func Create(name string, args interface{}, opts ...CreateOption) (IAIEngine, error) {
+func Create(name string, args any, opts ...CreateOption) (IAIEngine, error) {
 	if creator, ok := m[name]; ok {
 		return creator(args, opts...)
 	}

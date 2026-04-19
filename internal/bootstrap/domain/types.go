@@ -16,5 +16,5 @@ type PluginOption struct {
 
 type HandlerOption struct {
 	Disable bool
-	Args    interface{}
+	Args    any
 }

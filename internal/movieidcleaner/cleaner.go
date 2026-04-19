@@ -6,8 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/xxxsen/yamdc/internal/number"
 	"golang.org/x/text/width"
+
+	"github.com/xxxsen/yamdc/internal/number"
 )
 
 type compiledNormalizerRule struct {

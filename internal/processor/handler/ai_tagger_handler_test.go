@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/model"
 )
 
@@ -17,7 +18,7 @@ type mockAIEngine struct {
 }
 
 func (m *mockAIEngine) Name() string { return "mock_ai" }
-func (m *mockAIEngine) Complete(_ context.Context, _ string, _ map[string]interface{}) (string, error) {
+func (m *mockAIEngine) Complete(_ context.Context, _ string, _ map[string]any) (string, error) {
 	return m.result, m.err
 }
 

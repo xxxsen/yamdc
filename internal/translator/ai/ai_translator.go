@@ -45,7 +45,7 @@ func (g *aiTranslator) Translate(ctx context.Context, wording, _, _ string) (str
 	if g.engine == nil {
 		return "", errAIEngineNotInit
 	}
-	args := map[string]interface{}{
+	args := map[string]any{
 		"WORDING": wording,
 	}
 	res, err := g.engine.Complete(ctx, g.c.prompt, args)

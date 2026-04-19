@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/cronscheduler"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/cronscheduler"
 )
 
 // 1.5 起 media library 的定时任务从 Service 内自管的 goroutine + Timer

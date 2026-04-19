@@ -60,7 +60,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 		utf8.RuneCountInString(plot) < defualtMinPlotLengthForAITagging {
 		return nil
 	}
-	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]interface{}{
+	res, err := a.engine.Complete(ctx, defaultAITaggerPrompt, map[string]any{
 		"TITLE": title,
 		"PLOT":  plot,
 	})
@@ -79,7 +79,7 @@ func (a *aiTaggerHandler) Handle(ctx context.Context, fc *model.FileContext) err
 }
 
 func init() {
-	Register(HAITagger, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HAITagger, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &aiTaggerHandler{engine: deps.AIEngine}, nil
 	})
 }

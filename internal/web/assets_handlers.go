@@ -8,8 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/store"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
 func (a *API) handleAssetPost(c *gin.Context) {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 )
 

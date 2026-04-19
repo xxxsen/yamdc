@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/medialib"
 	"github.com/xxxsen/yamdc/internal/repository"
 )
@@ -790,8 +791,8 @@ func TestHandleMediaLibrarySyncLogsSuccess(t *testing.T) {
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, 0, resp.Code)
 
-	// resp.Data 是 []interface{} 形式, 至少有 start + end 两条记录。
-	items, ok := resp.Data.([]interface{})
+	// resp.Data 是 []any 形式, 至少有 start + end 两条记录。
+	items, ok := resp.Data.([]any)
 	require.True(t, ok, "response data must be array")
 	assert.GreaterOrEqual(t, len(items), 2)
 }

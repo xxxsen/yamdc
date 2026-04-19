@@ -5,10 +5,11 @@ import (
 	"fmt"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/processor"
 	"github.com/xxxsen/yamdc/internal/processor/handler"
-	"go.uber.org/zap"
 )
 
 func BuildProcessor(

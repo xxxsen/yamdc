@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+
 	"github.com/xxxsen/yamdc/internal/browser"
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/flarerr"
 	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	"github.com/xxxsen/yamdc/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 // Environment variables:
@@ -49,16 +50,16 @@ func fetchRemoteYAML(t *testing.T, url string) []byte {
 
 func toBrowserYAML(t *testing.T, goHTTPData []byte, waitSelector string) []byte {
 	t.Helper()
-	var raw map[string]interface{}
+	var raw map[string]any
 	require.NoError(t, yaml.Unmarshal(goHTTPData, &raw))
 
 	raw["fetch_type"] = "browser"
 	raw["name"] = fmt.Sprintf("%s-browser", raw["name"])
 
 	if waitSelector != "" {
-		req, _ := raw["request"].(map[string]interface{})
+		req, _ := raw["request"].(map[string]any)
 		if req != nil {
-			req["browser"] = map[string]interface{}{
+			req["browser"] = map[string]any{
 				"wait_selector": waitSelector,
 				"wait_timeout":  30,
 			}
@@ -138,7 +139,7 @@ func TestFetchType_Browser(t *testing.T) {
 
 func toFlaresolverrYAML(t *testing.T, goHTTPData []byte) []byte {
 	t.Helper()
-	var raw map[string]interface{}
+	var raw map[string]any
 	require.NoError(t, yaml.Unmarshal(goHTTPData, &raw))
 
 	raw["fetch_type"] = "flaresolverr"

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
@@ -450,7 +451,7 @@ func TestDebugChainWithFailures(t *testing.T) {
 
 func TestDebugSingleHandlerExecutionError(t *testing.T) {
 	name := "test_runtime_error_handler"
-	Register(name, func(_ interface{}, _ appdeps.Runtime) (IHandler, error) {
+	Register(name, func(_ any, _ appdeps.Runtime) (IHandler, error) {
 		return &failingHandler{}, nil
 	})
 	d := NewDebugger(appdeps.Runtime{}, nil, []string{name}, nil)
@@ -513,7 +514,7 @@ func TestDebugSingleHandlerWithHandlerID(t *testing.T) {
 }
 
 func TestDebugChainWithHandlerErrors(t *testing.T) {
-	Register("test_error_handler", func(_ interface{}, _ appdeps.Runtime) (IHandler, error) {
+	Register("test_error_handler", func(_ any, _ appdeps.Runtime) (IHandler, error) {
 		return nil, errors.New("cannot create handler")
 	})
 	d := NewDebugger(appdeps.Runtime{}, nil, []string{"test_error_handler"}, nil)
@@ -525,7 +526,7 @@ func TestDebugChainWithHandlerErrors(t *testing.T) {
 }
 
 func TestDebugSingleWithCreateHandlerError(t *testing.T) {
-	Register("test_create_error", func(_ interface{}, _ appdeps.Runtime) (IHandler, error) {
+	Register("test_create_error", func(_ any, _ appdeps.Runtime) (IHandler, error) {
 		return nil, errors.New("creation error")
 	})
 	d := NewDebugger(appdeps.Runtime{}, nil, []string{"test_create_error"}, nil)
@@ -547,7 +548,7 @@ func TestPrepareDebugContextNilMeta(t *testing.T) {
 
 func TestDebugChainWithHandlerFailures(t *testing.T) {
 	name := "test_failing_handler_chain"
-	Register(name, func(_ interface{}, _ appdeps.Runtime) (IHandler, error) {
+	Register(name, func(_ any, _ appdeps.Runtime) (IHandler, error) {
 		return &failingHandler{}, nil
 	})
 	d := NewDebugger(appdeps.Runtime{}, nil, []string{name}, nil)

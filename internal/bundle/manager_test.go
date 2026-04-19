@@ -1116,7 +1116,7 @@ func TestFetchLatestGitHubTag_CancelledContext(t *testing.T) {
 		location: "https://github.com/owner/repo",
 		cli: &mockHTTPClient{
 			doFunc: func(_ *http.Request) (*http.Response, error) {
-				return nil, errors.New("cancelled")
+				return nil, errors.New("canceled")
 			},
 		},
 	}

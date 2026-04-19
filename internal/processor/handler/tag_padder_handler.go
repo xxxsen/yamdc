@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/samber/lo"
+
 	"github.com/xxxsen/yamdc/internal/model"
 )
 

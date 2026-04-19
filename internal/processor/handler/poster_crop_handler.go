@@ -103,7 +103,7 @@ func (c *posterCropHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HPosterCropper, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HPosterCropper, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &posterCropHandler{
 			faceRec: deps.FaceRec,
 			storage: deps.Storage,

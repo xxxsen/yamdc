@@ -114,7 +114,7 @@ func (p *translaterHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 func init() {
-	Register(HTranslater, func(_ interface{}, deps appdeps.Runtime) (IHandler, error) {
+	Register(HTranslater, func(_ any, deps appdeps.Runtime) (IHandler, error) {
 		return &translaterHandler{
 			storage:    deps.Storage,
 			translator: deps.Translator,

@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/antchfx/htmlquery"
+	"golang.org/x/net/html"
+
 	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/meta"
-	"golang.org/x/net/html"
 )
 
 type workflowMultiRequestDebug struct {

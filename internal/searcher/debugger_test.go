@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/api"
@@ -43,7 +44,7 @@ func (m *mockCleaner) Explain(_ string) (*movieidcleaner.ExplainResult, error) {
 
 func TestDebuggerUsesSnapshotCreators(t *testing.T) {
 	oldCtx := factory.NewRegisterContext()
-	oldCtx.Register("old", func(_ interface{}) (api.IPlugin, error) {
+	oldCtx.Register("old", func(_ any) (api.IPlugin, error) {
 		return &precheckFalsePlugin{}, nil
 	})
 	factory.Swap(oldCtx)
@@ -51,7 +52,7 @@ func TestDebuggerUsesSnapshotCreators(t *testing.T) {
 	debugger := NewDebugger(debuggerTestClient{}, store.NewMemStorage(), nil, []string{"old"}, nil)
 
 	newCtx := factory.NewRegisterContext()
-	newCtx.Register("new", func(_ interface{}) (api.IPlugin, error) {
+	newCtx.Register("new", func(_ any) (api.IPlugin, error) {
 		return &precheckFalsePlugin{}, nil
 	})
 	factory.Swap(newCtx)
@@ -72,8 +73,8 @@ func TestDebuggerUsesSnapshotCreators(t *testing.T) {
 
 func TestDebuggerPlugins(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("plgA", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
-	ctx.Register("plgB", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("plgA", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("plgB", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	d := &Debugger{
 		cli:     &debuggerTestClient{},
 		storage: store.NewMemStorage(),
@@ -99,7 +100,7 @@ func TestDebugSearch_PluginNotFound(t *testing.T) {
 
 func TestDebugSearch_WithCleaner(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("test-plg", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("test-plg", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	cleaner := &mockCleaner{
 		res: &movieidcleaner.Result{
 			Normalized:      "ABC-123",
@@ -139,7 +140,7 @@ func TestDebugSearch_CleanerError(t *testing.T) {
 func TestDebugSearch_CleanerNilResult(t *testing.T) {
 	cleaner := &mockCleaner{res: nil}
 	ctx := factory.NewRegisterContext()
-	ctx.Register("test-plg", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("test-plg", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	d := &Debugger{
 		cli:     &debuggerTestClient{},
 		storage: store.NewMemStorage(),
@@ -156,7 +157,7 @@ func TestDebugSearch_CleanerNilResult(t *testing.T) {
 
 func TestDebugSearch_WithUncensor(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("test-plg", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("test-plg", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	cleaner := &mockCleaner{
 		res: &movieidcleaner.Result{
 			Normalized:      "ABC-123",
@@ -180,7 +181,7 @@ func TestDebugSearch_WithUncensor(t *testing.T) {
 
 func TestDebugSearch_ResolvePluginsWithCategory(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("cat-plg", func(_ interface{}) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
+	ctx.Register("cat-plg", func(_ any) (api.IPlugin, error) { return &precheckFalsePlugin{}, nil })
 	cleaner := &mockCleaner{
 		res: &movieidcleaner.Result{
 			Normalized:      "ABC-123",
@@ -208,7 +209,7 @@ func TestDebugSearch_SkipAssets(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("test-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("test-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -312,8 +313,8 @@ func TestBoolMessage(t *testing.T) {
 
 func TestCollectVisiblePlugins(t *testing.T) {
 	creators := map[string]factory.CreatorFunc{
-		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
-		"b": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"b": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
 	}
 	result := collectVisiblePlugins(
 		[]string{"a", "b", "  ", "a", "nonexistent"},
@@ -335,7 +336,7 @@ func TestDebugSearch_FullFound(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("found-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("found-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -361,7 +362,7 @@ func TestDebugSearch_FullFound(t *testing.T) {
 
 func TestDebugSearch_PrecheckError(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("err-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("err-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{precheckOK: false, precheckErr: errors.New("precheck fail")}, nil
 	})
 	d := &Debugger{cli: &debuggerTestClient{}, storage: store.NewMemStorage()}
@@ -374,7 +375,7 @@ func TestDebugSearch_PrecheckError(t *testing.T) {
 
 func TestDebugSearch_MakeRequestError(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("req-err-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("req-err-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK: true,
 			makeReqFn: func(_ context.Context, _ string) (*http.Request, error) {
@@ -391,7 +392,7 @@ func TestDebugSearch_MakeRequestError(t *testing.T) {
 
 func TestDebugSearch_HandleHTTPReturnsNilResponse(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("nil-rsp-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("nil-rsp-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK: true,
 			makeReqFn: func(ctx2 context.Context, _ string) (*http.Request, error) {
@@ -411,7 +412,7 @@ func TestDebugSearch_HandleHTTPReturnsNilResponse(t *testing.T) {
 
 func TestDebugSearch_HTTPError(t *testing.T) {
 	ctx := factory.NewRegisterContext()
-	ctx.Register("http-err-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("http-err-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK: true,
 			makeReqFn: func(ctx2 context.Context, _ string) (*http.Request, error) {
@@ -435,7 +436,7 @@ func TestDebugSearch_PrecheckResponseError(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("rsp-err-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("rsp-err-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:     true,
 			precheckRspOK:  false,
@@ -459,7 +460,7 @@ func TestDebugSearch_Non200Response(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("500-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("500-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -481,7 +482,7 @@ func TestDebugSearch_DecodeError(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("dec-err-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("dec-err-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -504,7 +505,7 @@ func TestDebugSearch_DecodeNotSucc(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("no-dec-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("no-dec-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -527,7 +528,7 @@ func TestDebugSearch_VerifyMetaFails(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := factory.NewRegisterContext()
-	ctx.Register("verify-fail-plg", func(_ interface{}) (api.IPlugin, error) {
+	ctx.Register("verify-fail-plg", func(_ any) (api.IPlugin, error) {
 		return &fullPlugin{
 			precheckOK:    true,
 			precheckRspOK: true,
@@ -547,7 +548,7 @@ func TestDebugSearch_VerifyMetaFails(t *testing.T) {
 
 func TestCloneCreators(t *testing.T) {
 	in := map[string]factory.CreatorFunc{
-		"a": func(_ interface{}) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
+		"a": func(_ any) (api.IPlugin, error) { return nil, nil }, //nolint:nilnil
 	}
 	out := cloneCreators(in)
 	require.Len(t, out, 1)
@@ -556,7 +557,7 @@ func TestCloneCreators(t *testing.T) {
 func TestDebugOnePlugin_CreatorError(t *testing.T) {
 	d := &Debugger{cli: &debuggerTestClient{}, storage: store.NewMemStorage()}
 	d.SwapState(nil, nil, map[string]factory.CreatorFunc{
-		"bad": func(_ interface{}) (api.IPlugin, error) {
+		"bad": func(_ any) (api.IPlugin, error) {
 			return nil, errors.New("creator error")
 		},
 	})

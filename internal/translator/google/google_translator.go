@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	gt "github.com/Conight/go-googletrans"
+
 	"github.com/xxxsen/yamdc/internal/translator"
 )
 

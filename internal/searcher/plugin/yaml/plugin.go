@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 	"gopkg.in/yaml.v3"
+
+	pluginapi "github.com/xxxsen/yamdc/internal/searcher/plugin/api"
 )
 
 var (

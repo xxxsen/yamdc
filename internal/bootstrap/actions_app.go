@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	bootapp "github.com/xxxsen/yamdc/internal/bootstrap/app"
 	"github.com/xxxsen/yamdc/internal/bootstrap/server"
 	"github.com/xxxsen/yamdc/internal/cronscheduler"
@@ -17,7 +19,6 @@ import (
 	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
 	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/web"
-	"go.uber.org/zap"
 )
 
 // 应用层 (app) action 集合:

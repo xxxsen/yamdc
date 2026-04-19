@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/model"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type group struct {

@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/face"
 	"github.com/xxxsen/yamdc/internal/face/pigo"
-	"go.uber.org/zap"
 )
 
 func BuildFaceRecognizer(ctx context.Context, enablePigo bool, models string) (face.IFaceRec, error) {

@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/net/html"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
 	"github.com/xxxsen/yamdc/internal/searcher/parser"
-	"golang.org/x/net/html"
 )
 
 func (p *SearchPlugin) decodeHTML(ctx context.Context, node *html.Node) (*model.MovieMeta, error) {

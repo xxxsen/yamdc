@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/logutil"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	"github.com/xxxsen/yamdc/internal/searcher"
 	pluginbundle "github.com/xxxsen/yamdc/internal/searcher/plugin/bundle"
 	"github.com/xxxsen/yamdc/internal/searcher/plugin/factory"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
-	"go.uber.org/zap"
 )
 
 // YAML 搜索器插件 bundle 的启动与热重载逻辑。

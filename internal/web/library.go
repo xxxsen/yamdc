@@ -11,8 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xxxsen/common/logutil"
-	"github.com/xxxsen/yamdc/internal/medialib"
 	"go.uber.org/zap"
+
+	"github.com/xxxsen/yamdc/internal/medialib"
 )
 
 type libraryListItem struct {

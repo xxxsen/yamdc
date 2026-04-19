@@ -55,7 +55,7 @@ type DebugResult struct {
 
 type DebugHandlerOption struct {
 	Disable bool
-	Args    interface{}
+	Args    any
 }
 
 type Debugger struct {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
@@ -2681,7 +2682,7 @@ func (s *gatedSearcher) Search(ctx context.Context, n *number.Number) (*model.Mo
 	select {
 	case <-s.release:
 	case <-ctx.Done():
-		return nil, false, fmt.Errorf("gated search cancelled: %w", ctx.Err())
+		return nil, false, fmt.Errorf("gated search canceled: %w", ctx.Err())
 	}
 	meta := *s.meta
 	meta.Number = n.GetNumberID()
@@ -2822,7 +2823,7 @@ func TestServiceStopReturnsCtxErrorButWorkerStillCompletes(t *testing.T) {
 	err := svc.Stop(ctx)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled),
-		"Stop with cancelled ctx must wrap ctx.Err; got: %v", err)
+		"Stop with canceled ctx must wrap ctx.Err; got: %v", err)
 
 	// ctx 已取消让 Stop 先返回, 但 worker 仍在 gate 里 → 释放后必须能自然退出。
 	close(gate.release)

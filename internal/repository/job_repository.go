@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/xxxsen/yamdc/internal/jobdef"
 )
 
@@ -225,9 +226,9 @@ func (r *JobRepository) UpsertScannedJob(ctx context.Context, in UpsertJobInput)
 	return nil
 }
 
-func buildListJobsFilter(status []jobdef.Status, keyword string) (string, []interface{}) {
+func buildListJobsFilter(status []jobdef.Status, keyword string) (string, []any) {
 	where := ` WHERE deleted_at = 0`
-	args := make([]interface{}, 0, len(status)+4)
+	args := make([]any, 0, len(status)+4)
 	if len(status) > 0 {
 		where += " AND status IN ("
 		for i, item := range status {
@@ -292,7 +293,7 @@ func (r *JobRepository) ListJobs(
 		error_msg, created_at, updated_at
 		FROM yamdc_job_tab` + where +
 		` ORDER BY created_at DESC, id DESC`
-	queryArgs := append([]interface{}{}, args...)
+	queryArgs := append([]any{}, args...)
 	if !all {
 		query += ` LIMIT ? OFFSET ?`
 		queryArgs = append(queryArgs, pageSize, (page-1)*pageSize)
@@ -419,7 +420,7 @@ func (r *JobRepository) UpdateStatus(
 	errMsg string,
 ) (bool, error) {
 	query := `UPDATE yamdc_job_tab SET status = ?, error_msg = ?, updated_at = ? WHERE id = ?`
-	args := make([]interface{}, 0, len(from)+4)
+	args := make([]any, 0, len(from)+4)
 	args = append(args, to, errMsg, time.Now().UnixMilli(), id)
 	if len(from) > 0 {
 		query += " AND status IN ("
@@ -498,7 +499,7 @@ func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys [
 	}
 	sort.Strings(filtered)
 	placeholders := make([]string, 0, len(filtered))
-	args := make([]interface{}, 0, len(filtered))
+	args := make([]any, 0, len(filtered))
 	for _, key := range filtered {
 		placeholders = append(placeholders, "?")
 		args = append(args, key)
@@ -507,7 +508,7 @@ func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys [
 	query := `SELECT id, rel_path, conflict_key, status FROM yamdc_job_tab` +
 		` WHERE deleted_at = 0 AND status != ? AND conflict_key IN (` +
 		strings.Join(placeholders, ",") + `)`
-	rows, err := r.db.QueryContext(ctx, query, append([]interface{}{jobdef.StatusDone}, args...)...)
+	rows, err := r.db.QueryContext(ctx, query, append([]any{jobdef.StatusDone}, args...)...)
 	if err != nil {
 		return nil, fmt.Errorf("list active jobs by conflict keys failed: %w", err)
 	}

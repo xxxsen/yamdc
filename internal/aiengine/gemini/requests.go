@@ -52,7 +52,7 @@ type TokenDetail struct {
 	TokenCount int    `json:"tokenCount"`
 }
 
-func buildRequest(prompt string, m map[string]interface{}) *Request {
+func buildRequest(prompt string, m map[string]any) *Request {
 	res := replacer.ReplaceByMap(prompt, m)
 	content := Content{
 		Parts: []Part{

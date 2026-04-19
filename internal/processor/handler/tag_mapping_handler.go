@@ -54,7 +54,7 @@ func (h *tagMappingHandler) Handle(ctx context.Context, fc *model.FileContext) e
 }
 
 // createTagMappingHandler 创建标签映射处理器
-func createTagMappingHandler(args interface{}, _ appdeps.Runtime) (IHandler, error) {
+func createTagMappingHandler(args any, _ appdeps.Runtime) (IHandler, error) {
 	c := &tagMappingConfig{}
 
 	handler := &tagMappingHandler{}

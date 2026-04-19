@@ -11,9 +11,10 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	basebundle "github.com/xxxsen/yamdc/internal/bundle"
 	pluginyaml "github.com/xxxsen/yamdc/internal/searcher/plugin/yaml"
-	"gopkg.in/yaml.v3"
 )
 
 var (

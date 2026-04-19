@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
 	"github.com/xxxsen/yamdc/internal/bootstrap/domain"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 )

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xxxsen/common/utils"
+
 	"github.com/xxxsen/yamdc/internal/aiengine"
 	"github.com/xxxsen/yamdc/internal/client"
 )
@@ -33,7 +34,7 @@ func (g *ollamaEngine) Name() string {
 	return defaultOllamaEngineName
 }
 
-func (g *ollamaEngine) Complete(ctx context.Context, prompt string, args map[string]interface{}) (string, error) {
+func (g *ollamaEngine) Complete(ctx context.Context, prompt string, args map[string]any) (string, error) {
 	bodyReq := buildRequest(prompt, args, g.c.Model)
 	raw, err := json.Marshal(bodyReq)
 	if err != nil {
@@ -92,7 +93,7 @@ func newOllamaEngine(c *config) (*ollamaEngine, error) {
 	return &ollamaEngine{c: c}, nil
 }
 
-func createOllamaEngine(args interface{}, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
+func createOllamaEngine(args any, opts ...aiengine.CreateOption) (aiengine.IAIEngine, error) {
 	c := &config{}
 	if err := utils.ConvStructJson(args, c); err != nil {
 		return nil, fmt.Errorf("parse ollama config failed: %w", err)

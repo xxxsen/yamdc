@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xxxsen/yamdc/internal/appdeps"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/store"
@@ -81,7 +82,7 @@ func TestCreateTagMapperHandlerViaFactory(t *testing.T) {
 	deps := appdeps.Runtime{
 		Storage: store.NewMemStorage(),
 	}
-	h, err := CreateHandler(HTagMapper, map[string]interface{}{}, deps)
+	h, err := CreateHandler(HTagMapper, map[string]any{}, deps)
 	require.NoError(t, err)
 	assert.NotNil(t, h)
 }

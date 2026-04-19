@@ -265,7 +265,7 @@ func (c *Capture) resolveSaveDir(fc *model.FileContext) error {
 	if len(titleTranslated) == 0 {
 		titleTranslated = title
 	}
-	m := map[string]interface{}{
+	m := map[string]any{
 		NamingReleaseDate:     date,
 		NamingReleaseYear:     year,
 		NamingReleaseMonth:    month,

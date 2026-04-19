@@ -9,8 +9,9 @@ import (
 
 	"github.com/antchfx/htmlquery"
 	"github.com/stretchr/testify/require"
-	"github.com/xxxsen/yamdc/internal/model"
 	"golang.org/x/net/html"
+
+	"github.com/xxxsen/yamdc/internal/model"
 )
 
 type testHTTPClient struct {

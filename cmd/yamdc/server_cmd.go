@@ -8,9 +8,10 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/xxxsen/yamdc/internal/bootstrap"
 	"github.com/xxxsen/yamdc/internal/config"
-	"go.uber.org/zap"
 )
 
 func newServerCmd() *cobra.Command {

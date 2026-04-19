@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/net/html"
+
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/searcher/decoder"
-	"golang.org/x/net/html"
 )
 
 func (p *SearchPlugin) traceDecodeHTML(ctx context.Context, node *html.Node, out map[string]FieldDebugResult) (
@@ -209,7 +210,7 @@ func traceAssignStringField(
 	field,
 	value string,
 	parserSpec ParserSpec,
-) (interface{}, error) {
+) (any, error) {
 	if strings.TrimSpace(value) == "" && (parserSpec.Kind == "" || parserSpec.Kind == "string") {
 		return value, nil
 	}
