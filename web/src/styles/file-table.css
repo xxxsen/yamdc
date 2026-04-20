@@ -475,8 +475,10 @@
 .file-log-dialog {
   width: min(960px, calc(100vw - 32px));
   max-height: min(80vh, 920px);
-  overflow: auto;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .file-log-head {
   display: flex;
@@ -484,6 +486,7 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 14px;
+  flex: 0 0 auto;
 }
 .file-log-kicker {
   font-size: 12px;
@@ -506,10 +509,19 @@
   border-radius: 14px;
   background: rgba(31, 26, 20, 0.05);
   color: var(--muted);
+  flex: 0 0 auto;
 }
+/* file-log-list: 只让日志列表自身滚动, 头部 (Task Trace / 任务日志 #XXX /
+   rel_path) 常驻在顶部。flex:1 + min-height:0 是让 grid 在 flex 容器里
+   正确吃到剩余高度并允许 overflow 生效的惯用组合; 只改 overflow-y 不给
+   min-height:0 会因为内容 intrinsic 高度把滚动条挤掉。 */
 .file-log-list {
   display: grid;
   gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .file-log-item {
   border: 1px solid var(--line);
