@@ -124,4 +124,63 @@ describe("ReviewListPanel overflow menu", () => {
     fireEvent.click(trigger);
     expect(screen.queryByRole("menuitem", { name: "打回" })).toBeNull();
   });
+
+  it("moveRunning=true: overflow trigger 也被禁用 (和 入库 按钮保持一致), title 提示迁移中", () => {
+    // 媒体库迁移进行中: 入库按钮早已 disabled, overflow 菜单里的"删除"
+    // 会 os.Remove 源文件, 迁移时极易和搬文件的路径撞车; "打回"虽然只改 DB
+    // 但为了 UI 不割裂一起锁上。这个 case 就是防御回归。
+    renderPanel({ moveRunning: true });
+    const trigger = screen.getByRole("button", { name: "更多操作" });
+    expect(trigger.hasAttribute("disabled")).toBe(true);
+    expect(trigger.getAttribute("title")).toContain("媒体库移动进行中");
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("menuitem", { name: "打回" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "删除" })).toBeNull();
+  });
+
+  // 批量删除按钮和 overflow 里的"删除"走同一套 os.Remove 源文件路径,
+  // 之前只堵了 overflow 而漏掉这里 (B 修不全)。本 case 回归"批量删除入口
+  // 也被 moveRunning 锁"。
+  it("批量删除按钮: moveRunning=true 时 disabled + title 提示迁移中", () => {
+    renderPanel({
+      moveRunning: true,
+      selectedJobIds: new Set([1]),
+      selectedCount: 1,
+    });
+    const btn = screen.getByRole("button", { name: "批量删除" });
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(btn.getAttribute("title")).toContain("媒体库移动进行中");
+  });
+
+  it("批量删除按钮: selectedCount > 0 且非 moveRunning 时可用", () => {
+    const onDeleteSelected = vi.fn();
+    renderPanel({
+      selectedJobIds: new Set([1]),
+      selectedCount: 1,
+      onDeleteSelected,
+    });
+    const btn = screen.getByRole("button", { name: "批量删除" });
+    expect(btn.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(btn);
+    expect(onDeleteSelected).toHaveBeenCalledTimes(1);
+  });
+
+  // 菜单通过 portal 渲染到 document.body 以避开 .review-job-list 的 overflow
+  // 裁剪。这里回归两件事: (1) 菜单节点确实在 list-panel 外部, 证明 portal
+  // 生效了; (2) 点菜单项本身不会触发"点外部"逻辑把菜单关掉 (之前 containerRef
+  // 版本是靠 DOM 嵌套保证的, portal 后必须显式在 trigger 和 menu 两个 ref
+  // 上都做 contains 检查)。
+  it("菜单通过 portal 渲染到 panel 外部, 点菜单项仍可以触发回调", () => {
+    const onReject = vi.fn();
+    const { container } = renderPanel({ onReject });
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+
+    const rejectItem = screen.getByRole("menuitem", { name: "打回" });
+    expect(container.contains(rejectItem)).toBe(false);
+    expect(document.body.contains(rejectItem)).toBe(true);
+
+    fireEvent.mouseDown(rejectItem);
+    fireEvent.click(rejectItem);
+    expect(onReject).toHaveBeenCalledTimes(1);
+  });
 });

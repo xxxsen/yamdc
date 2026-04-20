@@ -1376,3 +1376,36 @@ func TestServiceRejectDBError(t *testing.T) {
 	err := rig.svc.Reject(context.Background(), jobID, "x")
 	require.Error(t, err)
 }
+
+// TestServiceRejectRetryFromPartialState 回归"两阶段失败可自愈"这个不变量:
+//
+// Reject 分两步 — 先删 scrape_data, 再改 status。如果 UpdateStatus 崩在
+// 中途 (例如瞬时 DB 错误), 库里会留下 "status=reviewing + 无 scrape_data"
+// 的中间态。用户点第二次 Reject 应该还能走到底, 而不是被 "status != reviewing"
+// 这类校验卡住。
+//
+// 这里用"预先手工删掉 scrape_data"来模拟第一步成功、第二步失败后的残态,
+// 然后调一次 Reject 验证它确实能继续把 status 推到 failed。
+func TestServiceRejectRetryFromPartialState(t *testing.T) {
+	rig := newTestRig(t)
+	meta := &model.MovieMeta{Title: "T", Number: "RJ-RETRY"}
+	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
+
+	// 模拟 "Delete 成功 + UpdateStatus 失败" 的中间态: 手工把 scrape_data
+	// 删掉, 但保留 status = reviewing。
+	require.NoError(t, rig.svc.scrapeRepo.DeleteByJobID(context.Background(), jobID))
+	j0, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	require.Equal(t, jobdef.StatusReviewing, j0.Status)
+
+	// 在这种半完成态下再次 Reject: DeleteByJobID 对"无记录"幂等, UpdateStatus
+	// 走正常路径把 reviewing 推到 failed, 整条链路应当闭合无报错。
+	require.NoError(t, rig.svc.Reject(context.Background(), jobID, "retry"))
+
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+	assert.Equal(t, "retry", j.ErrorMsg)
+	_, err = rig.svc.scrapeRepo.GetByJobID(context.Background(), jobID)
+	require.ErrorIs(t, err, repository.ErrScrapeDataNotFound)
+}

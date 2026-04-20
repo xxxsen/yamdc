@@ -207,6 +207,29 @@ func (s *Service) Reject(ctx context.Context, jobID int64, reason string) error 
 		reasonText = reasonText[:maxReasonLen] + "..."
 	}
 
+	// 两阶段持久化顺序: 先删 scrape_data, 再改 status。
+	//
+	// 这是为了让"中途失败"的状态能被用户通过"再次点 Reject"自愈:
+	//   - 先 Delete 后 UpdateStatus: 如果 Delete 失败, 状态仍是 reviewing,
+	//     用户重试 Reject 走完整流程即可 (DeleteByJobID 对不存在的行幂等);
+	//     如果 UpdateStatus 失败, scrape_data 已清空, 重试时 loadJobOrNotFound
+	//     + StatusReviewing 校验仍通过, 再走一次 DeleteByJobID (no-op) +
+	//     UpdateStatus 就能闭合, 没有卡死路径。
+	//   - 反过来先改状态再删 scrape_data: 若 Delete 失败, status 已 failed,
+	//     重试会被 "status != reviewing" 拦住, 残留 scrape_data 就只能等
+	//     下一次 Run 走 UpsertRawData 覆盖或整条 Delete 级联清掉 — 无法在
+	//     Reject 这个入口自愈。
+	//
+	// 代价: Delete 成功 + UpdateStatus 失败时, 用户短暂看到 "reviewing 但没
+	// scrape 快照" 的中间态。点 Import 会立刻在 scrapeRepo.GetByJobID 里拿到
+	// repository.ErrScrapeDataNotFound (被 Import 的 "get scrape data for
+	// import: %w" 一层 wrap 抛出), 比"failed + 残留 scrape_data"这种隐蔽
+	// 残留更显眼, 可接受。
+	if err := s.scrapeRepo.DeleteByJobID(ctx, jobID); err != nil {
+		logger.Error("reject: delete scrape data failed", zap.Error(err))
+		return fmt.Errorf("reject delete scrape data: %w", err)
+	}
+
 	ok, err := s.jobRepo.UpdateStatus(
 		ctx, jobID,
 		[]jobdef.Status{jobdef.StatusReviewing},
@@ -223,14 +246,6 @@ func (s *Service) Reject(ctx context.Context, jobID int64, reason string) error 
 		// 校验过 StatusReviewing, 但这里复用 SQL 层的白名单自保, 对竞态直接把
 		// "非 reviewing 不能打回" 的语义一路透传上去。
 		return ErrJobNotReviewing
-	}
-
-	// scrape_data 的删除放在状态更新后: 前者失败才不落入"状态回到 failed 但
-	// scrape_data 还在"的泥泞中间态。DeleteByJobID 对"没有记录"本身就是幂等
-	// (底层 SQL DELETE WHERE job_id = ? 不会报错), 无需额外分支。
-	if err := s.scrapeRepo.DeleteByJobID(ctx, jobID); err != nil {
-		logger.Error("reject: delete scrape data failed", zap.Error(err))
-		return fmt.Errorf("reject delete scrape data: %w", err)
 	}
 
 	s.coordinator.AddJobLog(ctx, jobID, "info", "review", "review rejected", reasonText)

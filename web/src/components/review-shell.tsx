@@ -403,6 +403,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
         onCancel={() => setDeleteTargetIds(null)}
         onConfirm={confirmDelete}
         isPending={isPending}
+        moveRunning={moveRunning}
       />
       <RestoreConfirmOverlay
         open={restoreConfirmOpen}

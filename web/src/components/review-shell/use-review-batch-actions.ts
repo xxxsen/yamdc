@@ -119,6 +119,10 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
     if (!selected) {
       return;
     }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可删除任务");
+      return;
+    }
     setDeleteTargetIds([selected.id]);
   };
 
@@ -145,11 +149,25 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
     if (selectedCount === 0) {
       return;
     }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可批量删除");
+      return;
+    }
     setDeleteTargetIds(Array.from(selectedJobIds));
   };
 
   const confirmDelete = () => {
     if (!deleteTargetIds || deleteTargetIds.length === 0) {
+      return;
+    }
+    // 防御式守卫: 按钮 disabled 只挡了 "点开对话框" 这一步, 但用户完全可能
+    // 在 moveRunning 变 true 之前就已经把对话框打开。此时直接点"删除"会
+    // 绕过 UI 锁, 走到 deleteJob → os.Remove, 和迁移中的搬文件撞车。
+    // 这里和 handleDelete / handleDeleteSelected 保持同一套消息, 同时把
+    // targetIds 清空让对话框关闭, 提示用户当前动作被驳回。
+    if (moveRunning) {
+      setDeleteTargetIds(null);
+      setMessage("媒体库移动进行中，删除已取消");
       return;
     }
     const targetIDs = deleteTargetIds;
