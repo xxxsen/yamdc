@@ -2,7 +2,6 @@
 
 import { Check, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -183,6 +182,41 @@ interface MenuPosition {
   left: number;
 }
 
+// computeMenuPosition: 根据 trigger 的 viewport rect + 菜单真实尺寸 (若已挂载)
+// 计算菜单相对 viewport 的 top/left。提到 hook 之外是为了:
+//   1. 保证在 useLayoutEffect 里能把 `triggerRef.current` 的读取和 setPosition
+//      放在同一个函数体里, 让 react-hooks/set-state-in-effect 能识别到新 state
+//      的源头来自 ref (否则会误报 "setState synchronously within an effect");
+//   2. 顺便避免每次渲染重新构造 useCallback。
+function computeMenuPosition(trigger: HTMLElement, menuEl: HTMLElement | null): MenuPosition {
+  const rect = trigger.getBoundingClientRect();
+  // 优先用真实渲染后的 menu 尺寸; 首帧还没挂上时 fallback 到近似值,
+  // 首帧定位后 useLayoutEffect 会再触发一次 compute 收敛到精确位置。
+  const menuWidth = menuEl?.offsetWidth ?? MENU_WIDTH;
+  const menuHeight = menuEl?.offsetHeight ?? MENU_MIN_HEIGHT;
+
+  // 水平: 右对齐 trigger, 然后向左 clamp 保证不出左侧 viewport。
+  let left = rect.right - menuWidth;
+  const maxLeft = window.innerWidth - menuWidth - VIEWPORT_PAD;
+  if (left > maxLeft) left = maxLeft;
+  if (left < VIEWPORT_PAD) left = VIEWPORT_PAD;
+
+  // 垂直: 默认往下; trigger 下方空间不足时翻到上方; 两侧都不够就贴
+  // 底部并允许原本 overflow: auto 的菜单自身滚动 (目前只有两项, 实际
+  // 不会出现)。
+  const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PAD;
+  const spaceAbove = rect.top - VIEWPORT_PAD;
+  let top: number;
+  if (spaceBelow >= menuHeight + MENU_OFFSET) {
+    top = rect.bottom + MENU_OFFSET;
+  } else if (spaceAbove >= menuHeight + MENU_OFFSET) {
+    top = rect.top - menuHeight - MENU_OFFSET;
+  } else {
+    top = Math.max(VIEWPORT_PAD, window.innerHeight - menuHeight - VIEWPORT_PAD);
+  }
+  return { top, left };
+}
+
 // ReviewJobOverflowMenu 把 "删除" / "打回" 两个相对低频的破坏性操作
 // 折叠到 `...` 菜单里, 避免每张 review 卡片上出现 3 个按钮过于拥挤。
 //
@@ -197,69 +231,47 @@ interface MenuPosition {
 //   向上翻或往左 clamp。
 function ReviewJobOverflowMenu({ disabled, triggerTitle, onDelete, onReject }: ReviewJobOverflowMenuProps) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // SSR 安全: createPortal 需要 document, 用 mounted 门闩避免服务端
-  // 渲染阶段访问 document 报错。
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const computePosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const menuEl = menuRef.current;
-    // 优先用真实渲染后的 menu 尺寸; 首帧还没挂上时 fallback 到近似值,
-    // 首帧定位后 useLayoutEffect 会再触发一次 compute 收敛到精确位置。
-    const menuWidth = menuEl?.offsetWidth ?? MENU_WIDTH;
-    const menuHeight = menuEl?.offsetHeight ?? MENU_MIN_HEIGHT;
-
-    // 水平: 右对齐 trigger, 然后向左 clamp 保证不出左侧 viewport。
-    let left = rect.right - menuWidth;
-    const maxLeft = window.innerWidth - menuWidth - VIEWPORT_PAD;
-    if (left > maxLeft) left = maxLeft;
-    if (left < VIEWPORT_PAD) left = VIEWPORT_PAD;
-
-    // 垂直: 默认往下; trigger 下方空间不足时翻到上方; 两侧都不够就贴
-    // 底部并允许原本 overflow: auto 的菜单自身滚动 (目前只有两项, 实际
-    // 不会出现)。
-    const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PAD;
-    const spaceAbove = rect.top - VIEWPORT_PAD;
-    let top: number;
-    if (spaceBelow >= menuHeight + MENU_OFFSET) {
-      top = rect.bottom + MENU_OFFSET;
-    } else if (spaceAbove >= menuHeight + MENU_OFFSET) {
-      top = rect.top - menuHeight - MENU_OFFSET;
-    } else {
-      top = Math.max(VIEWPORT_PAD, window.innerHeight - menuHeight - VIEWPORT_PAD);
-    }
-    setPosition({ top, left });
-  }, []);
+  // SSR 安全说明: createPortal 需要 document。组件不再单独维护 mounted 门闩,
+  // 因为 `open` 初始为 false, 只可能在 client 的 onClick 里翻成 true ——
+  // 即使 Next.js app router 把这份组件放到 server render, 也不会进到下面
+  // `createPortal(..., document.body)` 分支, 所以不会 touch `document`。
 
   // 打开瞬间先用近似尺寸算一次, 避免菜单在 (0,0) 闪一下; 菜单挂上之后
   // useLayoutEffect 再用真实尺寸修一次位置。
+  // 这里把 trigger 的 ref 读取和 setPosition 放在同一个 effect 体里, 是为了
+  // 符合 react-hooks/set-state-in-effect: 规则允许 "setState 的值来源于 ref"
+  // 这种写法 (典型场景就是测量 DOM 尺寸), 但不允许同步 setState 一个常量 /
+  // 从 props 派生的值。如果再经过 useCallback 包一层, 规则就看不出 ref 的
+  // 源头, 会误报, 所以保持内联。
   useLayoutEffect(() => {
     if (!open) return;
-    computePosition();
-  }, [open, computePosition]);
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    setPosition(computeMenuPosition(trigger, menuRef.current));
+  }, [open]);
 
   // 打开时监听 scroll/resize 重算位置, 覆盖"菜单打开 -> 用户滚列表"
   // 场景。用 capture: true 保证能接到 .review-job-list 这种内部滚动
-  // 容器的 scroll 事件。
+  // 容器的 scroll 事件。setPosition 在事件回调里触发 (而不是 effect 主体
+  // 同步调用), 因此不会被 set-state-in-effect 规则判定为级联渲染。
   useEffect(() => {
     if (!open) return;
-    const handler = () => computePosition();
+    const handler = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      setPosition(computeMenuPosition(trigger, menuRef.current));
+    };
     window.addEventListener("scroll", handler, true);
     window.addEventListener("resize", handler);
     return () => {
       window.removeEventListener("scroll", handler, true);
       window.removeEventListener("resize", handler);
     };
-  }, [open, computePosition]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -309,7 +321,7 @@ function ReviewJobOverflowMenu({ disabled, triggerTitle, onDelete, onReject }: R
       >
         <MoreHorizontal size={16} />
       </Button>
-      {mounted && effectiveOpen
+      {effectiveOpen
         ? createPortal(
             <div
               ref={menuRef}
