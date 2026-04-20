@@ -123,7 +123,7 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
   };
 
   // handleReject 对应 "打回" 操作: 仅支持单个任务, 把当前 reviewing job 回退
-  // 到 failed 状态并清掉 scrape_data, 用户可以回到 /processing 修改番号/variants
+  // 到 failed 状态并清掉 scrape_data, 用户可以回到 /processing 修改影片 ID/variants
   // 后重新 run。批量 reject 暂不支持 (产品决策), 所以这里只针对 selected。
   const handleReject = () => {
     if (!selected) {
@@ -134,7 +134,7 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
         setMessage("打回任务...");
         await rejectReviewJob(selected.id);
         removeJobFromList(selected.id);
-        setMessage("任务已打回，可到文件列表修改番号后重新 run");
+        setMessage("任务已打回，可到文件列表修改影片 ID 后重新 run");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "打回失败");
       }

@@ -824,7 +824,7 @@ func TestServiceImportAllowsSnapshotNumberWithDifferentSeparators(t *testing.T) 
 }
 
 // TestServiceImportAllowsJobNumberWithVariantAgainstBaseSnapshot 锁死
-// P0 fix: scrape 端只拿到基础番号 "PXVR-406", 而用户在 /processing 页手动
+// P0 fix: scrape 端只拿到基础影片 ID "PXVR-406", 而用户在 /processing 页手动
 // 把 job number 填成带 variant 的写法 (CD / 4K / VR / LEAK / UC / ...) 时,
 // verifyScrapeSnapshotMatchesJob 不能再按"字面量 + CleanID" 比对误判 mismatch,
 // 必须先用 number.Parse 剥掉 variant, 只比较 base ID。

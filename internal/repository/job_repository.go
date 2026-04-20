@@ -75,9 +75,9 @@ func (r *JobRepository) resolveConflictNumber(ctx context.Context, relPath, numb
 // 展开), 并被 resolveConflictNumber 使用。cleaned_number / number_clean_* 不走
 // 本函数, 见 numberFrozenCondition 注释与 SQL 中相应 CASE 的独立分支。
 //
-// 冻结触发条件: 手动改过番号 (number_source='manual'), 或 job 正在执行/等待
+// 冻结触发条件: 手动改过影片 ID (number_source='manual'), 或 job 正在执行/等待
 // 人工 review —— 此时 scrape_data 已有一份旧 number 的 meta 快照, 若 scanner
-// 的下一次重扫把 canonical number 静默改掉, Import 落盘时 NFO 里的番号就会
+// 的下一次重扫把 canonical number 静默改掉, Import 落盘时 NFO 里的影片 ID 就会
 // 与目录名错位, 用户不易察觉。
 func numberFieldsFrozen(numberSource, status string) bool {
 	if numberSource == "manual" {
@@ -93,7 +93,7 @@ func numberFieldsFrozen(numberSource, status string) bool {
 // numberFrozenCondition 描述"job 当前 number / number_source / conflict_key 这三
 // 个核心字段此次 upsert 不可被覆盖"的 SQL 条件, 与 numberFieldsFrozen (Go 侧)
 // 严格一致。触发条件:
-//   - 用户手动改过番号 (number_source='manual'), 一直以来就在保护;
+//   - 用户手动改过影片 ID (number_source='manual'), 一直以来就在保护;
 //   - job 正在 processing / 等待 reviewing: scrape_data 已有快照, 若 number 被
 //     scanner 重扫时静默改掉, Import 会和快照错位(目录名用新 number, NFO 用旧 meta)。
 //

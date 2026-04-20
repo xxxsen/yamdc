@@ -246,7 +246,7 @@ func TestJobRepositoryUpsertScannedJobPreservesManualNumber(t *testing.T) {
 }
 
 // TestJobRepositoryUpsertScannedJobFreezesNumberDuringReviewing 对应 3.2.a:
-// reviewing 期间 scanner 重扫 + 番号清洗规则更新, 不应静默覆盖 canonical 三项
+// reviewing 期间 scanner 重扫 + 影片 ID 清洗规则更新, 不应静默覆盖 canonical 三项
 // (number / number_source / conflict_key), 否则 scrape_data 快照与 job.number
 // 会脱钩; cleaned_number 不在冻结范围, 仍应跟随新输入刷新。
 func TestJobRepositoryUpsertScannedJobFreezesNumberDuringReviewing(t *testing.T) {

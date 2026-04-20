@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { JobItem, NumberVariantDescriptor, NumberVariantSelection } from "@/lib/api";
 
-// NumberEditModal: "文件列表" 页结构化番号编辑器。
+// NumberEditModal: "文件列表" 页结构化影片 ID 编辑器。
 //
 // 交互模型:
-//   - base: 影片 ID 主体, 用户只在这个输入框里维护番号本身 (例如 "PXVR-406")。
+//   - base: 影片 ID 主体, 用户只在这个输入框里维护影片 ID 本身 (例如 "PXVR-406")。
 //   - variants: 每个 flag descriptor 渲染成 chip 按钮, indexed descriptor
 //     额外带一个小数字输入框 (例如 CD 选 1/2/3...)。
 //   - preview: 下方实时预览拼装后的完整 number, 让用户在 "这条 patch 会被
@@ -69,7 +69,7 @@ function tryMatchIndexedSuffix(
   return Number.parseInt(digits, 10);
 }
 
-// parseExistingNumber 把已有的番号 (如 "PXVR-406-4K-CD2") 拆成 base + 每个
+// parseExistingNumber 把已有的影片 ID (如 "PXVR-406-4K-CD2") 拆成 base + 每个
 // descriptor 命中的 selection。只匹配传入的 descriptors, 不认识的 suffix 会
 // 被当成 base 的一部分留下 (这比丢失信息更保守)。匹配时不区分大小写, 因为
 // 后端 Parse 会 ToUpper 然后再比对; 我们也按大写标准化后比较。
@@ -241,7 +241,7 @@ export function NumberEditModal({
     >
       <div className="number-edit-modal">
         <label className="number-edit-field">
-          <span className="number-edit-field-label">基础番号</span>
+          <span className="number-edit-field-label">基础影片 ID</span>
           <input
             className="input"
             autoFocus
@@ -256,7 +256,7 @@ export function NumberEditModal({
             }}
           />
           <span className="number-edit-field-hint">
-            只填主番号, 变体 (CD / 4K / 中字 ...) 请用下方的按钮勾选。
+            只填主影片 ID, 变体 (CD / 4K / 中字 ...) 请用下方的按钮勾选。
           </span>
         </label>
 
@@ -331,7 +331,7 @@ export function NumberEditModal({
 
         <div className="number-edit-preview">
           <span className="number-edit-preview-label">预览</span>
-          <span className="number-edit-preview-value">{preview || "(请填写基础番号)"}</span>
+          <span className="number-edit-preview-value">{preview || "(请填写基础影片 ID)"}</span>
         </div>
       </div>
     </Modal>

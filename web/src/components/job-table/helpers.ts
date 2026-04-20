@@ -2,10 +2,10 @@ import type { JobItem } from "@/lib/api";
 
 export const STATUS_FILTER = "init,processing,failed,reviewing";
 
-// jobSortKey 取一个最能代表 "番号前缀" 的字段: 优先用清洗后的 number,
+// jobSortKey 取一个最能代表 "影片 ID 前缀" 的字段: 优先用清洗后的 number,
 // 没清洗过 (init) 就拿 raw_number 兜底。localeCompare 的 numeric:true 会把
 // "ABC-2" / "ABC-10" 当数字比较, 相同前缀会天然聚到一起, 这是刻意选的行为
-// — 用户反馈想按番号前缀分组而不是时间序。
+// — 用户反馈想按影片 ID 前缀分组而不是时间序。
 export function jobSortKey(job: JobItem) {
   return (job.number || job.raw_number || job.cleaned_number || "").trim();
 }
@@ -14,7 +14,7 @@ export function compareJobsByNumber(a: JobItem, b: JobItem) {
   const aKey = jobSortKey(a);
   const bKey = jobSortKey(b);
   // 都没 number 的 (比如刚扫进来又清洗失败) 按 id DESC 兜底, 保留 "最新在前"
-  // 的直觉; 有 number 的永远排在没 number 的前面, 避免空番号把列表头占满。
+  // 的直觉; 有 number 的永远排在没 number 的前面, 避免空影片 ID 把列表头占满。
   if (!aKey && !bKey) {
     return b.id - a.id;
   }
@@ -34,7 +34,7 @@ export function compareJobsByNumber(a: JobItem, b: JobItem) {
 }
 
 // canSelectJob 判断一个任务是否可加入批量提交. 两个条件都必须满足:
-//   1) 番号已确认 — manual 源, 或自动清洗得到 high/medium 置信度.
+//   1) 影片 ID 已确认 — manual 源, 或自动清洗得到 high/medium 置信度.
 //   2) 处于可运行态 — init (未提交) 或 failed (可重试).
 // conflict_reason 不空直接排除, 避免批量提交触发目标冲突.
 export function canSelectJob(job: JobItem) {

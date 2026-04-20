@@ -9,7 +9,7 @@ import { mount } from "@/components/ui/__tests__/test-helpers";
 
 import { NumberEditModal } from "../number-edit-modal";
 
-// NumberEditModal 的目标是让用户用 "base + 变体按钮" 结构化地填番号, 而不是
+// NumberEditModal 的目标是让用户用 "base + 变体按钮" 结构化地填影片 ID, 而不是
 // 拼字符串。本测试覆盖:
 //   1. 从已有 job.number (含 variant 后缀) 正确预填 base 与 variant 勾选状态;
 //   2. 预览是跟随 base / variant 状态实时重算的;
@@ -212,7 +212,7 @@ describe("NumberEditModal", () => {
     });
     const saveBtn = findModalButtonByText("保存");
     expect(saveBtn.disabled).toBe(true);
-    expect(document.querySelector(".number-edit-preview-value")!.textContent).toBe("(请填写基础番号)");
+    expect(document.querySelector(".number-edit-preview-value")!.textContent).toBe("(请填写基础影片 ID)");
 
     act(() => {
       saveBtn.click();

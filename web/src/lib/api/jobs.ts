@@ -102,7 +102,7 @@ export async function updateJobNumber(id: number, number: string, signal?: Abort
 export type NumberVariantKind = "flag" | "indexed";
 
 // NumberVariantDescriptor 对应后端 number.VariantDescriptor, 用于驱动
-// "文件列表" 页结构化番号输入的 UI 渲染 (id 做 stable key, label/description
+// "文件列表" 页结构化影片 ID 输入的 UI 渲染 (id 做 stable key, label/description
 // 用于展示, kind + min/max 决定交互形式)。
 export interface NumberVariantDescriptor {
   id: string;
@@ -131,7 +131,7 @@ export async function listNumberVariants(signal?: AbortSignal) {
 }
 
 // updateJobNumberStructured 调 PATCH /api/jobs/:id/number 的新结构化入口,
-// 后端会用 base + selections 拼出 "番号-后缀1-后缀2" 形态的完整 number,
+// 后端会用 base + selections 拼出 "影片 ID-后缀1-后缀2" 形态的完整 number,
 // 然后复用老校验 / 持久化链路。推荐新代码一律走此入口。老的 updateJobNumber
 // 仍然保留, 给只需要传完整 number 的老调用方 / 脚本使用。
 export async function updateJobNumberStructured(

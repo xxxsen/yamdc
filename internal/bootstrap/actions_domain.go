@@ -13,7 +13,7 @@ import (
 // 业务域 (domain) action 集合:
 //   - Searcher / CategorySearcher (含 YAML 插件 bundle 路径)
 //   - Processor handler 链
-//   - 番号清洗 (MovieIDCleaner)
+//   - 影片 ID 清洗 (MovieIDCleaner)
 //   - 搜索器 / handler 调试器
 //   - Capture 主流程编排对象
 //

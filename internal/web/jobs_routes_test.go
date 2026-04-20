@@ -676,7 +676,7 @@ func TestHandleJobUpdateNumberStructuredRouting(t *testing.T) {
 		},
 		{
 			// 仅带 base, 无 variants: 也要走结构化路径 (因为 base 非 nil)。
-			// 此处 test capture 不认识 "NEW-ONLY-BASE-001" 这种番号, 会在
+			// 此处 test capture 不认识 "NEW-ONLY-BASE-001" 这种影片 ID, 会在
 			// UpdateNumber 里报错, 但不应该回退到老路径。
 			name:     "structured base only",
 			body:     `{"base":"NEW-ONLY-BASE-001"}`,

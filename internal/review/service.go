@@ -412,7 +412,7 @@ func (s *Service) validateImportPreconditions(
 //   - 比对基准是 **base number** (经 number.Parse 剥掉 variant 后的 id), 再
 //     走 number.GetCleanID + EqualFold, 避免因:
 //     1) 用户手动把 job number 填成 "PXVR-406-CD2" 之类带 variant 的写法,
-//     而 scrape 端拿到的仅是基础番号 "PXVR-406";
+//     而 scrape 端拿到的仅是基础影片 ID "PXVR-406";
 //     2) 书写差异 "SSIS-001" vs "SSIS001" vs "ssis_001";
 //     被误判 mismatch。Parse 失败时退回到旧行为 (直接对 raw string 走 CleanID),
 //     保证对不符合 Parse 约束 (例如含 `.`) 的 legacy 数据不会突然变得更严格。
@@ -454,7 +454,7 @@ func (s *Service) verifyScrapeSnapshotMatchesJob(
 	return nil
 }
 
-// canonicalBaseForCompare 把一个 number 字面量转成"仅基础番号 + 大小写/分隔符
+// canonicalBaseForCompare 把一个 number 字面量转成"仅基础影片 ID + 大小写/分隔符
 // 不敏感"的比对 key: 先走 number.Parse 拿 base ID (剥掉 CD/4K/VR 等 variant),
 // 再经 number.GetCleanID 去掉 `-` / `_`。Parse 失败 (例如字符串带 `.` 这种
 // 它主动拒绝的字符) 时回退到原值走 CleanID, 保持和老逻辑一致的兜底行为。

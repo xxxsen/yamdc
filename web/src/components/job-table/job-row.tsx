@@ -17,7 +17,7 @@ import { NumberStatusIcon } from "./number-status-icon";
 // 拆出来的主要动机是让外层主文件摆脱 ~160 行行内渲染, 便于单独读懂这一行的
 // 显示/交互语义 (选择框 / 状态 / 日志 / 动作).
 //
-// 番号编辑不在 row 内联, 改成点击铅笔按钮打开 NumberEditModal, 因为:
+// 影片 ID 编辑不在 row 内联, 改成点击铅笔按钮打开 NumberEditModal, 因为:
 //   1. "base + variants selector" 的结构化输入需要多个控件, 塞到 table cell
 //      里会让一行高度爆炸, 并且和其它列的竖直对齐很难做好;
 //   2. modal 能显示完整的后缀释义 (中字 / 4K / 多盘 CD...), 比单输入框更
@@ -35,7 +35,7 @@ interface Props {
   onOpenLogs: (job: JobItem) => void;
 }
 
-// JobRow: 单行 JSX, 内部有大量 status/confidence/手动改番号 三选一分支.
+// JobRow: 单行 JSX, 内部有大量 status/confidence/手动改影片 ID 三选一分支.
 // eslint-disable-next-line complexity
 export function JobRow({
   job,

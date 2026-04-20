@@ -152,7 +152,7 @@ func (a *API) handleJobLogs(c *gin.Context) {
 // handleJobUpdateNumber 支持两种入参形态:
 //
 //  1. 结构化 (推荐): {"base":"PXVR-406","variants":[{"id":"multi_cd","index":2}]}
-//     base 由前端 "文件列表" 页的番号输入框提供, variants 对应变体下拉 /
+//     base 由前端 "文件列表" 页的影片 ID 输入框提供, variants 对应变体下拉 /
 //     按钮选择, 后端负责拼装。
 //
 //  2. 兼容老路径: {"number":"PXVR-406-CD2"} — 直接传完整的 number 字符串。
@@ -229,7 +229,7 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 }
 
 // handleListNumberVariants 返回当前支持的 variant 描述符列表, 用于前端
-// "文件列表" 页的结构化番号输入 (base + variant selectors)。返回里包含
+// "文件列表" 页的结构化影片 ID 输入 (base + variant selectors)。返回里包含
 // 足够的展示信息 (label/description) 和 schema 信息 (kind + min/max),
 // 前端不需要硬编码 suffix 语义, 也不需要硬编码哪些 variant 存在。
 func (a *API) handleListNumberVariants(c *gin.Context) {

@@ -332,7 +332,7 @@ describe("handleReject", () => {
     expect(mockReject).toHaveBeenCalledWith(77);
     expect(removeJobFromList).toHaveBeenCalledWith(77);
     expect(setMessage).toHaveBeenCalledWith("打回任务...");
-    expect(setMessage).toHaveBeenLastCalledWith("任务已打回，可到文件列表修改番号后重新 run");
+    expect(setMessage).toHaveBeenLastCalledWith("任务已打回，可到文件列表修改影片 ID 后重新 run");
   });
 
   it("reject 抛错: setMessage 用 error.message, 不 removeJob", async () => {

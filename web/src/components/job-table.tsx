@@ -26,7 +26,7 @@ interface Props {
 // JobTable: 处理队列页 (/processing) 的主壳.
 //   - 本文件只保留: 本地状态声明 + useMemo 派生 + 选择同步 effect + JSX 编排.
 //   - 所有 handler / 轮询 / 防抖搜索 → ./job-table/use-job-actions.ts.
-//   - 纯函数 (排序 / 番号 meta / 路径切分) → ./job-table/helpers.ts (带单测).
+//   - 纯函数 (排序 / 影片 ID meta / 路径切分) → ./job-table/helpers.ts (带单测).
 //   - 行 / 表头 / 两个 Modal → ./job-table/*.tsx.
 // 详见 td/022-frontend-optimization-roadmap.md §3.4.
 //

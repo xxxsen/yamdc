@@ -326,7 +326,7 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 	return updated, nil
 }
 
-// UpdateNumberStructured 是结构化版的 number 编辑入口: 前端传入 "base 番号"
+// UpdateNumberStructured 是结构化版的 number 编辑入口: 前端传入 "base 影片 ID"
 // 以及一组 variant selections (来自 GET /api/number/variants 给到的描述符),
 // 后端先用 number.ApplyVariantSelections 拼成带后缀的完整 number 字符串, 再
 // 复用既有 UpdateNumber 通道走 capture 校验 + 持久化 + 冲突检测。

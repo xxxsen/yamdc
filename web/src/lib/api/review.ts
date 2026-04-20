@@ -59,7 +59,7 @@ export async function importReviewJob(id: number, signal?: AbortSignal) {
 
 // rejectReviewJob 对应后端 POST /api/review/jobs/:id/reject: 把一条 reviewing
 // 的 job "打回" 到 failed 状态, 同时清掉 scrape_data, 用户可以回到 /processing
-// 页面重新编辑番号/variants 后再 run。reason 为空时后端会用默认文案。
+// 页面重新编辑影片 ID/variants 后再 run。reason 为空时后端会用默认文案。
 export async function rejectReviewJob(id: number, reason?: string, signal?: AbortSignal) {
   const data = await apiRequest<unknown>(`/api/review/jobs/${id}/reject`, {
     method: "POST",
