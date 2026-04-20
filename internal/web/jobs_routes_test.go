@@ -695,6 +695,14 @@ func TestHandleJobUpdateNumberStructuredRouting(t *testing.T) {
 			body:     `{}`,
 			wantCode: errCodeJobUpdateNumberFailed,
 		},
+		{
+			// 结构化入参同时勾选 4K / 8K, 同属 resolution 互斥分组,
+			// 后端必须在 variant layer 拦截, 而不是生成 "XXX-4K-8K" 这种
+			// 非法影片 ID。
+			name:     "structured resolution group conflict",
+			body:     `{"base":"NEW-001","variants":[{"id":"resolution_4k"},{"id":"resolution_8k"}]}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

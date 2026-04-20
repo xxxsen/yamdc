@@ -603,6 +603,7 @@
 .number-edit-variant-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -611,6 +612,17 @@
   color: inherit;
   cursor: pointer;
   font-size: 13px;
+}
+/* chip 的文本按 "3 个中文字符宽度" 对齐渲染, 这样 "中字"(2) / "4K"(2) /
+   "特别版"(3) 这一排 flag chip 视觉宽度一致, 排布更整齐。
+   使用 em 而不是固定 px: font-size 是 13px, 3em ≈ 39px, 正好容纳 3 个
+   中文字符; 字号变了也跟着自适应。
+   指定 min-width 而不是 width, 是为了给可能出现的 4 字符以上 label
+   (后续若扩展) 留出溢出空间, 不强制截断。 */
+.number-edit-variant-label {
+  display: inline-block;
+  min-width: 3em;
+  text-align: center;
 }
 .number-edit-variant-chip[data-active="true"] {
   background: rgba(180, 79, 45, 0.12);
@@ -629,11 +641,6 @@
   align-items: center;
   gap: 4px;
   cursor: pointer;
-}
-.number-edit-variant-suffix {
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  color: var(--muted);
 }
 .number-edit-variant-index-input {
   width: 68px;

@@ -32,18 +32,27 @@ const (
 //   - Label: UI 上的短名 (例如 "中字", "4K"), 用于按钮/chip 展示。
 //   - Description: 长说明, 鼠标悬停或下拉展开时展示。
 //   - Kind: 输入形式, 见 VariantKind。
+//   - Group: 互斥分组 key, 空串表示该 variant 独立 (可与任意其它 variant
+//     共存); 非空时表示"同一 Group 内至多勾选其中一个"。例如 resolution
+//     组下 4K / 8K 二选一 (一个影片不可能同时是两种分辨率), edition 组下
+//     LEAK (特别版) / UC (修复版) 二选一。Group 值只是一个 tag, 不由后端
+//     解释含义, 前端也只用它判等。
 //   - Min / Max: 仅当 Kind == VariantKindIndexed 时有意义, 表示 index 合法区间。
 //
 // 设计取舍:
 //   - 故意不把 "4K" / "2160P" 两种写法都暴露出去。它们在 number.Parse
 //     里都会被识别为 is4k, 但生成文件名只用 "4K"; 暴露两个变体只会让
 //     用户选择时产生困惑。需要识别 "2160P" 历史文件名时仍由 Parse 负责。
+//   - Group 的互斥在后端 ApplyVariantSelections 里兜底校验 (避免前端被
+//     绕过后写入 4K-8K 这种非法组合), 前端按 Group 做 "点击替换" 的
+//     交互减少用户操作成本。
 type VariantDescriptor struct {
 	ID          string      `json:"id"`
 	Suffix      string      `json:"suffix"`
 	Label       string      `json:"label"`
 	Description string      `json:"description"`
 	Kind        VariantKind `json:"kind"`
+	Group       string      `json:"group,omitempty"`
 	Min         int         `json:"min,omitempty"`
 	Max         int         `json:"max,omitempty"`
 }
@@ -63,6 +72,13 @@ const (
 // 超过 2-3 张, 给 10 已经远超需要, 防止用户遇到 "10 张 CD 的合集" 类边缘数据。
 const defaultMultiCDMax = 10
 
+// Variant 互斥分组 key。同一 Group 内至多勾选一个 variant。新增 group 时
+// 请同步前端测试; 改名属于破坏性变更 (前端按 group 字面量判等)。
+const (
+	VariantGroupResolution = "resolution"
+	VariantGroupEdition    = "edition"
+)
+
 // DefaultVariantDescriptors 返回前端应当展示的 variant 列表, 顺序也是建议的
 // 渲染顺序 (和 Number.GenerateSuffix 里的拼装顺序保持一致, 这样 UI 上看到的
 // 顺序和最终落到文件名里的顺序一致, 降低心智负担)。
@@ -76,6 +92,7 @@ func DefaultVariantDescriptors() []VariantDescriptor {
 			Label:       "4K",
 			Description: "4K 分辨率",
 			Kind:        VariantKindFlag,
+			Group:       VariantGroupResolution,
 		},
 		{
 			ID:          VariantID8K,
@@ -83,6 +100,7 @@ func DefaultVariantDescriptors() []VariantDescriptor {
 			Label:       "8K",
 			Description: "8K 分辨率",
 			Kind:        VariantKindFlag,
+			Group:       VariantGroupResolution,
 		},
 		{
 			ID:          VariantIDVR,
@@ -104,6 +122,7 @@ func DefaultVariantDescriptors() []VariantDescriptor {
 			Label:       "特别版",
 			Description: "特别版 / 流出版 (LEAK)",
 			Kind:        VariantKindFlag,
+			Group:       VariantGroupEdition,
 		},
 		{
 			ID:          VariantIDRestored,
@@ -111,6 +130,7 @@ func DefaultVariantDescriptors() []VariantDescriptor {
 			Label:       "修复版",
 			Description: "修复 / 重制版 (UC)",
 			Kind:        VariantKindFlag,
+			Group:       VariantGroupEdition,
 		},
 		{
 			ID:          VariantIDMultiCD,
@@ -140,6 +160,11 @@ var (
 	ErrVariantUnknownID       = errors.New("variant: unknown id")
 	ErrVariantDuplicate       = errors.New("variant: duplicate selection")
 	ErrVariantIndexOutOfRange = errors.New("variant: index out of range")
+	// ErrVariantGroupConflict 表示同一个互斥分组 (Group) 内同时出现多个勾选,
+	// 例如分辨率分组下 4K + 8K 同时被选中。前端应在交互层做"点击替换"避免
+	// 走到这里; 这个错误主要作为 API 层的兜底, 防止客户端绕过 UI 直接 POST
+	// 一份非法组合。
+	ErrVariantGroupConflict = errors.New("variant: group conflict")
 )
 
 // ApplyVariantSelections 把用户选中的 variant 合并到 base number 之上, 返回
@@ -170,6 +195,10 @@ func ApplyVariantSelections(base string, selections []VariantSelection) (string,
 
 	info := &Number{numberID: normalized}
 	seen := make(map[string]struct{}, len(selections))
+	// groupOwner 记录每个已占用的 group 由哪个 selection ID 占住, 用于在
+	// 出错时给出可读的上下文 ("resolution 组已有 resolution_4k, 又收到
+	// resolution_8k"), 而不仅仅是一个 sentinel。
+	groupOwner := make(map[string]string, len(selections))
 	for _, sel := range selections {
 		if _, dup := seen[sel.ID]; dup {
 			return "", fmt.Errorf("id=%s: %w", sel.ID, ErrVariantDuplicate)
@@ -179,6 +208,15 @@ func ApplyVariantSelections(base string, selections []VariantSelection) (string,
 		desc, ok := byID[sel.ID]
 		if !ok {
 			return "", fmt.Errorf("id=%s: %w", sel.ID, ErrVariantUnknownID)
+		}
+		if desc.Group != "" {
+			if other, clash := groupOwner[desc.Group]; clash {
+				return "", fmt.Errorf(
+					"group=%s existing=%s conflict=%s: %w",
+					desc.Group, other, desc.ID, ErrVariantGroupConflict,
+				)
+			}
+			groupOwner[desc.Group] = desc.ID
 		}
 		if err := applyVariantOnNumber(info, desc, sel); err != nil {
 			return "", err

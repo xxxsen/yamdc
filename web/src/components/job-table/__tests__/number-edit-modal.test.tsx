@@ -222,6 +222,28 @@ describe("NumberEditModal", () => {
     unmount();
   });
 
+  it("chip 只展示 label, suffix (如 -C / -LEAK) 通过 title 提供给 hover", () => {
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001"),
+      descriptors: [
+        { id: "chinese-subtitle", suffix: "C", label: "中字", description: "中文字幕", kind: "flag" },
+        { id: "leak-edition", suffix: "LEAK", label: "特别版", description: "特别版泄漏", kind: "flag" },
+      ],
+    });
+    const chips = Array.from(document.querySelectorAll(".number-edit-variant-chip"));
+    const cn = chips.find((c) => c.textContent?.trim() === "中字");
+    const leak = chips.find((c) => c.textContent?.trim() === "特别版");
+    expect(cn).toBeDefined();
+    expect(leak).toBeDefined();
+    // 正文不出现 "-C" / "-LEAK", 但 title 里能看到对应 suffix
+    expect(cn!.textContent).not.toContain("-C");
+    expect(leak!.textContent).not.toContain("-LEAK");
+    expect(cn!.getAttribute("title")).toContain("-C");
+    expect(leak!.getAttribute("title")).toContain("-LEAK");
+    expect(cn!.getAttribute("title")).toContain("中文字幕");
+    unmount();
+  });
+
   it("descriptorsError 传值时显示告警条", () => {
     const { unmount } = renderModal({
       job: makeJob("ABC-001"),
@@ -230,6 +252,107 @@ describe("NumberEditModal", () => {
     const err = document.querySelector(".number-edit-error");
     expect(err).not.toBeNull();
     expect(err!.textContent).toContain("network down");
+    unmount();
+  });
+
+  it("group mutex (flag): 勾选 8K 会自动取消已勾选的 4K, 并更新 preview", () => {
+    // 互斥分组 "resolution" 下: 4K / 8K 同时只能存在一个。点 8K 时 4K 自动消失。
+    const descriptorsWithGroup: NumberVariantDescriptor[] = [
+      {
+        id: "resolution_4k",
+        suffix: "4K",
+        label: "4K",
+        description: "4K 分辨率",
+        kind: "flag",
+        group: "resolution",
+      },
+      {
+        id: "resolution_8k",
+        suffix: "8K",
+        label: "8K",
+        description: "8K 分辨率",
+        kind: "flag",
+        group: "resolution",
+      },
+      // 同时放一个独立 variant, 验证它不会受互斥影响。
+      { id: "chinese-subtitle", suffix: "C", label: "中字", description: "中文字幕", kind: "flag" },
+    ];
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001"),
+      descriptors: descriptorsWithGroup,
+    });
+
+    const chips = Array.from(document.querySelectorAll<HTMLElement>(".number-edit-variant-chip"));
+    const fourK = chips.find((c) => c.textContent?.trim() === "4K")!;
+    const eightK = chips.find((c) => c.textContent?.trim() === "8K")!;
+    const cn = chips.find((c) => c.textContent?.trim() === "中字")!;
+
+    act(() => {
+      fourK.click();
+    });
+    expect(fourK.getAttribute("data-active")).toBe("true");
+    expect(document.querySelector(".number-edit-preview-value")!.textContent).toBe("ABC-001-4K");
+
+    // 独立 variant 勾选: 不应被 resolution 组互斥牵连。
+    act(() => {
+      cn.click();
+    });
+    expect(cn.getAttribute("data-active")).toBe("true");
+
+    // 切到 8K: 4K 必须被自动取消, 中字保持不变。
+    act(() => {
+      eightK.click();
+    });
+    expect(fourK.getAttribute("data-active")).toBe("false");
+    expect(eightK.getAttribute("data-active")).toBe("true");
+    expect(cn.getAttribute("data-active")).toBe("true");
+    // preview 按 descriptor 声明顺序拼装 (4K / 8K 之后才是 C), 所以这里是
+    // ABC-001-8K-C 而不是 ABC-001-C-8K。
+    expect(document.querySelector(".number-edit-preview-value")!.textContent).toBe("ABC-001-8K-C");
+
+    unmount();
+  });
+
+  it("group mutex (parse): 遗留数据 'ABC-001-4K-8K' 只保留其中一个, UI 不会展示双勾", () => {
+    // 老数据可能存在 pre-mutex 时期写入的 "ABC-001-4K-8K"。parseExistingNumber
+    // 会按 "末尾 suffix 胜出" 的规则去重, 保留 8K (更贴近用户最近一次意图),
+    // 避免打开 modal 就看到两个 chip 同时 active / 保存时被后端 400。
+    const descriptorsWithGroup: NumberVariantDescriptor[] = [
+      {
+        id: "resolution_4k",
+        suffix: "4K",
+        label: "4K",
+        description: "4K 分辨率",
+        kind: "flag",
+        group: "resolution",
+      },
+      {
+        id: "resolution_8k",
+        suffix: "8K",
+        label: "8K",
+        description: "8K 分辨率",
+        kind: "flag",
+        group: "resolution",
+      },
+    ];
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001-4K-8K"),
+      descriptors: descriptorsWithGroup,
+    });
+
+    const chips = Array.from(document.querySelectorAll<HTMLElement>(".number-edit-variant-chip"));
+    const fourK = chips.find((c) => c.textContent?.trim() === "4K")!;
+    const eightK = chips.find((c) => c.textContent?.trim() === "8K")!;
+
+    // 组内只能有一个 active。具体哪个无所谓 (去重规则是实现细节), 这里只锚
+    // "二者不会同时 active" 这个不变量, 测试更稳。
+    const activeCount = [fourK, eightK].filter((c) => c.getAttribute("data-active") === "true").length;
+    expect(activeCount).toBe(1);
+    // preview 也必须只有一个分辨率后缀, 不能出现 "-4K-8K"。
+    const preview = document.querySelector(".number-edit-preview-value")!.textContent ?? "";
+    expect(preview.includes("-4K") && preview.includes("-8K")).toBe(false);
+    expect(preview).toMatch(/ABC-001-(4K|8K)/);
+
     unmount();
   });
 

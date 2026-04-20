@@ -104,12 +104,18 @@ export type NumberVariantKind = "flag" | "indexed";
 // NumberVariantDescriptor 对应后端 number.VariantDescriptor, 用于驱动
 // "文件列表" 页结构化影片 ID 输入的 UI 渲染 (id 做 stable key, label/description
 // 用于展示, kind + min/max 决定交互形式)。
+//
+// group 是互斥分组 key: 字段缺省 / 空串表示该 variant 独立, 非空时同
+// group 内只能勾选一个 (例如 4K / 8K 同属 resolution, LEAK / UC 同属
+// edition)。前端按 group 做 "点击替换" 交互, 后端也会在 variant layer
+// 做兜底校验, 客户端绕过 UI 直接提交冲突组合会得到 400。
 export interface NumberVariantDescriptor {
   id: string;
   suffix: string;
   label: string;
   description: string;
   kind: NumberVariantKind;
+  group?: string;
   min?: number;
   max?: number;
 }

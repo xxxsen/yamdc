@@ -103,6 +103,22 @@ function parseExistingNumber(raw: string, descriptors: NumberVariantDescriptor[]
     break;
   }
 
+  // 兜底: 遇到 pre-group-mutex 时代写入的 "XXX-4K-8K" 这类遗留数据, parse
+  // 会同时命中 4K + 8K, 但后端新版会拒收这种组合。这里按 "先命中者 (= 字符
+  // 串末尾的 suffix) 胜出" 的规则去重, 避免 UI 展示两个互斥 chip 同时 active,
+  // 用户一保存又被后端打回的尴尬循环。
+  const descriptorByID = new Map(descriptors.map((d) => [d.id, d]));
+  const groupOwner = new Map<string, string>();
+  for (const id of Array.from(selections.keys())) {
+    const desc = descriptorByID.get(id);
+    if (!desc || !desc.group) continue;
+    if (groupOwner.has(desc.group)) {
+      selections.delete(id);
+      continue;
+    }
+    groupOwner.set(desc.group, id);
+  }
+
   return { base: remaining, selections };
 }
 
@@ -129,6 +145,25 @@ function composePreview(
     }
   }
   return out;
+}
+
+// clearGroupSiblings: 激活某个带 group 的 variant 时, 先把同 group 里已经
+// 被勾选的其它 variant 全部清掉 — 实现 "点击替换" 的交互 (例如已勾选 4K
+// 的情况下点 8K, 4K 自动取消)。没有 group 的 variant 不会走这条路径。
+// 纯函数, 所以放到组件外避免每次 render 重建闭包。
+function clearGroupSiblings(
+  descriptors: NumberVariantDescriptor[],
+  target: NumberVariantDescriptor,
+  next: Map<string, number | true>,
+) {
+  if (!target.group) return;
+  for (const d of descriptors) {
+    if (d.id === target.id) continue;
+    if (d.group !== target.group) continue;
+    if (next.has(d.id)) {
+      next.delete(d.id);
+    }
+  }
 }
 
 function isIndexValid(descriptor: NumberVariantDescriptor, index: number | true | undefined): boolean {
@@ -166,6 +201,7 @@ export function NumberEditModal({
       if (next.has(d.id)) {
         next.delete(d.id);
       } else {
+        clearGroupSiblings(descriptors, d, next);
         next.set(d.id, true);
       }
       return next;
@@ -178,6 +214,7 @@ export function NumberEditModal({
       if (!enabled) {
         next.delete(d.id);
       } else if (!next.has(d.id)) {
+        clearGroupSiblings(descriptors, d, next);
         next.set(d.id, d.min ?? 1);
       }
       return next;
@@ -271,6 +308,12 @@ export function NumberEditModal({
           <div className="number-edit-variants-grid">
             {descriptors.map((d) => {
               const active = selections.has(d.id);
+              // chip 上只显示 label, 后缀字面量塞到 title 里靠 hover 查看。
+              // 这样视觉更干净, 遇到 "-LEAK" 这类不太友好的字面量时也不会
+              // 直接怼到用户脸上。
+              const chipTitle = d.description
+                ? `${d.description} (-${d.suffix})`
+                : `-${d.suffix}`;
               if (d.kind === "flag") {
                 return (
                   <button
@@ -279,10 +322,9 @@ export function NumberEditModal({
                     className="number-edit-variant-chip"
                     data-active={active}
                     onClick={() => toggleFlag(d)}
-                    title={d.description}
+                    title={chipTitle}
                   >
                     <span className="number-edit-variant-label">{d.label}</span>
-                    <span className="number-edit-variant-suffix">-{d.suffix}</span>
                   </button>
                 );
               }
@@ -294,6 +336,7 @@ export function NumberEditModal({
                   className="number-edit-variant-chip number-edit-variant-chip-indexed"
                   data-active={active}
                   data-invalid={invalid}
+                  title={chipTitle}
                 >
                   <label className="number-edit-variant-toggle">
                     <input
@@ -312,7 +355,7 @@ export function NumberEditModal({
                     disabled={!active}
                     value={indexValue}
                     aria-label={`${d.label} 序号`}
-                    title={d.description}
+                    title={chipTitle}
                     onChange={(e) => {
                       const raw = Number.parseInt(e.target.value, 10);
                       if (!Number.isNaN(raw)) {

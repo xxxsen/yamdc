@@ -61,6 +61,33 @@ func TestDefaultVariantDescriptors(t *testing.T) {
 	for _, want := range expected {
 		assert.Equal(t, want.suffix, got[want.id], "id=%s suffix mismatch", want.id)
 	}
+
+	// Group 互斥关系锚定: 前端会按 group 字面量判相等, 所以这里把关键
+	// 分组的成员关系写死, 防止后续改名导致前端 "4K / 8K 又能同时勾选" 这种
+	// 静默回归。
+	groupMembers := make(map[string][]string)
+	for _, d := range descriptors {
+		if d.Group == "" {
+			continue
+		}
+		groupMembers[d.Group] = append(groupMembers[d.Group], d.ID)
+	}
+	assert.ElementsMatch(t,
+		[]string{VariantID4K, VariantID8K},
+		groupMembers[VariantGroupResolution],
+		"resolution group should contain exactly 4K and 8K")
+	assert.ElementsMatch(t,
+		[]string{VariantIDSpecialEdition, VariantIDRestored},
+		groupMembers[VariantGroupEdition],
+		"edition group should contain exactly LEAK and UC")
+	// VR / 中字 / 多盘 应当保持独立 (空 Group), 组内互斥不应波及它们。
+	for _, d := range descriptors {
+		switch d.ID {
+		case VariantIDVR, VariantIDChineseSubtitle, VariantIDMultiCD:
+			assert.Empty(t, d.Group,
+				"variant %s should be independent (no group)", d.ID)
+		}
+	}
 }
 
 // TestApplyVariantSelections 覆盖 "apply" 的核心路径: 无 variant / flag / indexed /
@@ -96,19 +123,56 @@ func TestApplyVariantSelections(t *testing.T) {
 		assert.Equal(t, "PXVR-406-CD2", out)
 	})
 
-	t.Run("full stack", func(t *testing.T) {
+	t.Run("full stack respects group mutex", func(t *testing.T) {
+		// 4K / 8K 同属 resolution 组, LEAK / UC 同属 edition 组, 组内互斥,
+		// 所以一次合法的 "full stack" 每个组最多取一个。
 		out, err := ApplyVariantSelections("ABC-001", []VariantSelection{
 			{ID: VariantIDVR},
 			{ID: VariantID8K},
 			{ID: VariantIDMultiCD, Index: 1},
 			{ID: VariantIDChineseSubtitle},
 			{ID: VariantIDSpecialEdition},
-			{ID: VariantIDRestored},
-			{ID: VariantID4K},
 		})
 		require.NoError(t, err)
-		// Order per GenerateSuffix: 4K, 8K, VR, C, LEAK, UC, CD1.
-		assert.Equal(t, "ABC-001-4K-8K-VR-C-LEAK-UC-CD1", out)
+		// Order per GenerateSuffix: 8K, VR, C, LEAK, CD1.
+		assert.Equal(t, "ABC-001-8K-VR-C-LEAK-CD1", out)
+	})
+
+	t.Run("resolution group conflict (4K + 8K) fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantID4K},
+			{ID: VariantID8K},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrVariantGroupConflict)
+		// 错误文案里带上 group 和冲突双方, 方便前端 / 排障直接定位。
+		assert.Contains(t, err.Error(), "group=resolution")
+		assert.Contains(t, err.Error(), "existing=resolution_4k")
+		assert.Contains(t, err.Error(), "conflict=resolution_8k")
+	})
+
+	t.Run("edition group conflict (LEAK + UC) fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantIDSpecialEdition},
+			{ID: VariantIDRestored},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrVariantGroupConflict)
+		assert.Contains(t, err.Error(), "group=edition")
+	})
+
+	t.Run("independent variants can coexist across groups", func(t *testing.T) {
+		// VR / 中字 / CD 都是独立 variant (Group 为空), 4K / LEAK 各自占
+		// 一个分组但不冲突 — 合法组合。
+		out, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantID4K},
+			{ID: VariantIDSpecialEdition},
+			{ID: VariantIDVR},
+			{ID: VariantIDChineseSubtitle},
+			{ID: VariantIDMultiCD, Index: 2},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "ABC-001-4K-VR-C-LEAK-CD2", out)
 	})
 
 	t.Run("duplicate id fails", func(t *testing.T) {
