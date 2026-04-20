@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -822,6 +823,110 @@ func TestServiceImportAllowsSnapshotNumberWithDifferentSeparators(t *testing.T) 
 	}
 }
 
+// TestServiceImportAllowsJobNumberWithVariantAgainstBaseSnapshot 锁死
+// P0 fix: scrape 端只拿到基础番号 "PXVR-406", 而用户在 /processing 页手动
+// 把 job number 填成带 variant 的写法 (CD / 4K / VR / LEAK / UC / ...) 时,
+// verifyScrapeSnapshotMatchesJob 不能再按"字面量 + CleanID" 比对误判 mismatch,
+// 必须先用 number.Parse 剥掉 variant, 只比较 base ID。
+func TestServiceImportAllowsJobNumberWithVariantAgainstBaseSnapshot(t *testing.T) {
+	cases := []struct {
+		name          string
+		jobNumber     string
+		snapshotValue string
+	}{
+		{name: "cd2_vs_base", jobNumber: "PXVR-406-CD2", snapshotValue: "PXVR-406"},
+		{name: "cd1_vs_base", jobNumber: "PXVR-406-CD1", snapshotValue: "PXVR-406"},
+		{name: "chinese_sub_vs_base", jobNumber: "SSIS-001-C", snapshotValue: "SSIS-001"},
+		{name: "4k_vs_base", jobNumber: "SSIS-001-4K", snapshotValue: "SSIS-001"},
+		{name: "vr_vs_base", jobNumber: "PXVR-406-VR", snapshotValue: "PXVR-406"},
+		{name: "leak_vs_base", jobNumber: "SSIS-001-LEAK", snapshotValue: "SSIS-001"},
+		{name: "both_have_variant", jobNumber: "PXVR-406-CD2", snapshotValue: "pxvr406-cd1"},
+		{name: "variant_differ_but_same_base", jobNumber: "SSIS-001-C", snapshotValue: "SSIS-001-4K"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rig := newTestRig(t)
+			jobID := insertJobWithInput(t, rig.jobRepo, repository.UpsertJobInput{
+				FileName: "V.mp4", FileExt: ".mp4", RelPath: "V.mp4", AbsPath: "/tmp/V.mp4",
+				Number: tc.jobNumber, RawNumber: tc.jobNumber, CleanedNumber: tc.jobNumber,
+				NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high",
+			}, jobdef.StatusReviewing)
+			j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+			require.NoError(t, err)
+
+			raw, _ := json.Marshal(&model.MovieMeta{Title: "t", Number: tc.snapshotValue})
+			err = rig.svc.verifyScrapeSnapshotMatchesJob(testLogger(), j, &repository.ScrapeData{
+				RawData: string(raw),
+			})
+			require.NoError(t, err,
+				"job=%q vs snapshot=%q with same base should NOT be blocked after P0 fix",
+				tc.jobNumber, tc.snapshotValue)
+		})
+	}
+}
+
+// TestServiceImportStillRejectsDifferentBaseNumber 确认 P0 fix 仍然拦住
+// "base 都不同"的真实错位, 不能因为"忽略 variant"把兜底作用完全削掉。
+func TestServiceImportStillRejectsDifferentBaseNumber(t *testing.T) {
+	cases := []struct {
+		name          string
+		jobNumber     string
+		snapshotValue string
+	}{
+		{name: "different_prefix", jobNumber: "PXVR-406-CD1", snapshotValue: "SSIS-001"},
+		{name: "different_serial", jobNumber: "PXVR-406", snapshotValue: "PXVR-407"},
+		{name: "different_serial_with_variant", jobNumber: "PXVR-406-CD1", snapshotValue: "PXVR-407-CD1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rig := newTestRig(t)
+			jobID := insertJobWithInput(t, rig.jobRepo, repository.UpsertJobInput{
+				FileName: "V.mp4", FileExt: ".mp4", RelPath: "V.mp4", AbsPath: "/tmp/V.mp4",
+				Number: tc.jobNumber, RawNumber: tc.jobNumber, CleanedNumber: tc.jobNumber,
+				NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high",
+			}, jobdef.StatusReviewing)
+			j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+			require.NoError(t, err)
+
+			raw, _ := json.Marshal(&model.MovieMeta{Title: "t", Number: tc.snapshotValue})
+			err = rig.svc.verifyScrapeSnapshotMatchesJob(testLogger(), j, &repository.ScrapeData{
+				RawData: string(raw),
+			})
+			require.ErrorIs(t, err, ErrScrapeDataNumberMismatch,
+				"job=%q vs snapshot=%q with different base MUST be blocked",
+				tc.jobNumber, tc.snapshotValue)
+		})
+	}
+}
+
+// TestServiceImportFallbackForUnparseableNumber 覆盖 canonicalBaseForCompare
+// 的 Parse-fail 兜底路径: 当 number 带 `.` 这类 number.Parse 主动拒绝的字符时,
+// 不应直接放行 / panic, 而应回落到"raw string 走 CleanID"的旧比对行为。
+func TestServiceImportFallbackForUnparseableNumber(t *testing.T) {
+	rig := newTestRig(t)
+	jobID := insertJobWithInput(t, rig.jobRepo, repository.UpsertJobInput{
+		FileName: "F.mp4", FileExt: ".mp4", RelPath: "F.mp4", AbsPath: "/tmp/F.mp4",
+		Number: "BAD.NUM", RawNumber: "BAD.NUM", CleanedNumber: "BAD.NUM",
+		NumberSource: "manual", NumberCleanStatus: "success", NumberCleanConfidence: "high",
+	}, jobdef.StatusReviewing)
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+
+	// 同样的坏字面量在两边, 走兜底的 GetCleanID 仍应判等 (两边都是 "BAD.NUM",
+	// CleanID 只剥 `-`/`_` 所以原样返回) -> 不拦。
+	rawSame, _ := json.Marshal(&model.MovieMeta{Title: "t", Number: "BAD.NUM"})
+	require.NoError(t, rig.svc.verifyScrapeSnapshotMatchesJob(testLogger(), j, &repository.ScrapeData{
+		RawData: string(rawSame),
+	}))
+
+	// base 真的不同时, 兜底路径也要能拦下来。
+	rawDiff, _ := json.Marshal(&model.MovieMeta{Title: "t", Number: "OTHER.NUM"})
+	err = rig.svc.verifyScrapeSnapshotMatchesJob(testLogger(), j, &repository.ScrapeData{
+		RawData: string(rawDiff),
+	})
+	require.ErrorIs(t, err, ErrScrapeDataNumberMismatch)
+}
+
 // TestServiceImportTolerantToEmptyOrInvalidSnapshotNumber 对应 3.2.a 边缘 case。
 func TestServiceImportTolerantToEmptyOrInvalidSnapshotNumber(t *testing.T) {
 	cases := []struct {
@@ -1160,4 +1265,114 @@ func TestServiceImportSaveFinalDataTriggerError(t *testing.T) {
 	err = rig.svc.Import(context.Background(), jobID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "save final data")
+}
+
+// ---------- Reject ----------
+
+// TestServiceRejectSuccess 覆盖 Reject 的主路径: reviewing -> failed, scrape
+// 数据被清空, error_msg = 传入 reason。
+func TestServiceRejectSuccess(t *testing.T) {
+	rig := newTestRig(t)
+	meta := &model.MovieMeta{Title: "T", Number: "RJ-001"}
+	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
+
+	require.NoError(t, rig.svc.Reject(context.Background(), jobID, "用户手动打回"))
+
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+	assert.Equal(t, "用户手动打回", j.ErrorMsg)
+
+	_, err = rig.svc.scrapeRepo.GetByJobID(context.Background(), jobID)
+	// scrape_data 被 DeleteByJobID 删掉, 下一次读应该拿到 NotFound。
+	require.ErrorIs(t, err, repository.ErrScrapeDataNotFound)
+}
+
+// TestServiceRejectUsesDefaultReasonWhenEmpty 锁定"空 reason -> 默认文案"。
+func TestServiceRejectUsesDefaultReasonWhenEmpty(t *testing.T) {
+	rig := newTestRig(t)
+	meta := &model.MovieMeta{Title: "T", Number: "RJ-DEF"}
+	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
+
+	require.NoError(t, rig.svc.Reject(context.Background(), jobID, "   "))
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+	assert.Equal(t, "rejected by reviewer", j.ErrorMsg)
+}
+
+// TestServiceRejectTruncatesOverlongReason 锁定"超长 reason 被截断到 200 + ..."。
+// UI 层目前不做输入上限, 后端要给个硬上限防止 SQL 层膨胀 / 日志膨胀。
+func TestServiceRejectTruncatesOverlongReason(t *testing.T) {
+	rig := newTestRig(t)
+	meta := &model.MovieMeta{Title: "T", Number: "RJ-LONG"}
+	jobID := setupReviewingJobWithScrapeData(t, rig, meta)
+
+	long := strings.Repeat("x", 500)
+	require.NoError(t, rig.svc.Reject(context.Background(), jobID, long))
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	assert.Equal(t, 203, len(j.ErrorMsg)) // 200 + "..."
+	assert.True(t, strings.HasSuffix(j.ErrorMsg, "..."))
+}
+
+// TestServiceRejectJobNotFound: 上游用 errors.Is 检测"job 不存在"要能命中,
+// 保持和 Import/SaveReviewData 一致。
+func TestServiceRejectJobNotFound(t *testing.T) {
+	rig := newTestRig(t)
+	err := rig.svc.Reject(context.Background(), 99999, "x")
+	require.ErrorIs(t, err, job.ErrJobNotFound)
+	require.ErrorIs(t, err, repository.ErrJobNotFound)
+}
+
+// TestServiceRejectRequiresReviewing: 非 reviewing 状态下拒绝打回。init / failed /
+// done / processing 四个状态都应该返回 ErrJobNotReviewing。
+func TestServiceRejectRequiresReviewing(t *testing.T) {
+	cases := []jobdef.Status{
+		jobdef.StatusInit,
+		jobdef.StatusFailed,
+		jobdef.StatusDone,
+		jobdef.StatusProcessing,
+	}
+	for _, status := range cases {
+		t.Run(string(status), func(t *testing.T) {
+			rig := newTestRig(t)
+			jobID := insertJob(t, rig.jobRepo, filepath.Join(t.TempDir(), string(status)+".mp4"), status)
+			err := rig.svc.Reject(context.Background(), jobID, "x")
+			require.ErrorIs(t, err, ErrJobNotReviewing)
+		})
+	}
+}
+
+// TestServiceRejectAlreadyRunning: Claim 失败时立即返回 ErrJobAlreadyRunning,
+// 不会读库。
+func TestServiceRejectAlreadyRunning(t *testing.T) {
+	rig := newTestRig(t)
+	jobID := insertJob(t, rig.jobRepo, filepath.Join(t.TempDir(), "RJ-LOCK.mp4"), jobdef.StatusReviewing)
+	require.True(t, rig.jobSvc.Claim(jobID))
+	defer rig.jobSvc.Finish(jobID)
+
+	err := rig.svc.Reject(context.Background(), jobID, "x")
+	require.ErrorIs(t, err, job.ErrJobAlreadyRunning)
+}
+
+// TestServiceRejectWithoutScrapeData: 即使从来没写过 scrape_data, Reject 仍应
+// 成功 (DeleteByJobID 对空表幂等)。
+func TestServiceRejectWithoutScrapeData(t *testing.T) {
+	rig := newTestRig(t)
+	jobID := insertJob(t, rig.jobRepo, filepath.Join(t.TempDir(), "RJ-NOSD.mp4"), jobdef.StatusReviewing)
+
+	require.NoError(t, rig.svc.Reject(context.Background(), jobID, "nothing scraped"))
+	j, err := rig.jobRepo.GetByID(context.Background(), jobID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+}
+
+// TestServiceRejectDBError: DB 关闭时 Reject 报错, 不 panic。
+func TestServiceRejectDBError(t *testing.T) {
+	rig, jobID := newRigClosedDB(t)
+	// newRigClosedDB 造出的 job 是 init 态, 先切到 reviewing 再关库;
+	// 但此处 sqlite 已经关了, 所以我们直接期望 load job 报错。
+	err := rig.svc.Reject(context.Background(), jobID, "x")
+	require.Error(t, err)
 }

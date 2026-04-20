@@ -23,12 +23,14 @@ vi.mock("@/lib/api", async () => {
     ...actual,
     importReviewJob: vi.fn(),
     deleteJob: vi.fn(),
+    rejectReviewJob: vi.fn(),
   };
 });
 
 const api = await import("@/lib/api");
 const mockImport = vi.mocked(api.importReviewJob);
 const mockDelete = vi.mocked(api.deleteJob);
+const mockReject = vi.mocked(api.rejectReviewJob);
 
 function makeJob(overrides: Partial<JobItem> = {}): JobItem {
   return {
@@ -98,6 +100,7 @@ function renderBatch(deps: Partial<UseReviewBatchActionsDeps> = {}) {
 beforeEach(() => {
   mockImport.mockReset();
   mockDelete.mockReset();
+  mockReject.mockReset();
 });
 
 afterEach(() => {
@@ -303,6 +306,45 @@ describe("handleDelete / handleDeleteSelected", () => {
     });
     expect(setDeleteTargetIds).toHaveBeenCalledTimes(1);
     expect(Array.from(setDeleteTargetIds.mock.calls[0][0] as number[]).sort()).toEqual([1, 2, 3]);
+  });
+});
+
+describe("handleReject", () => {
+  it("selected 为 null 时 no-op, 不调 rejectReviewJob", async () => {
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected: null });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(mockReject).not.toHaveBeenCalled();
+    expect(setMessage).not.toHaveBeenCalled();
+    expect(removeJobFromList).not.toHaveBeenCalled();
+  });
+
+  it("打回成功: 调 rejectReviewJob + removeJobFromList + 成功 message", async () => {
+    mockReject.mockResolvedValue({});
+    const selected = makeJob({ id: 77 });
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(mockReject).toHaveBeenCalledWith(77);
+    expect(removeJobFromList).toHaveBeenCalledWith(77);
+    expect(setMessage).toHaveBeenCalledWith("打回任务...");
+    expect(setMessage).toHaveBeenLastCalledWith("任务已打回，可到文件列表修改番号后重新 run");
+  });
+
+  it("reject 抛错: setMessage 用 error.message, 不 removeJob", async () => {
+    mockReject.mockRejectedValue(new Error("reject boom"));
+    const selected = makeJob({ id: 77 });
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenLastCalledWith("reject boom");
+    expect(removeJobFromList).not.toHaveBeenCalled();
   });
 });
 

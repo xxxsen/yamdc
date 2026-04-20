@@ -1233,6 +1233,53 @@ func TestServiceUpdateNumber(t *testing.T) {
 	assert.Equal(t, "manual", updated.NumberSource)
 }
 
+// TestServiceUpdateNumberStructured 覆盖结构化入口的主路径: 拼装 base +
+// variants -> 得到 "NEW-NUMBER-CD2" 这样的 number, 走 capture / 持久化 /
+// 冲突检测 (复用 UpdateNumber), 最终 DB 里存的就是拼好的 number。
+func TestServiceUpdateNumberStructured(t *testing.T) {
+	svc, repo := newTestServiceWithSQLite(t)
+	searcher := &loggingTestSearcher{meta: &model.MovieMeta{Title: "T", Cover: &model.File{Name: "c.jpg", Key: "k"}, Poster: &model.File{Name: "p.jpg", Key: "k2"}}}
+	svc.capture = newLoggingTestCapture(t, searcher)
+
+	file := filepath.Join(t.TempDir(), "UPD-STR-001.mp4")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
+	jobID := insertJobWithInput(t, repo, repository.UpsertJobInput{
+		FileName:              filepath.Base(file),
+		FileExt:               filepath.Ext(file),
+		RelPath:               filepath.Base(file),
+		AbsPath:               file,
+		Number:                "UPD-STR-001",
+		RawNumber:             "UPD-STR-001",
+		CleanedNumber:         "UPD-STR-001",
+		NumberSource:          "cleaner",
+		NumberCleanStatus:     "success",
+		NumberCleanConfidence: "high",
+		FileSize:              1,
+	}, jobdef.StatusInit)
+
+	updated, err := svc.UpdateNumberStructured(context.Background(), jobID, "new-number", []number.VariantSelection{
+		{ID: number.VariantID4K},
+		{ID: number.VariantIDMultiCD, Index: 2},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	// variants 按 GenerateSuffix 的固定顺序拼: 4K 在 CDn 之前, 所以是 -4K-CD2.
+	assert.Equal(t, "NEW-NUMBER-4K-CD2", updated.Number)
+	assert.Equal(t, "manual", updated.NumberSource)
+}
+
+// TestServiceUpdateNumberStructuredInvalid 覆盖结构化入口的入参校验失败:
+// 不合法 variant id 应当直接在 ApplyVariantSelections 层阻断, 不会触发
+// 底层的 capture / DB 写入 — 这是 structured 路径存在的价值之一。
+func TestServiceUpdateNumberStructuredInvalid(t *testing.T) {
+	svc, _ := newTestService(t)
+	_, err := svc.UpdateNumberStructured(context.Background(), 1, "ABC-001", []number.VariantSelection{
+		{ID: "definitely-not-a-variant"},
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, number.ErrVariantUnknownID)
+}
+
 func TestServiceUpdateNumberJobNotFound(t *testing.T) {
 	svc, _ := newTestService(t)
 	_, err := svc.UpdateNumber(context.Background(), 99999, "X")

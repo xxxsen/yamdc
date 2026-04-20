@@ -229,6 +229,52 @@ func TestHandleJobLogs(t *testing.T) {
 	}
 }
 
+// TestHandleListNumberVariants 覆盖 GET /api/number/variants: 返回 200 + code=0,
+// data.variants 至少包含已知的几个关键 id (防止默认描述符被意外删掉); 返回的
+// indexed 描述符必须自带合法 min/max, 供前端渲染 number input。
+func TestHandleListNumberVariants(t *testing.T) {
+	api := &API{}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/number/variants", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, 0, resp.Code)
+	require.NotNil(t, resp.Data)
+	payload, ok := resp.Data.(map[string]any)
+	require.True(t, ok, "expected data to be object, got %T", resp.Data)
+	variantsAny, ok := payload["variants"].([]any)
+	require.True(t, ok, "expected data.variants to be array, got %T", payload["variants"])
+	require.NotEmpty(t, variantsAny)
+
+	byID := make(map[string]map[string]any, len(variantsAny))
+	for _, item := range variantsAny {
+		v, ok := item.(map[string]any)
+		require.True(t, ok, "variant entry must be object, got %T", item)
+		id, _ := v["id"].(string)
+		require.NotEmpty(t, id)
+		byID[id] = v
+	}
+
+	for _, wantID := range []string{"resolution_4k", "resolution_8k", "vr", "chinese_subtitle", "special_edition", "restored", "multi_cd"} {
+		_, ok := byID[wantID]
+		assert.True(t, ok, "missing descriptor id: %s", wantID)
+	}
+
+	cd := byID["multi_cd"]
+	require.NotNil(t, cd)
+	assert.Equal(t, "indexed", cd["kind"])
+	assert.EqualValues(t, 1, cd["min"])
+	maxAny, ok := cd["max"].(float64)
+	require.True(t, ok, "expected numeric max for multi_cd, got %T", cd["max"])
+	assert.GreaterOrEqual(t, int(maxAny), 2, "multi_cd max should be >= 2")
+	assert.Equal(t, "CD", cd["suffix"])
+}
+
 func TestHandleJobUpdateNumber(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
@@ -597,6 +643,72 @@ func TestHandleJobUpdateNumberSuccess(t *testing.T) {
 	api.handleJobUpdateNumber(c)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodeJobUpdateNumberFailed, resp.Code)
+}
+
+// TestHandleJobUpdateNumberStructuredRouting 只覆盖 handler 的 "如何路由 body
+// 形态" 的分支: 结构化 / 老 number / 两者空。验证错误路径上的返回码而不是
+// 成功的持久化 (成功路径由 service 层测试负责), 这样 handler 测试不依赖
+// 真实 capture 的启动环境。
+func TestHandleJobUpdateNumberStructuredRouting(t *testing.T) {
+	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
+	j := createTestJob(t, jobRepo, "UPDNUM-STR-001")
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
+
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+	}{
+		{
+			// 结构化入参, variant id 非法: 应当在 ApplyVariantSelections 层失败,
+			// 返回 errCodeJobUpdateNumberFailed。
+			name:     "structured invalid variant id",
+			body:     `{"base":"NEW-001","variants":[{"id":"totally-bogus"}]}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
+		{
+			// 结构化入参, base 空: 应当在 variant layer 的 ErrVariantEmptyBase
+			// 直接失败。
+			name:     "structured empty base",
+			body:     `{"base":"","variants":[{"id":"resolution_4k"}]}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
+		{
+			// 仅带 base, 无 variants: 也要走结构化路径 (因为 base 非 nil)。
+			// 此处 test capture 不认识 "NEW-ONLY-BASE-001" 这种番号, 会在
+			// UpdateNumber 里报错, 但不应该回退到老路径。
+			name:     "structured base only",
+			body:     `{"base":"NEW-ONLY-BASE-001"}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
+		{
+			// 老路径: 只有 number 字段。test capture 同样会报错, 但此时走的是
+			// 老 UpdateNumber, 验证回退逻辑没有因为新字段而被误触发。
+			name:     "legacy number field",
+			body:     `{"number":"NEW-001"}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
+		{
+			// 完全空 body (json 合法): 既不走结构化, 也会被 UpdateNumber 报错。
+			name:     "empty object falls back to legacy",
+			body:     `{}`,
+			wantCode: errCodeJobUpdateNumberFailed,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c, rec := newGinContextWithParams(
+				http.MethodPatch,
+				fmt.Sprintf("/api/jobs/%d/number", j.ID),
+				strings.NewReader(tc.body),
+				gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}},
+			)
+			api.handleJobUpdateNumber(c)
+			resp := decodeResponse(t, rec)
+			assert.Equal(t, tc.wantCode, resp.Code, "body=%s", tc.body)
+		})
+	}
 }
 
 func TestHandleJobDeleteError(t *testing.T) {
@@ -971,4 +1083,104 @@ func TestLoadReviewMetaScrapeDataNil(t *testing.T) {
 	meta, ok := api.loadReviewMeta(c, j.ID)
 	assert.True(t, ok)
 	assert.NotNil(t, meta)
+}
+
+// TestHandleReviewReject 验证 POST /api/review/jobs/:id/reject 的四条主路径:
+// invalid id / 非 reviewing / 成功 (空 body) / 成功 (带 reason)。
+// 成功路径通过 engine.ServeHTTP 走完整路由, 顺便锁死 POST 路由注册。
+func TestHandleReviewReject(t *testing.T) {
+	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
+	memStore := store.NewMemStorage()
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
+	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
+
+	initJob := createTestJob(t, jobRepo, "RVRJ-INIT")
+	reviewingJob := createTestJob(t, jobRepo, "RVRJ-OK")
+	ok, err := jobRepo.UpdateStatus(context.Background(), reviewingJob.ID,
+		[]jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NoError(t, scrapeRepo.UpsertRawData(
+		context.Background(), reviewingJob.ID, "test",
+		`{"number":"RVRJ-OK","title":"t"}`,
+	))
+	reviewingJob2 := createTestJob(t, jobRepo, "RVRJ-EMPTY")
+	ok, err = jobRepo.UpdateStatus(context.Background(), reviewingJob2.ID,
+		[]jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, reviewSvc: reviewSvc}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+
+	cases := []struct {
+		name     string
+		url      string
+		body     string
+		wantCode int
+	}{
+		{"invalid id", "/api/review/jobs/abc/reject", `{"reason":"x"}`, errCodeInvalidJobID},
+		{"not reviewing", fmt.Sprintf("/api/review/jobs/%d/reject", initJob.ID), `{"reason":"x"}`, errCodeReviewRejectFailed},
+		{"success_with_reason", fmt.Sprintf("/api/review/jobs/%d/reject", reviewingJob.ID), `{"reason":"用户手动打回"}`, 0},
+		{"success_empty_body", fmt.Sprintf("/api/review/jobs/%d/reject", reviewingJob2.ID), "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var reqBody *strings.Reader
+			if tc.body != "" {
+				reqBody = strings.NewReader(tc.body)
+			}
+			var req *http.Request
+			if reqBody != nil {
+				req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, tc.url, reqBody)
+				req.Header.Set("Content-Type", "application/json")
+			} else {
+				req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, tc.url, nil)
+			}
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, req)
+			resp := decodeResponse(t, rec)
+			assert.Equal(t, tc.wantCode, resp.Code, "case=%s body=%q", tc.name, rec.Body.String())
+		})
+	}
+
+	// 成功路径后的副作用: reviewingJob.ID 现在应该是 failed, error_msg
+	// 等于用户传入的 reason。
+	j, err := jobRepo.GetByID(context.Background(), reviewingJob.ID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j.Status)
+	assert.Equal(t, "用户手动打回", j.ErrorMsg)
+
+	// 空 body 的 reviewing job 应该走默认 reason。
+	j2, err := jobRepo.GetByID(context.Background(), reviewingJob2.ID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, j2.Status)
+	assert.Equal(t, "rejected by reviewer", j2.ErrorMsg)
+}
+
+// TestHandleReviewRejectReadBodyError 覆盖 body 读取失败的兜底: reject 需要
+// 兼容"body 读不出来"的场景, 此时走默认 reason, 不应返回 ReadBodyFailed。
+func TestHandleReviewRejectReadBodyError(t *testing.T) {
+	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
+	memStore := store.NewMemStorage()
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
+	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
+	j := createTestJob(t, jobRepo, "RVRJ-BODYERR")
+	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID,
+		[]jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, reviewSvc: reviewSvc}
+	c, rec := newGinContextWithParams(http.MethodPost, "/test", &errReader{},
+		gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
+	api.handleReviewReject(c)
+	resp := decodeResponse(t, rec)
+	// 读失败时 reject 应该仍能跑成功 (默认 reason), 不把 body 读错误当 500 抛。
+	assert.Equal(t, 0, resp.Code)
+	after, err := jobRepo.GetByID(context.Background(), j.ID)
+	require.NoError(t, err)
+	assert.Equal(t, jobdef.StatusFailed, after.Status)
+	assert.Equal(t, "rejected by reviewer", after.ErrorMsg)
 }

@@ -31,6 +31,7 @@ vi.mock("@/lib/api", async () => {
     deleteJob: vi.fn(),
     triggerScan: vi.fn(),
     updateJobNumber: vi.fn(),
+    updateJobNumberStructured: vi.fn(),
   };
 });
 
@@ -42,6 +43,7 @@ const mockRerunJob = vi.mocked(api.rerunJob);
 const mockDeleteJob = vi.mocked(api.deleteJob);
 const mockScan = vi.mocked(api.triggerScan);
 const mockUpdateNumber = vi.mocked(api.updateJobNumber);
+const mockUpdateNumberStructured = vi.mocked(api.updateJobNumberStructured);
 
 function makeJob(overrides: Partial<JobItem> = {}): JobItem {
   return {
@@ -150,6 +152,7 @@ beforeEach(() => {
   mockDeleteJob.mockReset();
   mockScan.mockReset();
   mockUpdateNumber.mockReset();
+  mockUpdateNumberStructured.mockReset();
   mockListJobs.mockResolvedValue({ items: [], total: 0 } as never);
 });
 
@@ -531,6 +534,44 @@ describe("handleStartEditNumber / handleCommitEditNumber / handleCancelEditNumbe
     });
     await flushAsync();
     expect(setMessage).toHaveBeenCalledWith("bad number");
+  });
+});
+
+describe("handleSubmitStructuredNumber", () => {
+  it("success: calls updateJobNumberStructured + cancel + refresh", async () => {
+    mockUpdateNumberStructured.mockResolvedValue(undefined as never);
+    const { hook, setEditingJobId, setEditingNumber } = renderJobActions();
+    await flushAsync();
+
+    act(() => {
+      hook.result.current.handleSubmitStructuredNumber(
+        makeJob({ id: 7 }),
+        "PXVR-406",
+        [{ id: "multi-cd", index: 2 }],
+      );
+    });
+    await flushAsync();
+
+    expect(mockUpdateNumberStructured).toHaveBeenCalledWith(
+      7,
+      "PXVR-406",
+      [{ id: "multi-cd", index: 2 }],
+    );
+    expect(setEditingJobId).toHaveBeenCalledWith(null);
+    expect(setEditingNumber).toHaveBeenCalledWith("");
+  });
+
+  it("error: setMessage with err text", async () => {
+    mockUpdateNumberStructured.mockRejectedValue(new Error("invalid variant"));
+    const { hook, setMessage } = renderJobActions();
+    await flushAsync();
+
+    act(() => {
+      hook.result.current.handleSubmitStructuredNumber(makeJob(), "ABC-001", []);
+    });
+    await flushAsync();
+
+    expect(setMessage).toHaveBeenCalledWith("invalid variant");
   });
 });
 

@@ -374,6 +374,45 @@
 .review-job-card[data-active="true"] .review-action-approve {
   background: rgba(47, 107, 69, 0.12);
 }
+.review-job-overflow {
+  position: relative;
+  display: inline-flex;
+}
+.review-job-overflow-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--panel, #1e1f22);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+}
+.review-job-overflow-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.review-job-overflow-item:hover,
+.review-job-overflow-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+.review-job-overflow-item-danger {
+  color: var(--danger, #e05b5b);
+}
 .review-image-crop-btn {
   position: absolute;
   top: 6px;

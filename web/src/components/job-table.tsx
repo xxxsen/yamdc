@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Spinner } from "@/components/ui/spinner";
-import type { JobItem, JobListResponse, JobLogItem } from "@/lib/api";
+import type { JobItem, JobListResponse, JobLogItem, NumberVariantDescriptor } from "@/lib/api";
+import { listNumberVariants } from "@/lib/api";
 
 import { DeleteConfirmModal } from "./job-table/delete-confirm-modal";
 import {
@@ -15,6 +16,7 @@ import { JobLogModal } from "./job-table/job-log-modal";
 import { JobRow } from "./job-table/job-row";
 import type { FilterChip, SummaryCard } from "./job-table/job-table-header";
 import { JobTableHeader } from "./job-table/job-table-header";
+import { NumberEditModal } from "./job-table/number-edit-modal";
 import { useJobActions } from "./job-table/use-job-actions";
 
 interface Props {
@@ -48,6 +50,8 @@ export function JobTable({ initialData }: Props) {
   const [editingNumber, setEditingNumber] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [variantDescriptors, setVariantDescriptors] = useState<NumberVariantDescriptor[]>([]);
+  const [variantsError, setVariantsError] = useState<string>("");
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const resolvedStatusFilter = statusFilter === "all" ? STATUS_FILTER : statusFilter;
@@ -144,6 +148,21 @@ export function JobTable({ initialData }: Props) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasHydrated(true);
+  }, []);
+
+  // variant 描述符只拉一次 — 这是个"字典表"性质的配置, 后端改的频次近似于零;
+  // 失败也不应该阻塞主页面, 用 state 记错, 编辑 modal 打开时顺带提示一下。
+  useEffect(() => {
+    const controller = new AbortController();
+    void listNumberVariants(controller.signal)
+      .then((items) => {
+        setVariantDescriptors(items);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setVariantsError(error instanceof Error ? error.message : "加载失败");
+      });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -246,15 +265,10 @@ export function JobTable({ initialData }: Props) {
                   key={job.id}
                   job={job}
                   isSelected={selectedJobIds.has(job.id)}
-                  isEditing={editingJobId === job.id}
-                  editingNumber={editingNumber}
                   hasHydrated={hasHydrated}
                   isPending={isPending}
                   onToggleSelect={actions.handleToggleSelectJob}
                   onStartEdit={actions.handleStartEditNumber}
-                  onCancelEdit={actions.handleCancelEditNumber}
-                  onCommitEdit={actions.handleCommitEditNumber}
-                  onEditingNumberChange={setEditingNumber}
                   onRun={actions.handleRun}
                   onRerun={actions.handleRerun}
                   onDelete={actions.handleDelete}
@@ -293,6 +307,24 @@ export function JobTable({ initialData }: Props) {
           onConfirm={actions.confirmDelete}
         />
       ) : null}
+      {editingJobId !== null
+        ? (() => {
+            const editingJob = jobs.find((j) => j.id === editingJobId);
+            if (!editingJob) {
+              return null;
+            }
+            return (
+              <NumberEditModal
+                job={editingJob}
+                descriptors={variantDescriptors}
+                descriptorsError={variantsError || undefined}
+                isSubmitting={isPending}
+                onClose={actions.handleCancelEditNumber}
+                onSubmit={(base, selections) => actions.handleSubmitStructuredNumber(editingJob, base, selections)}
+              />
+            );
+          })()
+        : null}
     </>
   );
 }

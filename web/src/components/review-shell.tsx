@@ -265,6 +265,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
     handleImportSelected,
     handleDelete,
     handleDeleteSelected,
+    handleReject,
     confirmDelete,
   } = useReviewBatchActions({
     selected,
@@ -318,6 +319,7 @@ export function ReviewShell({ jobs, initialScrapeData, initialMediaStatus }: Pro
           onDeleteSelected={handleDeleteSelected}
           onImport={handleImport}
           onDelete={handleDelete}
+          onReject={handleReject}
         />
         <section className="panel review-detail-panel">
           <ReviewDetailHeader

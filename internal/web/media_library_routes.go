@@ -3,8 +3,6 @@ package web
 import "github.com/gin-gonic/gin"
 
 // 与 registerEngineJobRoutes 结构同形但职责不同, 保留"路由表式"可读性.
-//
-//nolint:dupl // declarative route table; extracting would harm readability
 func (a *API) registerEngineMediaLibraryRoutes(group *gin.RouterGroup) {
 	group.GET("/api/media-library", a.handleMediaLibraryList)
 	group.GET("/api/media-library/item", a.handleMediaLibraryItemGet)

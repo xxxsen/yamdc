@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Trash2 } from "lucide-react";
-import type { RefObject } from "react";
+import { Check, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { JobItem } from "@/lib/api";
@@ -24,6 +24,7 @@ export interface ReviewListPanelProps {
   onDeleteSelected: () => void;
   onImport: () => void;
   onDelete: () => void;
+  onReject: () => void;
 }
 
 export function ReviewListPanel({
@@ -43,6 +44,7 @@ export function ReviewListPanel({
   onDeleteSelected,
   onImport,
   onDelete,
+  onReject,
 }: ReviewListPanelProps) {
   return (
     <aside className="panel review-list-panel">
@@ -127,19 +129,105 @@ export function ReviewListPanel({
               >
                 <Check size={16} />
               </Button>
-              <Button
-                className="review-inline-icon-btn"
-                onClick={onDelete}
+              <ReviewJobOverflowMenu
                 disabled={isPending || selectedId !== job.id}
-                aria-label="删除"
-                title="删除"
-              >
-                <Trash2 size={14} />
-              </Button>
+                onDelete={onDelete}
+                onReject={onReject}
+              />
             </div>
           </div>
         ))}
       </div>
     </aside>
+  );
+}
+
+interface ReviewJobOverflowMenuProps {
+  disabled: boolean;
+  onDelete: () => void;
+  onReject: () => void;
+}
+
+// ReviewJobOverflowMenu 把 "删除" / "打回" 两个相对低频的破坏性操作
+// 折叠到 `...` 菜单里, 避免每张 review 卡片上出现 3 个按钮过于拥挤。
+function ReviewJobOverflowMenu({ disabled, onDelete, onReject }: ReviewJobOverflowMenuProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointer = (event: MouseEvent) => {
+      if (!containerRef.current) {
+        return;
+      }
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handlePointer);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("mousedown", handlePointer);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  // 注: 不要用 useEffect 同步 "disabled -> setOpen(false)", 那会触发
+  // cascading render。改成 "disabled 生效时把 open 视为 false" 的 derived
+  // 展示模型, 同时禁用触发器 onClick, 保证切 disabled 那一刻菜单立即收起。
+  const effectiveOpen = open && !disabled;
+
+  return (
+    <div ref={containerRef} className="review-job-overflow">
+      <Button
+        className="review-inline-icon-btn review-job-overflow-trigger"
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+        disabled={disabled}
+        aria-label="更多操作"
+        aria-haspopup="menu"
+        aria-expanded={effectiveOpen}
+        title="更多操作"
+      >
+        <MoreHorizontal size={16} />
+      </Button>
+      {effectiveOpen ? (
+        <div className="review-job-overflow-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="review-job-overflow-item"
+            onClick={() => {
+              setOpen(false);
+              onReject();
+            }}
+          >
+            <RotateCcw size={14} aria-hidden />
+            <span>打回</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="review-job-overflow-item review-job-overflow-item-danger"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            <Trash2 size={14} aria-hidden />
+            <span>删除</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

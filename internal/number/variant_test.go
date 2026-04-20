@@ -1,0 +1,168 @@
+package number
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestDefaultVariantDescriptors 锚定默认 variant 列表的关键不变量, 防止后续
+// 改动意外删掉 / 重排 / 改动 ID 或 Suffix (这些字段会被前端持久化使用)。
+func TestDefaultVariantDescriptors(t *testing.T) {
+	descriptors := DefaultVariantDescriptors()
+	require.NotEmpty(t, descriptors, "default descriptors should not be empty")
+
+	// 每个 ID 全局唯一 (前端依赖此不变量做 selection 的 key)。
+	idSet := make(map[string]struct{}, len(descriptors))
+	for _, d := range descriptors {
+		assert.NotEmpty(t, d.ID, "descriptor must have non-empty id: %+v", d)
+		assert.NotEmpty(t, d.Suffix, "descriptor must have non-empty suffix: %+v", d)
+		assert.NotEmpty(t, d.Label, "descriptor must have non-empty label: %+v", d)
+		_, dup := idSet[d.ID]
+		assert.False(t, dup, "duplicated descriptor id: %s", d.ID)
+		idSet[d.ID] = struct{}{}
+		assert.Contains(t, []VariantKind{VariantKindFlag, VariantKindIndexed}, d.Kind,
+			"unknown kind %q for id %s", d.Kind, d.ID)
+		if d.Kind == VariantKindIndexed {
+			assert.GreaterOrEqual(t, d.Max, d.Min,
+				"indexed descriptor %s: max (%d) < min (%d)", d.ID, d.Max, d.Min)
+			assert.GreaterOrEqual(t, d.Min, 1,
+				"indexed descriptor %s: min (%d) should be >= 1", d.ID, d.Min)
+		}
+	}
+
+	// 每次调用必须返回独立切片, 调用方修改不能污染全局状态。
+	first := DefaultVariantDescriptors()
+	first[0].Label = "mutated"
+	second := DefaultVariantDescriptors()
+	assert.NotEqual(t, "mutated", second[0].Label,
+		"DefaultVariantDescriptors must return a fresh slice each call")
+
+	// 关键 ID / Suffix 对应关系断言, 一旦改动即意味着向老文件名的不兼容变更。
+	type idSuffix struct {
+		id     string
+		suffix string
+	}
+	expected := []idSuffix{
+		{VariantID4K, "4K"},
+		{VariantID8K, "8K"},
+		{VariantIDVR, "VR"},
+		{VariantIDChineseSubtitle, "C"},
+		{VariantIDSpecialEdition, "LEAK"},
+		{VariantIDRestored, "UC"},
+		{VariantIDMultiCD, "CD"},
+	}
+	got := make(map[string]string, len(descriptors))
+	for _, d := range descriptors {
+		got[d.ID] = d.Suffix
+	}
+	for _, want := range expected {
+		assert.Equal(t, want.suffix, got[want.id], "id=%s suffix mismatch", want.id)
+	}
+}
+
+// TestApplyVariantSelections 覆盖 "apply" 的核心路径: 无 variant / flag / indexed /
+// 多个组合 / 出错场景。尤其验证顺序: Generator 的顺序是固定的 (4K/8K/VR/C/LEAK/UC/CD),
+// 即使用户随意传入 selection, 输出也必须按该顺序拼装, 和落盘文件名一致。
+func TestApplyVariantSelections(t *testing.T) {
+	t.Run("no selection normalizes base", func(t *testing.T) {
+		out, err := ApplyVariantSelections("  pxvr-406  ", nil)
+		require.NoError(t, err)
+		assert.Equal(t, "PXVR-406", out)
+	})
+
+	t.Run("empty base fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("   ", nil)
+		assert.ErrorIs(t, err, ErrVariantEmptyBase)
+	})
+
+	t.Run("flag variants combine in fixed order regardless of input order", func(t *testing.T) {
+		out, err := ApplyVariantSelections("PXVR-406", []VariantSelection{
+			{ID: VariantIDChineseSubtitle},
+			{ID: VariantID4K},
+		})
+		require.NoError(t, err)
+		// Expected order: base -4K -C (4K before C per GenerateSuffix).
+		assert.Equal(t, "PXVR-406-4K-C", out)
+	})
+
+	t.Run("indexed CD variant", func(t *testing.T) {
+		out, err := ApplyVariantSelections("PXVR-406", []VariantSelection{
+			{ID: VariantIDMultiCD, Index: 2},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "PXVR-406-CD2", out)
+	})
+
+	t.Run("full stack", func(t *testing.T) {
+		out, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantIDVR},
+			{ID: VariantID8K},
+			{ID: VariantIDMultiCD, Index: 1},
+			{ID: VariantIDChineseSubtitle},
+			{ID: VariantIDSpecialEdition},
+			{ID: VariantIDRestored},
+			{ID: VariantID4K},
+		})
+		require.NoError(t, err)
+		// Order per GenerateSuffix: 4K, 8K, VR, C, LEAK, UC, CD1.
+		assert.Equal(t, "ABC-001-4K-8K-VR-C-LEAK-UC-CD1", out)
+	})
+
+	t.Run("duplicate id fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantID4K},
+			{ID: VariantID4K},
+		})
+		assert.ErrorIs(t, err, ErrVariantDuplicate)
+	})
+
+	t.Run("unknown id fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: "definitely-not-a-variant"},
+		})
+		assert.ErrorIs(t, err, ErrVariantUnknownID)
+	})
+
+	t.Run("indexed out of range fails", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantIDMultiCD, Index: 0},
+		})
+		assert.ErrorIs(t, err, ErrVariantIndexOutOfRange)
+
+		_, err = ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantIDMultiCD, Index: defaultMultiCDMax + 1},
+		})
+		assert.ErrorIs(t, err, ErrVariantIndexOutOfRange)
+	})
+
+	t.Run("output round-trips through Parse", func(t *testing.T) {
+		// 输出能被自己的 Parse 再解析出等价的 variant, 保证我们和历史解析器
+		// 关于 "variant 怎么长" 这件事没有漂移。
+		out, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: VariantIDMultiCD, Index: 2},
+			{ID: VariantIDChineseSubtitle},
+			{ID: VariantID4K},
+		})
+		require.NoError(t, err)
+
+		n, err := Parse(out)
+		require.NoError(t, err)
+		assert.Equal(t, "ABC-001", n.GetNumberID())
+		assert.True(t, n.GetIs4K())
+		assert.True(t, n.GetIsChineseSubtitle())
+		assert.True(t, n.GetIsMultiCD())
+		assert.Equal(t, 2, n.GetMultiCDIndex())
+	})
+
+	t.Run("wraps sentinel with id context", func(t *testing.T) {
+		_, err := ApplyVariantSelections("ABC-001", []VariantSelection{
+			{ID: "unknown"},
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrVariantUnknownID))
+		assert.Contains(t, err.Error(), "id=unknown")
+	})
+}

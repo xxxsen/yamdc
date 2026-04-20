@@ -542,3 +542,110 @@
   line-height: 1.55;
   white-space: pre-wrap;
 }
+
+.number-edit-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 360px;
+}
+.number-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.number-edit-field-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.number-edit-field-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.number-edit-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(224, 91, 91, 0.12);
+  color: var(--danger, #c04848);
+  font-size: 13px;
+}
+.number-edit-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.number-edit-variants-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.number-edit-variants-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.number-edit-variants-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.number-edit-variant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 67, 44, 0.16);
+  background: rgba(255, 255, 255, 0.6);
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+.number-edit-variant-chip[data-active="true"] {
+  background: rgba(180, 79, 45, 0.12);
+  border-color: rgba(180, 79, 45, 0.32);
+  color: var(--accent-strong, #8c3a1f);
+}
+.number-edit-variant-chip[data-invalid="true"] {
+  border-color: var(--danger, #c04848);
+}
+.number-edit-variant-chip-indexed {
+  cursor: default;
+  gap: 8px;
+}
+.number-edit-variant-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.number-edit-variant-suffix {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.number-edit-variant-index-input {
+  width: 68px;
+  height: 30px;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+.number-edit-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(31, 26, 20, 0.05);
+}
+.number-edit-preview-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.number-edit-preview-value {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  color: var(--accent-strong, #8c3a1f);
+  word-break: break-all;
+}

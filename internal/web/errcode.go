@@ -39,6 +39,7 @@ const (
 	errCodeInvalidReviewJSON        = 110106
 	errCodeReviewAssetStoreFailed   = 110107
 	errCodeReviewMarshalJSONFailed  = 110108
+	errCodeReviewRejectFailed       = 110109
 
 	// Library errors.
 	errCodeListLibraryFailed         = 120001

@@ -14,14 +14,13 @@ import (
 
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/store"
 )
 
-// 这里与 registerEngineMediaLibraryRoutes 在"一串 group.METHOD 调用"这个形状上
-// 结构相似, dupl 会把二者识别为重复. 但语义不同: 一个负责 job / review 生命周期,
-// 一个负责媒体库路由, 把它们抽成 "data + loop" 反而弱化了声明式可读性.
-//
-//nolint:dupl // declarative route table; extracting would harm readability
+// 声明式路由注册: 与 registerEngineMediaLibraryRoutes 形状类似但语义不同
+// (一个负责 job / review 生命周期, 一个负责媒体库), 抽成 "data + loop"
+// 反而削弱可读性, 因此保留直写风格.
 func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
 	group.POST("/api/scan", a.handleScan)
 	group.GET("/api/jobs", a.handleListJobs)
@@ -32,9 +31,12 @@ func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
 	group.PATCH("/api/jobs/:id/number", a.handleJobUpdateNumber)
 	group.DELETE("/api/jobs/:id", a.handleJobDelete)
 
+	group.GET("/api/number/variants", a.handleListNumberVariants)
+
 	group.GET("/api/review/jobs/:id", a.handleReviewGet)
 	group.PUT("/api/review/jobs/:id", a.handleReviewSave)
 	group.POST("/api/review/jobs/:id/import", a.handleReviewImport)
+	group.POST("/api/review/jobs/:id/reject", a.handleReviewReject)
 	group.POST("/api/review/jobs/:id/poster-crop", a.handleReviewPosterCrop)
 	group.POST("/api/review/jobs/:id/asset", a.handleReviewAsset)
 }
@@ -147,6 +149,18 @@ func (a *API) handleJobLogs(c *gin.Context) {
 	writeSuccess(c.Writer, "ok", items)
 }
 
+// handleJobUpdateNumber 支持两种入参形态:
+//
+//  1. 结构化 (推荐): {"base":"PXVR-406","variants":[{"id":"multi_cd","index":2}]}
+//     base 由前端 "文件列表" 页的番号输入框提供, variants 对应变体下拉 /
+//     按钮选择, 后端负责拼装。
+//
+//  2. 兼容老路径: {"number":"PXVR-406-CD2"} — 直接传完整的 number 字符串。
+//     老前端、命令行脚本、集成测试仍会走这条路径, 不能破坏。
+//
+// 识别规则: 只要请求里显式出现 base 或 variants 字段, 就按结构化处理;
+// 否则走老的 number 字段。为保持向后兼容, 既没有 base/variants 又没有 number
+// 时, 仍走老逻辑 (传一个空 number 进 service, 由 service 返回业务错误)。
 func (a *API) handleJobUpdateNumber(c *gin.Context) {
 	id, ok := parseIDParam(c)
 	if !ok {
@@ -158,15 +172,48 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Number string `json:"number"`
+		Number   string                    `json:"number"`
+		Base     *string                   `json:"base"`
+		Variants []number.VariantSelection `json:"variants"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
 		return
 	}
-	item, err := a.jobSvc.UpdateNumber(c.Request.Context(), id, req.Number)
+
+	useStructured := req.Base != nil || len(req.Variants) > 0
+	ctx := c.Request.Context()
+	logger := logutil.GetLogger(ctx)
+
+	var item *jobdef.Job
+	if useStructured {
+		base := ""
+		if req.Base != nil {
+			base = *req.Base
+		}
+		item, err = a.jobSvc.UpdateNumberStructured(ctx, id, base, req.Variants)
+		if err != nil {
+			logger.Warn("job number update (structured) failed",
+				zap.Int64("job_id", id),
+				zap.String("base", strings.TrimSpace(base)),
+				zap.Int("variants", len(req.Variants)),
+				zap.Error(err),
+			)
+			writeFail(c.Writer, errCodeJobUpdateNumberFailed, err.Error())
+			return
+		}
+		logger.Info("job number updated (structured)",
+			zap.Int64("job_id", id),
+			zap.String("base", strings.TrimSpace(base)),
+			zap.Int("variants", len(req.Variants)),
+		)
+		writeSuccess(c.Writer, "job number updated", item)
+		return
+	}
+
+	item, err = a.jobSvc.UpdateNumber(ctx, id, req.Number)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("job number update failed",
+		logger.Warn("job number update failed",
 			zap.Int64("job_id", id),
 			zap.String("number", strings.TrimSpace(req.Number)),
 			zap.Error(err),
@@ -174,11 +221,20 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 		writeFail(c.Writer, errCodeJobUpdateNumberFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("job number updated",
+	logger.Info("job number updated",
 		zap.Int64("job_id", id),
 		zap.String("number", strings.TrimSpace(req.Number)),
 	)
 	writeSuccess(c.Writer, "job number updated", item)
+}
+
+// handleListNumberVariants 返回当前支持的 variant 描述符列表, 用于前端
+// "文件列表" 页的结构化番号输入 (base + variant selectors)。返回里包含
+// 足够的展示信息 (label/description) 和 schema 信息 (kind + min/max),
+// 前端不需要硬编码 suffix 语义, 也不需要硬编码哪些 variant 存在。
+func (a *API) handleListNumberVariants(c *gin.Context) {
+	descriptors := number.DefaultVariantDescriptors()
+	writeSuccess(c.Writer, "ok", gin.H{"variants": descriptors})
 }
 
 func (a *API) handleJobDelete(c *gin.Context) {
@@ -246,6 +302,39 @@ func (a *API) handleReviewImport(c *gin.Context) {
 	}
 	logutil.GetLogger(c.Request.Context()).Info("review import completed", zap.Int64("job_id", id))
 	writeSuccess(c.Writer, "import completed", nil)
+}
+
+// handleReviewReject 处理 /api/review/jobs/:id/reject: 把 reviewing 的 job
+// 退回到 failed 状态, 删除 scrape_data, 使用户可以重新编辑 number 后 run。
+// reason 字段可选 (空则用默认文案); 行为/边界见 review.Service.Reject 注释。
+func (a *API) handleReviewReject(c *gin.Context) {
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
+	// reason 可选: 兼容 "空 body" 和 "{}": 读 body 失败 / JSON 不合法时仍
+	// 走默认 reason, 避免前端因为没填理由而拿到 400。
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	body, err := io.ReadAll(c.Request.Body)
+	if err == nil && len(body) > 0 {
+		_ = json.Unmarshal(body, &req)
+	}
+	if err := a.reviewSvc.Reject(c.Request.Context(), id, req.Reason); err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn("review reject failed",
+			zap.Int64("job_id", id),
+			zap.String("reason", strings.TrimSpace(req.Reason)),
+			zap.Error(err),
+		)
+		writeFail(c.Writer, errCodeReviewRejectFailed, err.Error())
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info("review rejected",
+		zap.Int64("job_id", id),
+		zap.String("reason", strings.TrimSpace(req.Reason)),
+	)
+	writeSuccess(c.Writer, "review rejected", nil)
 }
 
 func (a *API) handleReviewPosterCrop(c *gin.Context) {

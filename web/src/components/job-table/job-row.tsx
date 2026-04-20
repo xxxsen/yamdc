@@ -1,5 +1,4 @@
-import { Eye, Pencil, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
-import type { ChangeEvent } from "react";
+import { Eye, Pencil, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { JobItem } from "@/lib/api";
@@ -16,41 +15,35 @@ import { NumberStatusIcon } from "./number-status-icon";
 
 // JobRow 负责渲染单行任务, 不持有状态, 所有交互通过 props 回调透传给父层.
 // 拆出来的主要动机是让外层主文件摆脱 ~160 行行内渲染, 便于单独读懂这一行的
-// 显示/交互语义 (选择框 / 行内编辑番号 / 状态 / 日志 / 动作).
+// 显示/交互语义 (选择框 / 状态 / 日志 / 动作).
+//
+// 番号编辑不在 row 内联, 改成点击铅笔按钮打开 NumberEditModal, 因为:
+//   1. "base + variants selector" 的结构化输入需要多个控件, 塞到 table cell
+//      里会让一行高度爆炸, 并且和其它列的竖直对齐很难做好;
+//   2. modal 能显示完整的后缀释义 (中字 / 4K / 多盘 CD...), 比单输入框更
+//      friendly, 也避免用户打错后缀字面量导致一直报错。
 interface Props {
   job: JobItem;
   isSelected: boolean;
-  isEditing: boolean;
-  editingNumber: string;
   hasHydrated: boolean;
   isPending: boolean;
   onToggleSelect: (jobID: number) => void;
   onStartEdit: (job: JobItem) => void;
-  onCancelEdit: () => void;
-  onCommitEdit: (job: JobItem) => void;
-  onEditingNumberChange: (value: string) => void;
   onRun: (job: JobItem) => void;
   onRerun: (job: JobItem) => void;
   onDelete: (job: JobItem) => void;
   onOpenLogs: (job: JobItem) => void;
 }
 
-// JobRow: 单行 JSX, 内部有大量 status/confidence/手动改番号 三选一分支. 每
-// 条 status badge / 置信度徽标 / 行内 input 都是小独立片段, 继续拆分会让
-// 行级 layout 被扯散到多个文件. 保持一个函数 + inline disable.
+// JobRow: 单行 JSX, 内部有大量 status/confidence/手动改番号 三选一分支.
 // eslint-disable-next-line complexity
 export function JobRow({
   job,
   isSelected,
-  isEditing,
-  editingNumber,
   hasHydrated,
   isPending,
   onToggleSelect,
   onStartEdit,
-  onCancelEdit,
-  onCommitEdit,
-  onEditingNumberChange,
   onRun,
   onRerun,
   onDelete,
@@ -100,58 +93,28 @@ export function JobRow({
       <td data-label="影片 ID" style={{ width: 340 }}>
         <div className="file-number-cell">
           <div style={{ minWidth: 0, flex: 1 }}>
-            {isEditing ? (
-              <div className="file-number-editing">
-                <NumberStatusIcon job={job} />
-                <input
-                  className="input"
-                  style={{ width: "100%", minWidth: 0, height: 40, boxSizing: "border-box", padding: "0 12px" }}
-                  value={editingNumber}
-                  placeholder="请输入确认后的影片 ID"
-                  autoFocus
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => onEditingNumberChange(e.target.value)}
-                  onBlur={() => onCommitEdit(job)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      onCommitEdit(job);
-                    }
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      onCancelEdit();
-                    }
-                  }}
-                />
+            <div className="file-number-display">
+              <NumberStatusIcon job={job} />
+              <div className="file-number-copy">
+                <span
+                  className="file-number-value"
+                  title={needsManualNumberReview ? "待手动确认" : job.number}
+                >
+                  {needsManualNumberReview ? "待确认" : job.number}
+                </span>
+                <span className="file-number-note">{getNumberHint(job)}</span>
               </div>
-            ) : (
-              <div className="file-number-display">
-                <NumberStatusIcon job={job} />
-                <div className="file-number-copy">
-                  <span
-                    className="file-number-value"
-                    title={needsManualNumberReview ? "待手动确认" : job.number}
-                  >
-                    {needsManualNumberReview ? "待确认" : job.number}
-                  </span>
-                  <span className="file-number-note">{getNumberHint(job)}</span>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
           {canEditNumber ? (
-            isEditing ? (
-              <Button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={onCancelEdit}
-                disabled={isPending}
-              >
-                <X size={16} />
-              </Button>
-            ) : (
-              <Button onClick={() => onStartEdit(job)} disabled={isPending}>
-                <Pencil size={16} />
-              </Button>
-            )
+            <Button
+              onClick={() => onStartEdit(job)}
+              disabled={isPending}
+              aria-label="编辑影片 ID"
+              title="编辑影片 ID"
+            >
+              <Pencil size={16} />
+            </Button>
           ) : null}
         </div>
       </td>
