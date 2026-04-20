@@ -8,7 +8,7 @@ interface Props {
   job: JobItem;
 }
 
-// NumberStatusIcon: 番号清洗状态在表格中的圆形图标.
+// NumberStatusIcon: 影片 ID 清洗状态在表格中的圆形图标.
 // 颜色 / icon 由 getNumberMeta(job).kind 决定, 四种状态:
 //   success → 绿勾
 //   manual  → 蓝色编辑笔 (用户手动改过)

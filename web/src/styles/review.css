@@ -374,6 +374,64 @@
 .review-job-card[data-active="true"] .review-action-approve {
   background: rgba(47, 107, 69, 0.12);
 }
+.review-job-overflow {
+  position: relative;
+  display: inline-flex;
+}
+.review-job-overflow-menu {
+  /* 实际 position / top / left 由组件内联 style 用 getBoundingClientRect
+     配合 portal 动态下发 (见 list-panel.tsx), 这里只管外观。选择 portal
+     是因为 .review-job-list 自带 overflow: auto, 原来的 absolute + top
+     calc(100% + 4px) 会被滚动容器直接裁掉 (尤其最后一张卡下方没空间)。
+
+     颜色说明: 本项目是 warm cream 浅色主题 (--panel 是半透明奶白),
+     原来 fallback 到 #1e1f22 是给暗色主题写的, 浅色下完全不对。菜单
+     改用 --panel-strong (不透明奶白) + --line 作为描边, 这样在列表
+     背景上有明显的分层; hover 走 accent-tinted 背景, 和 review 卡片
+     data-active / data-selected 的配色对齐。 */
+  z-index: 30;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  color: var(--foreground);
+  background: var(--panel-strong, #fffaf2);
+  border: 1px solid var(--line, rgba(91, 67, 44, 0.16));
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(91, 67, 44, 0.18);
+}
+.review-job-overflow-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 32px;
+  font-size: 13px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  /* 让 hover 的背景变化过渡顺滑一点, 避免瞬切显得突兀。 */
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.review-job-overflow-item:hover,
+.review-job-overflow-item:focus-visible {
+  background: rgba(180, 79, 45, 0.12);
+  color: var(--accent-strong, #8b3618);
+  outline: none;
+}
+.review-job-overflow-item-danger {
+  color: var(--danger, #9d2b2b);
+}
+.review-job-overflow-item-danger:hover,
+.review-job-overflow-item-danger:focus-visible {
+  background: rgba(157, 43, 43, 0.12);
+  color: var(--danger, #9d2b2b);
+}
 .review-image-crop-btn {
   position: absolute;
   top: 6px;
@@ -559,4 +617,13 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
+}
+.review-confirm-warning {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 171, 64, 0.12);
+  color: #c77800;
+  font-size: 13px;
+  line-height: 1.5;
 }

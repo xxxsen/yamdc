@@ -18,11 +18,16 @@ export {
   type JobItem,
   type JobLogItem,
   type JobListResponse,
+  type NumberVariantKind,
+  type NumberVariantDescriptor,
+  type NumberVariantSelection,
   listJobs,
   runJob,
   rerunJob,
   deleteJob,
   updateJobNumber,
+  updateJobNumberStructured,
+  listNumberVariants,
   listJobLogs,
 } from "./jobs";
 
@@ -66,6 +71,7 @@ export {
   getReviewJob,
   saveReviewJob,
   importReviewJob,
+  rejectReviewJob,
   cropPosterFromCover,
   uploadReviewAsset,
 } from "./review";

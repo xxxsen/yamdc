@@ -19,6 +19,7 @@ import (
 	"github.com/xxxsen/yamdc/internal/capture"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/model"
+	"github.com/xxxsen/yamdc/internal/number"
 	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/store"
 )
@@ -323,6 +324,28 @@ func (s *Service) UpdateNumber(ctx context.Context, jobID int64, input string) (
 		}
 	}
 	return updated, nil
+}
+
+// UpdateNumberStructured 是结构化版的 number 编辑入口: 前端传入 "base 影片 ID"
+// 以及一组 variant selections (来自 GET /api/number/variants 给到的描述符),
+// 后端先用 number.ApplyVariantSelections 拼成带后缀的完整 number 字符串, 再
+// 复用既有 UpdateNumber 通道走 capture 校验 + 持久化 + 冲突检测。
+//
+// 为什么在 service 层而不是只在 HTTP 层拼:
+//   - 拼接逻辑涉及 variant 校验 (unknown id / 越界 index / 重复), 应在一处做;
+//   - 拼完的 number 还要喂给 capture / jobRepo, 若放在 handler 会让 handler
+//     变成 "业务逻辑 + 路由参数解析" 两份职责, service 才是单元测试的自然边界。
+func (s *Service) UpdateNumberStructured(
+	ctx context.Context,
+	jobID int64,
+	base string,
+	selections []number.VariantSelection,
+) (*jobdef.Job, error) {
+	composed, err := number.ApplyVariantSelections(base, selections)
+	if err != nil {
+		return nil, fmt.Errorf("apply variant selections: %w", err)
+	}
+	return s.UpdateNumber(ctx, jobID, composed)
 }
 
 func (s *Service) Delete(ctx context.Context, jobID int64) error {

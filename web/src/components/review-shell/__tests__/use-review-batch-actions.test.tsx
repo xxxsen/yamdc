@@ -23,12 +23,14 @@ vi.mock("@/lib/api", async () => {
     ...actual,
     importReviewJob: vi.fn(),
     deleteJob: vi.fn(),
+    rejectReviewJob: vi.fn(),
   };
 });
 
 const api = await import("@/lib/api");
 const mockImport = vi.mocked(api.importReviewJob);
 const mockDelete = vi.mocked(api.deleteJob);
+const mockReject = vi.mocked(api.rejectReviewJob);
 
 function makeJob(overrides: Partial<JobItem> = {}): JobItem {
   return {
@@ -98,6 +100,7 @@ function renderBatch(deps: Partial<UseReviewBatchActionsDeps> = {}) {
 beforeEach(() => {
   mockImport.mockReset();
   mockDelete.mockReset();
+  mockReject.mockReset();
 });
 
 afterEach(() => {
@@ -304,6 +307,73 @@ describe("handleDelete / handleDeleteSelected", () => {
     expect(setDeleteTargetIds).toHaveBeenCalledTimes(1);
     expect(Array.from(setDeleteTargetIds.mock.calls[0][0] as number[]).sort()).toEqual([1, 2, 3]);
   });
+
+  // moveRunning 守卫: 这两个 handler 是删除链路的入口, 如果只靠 UI 的
+  // disabled 去挡, "对话框已经开着, moveRunning 中途变 true" 场景仍然漏掉。
+  // 所以 hook 层自己也要短路 + 给出一致 message, 保持和 handleImport* 同款
+  // 策略。
+  it("handleDelete: moveRunning 时只 setMessage, 不写 targetIds", () => {
+    const { hook, setMessage, setDeleteTargetIds } = renderBatch({
+      selected: makeJob({ id: 99 }),
+      moveRunning: true,
+    });
+    act(() => {
+      hook.result.current.handleDelete();
+    });
+    expect(setMessage).toHaveBeenCalledWith("媒体库移动进行中，暂不可删除任务");
+    expect(setDeleteTargetIds).not.toHaveBeenCalled();
+  });
+
+  it("handleDeleteSelected: moveRunning 时只 setMessage, 不写 targetIds", () => {
+    const { hook, setMessage, setDeleteTargetIds } = renderBatch({
+      selectedJobIds: new Set([1, 2]),
+      moveRunning: true,
+    });
+    act(() => {
+      hook.result.current.handleDeleteSelected();
+    });
+    expect(setMessage).toHaveBeenCalledWith("媒体库移动进行中，暂不可批量删除");
+    expect(setDeleteTargetIds).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleReject", () => {
+  it("selected 为 null 时 no-op, 不调 rejectReviewJob", async () => {
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected: null });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(mockReject).not.toHaveBeenCalled();
+    expect(setMessage).not.toHaveBeenCalled();
+    expect(removeJobFromList).not.toHaveBeenCalled();
+  });
+
+  it("打回成功: 调 rejectReviewJob + removeJobFromList + 成功 message", async () => {
+    mockReject.mockResolvedValue({});
+    const selected = makeJob({ id: 77 });
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(mockReject).toHaveBeenCalledWith(77);
+    expect(removeJobFromList).toHaveBeenCalledWith(77);
+    expect(setMessage).toHaveBeenCalledWith("打回任务...");
+    expect(setMessage).toHaveBeenLastCalledWith("任务已打回，可到文件列表修改影片 ID 后重新 run");
+  });
+
+  it("reject 抛错: setMessage 用 error.message, 不 removeJob", async () => {
+    mockReject.mockRejectedValue(new Error("reject boom"));
+    const selected = makeJob({ id: 77 });
+    const { hook, setMessage, removeJobFromList } = renderBatch({ selected });
+    act(() => {
+      hook.result.current.handleReject();
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenLastCalledWith("reject boom");
+    expect(removeJobFromList).not.toHaveBeenCalled();
+  });
 });
 
 describe("confirmDelete", () => {
@@ -379,5 +449,23 @@ describe("confirmDelete", () => {
     await flushAsync();
     expect(removeJobsFromList).toHaveBeenCalledWith([1]);
     expect(setMessage).toHaveBeenLastCalledWith("已删除 1 项，1 项失败");
+  });
+
+  // moveRunning 在"对话框已经打开、随后迁移启动"时的兜底: 点确认会走到
+  // confirmDelete, 这里必须把 targetIds 清空 (关对话框) 并发消息, 拒绝
+  // 进入 deleteJob/os.Remove 的实际删除路径。
+  it("moveRunning 时: 清空 targetIds + setMessage, 不调 deleteJob", async () => {
+    const { hook, setMessage, setDeleteTargetIds, removeJobsFromList } = renderBatch({
+      deleteTargetIds: [1, 2],
+      moveRunning: true,
+    });
+    act(() => {
+      hook.result.current.confirmDelete();
+    });
+    await flushAsync();
+    expect(setDeleteTargetIds).toHaveBeenCalledWith(null);
+    expect(setMessage).toHaveBeenCalledWith("媒体库移动进行中，删除已取消");
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(removeJobsFromList).not.toHaveBeenCalled();
   });
 });

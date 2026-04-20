@@ -3,7 +3,7 @@
 import { type Dispatch, type SetStateAction, type TransitionStartFunction } from "react";
 
 import type { JobItem, ReviewMeta } from "@/lib/api";
-import { deleteJob, importReviewJob } from "@/lib/api";
+import { deleteJob, importReviewJob, rejectReviewJob } from "@/lib/api";
 
 export interface UseReviewBatchActionsDeps {
   selected: JobItem | null;
@@ -24,6 +24,7 @@ export interface ReviewBatchActions {
   handleImportSelected: () => void;
   handleDelete: () => void;
   handleDeleteSelected: () => void;
+  handleReject: () => void;
   confirmDelete: () => void;
 }
 
@@ -118,11 +119,38 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
     if (!selected) {
       return;
     }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可删除任务");
+      return;
+    }
     setDeleteTargetIds([selected.id]);
+  };
+
+  // handleReject 对应 "打回" 操作: 仅支持单个任务, 把当前 reviewing job 回退
+  // 到 failed 状态并清掉 scrape_data, 用户可以回到 /processing 修改影片 ID/variants
+  // 后重新 run。批量 reject 暂不支持 (产品决策), 所以这里只针对 selected。
+  const handleReject = () => {
+    if (!selected) {
+      return;
+    }
+    startTransition(async () => {
+      try {
+        setMessage("打回任务...");
+        await rejectReviewJob(selected.id);
+        removeJobFromList(selected.id);
+        setMessage("任务已打回，可到文件列表修改影片 ID 后重新 run");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "打回失败");
+      }
+    });
   };
 
   const handleDeleteSelected = () => {
     if (selectedCount === 0) {
+      return;
+    }
+    if (moveRunning) {
+      setMessage("媒体库移动进行中，暂不可批量删除");
       return;
     }
     setDeleteTargetIds(Array.from(selectedJobIds));
@@ -130,6 +158,16 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
 
   const confirmDelete = () => {
     if (!deleteTargetIds || deleteTargetIds.length === 0) {
+      return;
+    }
+    // 防御式守卫: 按钮 disabled 只挡了 "点开对话框" 这一步, 但用户完全可能
+    // 在 moveRunning 变 true 之前就已经把对话框打开。此时直接点"删除"会
+    // 绕过 UI 锁, 走到 deleteJob → os.Remove, 和迁移中的搬文件撞车。
+    // 这里和 handleDelete / handleDeleteSelected 保持同一套消息, 同时把
+    // targetIds 清空让对话框关闭, 提示用户当前动作被驳回。
+    if (moveRunning) {
+      setDeleteTargetIds(null);
+      setMessage("媒体库移动进行中，删除已取消");
       return;
     }
     const targetIDs = deleteTargetIds;
@@ -167,6 +205,7 @@ export function useReviewBatchActions(deps: UseReviewBatchActionsDeps): ReviewBa
     handleImportSelected,
     handleDelete,
     handleDeleteSelected,
+    handleReject,
     confirmDelete,
   };
 }

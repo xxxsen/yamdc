@@ -166,6 +166,96 @@ func (s *Service) CropPosterFromCover(
 	return meta.Poster, nil
 }
 
+// Reject ("打回") 把一个处于 reviewing 状态的 job 退回到可编辑态:
+//  1. 状态 reviewing -> failed, error_msg 记录退回原因 (默认 "rejected by reviewer"),
+//     前端拿到 failed 态后用户才能再次编辑 number / 重跑 run。
+//  2. 删除对应的 scrape_data, 彻底放弃本次抓取结果; 下一次 run 时 capture
+//     会用最新的 number 重新搜一遍, 避免残留的 raw_data 污染新一轮比对
+//     (尤其和 verifyScrapeSnapshotMatchesJob 的语义兜底一致)。
+//  3. 通过 coordinator.AddJobLog 记录人工操作, 方便日志面板回溯。
+//
+// 与 SaveReviewData/CropPosterFromCover/Import 共享同一把 Claim 锁, 保证
+// 不会和正在进行的 Import 同时操作 scrape_data。并发冲突时直接返回
+// job.ErrJobAlreadyRunning。
+// 若 job 已经不在 reviewing 态, 返回 ErrJobNotReviewing (不做幂等放过) —
+// 这是一个"人工意图"操作, 调用方应先刷新列表确认对象。
+func (s *Service) Reject(ctx context.Context, jobID int64, reason string) error {
+	logger := logutil.GetLogger(ctx).With(zap.Int64("job_id", jobID))
+	if !s.coordinator.Claim(jobID) {
+		logger.Warn("reject skipped because job is already running")
+		return job.ErrJobAlreadyRunning
+	}
+	defer s.coordinator.Finish(jobID)
+
+	j, err := s.loadJobOrNotFound(ctx, jobID)
+	if err != nil {
+		logger.Error("load job before reject failed", zap.Error(err))
+		return err
+	}
+	if j.Status != jobdef.StatusReviewing {
+		return ErrJobNotReviewing
+	}
+
+	// error_msg 既是 UI 展示的原因, 也是给 Job.ErrorMsg 做日后审计的记录,
+	// 控制长度防止 SQL 层被塞爆; 超长时截到 200 字符 + 省略号。
+	reasonText := strings.TrimSpace(reason)
+	if reasonText == "" {
+		reasonText = "rejected by reviewer"
+	}
+	const maxReasonLen = 200
+	if len(reasonText) > maxReasonLen {
+		reasonText = reasonText[:maxReasonLen] + "..."
+	}
+
+	// 两阶段持久化顺序: 先删 scrape_data, 再改 status。
+	//
+	// 这是为了让"中途失败"的状态能被用户通过"再次点 Reject"自愈:
+	//   - 先 Delete 后 UpdateStatus: 如果 Delete 失败, 状态仍是 reviewing,
+	//     用户重试 Reject 走完整流程即可 (DeleteByJobID 对不存在的行幂等);
+	//     如果 UpdateStatus 失败, scrape_data 已清空, 重试时 loadJobOrNotFound
+	//     + StatusReviewing 校验仍通过, 再走一次 DeleteByJobID (no-op) +
+	//     UpdateStatus 就能闭合, 没有卡死路径。
+	//   - 反过来先改状态再删 scrape_data: 若 Delete 失败, status 已 failed,
+	//     重试会被 "status != reviewing" 拦住, 残留 scrape_data 就只能等
+	//     下一次 Run 走 UpsertRawData 覆盖或整条 Delete 级联清掉 — 无法在
+	//     Reject 这个入口自愈。
+	//
+	// 代价: Delete 成功 + UpdateStatus 失败时, 用户短暂看到 "reviewing 但没
+	// scrape 快照" 的中间态。点 Import 会立刻在 scrapeRepo.GetByJobID 里拿到
+	// repository.ErrScrapeDataNotFound (被 Import 的 "get scrape data for
+	// import: %w" 一层 wrap 抛出), 比"failed + 残留 scrape_data"这种隐蔽
+	// 残留更显眼, 可接受。
+	if err := s.scrapeRepo.DeleteByJobID(ctx, jobID); err != nil {
+		logger.Error("reject: delete scrape data failed", zap.Error(err))
+		return fmt.Errorf("reject delete scrape data: %w", err)
+	}
+
+	ok, err := s.jobRepo.UpdateStatus(
+		ctx, jobID,
+		[]jobdef.Status{jobdef.StatusReviewing},
+		jobdef.StatusFailed,
+		reasonText,
+	)
+	if err != nil {
+		logger.Error("reject: update status failed", zap.Error(err))
+		return fmt.Errorf("reject update status: %w", err)
+	}
+	if !ok {
+		// 极罕见: UpdateStatus 返回 ok=false 意味着 status 不在预期的 [reviewing]
+		// 白名单里 (例如另一并发路径已经把它改成 done/failed)。虽然我们前面已经
+		// 校验过 StatusReviewing, 但这里复用 SQL 层的白名单自保, 对竞态直接把
+		// "非 reviewing 不能打回" 的语义一路透传上去。
+		return ErrJobNotReviewing
+	}
+
+	s.coordinator.AddJobLog(ctx, jobID, "info", "review", "review rejected", reasonText)
+	logger.Info("review rejected",
+		zap.String("number", strings.TrimSpace(j.Number)),
+		zap.String("reason", reasonText),
+	)
+	return nil
+}
+
 // loadJobOrNotFound 把 jobRepo.GetByID 的三种返回统一为 (job, err) 两种:
 //   - 命中: (job, nil)
 //   - 未找到 (repository.ErrJobNotFound): (nil, job.ErrJobNotFound), 使上层
@@ -334,8 +424,13 @@ func (s *Service) validateImportPreconditions(
 //     报错, 不在本函数拦截;
 //   - 坏 JSON: 打 warn 日志, 但不阻塞 Import (legacy 快照可能带历史 bug 的字段);
 //   - 两边 number 有一侧为空: 不阻塞 (不具备比较基准);
-//   - 比对采用 number.GetCleanID 去除分隔符 + EqualFold 忽略大小写, 避免因
-//     "SSIS-001" vs "SSIS001" vs "ssis_001" 等书写差异误伤。
+//   - 比对基准是 **base number** (经 number.Parse 剥掉 variant 后的 id), 再
+//     走 number.GetCleanID + EqualFold, 避免因:
+//     1) 用户手动把 job number 填成 "PXVR-406-CD2" 之类带 variant 的写法,
+//     而 scrape 端拿到的仅是基础影片 ID "PXVR-406";
+//     2) 书写差异 "SSIS-001" vs "SSIS001" vs "ssis_001";
+//     被误判 mismatch。Parse 失败时退回到旧行为 (直接对 raw string 走 CleanID),
+//     保证对不符合 Parse 约束 (例如含 `.`) 的 legacy 数据不会突然变得更严格。
 func (s *Service) verifyScrapeSnapshotMatchesJob(
 	logger *zap.Logger, j *jobdef.Job, data *repository.ScrapeData,
 ) error {
@@ -356,11 +451,15 @@ func (s *Service) verifyScrapeSnapshotMatchesJob(
 	if snapshotNumber == "" || jobNumber == "" {
 		return nil
 	}
-	if !strings.EqualFold(number.GetCleanID(snapshotNumber), number.GetCleanID(jobNumber)) {
+	snapshotBase := canonicalBaseForCompare(snapshotNumber)
+	jobBase := canonicalBaseForCompare(jobNumber)
+	if !strings.EqualFold(snapshotBase, jobBase) {
 		logger.Warn(
 			"scrape snapshot number mismatches job number, refusing import",
 			zap.String("snapshot_number", snapshotNumber),
 			zap.String("job_number", jobNumber),
+			zap.String("snapshot_base", snapshotBase),
+			zap.String("job_base", jobBase),
 		)
 		return fmt.Errorf(
 			"snapshot=%s job=%s: %w",
@@ -368,6 +467,17 @@ func (s *Service) verifyScrapeSnapshotMatchesJob(
 		)
 	}
 	return nil
+}
+
+// canonicalBaseForCompare 把一个 number 字面量转成"仅基础影片 ID + 大小写/分隔符
+// 不敏感"的比对 key: 先走 number.Parse 拿 base ID (剥掉 CD/4K/VR 等 variant),
+// 再经 number.GetCleanID 去掉 `-` / `_`。Parse 失败 (例如字符串带 `.` 这种
+// 它主动拒绝的字符) 时回退到原值走 CleanID, 保持和老逻辑一致的兜底行为。
+func canonicalBaseForCompare(raw string) string {
+	if n, err := number.Parse(raw); err == nil {
+		return number.GetCleanID(n.GetNumberID())
+	}
+	return number.GetCleanID(raw)
 }
 
 func (s *Service) performImport(

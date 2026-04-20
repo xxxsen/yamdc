@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,17 @@ interface Props {
 }
 
 export function JobLogModal({ job, logs, message, onClose }: Props) {
+  // 按产生时间逆序: 最新的日志排在最上面, 打开弹窗就能看到最近发生了什么,
+  // 不需要滚到底。id 作为 tiebreaker 保证相同时间戳的顺序稳定 (创建自增)。
+  const sortedLogs = useMemo(() => {
+    return [...logs].sort((a, b) => {
+      if (b.created_at !== a.created_at) {
+        return b.created_at - a.created_at;
+      }
+      return b.id - a.id;
+    });
+  }, [logs]);
+
   return (
     <div className="review-preview-overlay" onClick={onClose}>
       <div className="panel file-log-dialog" onClick={(e) => e.stopPropagation()}>
@@ -27,7 +40,7 @@ export function JobLogModal({ job, logs, message, onClose }: Props) {
         </div>
         {message ? <div className="file-log-message">{message}</div> : null}
         <div className="file-log-list">
-          {logs.map((item) => (
+          {sortedLogs.map((item) => (
             <div key={item.id} className="file-log-item">
               <div className="file-log-meta">
                 <span>{formatUnixMillis(item.created_at)}</span>

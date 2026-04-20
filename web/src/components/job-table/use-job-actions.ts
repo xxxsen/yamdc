@@ -2,8 +2,17 @@
 
 import { useEffect, useTransition } from "react";
 
-import type { JobItem, JobLogItem } from "@/lib/api";
-import { deleteJob, listJobs, listJobLogs, rerunJob, runJob, triggerScan, updateJobNumber } from "@/lib/api";
+import type { JobItem, JobLogItem, NumberVariantSelection } from "@/lib/api";
+import {
+  deleteJob,
+  listJobs,
+  listJobLogs,
+  rerunJob,
+  runJob,
+  triggerScan,
+  updateJobNumber,
+  updateJobNumberStructured,
+} from "@/lib/api";
 
 import { STATUS_FILTER, canSelectJob, requiresManualNumberReview } from "./helpers";
 
@@ -47,6 +56,7 @@ export interface JobActions {
   handleStartEditNumber: (job: JobItem) => void;
   handleCancelEditNumber: () => void;
   handleCommitEditNumber: (job: JobItem) => void;
+  handleSubmitStructuredNumber: (job: JobItem, base: string, selections: NumberVariantSelection[]) => void;
   handleRunSelectedJobs: () => void;
   confirmDelete: (job: JobItem) => void;
 }
@@ -253,6 +263,26 @@ export function useJobActions(deps: JobActionsDeps): JobActions {
     handleSaveNumber(job);
   };
 
+  // handleSubmitStructuredNumber 是新的结构化编辑入口, 对应 NumberEditModal
+  // 里 "base + variants 按钮" 的保存路径。后端拿到 base + selections 后会
+  // 自己拼成完整 number, 前端不再需要 string.concat variant 后缀。
+  const handleSubmitStructuredNumber = (
+    job: JobItem,
+    base: string,
+    selections: NumberVariantSelection[],
+  ) => {
+    startTransition(async () => {
+      try {
+        setMessage("");
+        await updateJobNumberStructured(job.id, base, selections);
+        handleCancelEditNumber();
+        await refreshJobs();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "更新影片 ID 失败");
+      }
+    });
+  };
+
   const handleRunSelectedJobs = () => {
     const pendingJobs = jobs.filter((job) => selectedJobIds.has(job.id) && canSelectJob(job));
     if (pendingJobs.length === 0) {
@@ -318,6 +348,7 @@ export function useJobActions(deps: JobActionsDeps): JobActions {
     handleStartEditNumber,
     handleCancelEditNumber,
     handleCommitEditNumber,
+    handleSubmitStructuredNumber,
     handleRunSelectedJobs,
     confirmDelete,
   };

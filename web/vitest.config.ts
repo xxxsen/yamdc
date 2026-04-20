@@ -83,7 +83,7 @@ const COVERED_SOURCES = [
   // handler-debug-shell/utils.ts: JSON 按行 LCS diff 算法 + debug 常量.
   // 算法边界情况多, 行为冻结.
   "src/components/handler-debug-shell/utils.ts",
-  // job-table/helpers.ts: job 表格排序 / 选中判定 / 番号 meta 派生等.
+  // job-table/helpers.ts: job 表格排序 / 选中判定 / 影片 ID meta 派生等.
   // 本来就有 24 个测试, 这次补进白名单让阈值真正守护它.
   "src/components/job-table/helpers.ts",
   // job-table/use-job-actions.ts: job 列表页的 action 集散 hook — 8s 轮询 +

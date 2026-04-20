@@ -96,6 +96,64 @@ export async function updateJobNumber(id: number, number: string, signal?: Abort
   return data.data;
 }
 
+// NumberVariantKind 对应后端 number.VariantKind:
+//   - "flag"    : 开关式 variant (中字 / 4K / 8K / VR / 特别版 / 修复版)
+//   - "indexed" : 带 index 的 variant (CD 多盘), index 必须在 [min, max] 区间
+export type NumberVariantKind = "flag" | "indexed";
+
+// NumberVariantDescriptor 对应后端 number.VariantDescriptor, 用于驱动
+// "文件列表" 页结构化影片 ID 输入的 UI 渲染 (id 做 stable key, label/description
+// 用于展示, kind + min/max 决定交互形式)。
+//
+// group 是互斥分组 key: 字段缺省 / 空串表示该 variant 独立, 非空时同
+// group 内只能勾选一个 (例如 4K / 8K 同属 resolution, LEAK / UC 同属
+// edition)。前端按 group 做 "点击替换" 交互, 后端也会在 variant layer
+// 做兜底校验, 客户端绕过 UI 直接提交冲突组合会得到 400。
+export interface NumberVariantDescriptor {
+  id: string;
+  suffix: string;
+  label: string;
+  description: string;
+  kind: NumberVariantKind;
+  group?: string;
+  min?: number;
+  max?: number;
+}
+
+export interface NumberVariantSelection {
+  id: string;
+  index?: number;
+}
+
+// listNumberVariants 拉取后端支持的 variant 描述符列表。后端保证:
+//   - id/suffix 在同一版本内稳定 (前端可当 persistent key);
+//   - 顺序即是期望的 UI 渲染顺序 (和落盘文件名拼接顺序一致)。
+export async function listNumberVariants(signal?: AbortSignal) {
+  const data = await apiRequest<{ variants: NumberVariantDescriptor[] }>("/api/number/variants", {
+    cache: "no-store",
+    signal,
+  });
+  return data.data.variants;
+}
+
+// updateJobNumberStructured 调 PATCH /api/jobs/:id/number 的新结构化入口,
+// 后端会用 base + selections 拼出 "影片 ID-后缀1-后缀2" 形态的完整 number,
+// 然后复用老校验 / 持久化链路。推荐新代码一律走此入口。老的 updateJobNumber
+// 仍然保留, 给只需要传完整 number 的老调用方 / 脚本使用。
+export async function updateJobNumberStructured(
+  id: number,
+  base: string,
+  variants: NumberVariantSelection[],
+  signal?: AbortSignal,
+) {
+  const data = await apiRequest<JobItem>(`/api/jobs/${id}/number`, {
+    method: "PATCH",
+    body: { base, variants },
+    signal,
+  });
+  return data.data;
+}
+
 export async function listJobLogs(id: number, signal?: AbortSignal) {
   const data = await apiRequest<JobLogItem[]>(`/api/jobs/${id}/logs`, { cache: "no-store", signal });
   return data.data;

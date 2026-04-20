@@ -373,7 +373,7 @@ go test ./internal/searcher/plugin/yaml/ -run 'TestFetchType_' -v
 | 环境变量 | 说明 |
 |---------|------|
 | `FETCH_TYPE_TEST_URL` | 远程 YAML 插件 URL（必填） |
-| `FETCH_TYPE_TEST_NUMBER` | 测试番号（必填） |
+| `FETCH_TYPE_TEST_NUMBER` | 测试影片 ID（必填） |
 | `FETCH_TYPE_TEST_WAIT` | browser 模式的 wait_selector（选填） |
 
 测试流程：
