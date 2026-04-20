@@ -309,14 +309,45 @@
   font-weight: 600;
 }
 .library-variant-list {
+  /* 变体 chip 列表显示策略: 始终单行, 超出容器宽度时横向滚动, 而不是换行。
+     wrap 换行的问题是:
+       1) 第 N+1 个 chip 独占一行视觉上很突兀 (例如 6 个 CD 只有最后 1 个掉到
+          第二行, 看起来像"排版错误");
+       2) 多行会把下方内容 (入库按钮 / 下一个 panel) 往下挤, 视口变得高矮不一。
+     改成 nowrap + overflow-x: auto 后, 即使未来碰到 10+ 个变体也只会在本行内
+     产生一条滚动条, 上下布局保持稳定。
+     overscroll-behavior-x: contain 防止在 Safari/Trackpad 上水平滚动一直传
+     给祖先 (app-shell 主列本身不横滚, 但 library-shell 右侧 detail 列内部
+     还有别的横向容器, 提前截断减少意外联动)。 */
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* 细滚动条 (Firefox / Chromium 新内核); WebKit 的 ::-webkit-scrollbar
+     样式放在下方补充, 保持和页面 warm 色板一致, 避免默认灰色滚动条打断视觉。*/
+  scrollbar-width: thin;
+  scrollbar-color: rgba(180, 79, 45, 0.35) transparent;
+}
+.library-variant-list::-webkit-scrollbar {
+  height: 6px;
+}
+.library-variant-list::-webkit-scrollbar-thumb {
+  background: rgba(180, 79, 45, 0.35);
+  border-radius: 3px;
+}
+.library-variant-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 .library-variant-chip {
   display: grid;
   gap: 4px;
-  min-width: 148px;
+  /* min-width 是 chip 的"自然尺寸下限": 即使 meta 文案很短 (例如 "CD1" /
+     "ABC-1-CD1"), 也保证 chip 视觉上足够舒展, 不会变成扁平小方块。
+     同时 flex-shrink: 0 确保父层 overflow-x: auto 生效时 chip 不会被压扁,
+     宽度始终等于 min-width 或 content + padding 的较大值 -> 滚动行为可预期。*/
+  flex: 0 0 auto;
+  min-width: 128px;
   padding: 11px 13px;
   border-radius: 16px;
   border: 1px solid rgba(91, 67, 44, 0.08);
