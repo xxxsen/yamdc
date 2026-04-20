@@ -285,7 +285,11 @@
 .library-variant-panel {
   display: grid;
   gap: 14px;
-  padding: 14px 16px;
+  /* bottom padding 从 14 减到 6: .library-variant-list 自己会吃 12px
+     的 padding-bottom 来容纳横向滚动条 + 选中态 box-shadow, 避免滚动条
+     把 chip 圆角盖住。合起来 panel 视觉底边留白仍然 ~18px, 和顶部
+     14px 基本对称。*/
+  padding: 14px 16px 6px;
   border: 1px solid rgba(180, 79, 45, 0.12);
   background:
     linear-gradient(180deg, rgba(255, 252, 247, 0.94) 0%, rgba(255, 247, 238, 0.9) 100%),
@@ -324,6 +328,17 @@
   gap: 10px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  /* padding 解释:
+     CSS 规则里只要 overflow-x 不是 visible, 浏览器会把 overflow-y 也升级为
+     auto / scroll (见 CSS Overflow L3), 导致横向滚动条 (~6px 高) 会盖住
+     chip 的圆角底边, 同时 chip 的 :hover transform(-1px) 和 active
+     box-shadow (0 10px 22px) 也会被 y 轴裁掉 — 从视觉上就是 CD1 这种选中
+     态底部"被削平一刀"。
+     所以这里留出:
+       - 4px top    : 容纳 hover 上浮 1px + 一点余量, 避免顶边被裁;
+       - 12px bottom: 6px 给滚动条 + 余量给 active 态投影扩散, 让圆角完整显示。
+     同时把 panel 的 padding-bottom 从 14 减到 6, 总视觉高度基本保持不变。*/
+  padding: 4px 0 12px;
   /* 细滚动条 (Firefox / Chromium 新内核); WebKit 的 ::-webkit-scrollbar
      样式放在下方补充, 保持和页面 warm 色板一致, 避免默认灰色滚动条打断视觉。*/
   scrollbar-width: thin;
