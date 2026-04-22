@@ -9,27 +9,6 @@ yamdc — 影片元数据抓取、补全与媒体库管理工具。Go 后端 + N
 
 ---
 
-## 仓库结构
-
-```
-cmd/yamdc/              CLI 入口（cobra）
-internal/               Go 后端全部业务逻辑
-  config/               配置结构体与解析（hujson JSON）
-  capture/              核心抓取流程编排
-  searcher/             搜索器 + YAML 声明式插件引擎
-  processor/handler/    后处理 handler 链（注册式工厂）
-  model/                核心数据模型（MovieMeta）
-  web/                  HTTP API（gin）
-  repository/           SQLite 持久层
-  ...                   其余子包见目录名
-web/                    Next.js 前端
-  src/app/              页面路由
-  src/components/       React 组件（*-shell.tsx）
-  src/lib/api.ts        API 客户端（所有后端交互集中于此）
-```
-
----
-
 ## 构建与测试
 
 ### Make 命令一览
@@ -86,6 +65,10 @@ make ci-check             # backend-check + web-check（与 CI 一致）
   - 不投入响应式适配成本；已有的 `@media` 断点代码允许随手清理，但不强制。
   - `data-label="..."` 这类"移动端卡片化表格"兜底 pattern **不作为新组件规范**，存量可以逐步下线。
 - **视觉风格：warm serif 复古基调**（`Iowan Old Style` + 暖色底）是刻意选的，重构/重写不改主视觉语言。
-- **样式工程**：走 Tailwind v4 utility + `@theme` token。新增组件优先用 utility，尽量不往 `globals.css` 加全局 class。详见 `td/022-frontend-optimization-roadmap.md`。
+- **样式工程**：走 Tailwind v4 utility + `@theme` token。新增组件优先用 utility，尽量不往 `globals.css` 加全局 class。
 - **组件库**：手写 `components/ui/`（Button/Modal/Badge 等），不引入 shadcn/ui 或其它第三方组件库。
 - **暗色模式**：明确不做，不要引入 `prefers-color-scheme: dark` 或 `data-theme` 切换逻辑。
+
+## 其他
+
+- 在需求执行完或者需要澄清的情况下, 你需要调用 `mcp-feedback-enhanced`(如果存在该mcp) 来询问用户需要执行的下一步动作, 调用的超时时间为1分钟, 如果调用超时了, 你需要执行重试, 重试上限为60次。
