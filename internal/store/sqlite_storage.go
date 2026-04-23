@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultExpireTime = 90 * 24 * time.Hour // 默认存储3个月, 超过就删了吧, 实在没想到有啥东西需要永久存储的?
+	defaultExpireTime = 365 * 24 * time.Hour // 默认存储1年, cache 可重建但图片/元数据引用需要较长生命周期。
 
 	// CacheCleanupInterval 是缓存过期行的清理周期, 由 internal/cronscheduler
 	// 注册的 cache_store_cleanup job 负责按本周期触发一次 CleanupExpired。

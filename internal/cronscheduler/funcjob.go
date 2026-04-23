@@ -3,7 +3,7 @@ package cronscheduler
 import "context"
 
 // FuncJob 把 "裸函数 + 名字 + spec" 直接包成 Job, 适合业务方只需要一小段
-// 逻辑, 不值得单独开一个 struct 的场景 (e.g. sqlite cache 定期清理, bundle
+// 逻辑, 不值得单独开一个 struct 的场景 (e.g. cache store 定期清理, bundle
 // 周期同步)。语义上等价于手写的 Job 实现, 走同一套 adapter: panic recover /
 // 耗时日志 / SkipIfStillRunning 全都免费拿到, 不用每个业务方重造轮子。
 //
