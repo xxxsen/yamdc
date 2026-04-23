@@ -35,6 +35,7 @@ make ci-check             # backend-check + web-check（与 CI 一致）
 ```
 
 **提交前务必确保 `make ci-check` 通过。**
+**你不应该直接修改.golangci.yml等lint配置, 除非你得到允许。**
 
 ### Go 测试
 
