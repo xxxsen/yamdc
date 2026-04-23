@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -127,27 +129,22 @@ func (tm *TagMapper) buildPathCache() {
 
 // getOrBuildPath 获取或构建标签的完整路径
 func (tm *TagMapper) getOrBuildPath(tag string) []string {
-	// 如果已经缓存，直接返回
 	if path, exists := tm.tagToPath[tag]; exists {
 		return path
 	}
 
-	// 构建路径
-	path := make([]string, 0)
-
-	// 向上追溯父标签
+	path := make([]string, 0, 4)
 	current := tag
 	for {
-		path = append([]string{current}, path...) // 在前面插入
-
+		path = append(path, current)
 		parent, hasParent := tm.tagToParent[current]
 		if !hasParent || parent == "" {
 			break
 		}
 		current = parent
 	}
+	slices.Reverse(path)
 
-	// 缓存路径
 	tm.tagToPath[tag] = path
 	return path
 }
@@ -185,11 +182,10 @@ func (tm *TagMapper) ProcessTags(tags []string) []string {
 		}
 	}
 
-	// 转换为切片
 	result := make([]string, 0, len(resultSet))
 	for tag := range resultSet {
 		result = append(result, tag)
 	}
-
+	sort.Strings(result)
 	return result
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xxxsen/yamdc/internal/client"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/xxxsen/common/logutil"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -327,28 +329,43 @@ func (p *DefaultSearcher) storeImageData(ctx context.Context, in *model.MovieMet
 	in.SampleImages = rebuildSampleList
 }
 
+const defaultImageDownloadConcurrency = 2
+
 func (p *DefaultSearcher) saveRemoteURLData(ctx context.Context, urls []string) map[string]string {
+	var mu sync.Mutex
 	rs := make(map[string]string, len(urls))
-	for _, url := range urls {
-		if len(url) == 0 {
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(defaultImageDownloadConcurrency)
+	for _, u := range urls {
+		if len(u) == 0 {
 			continue
 		}
-		logger := logutil.GetLogger(ctx).With(zap.String("url", url))
-		key := hasher.ToSha1(url)
-		if ok, _ := p.cc.storage.IsDataExist(ctx, key); ok {
-			rs[url] = key
-			continue
-		}
-		data, err := p.fetchImageData(ctx, url)
-		if err != nil {
-			logger.Error("fetch image data failed", zap.Error(err))
-			continue
-		}
-		err = p.cc.storage.PutData(ctx, key, data, 0)
-		if err != nil {
-			logger.Error("put image data to store failed", zap.Error(err))
-		}
-		rs[url] = key
+		g.Go(func() error {
+			logger := logutil.GetLogger(gctx).With(zap.String("url", u))
+			key := hasher.ToSha1(u)
+			if ok, _ := p.cc.storage.IsDataExist(gctx, key); ok {
+				mu.Lock()
+				rs[u] = key
+				mu.Unlock()
+				return nil
+			}
+			data, err := p.fetchImageData(gctx, u)
+			if err != nil {
+				logger.Error("fetch image data failed", zap.Error(err))
+				return nil
+			}
+			if err := p.cc.storage.PutData(gctx, key, data, 0); err != nil {
+				logger.Error("put image data to store failed", zap.Error(err))
+			}
+			mu.Lock()
+			rs[u] = key
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		logutil.GetLogger(ctx).Error("image download errgroup failed", zap.Error(err))
 	}
 	return rs
 }

@@ -31,10 +31,12 @@ func LoadImage(data []byte) (image.Image, error) {
 	return img, nil
 }
 
+const defaultJpegQuality = 95
+
 func toJpegData(img image.Image) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{
-		Quality: 100,
+		Quality: defaultJpegQuality,
 	}); err != nil {
 		return nil, fmt.Errorf("unable to convert img to jpg, err:%w", err)
 	}
@@ -46,12 +48,7 @@ func WriteImageToBytes(img image.Image) ([]byte, error) {
 }
 
 func fillImage(img *image.RGBA, c color.RGBA) {
-	bounds := img.Bounds()
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			img.Set(x, y, c)
-		}
-	}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: c}, image.Point{}, draw.Src)
 }
 
 func MakeColorImage(rect image.Rectangle, rgb color.RGBA) image.Image {

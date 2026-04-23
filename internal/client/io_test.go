@@ -142,3 +142,34 @@ func TestReadHTTPData_ReadAllError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read http response body")
 }
+
+func TestReadHTTPDataWithLimit_WithinLimit(t *testing.T) {
+	rsp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewBufferString("small")),
+	}
+	data, err := ReadHTTPDataWithLimit(rsp, 1024)
+	require.NoError(t, err)
+	assert.Equal(t, "small", string(data))
+}
+
+func TestReadHTTPDataWithLimit_ExceedsLimit(t *testing.T) {
+	rsp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewReader(make([]byte, 200))),
+	}
+	_, err := ReadHTTPDataWithLimit(rsp, 100)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrHTTPResponseTooLarge)
+}
+
+func TestReadHTTPDataWithLimit_ExactLimit(t *testing.T) {
+	payload := bytes.Repeat([]byte("x"), 64)
+	rsp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewReader(payload)),
+	}
+	data, err := ReadHTTPDataWithLimit(rsp, 64)
+	require.NoError(t, err)
+	assert.Len(t, data, 64)
+}

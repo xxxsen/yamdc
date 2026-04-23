@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/jobdef"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/repository"
@@ -18,11 +19,6 @@ var (
 	errScanAlreadyRunning  = errors.New("scan is already running")
 	errMarkReviewingFailed = errors.New("mark reviewing job as failed failed")
 )
-
-var defaultMediaSuffix = []string{
-	".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v",
-	".avi", ".mkv", ".rmvb", ".ts", ".mov", ".rm", ".strm",
-}
 
 type Service struct {
 	scanDir string
@@ -40,8 +36,8 @@ func New(
 	repo *repository.JobRepository,
 	cleaner movieidcleaner.Cleaner,
 ) *Service {
-	extMap := make(map[string]struct{}, len(defaultMediaSuffix)+len(extraMediaExts))
-	for _, item := range defaultMediaSuffix {
+	extMap := make(map[string]struct{}, len(enum.DefaultMediaSuffixes)+len(extraMediaExts))
+	for _, item := range enum.DefaultMediaSuffixes {
 		extMap[strings.ToLower(item)] = struct{}{}
 	}
 	for _, item := range extraMediaExts {
@@ -168,17 +164,14 @@ func (s *Service) cleanupMissingJobs(ctx context.Context, entries []repository.U
 	for _, item := range entries {
 		activePaths[item.RelPath] = struct{}{}
 	}
-	result, err := s.repo.ListJobs(
+	summaries, err := s.repo.ListActiveJobSummaries(
 		ctx,
 		[]jobdef.Status{jobdef.StatusInit, jobdef.StatusFailed, jobdef.StatusReviewing},
-		"",
-		1,
-		0,
 	)
 	if err != nil {
 		return fmt.Errorf("list jobs: %w", err)
 	}
-	for _, job := range result.Items {
+	for _, job := range summaries {
 		if _, ok := activePaths[job.RelPath]; ok {
 			continue
 		}

@@ -3,6 +3,7 @@ package client
 import (
 	"compress/flate"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/xxxsen/common/iotool"
 )
+
+var ErrHTTPResponseTooLarge = errors.New("http response body exceeds size limit")
 
 func getResponseBody(rsp *http.Response) (io.ReadCloser, error) {
 	switch rsp.Header.Get("Content-Encoding") {
@@ -36,7 +39,13 @@ func BuildReaderFromHTTPResponse(rsp *http.Response) (io.ReadCloser, error) {
 	return getResponseBody(rsp)
 }
 
+const defaultMaxHTTPResponseSize = 256 << 20 // 256 MiB
+
 func ReadHTTPData(rsp *http.Response) ([]byte, error) {
+	return ReadHTTPDataWithLimit(rsp, defaultMaxHTTPResponseSize)
+}
+
+func ReadHTTPDataWithLimit(rsp *http.Response, maxBytes int64) ([]byte, error) {
 	defer func() {
 		_ = rsp.Body.Close()
 	}()
@@ -47,9 +56,13 @@ func ReadHTTPData(rsp *http.Response) ([]byte, error) {
 	defer func() {
 		_ = reader.Close()
 	}()
-	data, err := io.ReadAll(reader)
+	limited := io.LimitReader(reader, maxBytes+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
 		return nil, fmt.Errorf("read http response body failed: %w", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("%w: %d bytes", ErrHTTPResponseTooLarge, maxBytes)
 	}
 	return data, nil
 }
