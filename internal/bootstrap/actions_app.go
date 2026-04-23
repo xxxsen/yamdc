@@ -74,7 +74,7 @@ func assembleServicesAction(_ context.Context, sc *StartContext) error {
 		return nil
 	})
 	// CronScheduler 是进程级的定时任务编排器, 目前挂 media library 的
-	// auto sync / log cleanup / sqlite cache cleanup / bundle remote sync
+	// auto sync / log cleanup / cache cleanup / bundle remote sync
 	// 等定时任务。rootCtx 用 context.Background 是故意的: cron job 的
 	// "取消" 语义走 Scheduler.Stop (拒绝新 tick + 等当前 job 返回), 不走
 	// rootCtx cancel — 避免外层 ctx 被 cancel 时某个 job 正好执行到一半
@@ -200,10 +200,10 @@ func registerCronJobsAction(ctx context.Context, sc *StartContext) error {
 	if err := sc.App.CronScheduler.Register(medialib.NewAutoSyncJob(sc.App.MediaSvc)); err != nil {
 		return fmt.Errorf("register media library auto sync cron job: %w", err)
 	}
-	// cache store 在 server 模式下用 *sqliteStore 实现, 走类型断言注册 cron
-	// cleanup; 断言失败 (测试场景可能塞 noop 或 mock 实现) 不拒启动, 但打一
-	// 条 Warn 让运维/开发者能察觉 — 不然将来某天缓存实现换掉后 cleanup 就
-	// 悄悄失效, 现象只有"盘占用慢慢涨", 排障成本极高。不是致命问题所以只
+	// cache store 只要实现 CacheCleanupExpirer 就注册 cron cleanup; 断言
+	// 失败 (测试场景可能塞 noop 或 mock 实现) 不拒启动, 但打一条 Warn
+	// 让运维/开发者能察觉 — 不然将来某天缓存实现换掉后 cleanup 就悄悄
+	// 失效, 现象只有"盘占用慢慢涨", 排障成本极高。不是致命问题所以只
 	// warn 不 error, 保持启动鲁棒性。
 	if cleanup, ok := sc.Infra.CacheStore.(store.CacheCleanupExpirer); ok {
 		if err := sc.App.CronScheduler.Register(store.NewCacheCleanupJob(cleanup)); err != nil {

@@ -14,10 +14,10 @@ const cacheCleanupJobName = "cache_store_cleanup"
 
 // CacheCleanupExpirer 是 cache_store_cleanup job 需要的最小能力抽象。
 //
-// 单独拎出接口而不是直接依赖 *sqliteStore 的理由:
+// 单独拎出接口而不是直接依赖具体 cache store 的理由:
 //  1. 让 bootstrap 侧可以对 IStorage 做类型断言, 断言失败就跳过注册, 不会
 //     因为缓存存储实现换了 (e.g. 测试里换成 noop) 就崩在启动路径上;
-//  2. 单测里拿 mock 也更方便, 不用掏真 sqlite。
+//  2. 单测里拿 mock 也更方便, 不用打开真实 cache DB。
 type CacheCleanupExpirer interface {
 	CleanupExpired(ctx context.Context) error
 }
