@@ -199,6 +199,36 @@ func (s *Service) ListItems(ctx context.Context, options ListItemsOptions) ([]It
 	return items, nil
 }
 
+// ConflictIdentity is a lightweight projection of a media library row, carrying
+// only the two fields needed for conflict detection (number + rel_path).
+type ConflictIdentity struct {
+	Number  string
+	RelPath string
+}
+
+// ListConflictIdentities returns (number, rel_path) for every row, without
+// deserializing item_json / detail_json. Used by the web handler to check
+// whether a save-library item already exists in the media library.
+func (s *Service) ListConflictIdentities(ctx context.Context) ([]ConflictIdentity, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT number, rel_path FROM yamdc_media_library_tab`)
+	if err != nil {
+		return nil, fmt.Errorf("list conflict identities failed: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]ConflictIdentity, 0, 64)
+	for rows.Next() {
+		var ci ConflictIdentity
+		if err := rows.Scan(&ci.Number, &ci.RelPath); err != nil {
+			return nil, fmt.Errorf("scan conflict identity failed: %w", err)
+		}
+		items = append(items, ci)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conflict identities failed: %w", err)
+	}
+	return items, nil
+}
+
 func (s *Service) GetDetail(ctx context.Context, id int64) (*Detail, error) {
 	var raw string
 	err := s.db.QueryRowContext(ctx, `

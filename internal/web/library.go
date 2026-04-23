@@ -388,12 +388,12 @@ func (a *API) loadLibraryConflictFlags() map[string]struct{} {
 	if a.media == nil || !a.media.IsConfigured() {
 		return out
 	}
-	items, err := a.media.ListItems(context.Background(), medialib.ListItemsOptions{})
+	identities, err := a.media.ListConflictIdentities(context.Background())
 	if err != nil {
 		return out
 	}
-	for _, item := range items {
-		out[buildLibraryConflictKey(item.RelPath, item.Number)] = struct{}{}
+	for _, ci := range identities {
+		out[buildLibraryConflictKey(ci.RelPath, ci.Number)] = struct{}{}
 	}
 	return out
 }

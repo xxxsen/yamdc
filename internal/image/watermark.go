@@ -37,16 +37,24 @@ const (
 	WMRestored        Watermark = 7
 )
 
-var resMap = make(map[Watermark][]byte)
+var imgCache = make(map[Watermark]image.Image)
+
+func decodeEmbeddedImage(data []byte) image.Image {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		panic(fmt.Sprintf("decode embedded watermark resource failed: %v", err))
+	}
+	return img
+}
 
 func registerResource() {
-	resMap[WMChineseSubtitle] = resource.ResIMGSubtitle
-	resMap[WM4K] = resource.ResIMG4K
-	resMap[WMUnrated] = resource.ResIMGUnrated
-	resMap[WMSpecialEdition] = resource.ResIMGSpecialEdition
-	resMap[WM8K] = resource.ResIMG8K
-	resMap[WMVR] = resource.ResIMGVR
-	resMap[WMRestored] = resource.ResIMGRestored
+	imgCache[WMChineseSubtitle] = decodeEmbeddedImage(resource.ResIMGSubtitle)
+	imgCache[WM4K] = decodeEmbeddedImage(resource.ResIMG4K)
+	imgCache[WMUnrated] = decodeEmbeddedImage(resource.ResIMGUnrated)
+	imgCache[WMSpecialEdition] = decodeEmbeddedImage(resource.ResIMGSpecialEdition)
+	imgCache[WM8K] = decodeEmbeddedImage(resource.ResIMG8K)
+	imgCache[WMVR] = decodeEmbeddedImage(resource.ResIMGVR)
+	imgCache[WMRestored] = decodeEmbeddedImage(resource.ResIMGRestored)
 }
 
 func init() {
@@ -92,26 +100,12 @@ func addWatermarkToImage(img image.Image, wms []image.Image) (image.Image, error
 	return newImg, nil
 }
 
-func selectWatermarkResource(w Watermark) ([]byte, bool) {
-	out, ok := resMap[w]
-	if !ok {
-		return nil, false
-	}
-	rs := make([]byte, len(out))
-	copy(rs, out)
-	return rs, true
-}
-
 func AddWatermark(img image.Image, wmTags []Watermark) (image.Image, error) {
 	wms := make([]image.Image, 0, len(wmTags))
 	for _, tag := range wmTags {
-		res, ok := selectWatermarkResource(tag)
+		wm, ok := imgCache[tag]
 		if !ok {
 			return nil, fmt.Errorf("watermark:%d: %w", tag, errWatermarkNotFound)
-		}
-		wm, _, err := image.Decode(bytes.NewReader(res))
-		if err != nil {
-			return nil, fmt.Errorf("decode watermark image failed: %w", err)
 		}
 		wms = append(wms, wm)
 	}

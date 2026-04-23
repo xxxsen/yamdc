@@ -2,6 +2,7 @@ package number
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/xxxsen/yamdc/internal/tag"
 )
@@ -77,28 +78,37 @@ func (n *Number) GetIsRestored() bool {
 }
 
 func (n *Number) GenerateSuffix(base string) string {
+	var sb strings.Builder
+	sb.Grow(len(base) + 40)
+	sb.WriteString(base)
+	appendSuffix := func(suffix string) {
+		sb.WriteByte('-')
+		sb.WriteString(suffix)
+	}
 	if n.GetIs4K() {
-		base += "-" + defaultSuffix4K
+		appendSuffix(defaultSuffix4K)
 	}
 	if n.GetIs8K() {
-		base += "-" + defaultSuffix8K
+		appendSuffix(defaultSuffix8K)
 	}
 	if n.GetIsVR() {
-		base += "-" + defaultSuffixVR
+		appendSuffix(defaultSuffixVR)
 	}
 	if n.GetIsChineseSubtitle() {
-		base += "-" + defaultSuffixChineseSubtitle
+		appendSuffix(defaultSuffixChineseSubtitle)
 	}
 	if n.GetIsSpecialEdition() {
-		base += "-" + defaultSuffixSpecialEdition
+		appendSuffix(defaultSuffixSpecialEdition)
 	}
 	if n.GetIsRestored() {
-		base += "-" + defaultSuffixRestored2
+		appendSuffix(defaultSuffixRestored2)
 	}
 	if n.GetIsMultiCD() {
-		base += "-" + defaultSuffixMultiCD + strconv.FormatInt(int64(n.GetMultiCDIndex()), 10)
+		sb.WriteByte('-')
+		sb.WriteString(defaultSuffixMultiCD)
+		sb.WriteString(strconv.FormatInt(int64(n.GetMultiCDIndex()), 10))
 	}
-	return base
+	return sb.String()
 }
 
 func (n *Number) GenerateTags() []string {

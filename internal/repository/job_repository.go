@@ -480,6 +480,52 @@ func (r *JobRepository) RecoverProcessingJobs(ctx context.Context) error {
 	return nil
 }
 
+// ActiveJobSummary holds only the columns needed by scanner.cleanupMissingJobs,
+// avoiding the cost of scanning and deserializing every column in yamdc_job_tab.
+type ActiveJobSummary struct {
+	ID      int64
+	RelPath string
+	Status  jobdef.Status
+}
+
+// ListActiveJobSummaries returns (id, rel_path, status) for non-deleted jobs
+// matching the given statuses. It is intentionally lighter than ListJobs.
+func (r *JobRepository) ListActiveJobSummaries(
+	ctx context.Context, statuses []jobdef.Status,
+) ([]ActiveJobSummary, error) {
+	where := ` WHERE deleted_at = 0`
+	args := make([]any, 0, len(statuses))
+	if len(statuses) > 0 {
+		where += " AND status IN ("
+		for i, s := range statuses {
+			if i > 0 {
+				where += ","
+			}
+			where += "?"
+			args = append(args, s)
+		}
+		where += ")"
+	}
+	query := `SELECT id, rel_path, status FROM yamdc_job_tab` + where
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list active job summaries failed: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]ActiveJobSummary, 0, 64)
+	for rows.Next() {
+		var item ActiveJobSummary
+		if err := rows.Scan(&item.ID, &item.RelPath, &item.Status); err != nil {
+			return nil, fmt.Errorf("scan active job summary failed: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active job summaries failed: %w", err)
+	}
+	return items, nil
+}
+
 func (r *JobRepository) ListActiveJobsByConflictKeys(ctx context.Context, keys []string) ([]jobdef.Job, error) {
 	filtered := make([]string, 0, len(keys))
 	seen := make(map[string]struct{}, len(keys))

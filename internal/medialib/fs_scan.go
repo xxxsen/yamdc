@@ -134,23 +134,29 @@ func applyVariantMetaToItem(item *Item, variants []Variant, primaryKey, root, re
 	}
 }
 
-func (s *Service) inspectRootDir(root, absPath string) (Item, bool, error) {
+type inspectResult struct {
+	item       Item
+	variants   []Variant
+	primaryKey string
+}
+
+func (s *Service) inspectRootDirFull(root, absPath string) (inspectResult, bool, error) {
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return Item{}, false, fmt.Errorf("read dir %s: %w", absPath, err)
+		return inspectResult{}, false, fmt.Errorf("read dir %s: %w", absPath, err)
 	}
 	relPath, err := filepath.Rel(root, absPath)
 	if err != nil {
-		return Item{}, false, fmt.Errorf("compute relative path: %w", err)
+		return inspectResult{}, false, fmt.Errorf("compute relative path: %w", err)
 	}
 	relPath = filepath.ToSlash(relPath)
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return Item{}, false, fmt.Errorf("stat dir %s: %w", absPath, err)
+		return inspectResult{}, false, fmt.Errorf("stat dir %s: %w", absPath, err)
 	}
 	scan := scanDirEntries(absPath, entries, info.ModTime().UnixMilli())
 	if !scan.hasNFO && scan.videoCount == 0 {
-		return Item{}, false, nil
+		return inspectResult{}, false, nil
 	}
 	item := Item{
 		RelPath:    relPath,
@@ -164,25 +170,33 @@ func (s *Service) inspectRootDir(root, absPath string) (Item, bool, error) {
 	}
 	variants, primaryKey, err := s.scanRootVariants(root, relPath, absPath)
 	if err != nil {
-		return Item{}, false, err
+		return inspectResult{}, false, err
 	}
 	item.VariantCount = len(variants)
 	applyVariantMetaToItem(&item, variants, primaryKey, root, relPath, scan)
-	return item, true, nil
+	return inspectResult{item: item, variants: variants, primaryKey: primaryKey}, true, nil
 }
 
-func (s *Service) readRootDetail(root, relPath, absPath string) (*Detail, error) {
-	item, ok, err := s.inspectRootDir(root, absPath)
+func (s *Service) inspectRootDir(root, absPath string) (Item, bool, error) {
+	res, ok, err := s.inspectRootDirFull(root, absPath)
+	if err != nil {
+		return Item{}, false, err
+	}
+	if !ok {
+		return Item{}, false, nil
+	}
+	return res.item, true, nil
+}
+
+func (s *Service) readRootDetail(root, _, absPath string) (*Detail, error) {
+	res, ok, err := s.inspectRootDirFull(root, absPath)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	variants, primaryKey, err := s.scanRootVariants(root, relPath, absPath)
-	if err != nil {
-		return nil, err
-	}
+	item, variants, primaryKey := res.item, res.variants, res.primaryKey
 	files, err := s.listRootFiles(root, absPath)
 	if err != nil {
 		return nil, err

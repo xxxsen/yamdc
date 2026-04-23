@@ -16,6 +16,10 @@ type IHandler interface {
 
 var errHandlerNotFound = errors.New("handler not found")
 
+// mp is the handler name → creator registry.
+// It is populated exclusively by init() functions in handler packages and
+// is read-only at runtime, so no lock is required.
+// Do NOT call Register outside of init().
 var mp = make(map[string]CreatorFunc)
 
 type CreatorFunc func(args any, deps appdeps.Runtime) (IHandler, error)

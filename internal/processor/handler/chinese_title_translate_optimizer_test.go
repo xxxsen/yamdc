@@ -2,10 +2,6 @@ package handler
 
 import (
 	"context"
-	"errors"
-	"io"
-	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,25 +10,6 @@ import (
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/number"
 )
-
-func TestEncodeNumberID(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{}
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"normal", "ABC-123", "ABC%2D123"},
-		{"with underscore", "ABC_123", "ABC%5F123"},
-		{"no special", "ABC123", "ABC123"},
-		{"mixed", "A-B_C", "A%2DB%5FC"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, c.encodeNumberID(tt.input))
-		})
-	}
-}
 
 func TestReadTitleFromCNumber(t *testing.T) {
 	c := &chineseTitleTranslateOptimizer{}
@@ -66,9 +43,7 @@ func TestReadTitleFromCNumberUninitialized(t *testing.T) {
 }
 
 func TestChineseTitleOptimizeHandleWithCNumber(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{err: errors.New("should not reach")},
-	}
+	c := &chineseTitleTranslateOptimizer{}
 	c.tryInitCNumber(context.Background())
 	if c.m == nil {
 		c.m = make(map[string]string)
@@ -86,14 +61,7 @@ func TestChineseTitleOptimizeHandleWithCNumber(t *testing.T) {
 }
 
 func TestChineseTitleOptimizeHandleNoResult(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("<html></html>")),
-			},
-		},
-	}
+	c := &chineseTitleTranslateOptimizer{}
 	c.tryInitCNumber(context.Background())
 	if c.m == nil {
 		c.m = make(map[string]string)
@@ -109,11 +77,7 @@ func TestChineseTitleOptimizeHandleNoResult(t *testing.T) {
 }
 
 func TestChineseTitleOptimizeHandleSubHandlerError(t *testing.T) {
-	c := &chineseTitleTranslateOptimizer{
-		cli: &mockHTTPClient{
-			err: errors.New("network error"),
-		},
-	}
+	c := &chineseTitleTranslateOptimizer{}
 	c.tryInitCNumber(context.Background())
 	if c.m == nil {
 		c.m = make(map[string]string)

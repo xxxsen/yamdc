@@ -969,3 +969,60 @@ func TestLogListScanError(t *testing.T) {
 	_, err = logRepo.List(ctx, LogListFilter{LogType: LogTypeScrapeJob, TaskID: "1", Limit: 10})
 	require.Error(t, err)
 }
+
+func TestListActiveJobSummaries(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	for _, in := range []UpsertJobInput{
+		{FileName: "a.mp4", FileExt: ".mp4", RelPath: "a/a.mp4", AbsPath: "/s/a/a.mp4", Number: "A-1", FileSize: 1},
+		{FileName: "b.mp4", FileExt: ".mp4", RelPath: "b/b.mp4", AbsPath: "/s/b/b.mp4", Number: "B-1", FileSize: 2},
+		{FileName: "c.mp4", FileExt: ".mp4", RelPath: "c/c.mp4", AbsPath: "/s/c/c.mp4", Number: "C-1", FileSize: 3},
+	} {
+		require.NoError(t, repo.UpsertScannedJob(ctx, in))
+	}
+
+	all, err := repo.ListActiveJobSummaries(ctx, nil)
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+
+	summaries, err := repo.ListActiveJobSummaries(ctx, []jobdef.Status{jobdef.StatusInit})
+	require.NoError(t, err)
+	assert.Len(t, summaries, 3)
+	for _, s := range summaries {
+		assert.Equal(t, jobdef.StatusInit, s.Status)
+		assert.NotEmpty(t, s.RelPath)
+		assert.NotZero(t, s.ID)
+	}
+
+	res, err := repo.ListJobs(ctx, []jobdef.Status{jobdef.StatusInit}, "", 1, 10)
+	require.NoError(t, err)
+	ok, err := repo.UpdateStatus(ctx, res.Items[0].ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusProcessing, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	initOnly, err := repo.ListActiveJobSummaries(ctx, []jobdef.Status{jobdef.StatusInit})
+	require.NoError(t, err)
+	assert.Len(t, initOnly, 2)
+}
+
+func TestListActiveJobSummariesEmpty(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+
+	summaries, err := repo.ListActiveJobSummaries(ctx, []jobdef.Status{jobdef.StatusInit})
+	require.NoError(t, err)
+	assert.Empty(t, summaries)
+}
+
+func TestListActiveJobSummariesClosedDB(t *testing.T) {
+	ctx := context.Background()
+	sqlite := newTestSQLite(t)
+	repo := NewJobRepository(sqlite.DB())
+	require.NoError(t, sqlite.Close())
+
+	_, err := repo.ListActiveJobSummaries(ctx, []jobdef.Status{jobdef.StatusInit})
+	assert.Error(t, err)
+}

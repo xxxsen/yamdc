@@ -1777,3 +1777,49 @@ func TestListItemsKeywordConsistencyAfterPushdown(t *testing.T) {
 	_, unexpected := paths["d"]
 	assert.False(t, unexpected, "beta should not appear when keyword=alpha")
 }
+
+func TestListConflictIdentities(t *testing.T) {
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	for _, d := range []*Detail{
+		{Item: Item{RelPath: "a", Title: "A", Number: "NUM-001", UpdatedAt: 1}},
+		{Item: Item{RelPath: "b", Title: "B", Number: "NUM-002", UpdatedAt: 2}},
+	} {
+		require.NoError(t, svc.upsertDetail(ctx, d))
+	}
+
+	identities, err := svc.ListConflictIdentities(ctx)
+	require.NoError(t, err)
+	assert.Len(t, identities, 2)
+
+	found := map[string]string{}
+	for _, ci := range identities {
+		found[ci.RelPath] = ci.Number
+	}
+	assert.Equal(t, "NUM-001", found["a"])
+	assert.Equal(t, "NUM-002", found["b"])
+}
+
+func TestListConflictIdentitiesEmpty(t *testing.T) {
+	svc := newTestMediaService(t)
+	ctx := context.Background()
+
+	identities, err := svc.ListConflictIdentities(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, identities)
+}
+
+func TestListConflictIdentitiesDBError(t *testing.T) {
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "app.db"))
+	require.NoError(t, err)
+	svc := NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+	t.Cleanup(func() {
+		svc.Stop()
+		svc.WaitBackground()
+	})
+	require.NoError(t, sqlite.Close())
+
+	_, err = svc.ListConflictIdentities(context.Background())
+	assert.Error(t, err)
+}

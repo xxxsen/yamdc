@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxxsen/yamdc/internal/enum"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/movieidcleaner"
 	"github.com/xxxsen/yamdc/internal/nfo"
@@ -39,11 +40,6 @@ const (
 	defaultImageExtName   = ".jpg"
 	defaultExtraFanartDir = "extrafanart"
 )
-
-var defaultMediaSuffix = []string{
-	".mp4", ".wmv", ".flv", ".mpeg", ".m2ts", ".mts", ".mpe", ".mpg", ".m4v", ".avi",
-	".mkv", ".rmvb", ".ts", ".mov", ".rm", ".strm",
-}
 
 type fcProcessFunc func(ctx context.Context, fc *model.FileContext) error
 
@@ -75,7 +71,10 @@ func New(opts ...Option) (*Capture, error) {
 	if len(c.Naming) == 0 {
 		c.Naming = defaultNamingRule
 	}
-	extMap := lo.SliceToMap(append(c.ExtraMediaExtList, defaultMediaSuffix...), func(in string) (string, struct{}) {
+	allExts := make([]string, 0, len(c.ExtraMediaExtList)+len(enum.DefaultMediaSuffixes))
+	allExts = append(allExts, c.ExtraMediaExtList...)
+	allExts = append(allExts, enum.DefaultMediaSuffixes...)
+	extMap := lo.SliceToMap(allExts, func(in string) (string, struct{}) {
 		return strings.ToLower(in), struct{}{}
 	})
 	return &Capture{c: c, extMap: extMap}, nil
@@ -366,10 +365,7 @@ func (c *Capture) doDataDiscard(_ context.Context, fc *model.FileContext) error 
 
 func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) error {
 	ctx = trace.WithTraceId(ctx, "TID:N:"+fc.Number.GetNumberID())
-	steps := []struct {
-		name string
-		fn   fcProcessFunc
-	}{
+	if err := c.runPipeline(ctx, fc, []pipelineStep{
 		{"search", c.doSearch},
 		{"process", c.doProcess},
 		{"metaverify", c.doMetaVerify},
@@ -377,18 +373,10 @@ func (c *Capture) processOneFile(ctx context.Context, fc *model.FileContext) err
 		{"savedata", c.doSaveData},
 		{"datadiscard", c.doDataDiscard},
 		{"nfo", c.doExport},
+	}); err != nil {
+		return err
 	}
-	logger := logutil.GetLogger(ctx).With(zap.String("file", fc.FileName))
-	for idx, step := range steps {
-		log := logger.With(zap.Int("idx", idx), zap.String("name", step.name))
-		log.Debug("step start")
-		if err := step.fn(ctx, fc); err != nil {
-			log.Error("proc step failed", zap.Error(err))
-			return err
-		}
-		log.Debug("step end")
-	}
-	logger.Info("process succ",
+	logutil.GetLogger(ctx).With(zap.String("file", fc.FileName)).Info("process succ",
 		zap.String("number_id", fc.Number.GetNumberID()),
 		zap.String("scrape_source", fc.Meta.ExtInfo.ScrapeInfo.Source),
 		zap.String("release_date", formatTimeToDate(fc.Meta.ReleaseDate)),

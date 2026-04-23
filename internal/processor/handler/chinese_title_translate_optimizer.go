@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/xxxsen/yamdc/internal/appdeps"
-	"github.com/xxxsen/yamdc/internal/client"
 	"github.com/xxxsen/yamdc/internal/model"
 	"github.com/xxxsen/yamdc/internal/resource"
 )
@@ -21,7 +19,6 @@ import (
 type chineseTitleTranslateOptimizer struct {
 	once sync.Once
 	m    map[string]string
-	cli  client.IHTTPClient
 }
 
 func (c *chineseTitleTranslateOptimizer) tryInitCNumber(ctx context.Context) {
@@ -57,12 +54,6 @@ func (c *chineseTitleTranslateOptimizer) readTitleFromCNumber(ctx context.Contex
 	return title, true, nil
 }
 
-func (c *chineseTitleTranslateOptimizer) encodeNumberID(numberid string) string {
-	encodedid := strings.ReplaceAll(numberid, "-", "%2D")
-	encodedid = strings.ReplaceAll(encodedid, "_", "%5F")
-	return encodedid
-}
-
 func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.FileContext) error {
 	hlist := []struct {
 		name    string
@@ -95,7 +86,7 @@ func (c *chineseTitleTranslateOptimizer) Handle(ctx context.Context, fc *model.F
 }
 
 func init() {
-	Register(HChineseTitleTranslateOptimizer, func(_ any, deps appdeps.Runtime) (IHandler, error) {
-		return &chineseTitleTranslateOptimizer{cli: deps.HTTPClient}, nil
+	Register(HChineseTitleTranslateOptimizer, func(_ any, _ appdeps.Runtime) (IHandler, error) {
+		return &chineseTitleTranslateOptimizer{}, nil
 	})
 }

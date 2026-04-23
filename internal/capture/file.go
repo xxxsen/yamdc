@@ -1,23 +1,25 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
+	"syscall"
 
 	"github.com/google/uuid"
 )
 
 func moveFile(srcFile, dstFile string) error {
 	err := os.Rename(srcFile, dstFile)
-	if err != nil && strings.Contains(err.Error(), "invalid cross-device link") {
+	if err == nil {
+		return nil
+	}
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) && errors.Is(linkErr.Err, syscall.EXDEV) {
 		return moveCrossDevice(srcFile, dstFile)
 	}
-	if err != nil {
-		return fmt.Errorf("rename %s to %s failed: %w", srcFile, dstFile, err)
-	}
-	return nil
+	return fmt.Errorf("rename %s to %s failed: %w", srcFile, dstFile, err)
 }
 
 func copyFile(srcFile, dstFile string) error {

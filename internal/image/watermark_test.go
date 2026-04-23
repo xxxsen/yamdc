@@ -94,10 +94,11 @@ func TestAddWatermarkFromBytes_loadError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSelectWatermarkResource_unknown(t *testing.T) {
+func TestAddWatermark_unknownWatermark(t *testing.T) {
 	t.Parallel()
-	_, ok := selectWatermarkResource(Watermark(0))
-	assert.False(t, ok)
+	base := MakeColorImage(image.Rect(0, 0, 800, 600), color.RGBA{A: 255})
+	_, err := AddWatermark(base, []Watermark{Watermark(0)})
+	assert.ErrorIs(t, err, errWatermarkNotFound)
 }
 
 func TestAddWatermark_canvasTooShortForStack(t *testing.T) {
