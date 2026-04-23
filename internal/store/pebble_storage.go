@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/pebble"
@@ -29,7 +30,19 @@ var (
 	errPebbleClosed         = errors.New("pebble cache db closed")
 )
 
+// pebbleStore 用一把 RWMutex 同时承担两件事:
+//  1. 保护 db 指针生命周期, 让 Close 与其它方法之间不出现 data race;
+//  2. 串行化 "读 expire + 批量写" 这类 check-then-write 操作, 避免 cleanup
+//     误删掉被并发 PutData 刚写入的新值。
+//
+// 锁使用约定:
+//   - 只读路径 (GetData / IsDataExist) 持 RLock, 允许并发读。
+//   - 写路径 (PutData / CleanupExpired / deleteExpiredKey / Close) 持 Lock,
+//     互相排他。
+//   - 内部 helper (lookupExpireAt / getRecord / queueExpiredDeletes /
+//     cleanupExpiredIterator) 不自行加锁, 调用方必须已经持有合适的锁。
 type pebbleStore struct {
+	mu sync.RWMutex
 	db *pebble.DB
 }
 
@@ -38,9 +51,13 @@ func normalizeExpire(expire time.Duration) time.Duration {
 		return defaultExpireTime
 	}
 	if expire < 0 {
-		return time.Nanosecond
+		return -time.Second
 	}
 	return expire
+}
+
+func pebbleExpireTime(t time.Time) int64 {
+	return t.Unix()
 }
 
 func makePebbleDataKey(key string) []byte {
@@ -146,11 +163,13 @@ func (s *pebbleStore) PutData(ctx context.Context, key string, value []byte, exp
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("put cache key %s canceled: %w", key, err)
 	}
-	db, err := s.openDB()
-	if err != nil {
-		return fmt.Errorf("open pebble cache for put key %s failed: %w", key, err)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("open pebble cache for put key %s failed: %w", key, errPebbleClosed)
 	}
-	expireAt := time.Now().Add(normalizeExpire(expire)).UnixNano()
+	db := s.db
+	expireAt := pebbleExpireTime(time.Now().Add(normalizeExpire(expire)))
 	dataKey := makePebbleDataKey(key)
 	expireKey := makePebbleExpireKey(expireAt, key)
 
@@ -180,12 +199,10 @@ func (s *pebbleStore) PutData(ctx context.Context, key string, value []byte, exp
 	return nil
 }
 
+// lookupExpireAt 读 data record 的过期时间戳。调用方必须已持有 s.mu (R/W 均可),
+// 且保证 s.db != nil。
 func (s *pebbleStore) lookupExpireAt(dataKey []byte) (int64, bool, error) {
-	db, err := s.openDB()
-	if err != nil {
-		return 0, false, fmt.Errorf("open pebble cache for expiration lookup failed: %w", err)
-	}
-	raw, closer, err := db.Get(dataKey)
+	raw, closer, err := s.db.Get(dataKey)
 	if errors.Is(err, pebble.ErrNotFound) {
 		return 0, false, nil
 	}
@@ -206,23 +223,32 @@ func (s *pebbleStore) GetData(ctx context.Context, key string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("query cache key %s canceled: %w", key, err)
 	}
-	value, expireAt, err := s.getRecord(key)
+	value, expireAt, err := s.readRecord(key)
 	if err != nil {
 		return nil, fmt.Errorf("query cache key %s failed: %w", key, err)
 	}
-	if expireAt <= time.Now().UnixNano() {
+	if expireAt <= pebbleExpireTime(time.Now()) {
 		_ = s.deleteExpiredKey(key, expireAt)
 		return nil, fmt.Errorf("query cache key %s failed: %w", key, errCacheExpired)
 	}
 	return value, nil
 }
 
-func (s *pebbleStore) getRecord(key string) ([]byte, int64, error) {
-	db, openErr := s.openDB()
-	if openErr != nil {
-		return nil, 0, fmt.Errorf("open pebble cache for get key %s failed: %w", key, openErr)
+// readRecord 是 GetData/IsDataExist 的共享只读路径。持 RLock 读完就释放,
+// 惰性删除 (deleteExpiredKey) 在锁外重新拿 Lock, 避免 RLock -> Lock 的锁升级
+// 死锁。
+func (s *pebbleStore) readRecord(key string) ([]byte, int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.db == nil {
+		return nil, 0, fmt.Errorf("open pebble cache for get key %s failed: %w", key, errPebbleClosed)
 	}
-	raw, closer, err := db.Get(makePebbleDataKey(key))
+	return s.getRecord(key)
+}
+
+// getRecord 读原始 record 并拷贝 value 出来。调用方必须持有 s.mu 且 s.db 非 nil。
+func (s *pebbleStore) getRecord(key string) ([]byte, int64, error) {
+	raw, closer, err := s.db.Get(makePebbleDataKey(key))
 	if err != nil {
 		return nil, 0, fmt.Errorf("get cache key %s failed: %w", key, err)
 	}
@@ -240,28 +266,33 @@ func (s *pebbleStore) IsDataExist(ctx context.Context, key string) (bool, error)
 	if err := ctx.Err(); err != nil {
 		return false, fmt.Errorf("check cache key %s existence canceled: %w", key, err)
 	}
-	_, expireAt, err := s.getRecord(key)
+	_, expireAt, err := s.readRecord(key)
 	if errors.Is(err, pebble.ErrNotFound) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("check cache key %s existence failed: %w", key, err)
 	}
-	if expireAt <= time.Now().UnixNano() {
+	if expireAt <= pebbleExpireTime(time.Now()) {
 		_ = s.deleteExpiredKey(key, expireAt)
 		return false, nil
 	}
 	return true, nil
 }
 
+// deleteExpiredKey 做惰性清理。拿 Lock 是为了和 PutData/CleanupExpired 串行,
+// 防止在 check-then-write 窗口里把并发新写入的数据删掉。Close 以后静默返回,
+// 因为它本来就是 best-effort, 下次 cleanup 会补救。
 func (s *pebbleStore) deleteExpiredKey(key string, expireAt int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil
+	}
+	db := s.db
 	currentExpireAt, ok, err := s.lookupExpireAt(makePebbleDataKey(key))
 	if err != nil {
 		return fmt.Errorf("lookup cache key %s before expired delete failed: %w", key, err)
-	}
-	db, err := s.openDB()
-	if err != nil {
-		return fmt.Errorf("open pebble cache for expired delete key %s failed: %w", key, err)
 	}
 	batch := db.NewBatch()
 	defer func() {
@@ -281,14 +312,19 @@ func (s *pebbleStore) deleteExpiredKey(key string, expireAt int64) error {
 	return nil
 }
 
+// CleanupExpired 持 Lock 全程执行。cleanup 本来就只在后台 job 里每 24h 跑一次,
+// 短暂阻塞并发 Put 可以接受, 换来的是对每条 expire index "检查 data record 当前
+// 过期时间 + 批量删除" 的原子性。
 func (s *pebbleStore) CleanupExpired(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("cleanup pebble cache canceled: %w", err)
 	}
-	db, err := s.openDB()
-	if err != nil {
-		return fmt.Errorf("open pebble cache for cleanup failed: %w", err)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("open pebble cache for cleanup failed: %w", errPebbleClosed)
 	}
+	db := s.db
 	iter, err := db.NewIter(&pebble.IterOptions{
 		LowerBound: pebbleExpireLowerBound(),
 		UpperBound: pebbleExpireUpperBound(),
@@ -300,7 +336,7 @@ func (s *pebbleStore) CleanupExpired(ctx context.Context) error {
 		_ = iter.Close()
 	}()
 
-	cleaner := newPebbleExpiredCleaner(db, time.Now().UnixNano())
+	cleaner := newPebbleExpiredCleaner(db, pebbleExpireTime(time.Now()))
 	defer cleaner.close()
 	if err := s.cleanupExpiredIterator(ctx, iter, cleaner); err != nil {
 		return err
@@ -411,8 +447,15 @@ func (c *pebbleExpiredCleaner) close() {
 	_ = c.batch.Close()
 }
 
+// Close 用写锁与其它入口互斥, 确保 s.db = nil 与并发的 PutData/GetData 不出现
+// data race。重复 Close / 对 nil 接收者调用都是 no-op, 保持和原实现一致。
 func (s *pebbleStore) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
 		return nil
 	}
 	db := s.db
@@ -421,13 +464,6 @@ func (s *pebbleStore) Close() error {
 		return fmt.Errorf("close pebble cache db failed: %w", err)
 	}
 	return nil
-}
-
-func (s *pebbleStore) openDB() (*pebble.DB, error) {
-	if s == nil || s.db == nil {
-		return nil, errPebbleClosed
-	}
-	return s.db, nil
 }
 
 func PebblePathForDataDir(dataDir string) string {
