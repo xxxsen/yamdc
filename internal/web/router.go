@@ -11,12 +11,6 @@ import (
 	"github.com/xxxsen/common/webapi"
 )
 
-// 默认允许的本机前端开发源. 不允许 "*"; 详见 corsMiddleware 注释.
-var defaultAllowedOrigins = []string{
-	"http://localhost:3000",
-	"http://127.0.0.1:3000",
-}
-
 // stateChangingMethods 列出会写状态 / 触发副作用的 HTTP 方法.
 // 这些方法即便没有显式 CORS 也可能被某些浏览器作为 "简单请求" 直接发出
 // (例如 POST application/x-www-form-urlencoded), 因此我们在 handler 之前
@@ -49,15 +43,14 @@ func (a *API) Engine(addr string) (webapi.IWebEngine, error) {
 	return engine, nil
 }
 
-// loadAllowedOrigins 读取 YAMDC_ALLOWED_ORIGINS 环境变量 (逗号分隔), 不
-// 设置时返回 defaultAllowedOrigins. 用环境变量是为了让本地用户可以按需
-// 加入自己的前端域名 (例如局域网开发机), 而不需要改源码.
+// loadAllowedOrigins 读取 YAMDC_ALLOWED_ORIGINS 环境变量 (逗号分隔).
+// 默认行为: 未设置或 trim 后为空时返回空切片, 表示 wildcard 模式
+// (Access-Control-Allow-Origin: *), 用于本地用户通过任意域名访问场景.
+// 显式配置后切换到白名单模式, 仅命中的 Origin 被允许跨域访问.
 func loadAllowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv("YAMDC_ALLOWED_ORIGINS"))
 	if raw == "" {
-		out := make([]string, len(defaultAllowedOrigins))
-		copy(out, defaultAllowedOrigins)
-		return out
+		return nil
 	}
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
@@ -68,35 +61,39 @@ func loadAllowedOrigins() []string {
 		}
 		out = append(out, item)
 	}
-	if len(out) == 0 {
-		out = append(out, defaultAllowedOrigins...)
-	}
 	return out
 }
 
-// corsMiddleware 基于显式白名单实现 CORS + 状态变更 Origin 校验.
+// corsMiddleware 实现 CORS + 状态变更 Origin 校验, 支持两种模式.
 //
-// 安全模型:
+// 模式 1: wildcard (allowedOrigins 为空)
 //
-//  1. 不再返回 Access-Control-Allow-Origin: *. 收到带 Origin 的请求时,
-//     只有当 Origin 命中白名单才会回写完全相同的字面值, 否则跨站浏览器会
-//     按浏览器策略阻断响应可读性.
-//  2. 对 POST/PUT/PATCH/DELETE 等状态变更方法做 Origin 强制校验:
-//     - 没有 Origin 头: 视为本机 CLI / curl / same-origin 请求, 放行,
-//     由后端 handler 决定响应.
-//     - 有 Origin 但不在白名单: 返回 HTTP 403 + body { code, message },
-//     拦在 handler 之前, 不让任何写副作用执行.
-//  3. 预检请求 (OPTIONS):
-//     - 命中白名单: 返回 204 No Content + Allow-* 头.
-//     - 不命中白名单 (含 "未知 Origin"): 返回 HTTP 403, 让浏览器直接放弃
-//     后续真正的请求. 没有 Origin 头的 OPTIONS 走 same-origin 兼容路径,
-//     仍然返回 204 但不带 Access-Control-Allow-Origin.
+//   - 默认 wildcard, 用户本地启动后可通过任意域名 (例如局域网 IP /
+//     自定义 hosts 域名) 访问后端.
+//   - 跨域响应统一写入 Access-Control-Allow-Origin: *.
+//   - OPTIONS 预检直接返回 204 + Allow-* 头.
+//   - 不做 Origin 白名单拦截, 状态变更方法直接进入 handler.
+//
+// 模式 2: 白名单 (allowedOrigins 非空)
+//
+//   - 设置 YAMDC_ALLOWED_ORIGINS 后启用, 用于明确收紧的部署场景.
+//   - 命中白名单时回写完全相同的 Origin 字面值, 浏览器按同源策略放行.
+//   - 未命中白名单的 OPTIONS 预检返回 HTTP 403, 让浏览器放弃后续请求.
+//   - 未命中白名单且方法属于 POST/PUT/PATCH/DELETE 的请求返回 HTTP 403,
+//     拦在 handler 之前不让任何写副作用执行.
+//   - 没有 Origin 头的请求 (本机 CLI / curl / same-origin) 直接放行.
 func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	allowed := buildAllowedOriginSet(allowedOrigins)
+	wildcard := len(allowedOrigins) == 0
 	return func(c *gin.Context) {
 		origin := strings.TrimSpace(c.Request.Header.Get("Origin"))
-		isAllowedOrigin := origin != "" && allowed.contains(origin)
 
+		if wildcard {
+			handleWildcardCORS(c, origin)
+			return
+		}
+
+		isAllowedOrigin := origin != "" && allowed.contains(origin)
 		if origin != "" && isAllowedOrigin {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Vary", "Origin")
@@ -120,6 +117,25 @@ func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// handleWildcardCORS 在 wildcard 模式下统一写 Allow-Origin: *, 不做白名单
+// 拦截; 实际请求方法 (Allow-Methods) 与允许头 (Allow-Headers) 仅在 OPTIONS
+// 预检上写入 — 这两个头按 fetch spec 只在预检阶段被浏览器读取, 给 GET/POST
+// 实际请求重复写一遍是冗余字节, 不影响安全语义. 即便请求没有 Origin
+// (例如本机 curl), 仍然写 "*" 是无害的, 浏览器只在跨域场景下读取此头.
+func handleWildcardCORS(c *gin.Context, origin string) {
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	if origin != "" {
+		c.Writer.Header().Set("Vary", "Origin")
+	}
+	if c.Request.Method == http.MethodOptions {
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.AbortWithStatus(http.StatusNoContent)
+		return
+	}
+	c.Next()
 }
 
 // abortWithOriginForbidden 用项目统一的 { code, message, data } 协议向

@@ -14,6 +14,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# guard: 仅允许在 devcontainer 内启动 8080 / 3000 进程, 避免污染宿主机.
+"$repo_root/scripts/devcontainer/require-devcontainer.sh"
+
 DEV_BACKEND_CONFIG=${DEV_BACKEND_CONFIG:-.devcontainer/config/devcontainer.json}
 DEV_PID_DIR=${DEV_PID_DIR:-.devcontainer-data/pids}
 DEV_LOG_DIR=${DEV_LOG_DIR:-.devcontainer-data/logs}

@@ -26,7 +26,8 @@
     "GOLANGCI_LINT_CACHE": "/workspace/yamdc/.cache/golangci-lint",
     "PLAYWRIGHT_BROWSERS_PATH": "/workspace/yamdc/.cache/ms-playwright",
     "NEXT_TELEMETRY_DISABLED": "1",
-    "API_PROXY_TARGET": "http://localhost:8080"
+    "API_PROXY_TARGET": "http://localhost:8080",
+    "YAMDC_DEVCONTAINER": "1"
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {

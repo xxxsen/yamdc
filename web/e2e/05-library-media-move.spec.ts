@@ -13,7 +13,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { apiCallAllowBusinessError, apiGet, apiPost } from "./helpers/api";
+import { apiCallAllowBusinessError, apiGet } from "./helpers/api";
 
 interface MediaLibraryStatus {
   configured: boolean;
@@ -51,9 +51,14 @@ test.describe("library media move 用户故事", () => {
   });
 
   test("重复触发 move (本来就在跑或刚完成): 仍然走 envelope 协议, 不会蹦 5xx", async () => {
-    // 第一次 move (允许业务错), 第二次紧跟着再来一发. yamdc 后端对 "已在跑"
-    // 用 envelope.code != 0 表达, 不允许直接 502/503.
-    await apiPost<unknown>("/api/media-library/move").catch(() => undefined);
+    // 第一次 move + 第二次紧跟着再来一发. yamdc 后端对 "已在跑" 用
+    // envelope.code != 0 表达, 不允许直接 502/503. 两次都走
+    // apiCallAllowBusinessError 接 envelope, 任意 envelope.code 都合法,
+    // 但 HTTP 必须 2xx + JSON envelope 形态; 网络层挂 / 5xx 都立刻让
+    // 测试失败 — 不再 .catch(() => undefined) 静默吞.
+    const first = await apiCallAllowBusinessError("POST", "/api/media-library/move");
+    expect(typeof first.code).toBe("number");
+    expect(typeof first.message).toBe("string");
     const env = await apiCallAllowBusinessError("POST", "/api/media-library/move");
     expect(typeof env.code).toBe("number");
     expect(typeof env.message).toBe("string");

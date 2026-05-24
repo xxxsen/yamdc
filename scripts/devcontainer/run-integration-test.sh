@@ -15,6 +15,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# guard: 集成测试也会起 backend (8080), 必须在 devcontainer 内执行.
+"$repo_root/scripts/devcontainer/require-devcontainer.sh"
+
 cleanup() {
   "$repo_root/scripts/devcontainer/stop-dev.sh"
 }

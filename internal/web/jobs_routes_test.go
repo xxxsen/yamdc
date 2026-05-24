@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -556,7 +558,10 @@ func TestReadUploadImageData(t *testing.T) {
 // 真正的存储 / 业务路径.
 func TestReadUploadImageDataTooLarge(t *testing.T) {
 	oversize := make([]byte, maxUploadImageBytes+1)
-	for i := range oversize {
+	// 前 8 字节伪装成 PNG 签名, 剩余填充, 让 http.DetectContentType 不会
+	// 在 size 校验之前因 "non-image" 提前返错.
+	copy(oversize, pngBytes())
+	for i := 8; i < len(oversize); i++ {
 		oversize[i] = 'A'
 	}
 	body, contentType := buildMultipartImage(t, "file", "big.bin", oversize)
@@ -567,6 +572,55 @@ func TestReadUploadImageDataTooLarge(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodeUploadFileTooLarge, resp.Code)
+}
+
+// TestReadUploadImageDataExactlyMaxSucceeds: 文件大小刚好 32 MiB 时,
+// multipart body 一定大于 32 MiB (boundary + part header 占额外字节);
+// readUploadImageData 必须把这种合法上传放过去, 不能因为 multipart
+// overhead 导致整个 body 触发 MaxBytesReader 上限.
+func TestReadUploadImageDataExactlyMaxSucceeds(t *testing.T) {
+	payload := make([]byte, maxUploadImageBytes)
+	copy(payload, pngBytes())
+	for i := 8; i < len(payload); i++ {
+		payload[i] = 'P'
+	}
+	body, contentType := buildMultipartImage(t, "file", "exact.png", payload)
+	c, rec := newGinContext(http.MethodPost, "/test", body)
+	c.Request.Header.Set("Content-Type", contentType)
+	data, fileName, ok := readUploadImageData(c)
+	require.True(t, ok, "32 MiB 文件应被接收, rec.Code=%d body=%s", rec.Code, rec.Body.String())
+	assert.Equal(t, "exact.png", fileName)
+	assert.Equal(t, maxUploadImageBytes, len(data))
+}
+
+// TestReadUploadImageDataLargeMultipartHeaderSucceeds: multipart header 区
+// 较大但文件本体未超过 32 MiB 时, 只要整个 body 仍在 33 MiB 内, 上传应
+// 成功. 这条路径覆盖"用户上传 32 MiB-1 文件 + 较多 form 字段 / 长 boundary"
+// 的合法场景, 防止后端因 request body 上限太紧而误拒.
+func TestReadUploadImageDataLargeMultipartHeaderSucceeds(t *testing.T) {
+	payload := make([]byte, maxUploadImageBytes-1)
+	copy(payload, pngBytes())
+	for i := 8; i < len(payload); i++ {
+		payload[i] = 'B'
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	// 写一个长字段, 模拟较大的 multipart header 开销; 但仍然在 1 MiB 容
+	// 量内, 不超过 maxUploadMultipartOverheadBytes.
+	bigHeaderField := strings.Repeat("x", 256*1024)
+	require.NoError(t, w.WriteField("notes", bigHeaderField))
+	part, err := w.CreateFormFile("file", "big-header.png")
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	c, rec := newGinContext(http.MethodPost, "/test", &buf)
+	c.Request.Header.Set("Content-Type", w.FormDataContentType())
+	data, fileName, ok := readUploadImageData(c)
+	require.True(t, ok, "multipart header 较大但 body < 33 MiB 时应通过, rec.Code=%d body=%s", rec.Code, rec.Body.String())
+	assert.Equal(t, "big-header.png", fileName)
+	assert.Equal(t, len(payload), len(data))
 }
 
 // TestIsUploadTooLargeErr: 验证 helper 能识别 stdlib 的 MaxBytesError 与

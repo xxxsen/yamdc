@@ -11,8 +11,8 @@ GOLANGCI_LINT_VERSION ?= v2.11.4
 GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
 GO_COVERAGE_THRESHOLD ?= 95
 
-# 跨仓库集成测试根目录. 默认锁死到 029-fe-be-uiux-review 验收要求的本地
-# 路径; 真实 CI 上仓库会被 checkout 到同一组路径或通过 env 覆盖.
+# 跨仓库集成测试根目录. 默认指向开发者本地 checkout 出来的 yamdc-plugin /
+# yamdc-script 仓库; CI 通过 env 覆盖到 actions/checkout 出来的实际路径.
 YAMDC_PLUGIN_REPO ?= /home/sen/work/yamdc-plugin
 YAMDC_SCRIPT_REPO ?= /home/sen/work/yamdc-script
 
@@ -128,11 +128,12 @@ cross-repo-integration-test: plugin-integration-test ruleset-integration-test
 # ─────────────────────────────────────────────────────────────────────
 # Devcontainer / dev server / integration & E2E test targets.
 #
-# 设计原则 (与 fire-manager 模板一致):
+# 设计原则:
 # - devcontainer-* 都从宿主机调 `devcontainer` CLI, 让 IDE / Make 行为
 #   一致 (docker compose 由 .devcontainer/docker-compose.yml 单一来源).
 # - dev-start / dev-stop / integration-test / e2e-test 默认必须在
-#   devcontainer 内执行, 避免 8080/3000 / playwright chromium 污染宿主.
+#   devcontainer 内执行 (脚本入口有 require-devcontainer.sh guard),
+#   避免 8080 / 3000 / playwright chromium 污染宿主机.
 # - Playwright 装在 stamp 文件背后, 避免反复重新下载 chromium.
 # ─────────────────────────────────────────────────────────────────────
 

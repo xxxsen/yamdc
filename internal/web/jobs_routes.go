@@ -429,9 +429,17 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 	writeSuccess(c.Writer, "poster cropped", poster)
 }
 
-// maxUploadImageBytes 是单次图片上传请求体的硬上限. 32 MiB 足够覆盖
+// maxUploadImageBytes 是单张上传图片本身 (file) 的硬上限. 32 MiB 足够覆盖
 // 现实中合理的封面 / 海报 / fanart 大小; 任何超出值都视为恶意/异常.
 const maxUploadImageBytes = 32 << 20
+
+// maxUploadMultipartOverheadBytes 是 multipart 形式带来的额外开销
+// (boundary / part header / form 字段), 1 MiB 足够覆盖标准浏览器 +
+// 标准 multipart 库的实现. 业务层仍然只允许文件 <= 32 MiB, 这里只是
+// 把"整个 multipart request body"的硬上限放宽到 33 MiB, 避免一个刚好
+// 32 MiB 的合法图片因为 multipart header 多出几百字节就被
+// http.MaxBytesReader 误拒.
+const maxUploadMultipartOverheadBytes = 1 << 20
 
 // readUploadImageData 从 multipart 表单读取一张图片, 强制 32 MiB 上限,
 // 同时被 review 资产上传 (handleReviewAsset) 与媒体库资产上传
@@ -441,14 +449,18 @@ const maxUploadImageBytes = 32 << 20
 //
 // 体积保护机制:
 //
-//  1. http.MaxBytesReader 把请求 body 包成只能读 maxUploadImageBytes+1
-//     字节的 reader; 超过即在 Read 时抛 *http.MaxBytesError, 让 handler
-//     立刻拒绝. 这一层比 io.ReadAll 之前先体积探测更稳妥, 因为 multipart
-//     边界 / header 也会算进去, 不容易被构造的 multipart 旁路.
-//  2. 即使第一步漏过 (例如某些上游中间件已经 cache 整个 body), 我们再
-//     用 len(data) 做最终校验, 双层保护.
+//  1. http.MaxBytesReader 把请求 body 包成只能读 maxUploadImageBytes +
+//     maxUploadMultipartOverheadBytes 字节的 reader; 超过即在 Read 时抛
+//     *http.MaxBytesError, 让 handler 立刻拒绝. 因为 multipart body 包含
+//     boundary / part header, 它一定大于文件本体, 所以 request body 上限
+//     必须比文件上限再宽一点, 否则一张刚好 32 MiB 的合法图片会被误拒.
+//  2. 文件本身的 32 MiB 上限通过 header.Size 与 len(data) 做严格校验,
+//     不依赖 request body 上限; 双层保护下任意一方失守都还能拦截.
 func readUploadImageData(c *gin.Context) ([]byte, string, bool) {
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadImageBytes)
+	c.Request.Body = http.MaxBytesReader(
+		c.Writer, c.Request.Body,
+		maxUploadImageBytes+maxUploadMultipartOverheadBytes,
+	)
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		if isUploadTooLargeErr(err) {

@@ -69,6 +69,10 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   return call<T>("PUT", path, { body });
 }
 
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  return call<T>("PATCH", path, { body });
+}
+
 export async function apiDelete(path: string): Promise<void> {
   await call<unknown>("DELETE", path);
 }
