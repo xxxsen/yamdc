@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-knip web-test web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker plugin-integration-test ruleset-integration-test cross-repo-integration-test devcontainer-bootstrap devcontainer-up devcontainer-rebuild devcontainer-shell devcontainer-check dev-start dev-stop e2e-install e2e-test integration-test
+.PHONY: build test test-coverage install-golangci-lint lint-go backend-build backend-test backend-check web-install web-lint web-knip web-test web-build web-check ci-check build-image build-web-image run-dev-docker stop-dev-docker plugin-integration-test ruleset-integration-test cross-repo-integration-test devcontainer-bootstrap devcontainer-up devcontainer-rebuild devcontainer-shell devcontainer-check dev-start dev-stop e2e-install e2e-test integration-test require-devcontainer
 
 BIN ?= yamdc
 BACKEND_IMAGE ?= xxxsen/yamdc:latest
@@ -141,10 +141,28 @@ DEVCONTAINER_CLI ?= devcontainer
 PLAYWRIGHT_BROWSERS_PATH ?= $(CURDIR)/.cache/ms-playwright
 PLAYWRIGHT_STAMP := web/node_modules/.playwright-install-stamp
 
+# require-devcontainer: 所有"在隔离环境内启动 backend / frontend / 安装
+# Playwright 浏览器"的入口都必须先过这个 guard, 防止宿主机 `make e2e-test`
+# 这类命令在 guard 之前就先污染宿主机依赖与端口. 接受两种合法环境:
+#   YAMDC_DEVCONTAINER=1                        本地 devcontainer 内
+#   YAMDC_ALLOW_NON_DEVCONTAINER_TESTS=1        CI runner 显式放行
+# 详见 scripts/devcontainer/require-devcontainer.sh.
+require-devcontainer:
+	scripts/devcontainer/require-devcontainer.sh
+
 # devcontainer-bootstrap: 容器内首次启动 (postCreateCommand) 跑一次, 把
 # 后端 lint, 前端 npm ci, playwright 浏览器都装好.
-devcontainer-bootstrap: install-golangci-lint web-install e2e-install
+#
+# require-devcontainer 必须放在依赖列表的首位: Make 按依赖列出顺序串行
+# 执行, 把 guard 放在第一位才能阻止 install-golangci-lint / web-install
+# 在宿主机被误触发时污染 ./bin 与 web/node_modules. 注意 *不* 能把 guard
+# 直接挂到 install-golangci-lint / web-install, 因为它们也是 backend-check
+# / web-check / ci-check 的间接依赖, AGENTS.md §3 要求宿主机能跑 ci-check.
+devcontainer-bootstrap: require-devcontainer install-golangci-lint web-install e2e-install
 
+# devcontainer-up / devcontainer-rebuild / devcontainer-shell /
+# devcontainer-check: 这四个 target 的职责本就是从宿主机调 devcontainer
+# CLI 进容器, 不能加 require-devcontainer guard.
 devcontainer-up:
 	$(DEVCONTAINER_CLI) up --workspace-folder .
 
@@ -162,16 +180,22 @@ devcontainer-check:
 # Stamp-driven Playwright install: 仅在 web 依赖变化时重装 chromium,
 # 避免每次 e2e-test 都重下浏览器. 保留 --with-deps 兼容 CI 上需要装
 # linux 系统包的场景.
-$(PLAYWRIGHT_STAMP): web/package.json web/package-lock.json
+#
+# require-devcontainer 用 order-only prerequisite (`|` 之后) 而不是普通
+# 依赖: 普通依赖会让 Make 把 phony 目标视为"始终更新", 进而每次都重跑
+# stamp recipe (npm ci + chromium 下载). order-only 只保证执行顺序,
+# 不参与 stamp 的"是否过期"判断.
+$(PLAYWRIGHT_STAMP): web/package.json web/package-lock.json | require-devcontainer
 	cd web && npm ci --prefer-offline --no-audit --no-fund
 	cd web && PLAYWRIGHT_BROWSERS_PATH=$(PLAYWRIGHT_BROWSERS_PATH) npx playwright install --with-deps chromium
 	@touch $(PLAYWRIGHT_STAMP)
 
-e2e-install: $(PLAYWRIGHT_STAMP)
+e2e-install: require-devcontainer $(PLAYWRIGHT_STAMP)
 
 # dev-start / dev-stop: 启动 / 停止 backend (yamdc server) + 前端 dev.
 # 进程组管理在 scripts/devcontainer/{start,stop}-dev.sh 里, 见脚本注释.
-dev-start:
+# dev-start 必须先过 guard, dev-stop 仅做清理, 不要求 guard.
+dev-start: require-devcontainer
 	scripts/devcontainer/start-dev.sh
 
 dev-stop:
@@ -179,10 +203,12 @@ dev-stop:
 
 # integration-test: 后端 HTTP API 集成 smoke. 启停 backend 都在脚本内
 # 用 trap 收尾, Makefile 不重复 stop 避免双重 stop.
-integration-test:
+integration-test: require-devcontainer
 	scripts/devcontainer/run-integration-test.sh
 
 # e2e-test: Playwright Desktop Chrome 全套 (10 个 spec). 启 backend +
-# frontend 后跑一遍, 任一失败 trap 收尾.
-e2e-test: e2e-install
+# frontend 后跑一遍, 任一失败 trap 收尾. require-devcontainer 列在
+# e2e-install 之前, 让 `make -n e2e-test` 第一条命令就是 guard, 宿主机
+# 误执行不会先触发 npm ci / playwright install.
+e2e-test: require-devcontainer e2e-install
 	scripts/devcontainer/run-e2e-test.sh

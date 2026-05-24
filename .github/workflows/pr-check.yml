@@ -153,6 +153,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends jq sqlite3 curl
 
       - name: Run backend integration smoke test
+        env:
+          YAMDC_ALLOW_NON_DEVCONTAINER_TESTS: "1"
         run: make integration-test
 
   # ────────────────────────────────────────────────────────────────────
@@ -186,6 +188,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends jq curl ffmpeg
 
       - name: Run e2e (Playwright Desktop Chrome)
+        env:
+          YAMDC_ALLOW_NON_DEVCONTAINER_TESTS: "1"
         run: make e2e-test
 
       - name: Upload Playwright report on failure

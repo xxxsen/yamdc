@@ -25,6 +25,11 @@ services:
       TZ: Asia/Shanghai
       API_PROXY_TARGET: http://localhost:8080
       NEXT_TELEMETRY_DISABLED: "1"
+      # 必须在 Compose 这里注入: VS Code Dev Containers 的 containerEnv 在
+      # dockerComposeFile 模式下不一定能传到容器进程 (官方建议 Compose 场景
+      # 用 services.<name>.environment). require-devcontainer.sh guard 直接
+      # 读这个变量.
+      YAMDC_DEVCONTAINER: "1"
     ports:
       - "3000:3000"
       - "8080:8080"

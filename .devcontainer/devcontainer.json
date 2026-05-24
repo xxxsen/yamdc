@@ -24,10 +24,12 @@
     "TZ": "Asia/Shanghai",
     "GOCACHE": "/workspace/yamdc/.cache/go-build",
     "GOLANGCI_LINT_CACHE": "/workspace/yamdc/.cache/golangci-lint",
-    "PLAYWRIGHT_BROWSERS_PATH": "/workspace/yamdc/.cache/ms-playwright",
+    "PLAYWRIGHT_BROWSERS_PATH": "/workspace/yamdc/.cache/ms-playwright"
+  },
+  "remoteEnv": {
     "NEXT_TELEMETRY_DISABLED": "1",
     "API_PROXY_TARGET": "http://localhost:8080",
-    "YAMDC_DEVCONTAINER": "1"
+    "YAMDC_DEVCONTAINER": "${containerEnv:YAMDC_DEVCONTAINER}"
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {
