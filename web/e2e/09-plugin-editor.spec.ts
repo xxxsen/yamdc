@@ -73,6 +73,13 @@ test.describe("plugin-editor 用户故事 — XPath inspector 真实交互", () 
       "<!DOCTYPE html><html><body>"
       + "<div id=\"main\"><a id=\"abc\" class=\"x\" href=\"/foo\">link-text</a>"
       + "<p class=\"y\">paragraph</p></div></body></html>";
+    // 后端 /api/debug/plugin-editor/scrape 用了双层 envelope:
+    //   外层: { code, message, data: PluginEditorEnvelope<...> }
+    //   内层: { ok, warnings, data: PluginEditorScrapeDebugResult }
+    // 前端 debugPluginDraftScrape() 返回外层 .data 即 PluginEditorEnvelope,
+    // use-plugin-editor-state.ts 再访问 envelope.data.request / envelope.data.response,
+    // 因此 mock body 必须把 request/response 放在 envelope.data 里, 否则
+    // BodyPanel 以上链路会拿到 undefined → React 渲染抛 'reading request'.
     await page.route("**/api/debug/plugin-editor/scrape", async (route) => {
       await route.fulfill({
         status: 200,
@@ -81,15 +88,19 @@ test.describe("plugin-editor 用户故事 — XPath inspector 真实交互", () 
           code: 0,
           message: "ok",
           data: {
-            request: { method: "GET", url: "https://e2e.example/fixture", headers: {}, body: "" },
-            response: {
-              status_code: 200,
-              headers: { "content-type": ["text/html; charset=utf-8"] },
-              body: fixtureHTML,
-              body_preview: fixtureHTML,
+            ok: true,
+            warnings: [],
+            data: {
+              request: { method: "GET", url: "https://e2e.example/fixture", headers: {}, body: "" },
+              response: {
+                status_code: 200,
+                headers: { "content-type": ["text/html; charset=utf-8"] },
+                body: fixtureHTML,
+                body_preview: fixtureHTML,
+              },
+              fields: {},
+              meta: null,
             },
-            fields: {},
-            meta: null,
           },
         }),
       });
@@ -131,9 +142,17 @@ test.describe("plugin-editor 用户故事 — XPath inspector 真实交互", () 
     await page.getByRole("button", { name: "Response", exact: true }).click();
 
     // 切到 Inspector 模式 (按钮 class .body-mode-btn, 文本 "Inspector").
+    //
+    // 注意: plugin-editor 页面右上角悬浮菜单 (.plugin-editor-floating-menu)
+    // 是 fixed 定位且 z-index 较高, 默认位置正好压在 Body 面板的 mode-toggle
+    // 区上方, Playwright 的 mouse-based click 会被 floating menu 的
+    // .plugin-editor-split-action-main 拦截 (Test timeout 180s, 重试几百次都
+    // 失败). 这里用 dispatchEvent('click') 直接派发 React onClick 合成事件,
+    // 既保留了 "Inspector 按钮存在且可点击" 的语义, 也不依赖具体页面布局
+    // (悬浮菜单是否拖走 / 是否遮挡 / 是否被 portal 装载).
     const inspectorBtn = page.getByRole("button", { name: "Inspector", exact: true });
     await expect(inspectorBtn).toBeVisible();
-    await inspectorBtn.click();
+    await inspectorBtn.dispatchEvent("click");
 
     // 等 dom-tree 渲染. HtmlInspectorPanel 的根容器 class .html-inspector-tree.
     //

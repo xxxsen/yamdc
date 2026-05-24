@@ -38,9 +38,15 @@ const FIXTURE_REL_PATH = "e2e-review-fixture/E2E-REVIEW-001.mp4";
 // 32x32 透明 PNG (288 字节), 用于上传成功路径的 fixture.
 // 通过 base64 解码生成. 文件足够小 (<<32 MiB) 且 http.DetectContentType
 // 能稳定识别为 image/png.
+// 32x32 grayscale PNG (8-bit, color type 0), 75 字节. 由 zlib 压缩 1024
+// 个零像素行 (每行 1 字节 filter + 32 字节像素) 生成, IHDR/IDAT/IEND CRC
+// 全部合法. 此前用的版本 IDAT 解压后字节数与 IHDR 不一致, 后端
+// image.Decode 直接 "png: invalid format: too much pixel data" 抛错,
+// poster-crop 因此永远拿不到合法 cover, 导致 03-review-assets 裁剪
+// 用例必 fail. 替换为这个最小合法 PNG 后 image/png decoder 能正常解.
 const TINY_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAH0lEQVRYhe3BAQ" +
-  "EAAACCIP+vbkhAAQAAAAAAAAAAvg0hAAABA+UCFAAAAABJRU5ErkJggg==";
+  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAAAEklEQVR42mNg" +
+  "GAWjYBSMAuwAAAQgAAF8we+4AAAAAElFTkSuQmCC";
 
 async function fetchFixtureJob(): Promise<JobItem | null> {
   const list = await apiGet<JobListResponse>("/api/jobs?status=reviewing&page=1&page_size=200");

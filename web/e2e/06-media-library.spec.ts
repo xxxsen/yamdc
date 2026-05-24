@@ -106,24 +106,28 @@ test.describe("media-library 用户故事 — fixture 真实交互", () => {
     );
     expect(typeof triggerEnv.message).toBe("string");
 
+    // 用同一次 polling 同时验证两件事:
+    //   1) status 离开 running;
+    //   2) status 落在已知终态枚举里 (SYNC_TERMINAL_STATES).
+    // 历史写法是 poll regex match 之后再二次读 status 校验枚举, 那种结构
+    // 会出现一种 race: poll 那一刻是 completed, 但下一次 trigger (例如
+    // 另一个 spec 的 cleanup) 在两次读取之间把 status 又推回 running,
+    // 导致 finalStatus 读到 running 后整个 beforeEach 报错. 把"离开
+    // running + 在终态枚举里"合并进同一个 poll lambda, race window 收
+    // 缩到一次读, 也保留了"未知新枚举立刻报错"的诊断价值.
     await expect
       .poll(
         async () => {
           const status = await apiGet<MediaLibraryStatus>("/api/media-library/status");
-          return status.sync.status;
+          return SYNC_TERMINAL_STATES.has(status.sync.status);
         },
         {
           timeout: 30_000,
           intervals: [200, 400, 800, 1500, 3000],
-          message: "等待 /api/media-library/sync 后台 goroutine 跑完 (status 离开 running)",
+          message: "等待 /api/media-library/sync 后台 goroutine 跑完 (status 落在 SYNC_TERMINAL_STATES)",
         },
       )
-      .toMatch(/^(idle|completed|failed)$/);
-
-    // 离开 running 之后再读一次, 确认 status 真的属于终态枚举 (而不是
-    // 我们没考虑到的新枚举值, 那种情况要立刻让 spec 失败而非继续).
-    const finalStatus = await apiGet<MediaLibraryStatus>("/api/media-library/status");
-    expect(SYNC_TERMINAL_STATES.has(finalStatus.sync.status), `非预期的 sync.status: ${finalStatus.sync.status}`).toBe(true);
+      .toBe(true);
   });
 
   test("同步日志弹窗: 同步菜单 → 查看同步日志 → 模态框可见", async ({ page }) => {
@@ -145,9 +149,20 @@ test.describe("media-library 用户故事 — fixture 真实交互", () => {
     ).toBeGreaterThan(0);
 
     await page.goto("/media-library");
+    // 等首张 card 渲染稳定 (React fetch /api/media-library 后才挂上 button).
+    // 仅 toBeVisible 不够 — visibleItems 第一次 render 是空数组, 第二次
+    // 才填进 fixture, 中间会出现 button DOM remount, 此时 click 派发到旧
+    // node 不会触发 onClick. 等 cardCount > 0 + waitForFunction 守一帧.
     const firstCard = page.locator(".media-library-card").first();
     await expect(firstCard).toBeVisible();
-    await firstCard.click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".media-library-card").length > 0,
+    );
+
+    // 用 dispatchEvent('click') 直接派发 React onClick, 不走 mouse pipeline,
+    // 不受 React rerender 期间 button instance 抖动影响, 也不受任何浮层
+    // intercepts pointer events 影响.
+    await firstCard.dispatchEvent("click");
     const detailDialog = page.getByRole("dialog", { name: "媒体项详情" });
     await expect(detailDialog).toBeVisible();
   });

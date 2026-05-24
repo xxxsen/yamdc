@@ -67,10 +67,12 @@ interface LibraryDetail {
 
 const FIXTURE_REL_PATH = "E2E-FIXTURE-001";
 
-// 32x32 透明 PNG (288 字节). 与 03-review-assets 共用同一 fixture.
+// 32x32 grayscale PNG (8-bit, color type 0), 75 字节. 与 03-review-assets
+// 共用同一 fixture; 详见 03-review-assets.spec.ts 顶部注释 (IDAT 字节数与
+// IHDR 必须一致, 否则 image.Decode 报 "too much pixel data").
 const TINY_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAH0lEQVRYhe3BAQ" +
-  "EAAACCIP+vbkhAAQAAAAAAAAAAvg0hAAABA+UCFAAAAABJRU5ErkJggg==";
+  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAAAAABWESUoAAAAEklEQVR42mNg" +
+  "GAWjYBSMAuwAAAQgAAF8we+4AAAAAElFTkSuQmCC";
 
 async function findFixtureItem(): Promise<LibraryItem> {
   const items = await apiGet<LibraryItem[]>("/api/library");
@@ -100,7 +102,10 @@ test.describe("library 用户故事 — 协议契约 + 列表骨架", () => {
     await page.goto("/library");
     await expect(page.locator("body")).toBeVisible();
 
-    await expect(page.getByRole("heading", { name: "已入库" })).toBeVisible();
+    // exact:true 必须保留: /library 页面右侧详情区也有 <h2>已入库内容</h2>
+    // (library-shell/detail-header.tsx), 不限定精确文本会触发 strict mode
+    // 同时命中两个 heading.
+    await expect(page.getByRole("heading", { name: "已入库", exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("按标题 / 影片 ID / 演员搜索")).toBeVisible();
     await expect(page.getByRole("button", { name: /重新扫描/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /移动到媒体库/ })).toBeVisible();
@@ -177,13 +182,31 @@ test.describe("library 用户故事 — fixture E2E-FIXTURE-001 真实交互", (
     expect(chipCount).toBeGreaterThan(1);
 
     // 找到非当前激活的 chip 点击, 切换 variant.
+    //
+    // 注意: 不能直接 `await expect(inactiveChip).toHaveAttribute("data-active", "true")`,
+    // 因为 inactiveChip = locator('[data-active="false"]').first() 是动态 locator,
+    // 每次 retry 都会重查 DOM. variant 切换成功后, 旧 active chip 变 inactive,
+    // 这个 locator 会反复命中"另一只仍 inactive 的 chip", 永远 false. 所以
+    // 必须先抓 chip 的 base_name (chip-meta 文本) 作为稳定 key, click 后再用
+    // base_name 单独定位那只 chip 来验证它的 data-active='true'.
     const currentChip = page.locator('.library-variant-chip[data-active="true"]');
     await expect(currentChip).toHaveCount(1);
     const inactiveChip = page.locator('.library-variant-chip[data-active="false"]').first();
     await expect(inactiveChip).toBeVisible();
+    const inactiveBaseName = (
+      await inactiveChip.locator(".library-variant-chip-meta").textContent()
+    )?.trim() ?? "";
+    expect(inactiveBaseName.length, "variant chip meta 必须有 base_name 文本作为 key").toBeGreaterThan(0);
+
     await inactiveChip.click();
-    // 切换后, 之前 inactive 的 chip 应当成为 active.
-    await expect(inactiveChip).toHaveAttribute("data-active", "true");
+
+    // 用 base_name 在切换后再次精确定位刚被点过的那只 chip, 断它的
+    // data-active 已经变 true. 这是切换语义本身的最直接验证.
+    const switchedChip = page.locator(".library-variant-chip", {
+      has: page.locator(`.library-variant-chip-meta:has-text("${inactiveBaseName}")`),
+    });
+    await expect(switchedChip).toHaveCount(1);
+    await expect(switchedChip).toHaveAttribute("data-active", "true");
   });
 
   test("replace cover: 触发 file chooser → POST /api/library/asset → 详情更新", async ({ page }) => {

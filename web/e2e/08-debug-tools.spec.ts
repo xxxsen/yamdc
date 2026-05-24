@@ -20,8 +20,9 @@ interface MovieIDExplainData {
   final?: { number_id?: string; status?: string };
 }
 
-interface HandlersListData {
-  handlers: string[];
+interface HandlerEntry {
+  id: string;
+  name: string;
 }
 
 test.describe("debug-tools 用户故事", () => {
@@ -62,8 +63,15 @@ test.describe("debug-tools 用户故事", () => {
     // 顶部有"运行"按钮.
     await expect(page.getByRole("button", { name: /^运行$|执行中/ })).toBeVisible();
 
-    const data = await apiGet<HandlersListData>("/api/debug/handlers");
-    expect(Array.isArray(data.handlers)).toBe(true);
+    // /api/debug/handlers 协议契约: envelope.data 直接是 HandlerEntry[]
+    // (与 /api/library, /api/media-library 同一套 "data 直返数组" 风格),
+    // 而不是 { handlers: [...] } 包装.
+    const data = await apiGet<HandlerEntry[]>("/api/debug/handlers");
+    expect(Array.isArray(data)).toBe(true);
+    for (const h of data) {
+      expect(typeof h.id).toBe("string");
+      expect(typeof h.name).toBe("string");
+    }
 
     const env = await apiCallAllowBusinessError("POST", "/api/debug/handler/run", {
       handlers: ["__nonexistent_handler__"],
