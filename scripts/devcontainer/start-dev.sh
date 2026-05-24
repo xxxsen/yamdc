@@ -48,9 +48,14 @@ echo "$backend_pgid" > "$pid_dir/backend.pgid"
 if ! "$repo_root/scripts/devcontainer/wait-ready.sh" \
     "http://localhost:8080/api/healthz" --pgid "$backend_pgid"; then
   if ! kill -0 -- "-$backend_pgid" 2>/dev/null; then
-    echo "Backend exited before becoming ready. Last 80 log lines:" >&2
-    tail -n 80 "$log_dir/backend.log" >&2 || true
+    echo "Backend exited before becoming ready. Last 200 log lines:" >&2
+  else
+    # 进程还活着但 healthz 没响应 (常见于在某个 bootstrap action 卡住,
+    # 例如外网拉依赖 / browser client 启动). 也把日志倾倒出来, 没有日志
+    # CI 调试只能盲猜.
+    echo "Backend still alive but /api/healthz never responded. Last 200 log lines:" >&2
   fi
+  tail -n 200 "$log_dir/backend.log" >&2 || true
   exit 1
 fi
 
