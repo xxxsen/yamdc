@@ -43,6 +43,27 @@ func TestHandleListLibrary(t *testing.T) {
 	assert.Equal(t, 0, resp.Code)
 }
 
+// TestHandleListLibraryListItemsError: 异常路径 - 当 saveDir 指向的目录里
+// 含一个不可读子目录时, listRootItemDirs 会因为权限失败, 触发
+// errCodeListLibraryFailed (而不是崩或者返回空列表).
+func TestHandleListLibraryListItemsError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses permission denied; skip")
+	}
+	tmpDir := t.TempDir()
+	blocked := tmpDir + "/locked"
+	require.NoError(t, os.Mkdir(blocked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	api := &API{saveDir: tmpDir}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/library", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeListLibraryFailed, resp.Code)
+}
+
 func TestHandleLibraryItemGet(t *testing.T) {
 	saveDir := t.TempDir()
 	api := &API{saveDir: saveDir}
@@ -723,12 +744,17 @@ func TestHandleLibraryItemPatchSuccess(t *testing.T) {
 	assert.Equal(t, 0, resp.Code)
 }
 
+// TestHandleListLibraryError: saveDir 为空且未注入 media 时, library
+// handler 走 requireSaveDir 守门, 返回 503 + errCodeServiceUnavailable.
+// 这是 "纯 healthz / review-only 最小服务" 的正确行为, 与 requireDependency
+// 一致地把"协议外可用性"用 5xx 表达, 不混入业务错误码.
 func TestHandleListLibraryError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodGet, "/api/library", nil)
 	api.handleListLibrary(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	resp := decodeResponse(t, rec)
-	assert.Equal(t, errCodeListLibraryFailed, resp.Code)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
 }
 
 func TestHandleLibraryFileGetOpenError(t *testing.T) {
@@ -816,19 +842,39 @@ func TestLoadLibraryConflictFlagsWithItems(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
+// TestHandleLibraryFileDeleteResolveError: 空 saveDir 现在被
+// requireSaveDir 守门, 返回 503 + errCodeServiceUnavailable, 与其它
+// "依赖未注入" 路径行为对齐.
 func TestHandleLibraryFileDeleteResolveError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodDelete, "/api/library/file?path=x", nil)
 	c.Request.URL.RawQuery = "path=x"
 	api.handleLibraryFileDelete(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	resp := decodeResponse(t, rec)
-	assert.Equal(t, errCodeResolveLibraryPathFailed, resp.Code)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
 }
 
+// TestHandleLibraryFileGetResolveError: 同上 (GET 路径).
 func TestHandleLibraryFileGetResolveError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodGet, "/api/library/file?path=x", nil)
 	c.Request.URL.RawQuery = "path=x"
+	api.handleLibraryFileGet(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
+}
+
+// TestHandleLibraryFileResolveErrorWithSaveDir: 边缘路径 — saveDir 已设置
+// 但路径 ResolveSavePath 失败时, 走真正的业务错误码 errCodeResolveLibraryPathFailed,
+// 不应被 requireSaveDir 拦截.
+func TestHandleLibraryFileResolveErrorWithSaveDir(t *testing.T) {
+	saveDir := t.TempDir()
+	api := &API{saveDir: saveDir}
+	// 用 .. 触发 ResolveSavePath 的越界保护.
+	c, rec := newGinContext(http.MethodGet, "/api/library/file?path=../escape", nil)
+	c.Request.URL.RawQuery = "path=../escape"
 	api.handleLibraryFileGet(c)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodeResolveLibraryPathFailed, resp.Code)

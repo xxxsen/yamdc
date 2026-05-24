@@ -342,6 +342,27 @@ describe("openUploadPicker - cover / fanart / cancel paths", () => {
     expect(syncDetail).not.toHaveBeenCalled();
     expect(setItems).not.toHaveBeenCalled();
   });
+
+  // 边缘路径: 用户选了 > 32 MiB 的图. 前端必须立即 setMessage 拒绝, 不能
+  // 触发 replaceLibraryAsset, 与后端 maxUploadImageBytes 形成对称防线.
+  it("file > 32 MiB: setMessage and skip API", async () => {
+    const { hook, setMessage } = renderAssetActions();
+    act(() => hook.result.current.openUploadPicker("poster"));
+    if (!lastInput) throw new Error("no input captured");
+    const file = new File(["x"], "huge.png", { type: "image/png" });
+    Object.defineProperty(file, "size", { value: 33 * 1024 * 1024 });
+    Object.defineProperty(lastInput, "files", {
+      value: { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) },
+      configurable: true,
+    });
+    act(() => {
+      lastInput!.dispatchEvent(new Event("change"));
+    });
+    await flushAsync();
+
+    expect(setMessage).toHaveBeenCalledWith("图片不能超过 32 MiB");
+    expect(mockReplaceAsset).not.toHaveBeenCalled();
+  });
 });
 
 describe("handleDeleteFanart", () => {

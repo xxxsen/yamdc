@@ -21,6 +21,8 @@ const (
 	errCodeLibraryNotConfigured  = 100015
 	errCodeInvalidAssetKey       = 100016
 	errCodeInputRequired         = 100017
+	errCodeOriginForbidden       = 100018
+	errCodeUploadFileTooLarge    = 100019
 
 	// Job and review errors.
 	errCodeScanFailed               = 110001
@@ -73,19 +75,17 @@ const (
 	errCodeMediaLibraryStatusFailed       = 130014
 	errCodeMediaLibrarySyncLogsFailed     = 130015
 
-	// Debug errors.
-	errCodeMovieIDCleanerUnavailable   = 140001
+	// Debug errors. 注意: 140001 / 140101 / 140103 / 140201 (各 *Unavailable
+	// 系列) 已被 requireDependency 统一收编为 errCodeServiceUnavailable
+	// + HTTP 503, 这里不再分配独立业务错误码, 历史编号保留空位避免复用.
 	errCodeMovieIDCleanerExplainFailed = 140002
-	errCodeSearcherDebuggerUnavailable = 140101
 	errCodeSearcherDebugSearchFailed   = 140102
-	errCodePluginEditorUnavailable     = 140103
 	errCodePluginEditorCompileFailed   = 140104
 	errCodePluginEditorRequestFailed   = 140105
 	errCodePluginEditorScrapeFailed    = 140106
 	errCodePluginEditorWorkflowFailed  = 140107
 	errCodePluginEditorCaseFailed      = 140108
 	errCodePluginEditorImportFailed    = 140109
-	errCodeHandlerDebuggerUnavailable  = 140201
 	errCodeHandlerDebugRunFailed       = 140202
 
 	// Asset errors.

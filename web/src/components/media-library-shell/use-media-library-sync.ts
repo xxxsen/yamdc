@@ -34,6 +34,10 @@ export interface UseMediaLibrarySyncResult {
   syncButtonLabel: string;
   syncMessage: string;
   syncCompletedFlash: boolean;
+  // dataStale 在后台轮询失败时为 true (用户没主动操作, 不能弹 toast 打扰),
+  // 任意一次成功的列表 / 状态刷新会清回 false. UI 用它显示"数据刷新失败,
+  // 当前显示上一次结果"的非阻塞提示.
+  dataStale: boolean;
   handleTriggerSync: () => void;
 }
 
@@ -70,6 +74,7 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
   const [syncStarting, setSyncStarting] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncCompletedFlash, setSyncCompletedFlash] = useState(false);
+  const [dataStale, setDataStale] = useState(false);
 
   // observedSyncRunningRef gates the "show 同步完成 flash and refetch
   // items" path so we only fire the completion UX if we actually
@@ -80,6 +85,11 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
   const prevSyncRunningRef = useRef(initialStatus?.sync.status === "running");
   const observedSyncRunningRef = useRef(initialStatus?.sync.status === "running");
 
+  // refreshItems 同时被两条路径调用:
+  //   1) 后台轮询 (filter 变化、sync 完成) - 失败仅置 stale, 不打扰用户.
+  //   2) 用户触发的"同步媒体库"按钮 - 失败由 handleTriggerSync 自己显
+  //      示 syncMessage, 不复用这里的 stale 通道.
+  // 任何成功路径都把 stale 清回 false, 因此偶发抖动会自愈.
   const refreshItems = useEffectEvent(async (nextParams?: {
     keyword?: string;
     year?: string;
@@ -89,12 +99,22 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
   }) => {
     try {
       const next = await listMediaLibraryItems(nextParams);
+      // 防御: 极端情况下 (mock 耗尽 / 后端契约破坏 / 网关拦截) 拿到的可能
+      // 不是 MediaLibraryItem[] — 如果直接 setItems / extractYearOptions
+      // 解构会抛 TypeError 把整个 React tree 弄崩. 视为后台刷新失败, 走
+      // dataStale 通道, 保留上一次结果.
+      if (!Array.isArray(next)) {
+        setDataStale(true);
+        return;
+      }
       setItems(next);
       if (!nextParams?.year || nextParams.year === "all") {
         setYearOptions((current) => mergeYearOptions(current, extractYearOptions(next)));
       }
+      setDataStale(false);
     } catch {
-      // ignore polling errors
+      // 后台轮询失败: 不抛 toast, 仅标记数据可能过期.
+      setDataStale(true);
     }
   });
 
@@ -108,6 +128,13 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
         setSyncStarting(false);
         observedSyncRunningRef.current = true;
       }
+      // 本轮刷新是否要把 dataStale 置位. 不能在 if 分支里直接 setDataStale(true)
+      // — try 块尾部有一条无条件的 setDataStale(false) (代表"本次状态拉取成
+      // 功"的清理), 它会立刻覆盖分支里的 stale 信号; 也不能用 early return,
+      // 因为后面的 prevSyncRunningRef.current = nextSyncRunning 是下一轮 polling
+      // 边沿检测的必备 invariant, 一旦丢失再触发 running->idle 边沿就会失效.
+      // 用本地变量推迟到尾部统一落盘.
+      let stale = false;
       if (observedSyncRunningRef.current && prevSyncRunningRef.current && !nextSyncRunning) {
         setSyncCompletedFlash(true);
         observedSyncRunningRef.current = false;
@@ -118,11 +145,20 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
           sort: sortMode,
           order: sortOrder,
         });
-        setItems(nextItems);
+        // 同步完成后的 items 拉取与 refreshItems 同源, 同样需要防御非数组
+        // 返回 — 否则一次 mock 耗尽就会把 setItems 喂成 undefined, 让下游
+        // grid 渲染时崩溃.
+        if (Array.isArray(nextItems)) {
+          setItems(nextItems);
+        } else {
+          stale = true;
+        }
       }
       prevSyncRunningRef.current = nextSyncRunning;
+      setDataStale(stale);
     } catch {
-      // ignore polling errors
+      // 后台 status 轮询失败也是非阻塞的, 同样只置 stale.
+      setDataStale(true);
     }
   });
 
@@ -209,6 +245,7 @@ export function useMediaLibrarySync(deps: UseMediaLibrarySyncDeps): UseMediaLibr
     syncButtonLabel,
     syncMessage,
     syncCompletedFlash,
+    dataStale,
     handleTriggerSync,
   };
 }

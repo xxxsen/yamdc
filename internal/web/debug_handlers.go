@@ -28,8 +28,7 @@ type pluginEditorResponse struct {
 }
 
 func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
-	if a.cleaner == nil {
-		writeFail(c.Writer, errCodeMovieIDCleanerUnavailable, "movieid cleaner is not available")
+	if !requireDependency(c, a.cleaner, "movieid cleaner") {
 		return
 	}
 	var req struct {
@@ -63,16 +62,14 @@ func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
 }
 
 func (a *API) handleSearcherDebugPlugins(c *gin.Context) {
-	if a.debugger == nil {
-		writeFail(c.Writer, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
+	if !requireDependency(c, a.debugger, "searcher debugger") {
 		return
 	}
 	writeSuccess(c.Writer, "ok", a.debugger.Plugins())
 }
 
 func (a *API) handleSearcherDebugSearch(c *gin.Context) {
-	if a.debugger == nil {
-		writeFail(c.Writer, errCodeSearcherDebuggerUnavailable, "searcher debugger is not available")
+	if !requireDependency(c, a.debugger, "searcher debugger") {
 		return
 	}
 	var req searcher.DebugSearchOptions
@@ -102,8 +99,7 @@ func (a *API) handleSearcherDebugSearch(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorCompile(c *gin.Context) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
+	if !requireDependency(c, a.editor, "plugin editor") {
 		return
 	}
 	var req pluginEditorRequest
@@ -130,8 +126,7 @@ func (a *API) handlePluginEditorCompile(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorImport(c *gin.Context) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
+	if !requireDependency(c, a.editor, "plugin editor") {
 		return
 	}
 	var req pluginEditorRequest
@@ -167,8 +162,7 @@ type pluginEditorDraftNumberFunc func(
 func (a *API) handlePluginEditorDraftNumberOp(
 	c *gin.Context, opName string, failCode int, fn pluginEditorDraftNumberFunc,
 ) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
+	if !requireDependency(c, a.editor, "plugin editor") {
 		return
 	}
 	var req pluginEditorRequest
@@ -224,8 +218,7 @@ func (a *API) handlePluginEditorWorkflow(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorCase(c *gin.Context) {
-	if a.editor == nil {
-		writeFail(c.Writer, errCodePluginEditorUnavailable, "plugin editor is not available")
+	if !requireDependency(c, a.editor, "plugin editor") {
 		return
 	}
 	var req pluginEditorRequest
@@ -261,16 +254,14 @@ func (a *API) handlePluginEditorCase(c *gin.Context) {
 }
 
 func (a *API) handleHandlerDebugHandlers(c *gin.Context) {
-	if a.handlers == nil {
-		writeFail(c.Writer, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
+	if !requireDependency(c, a.handlers, "handler debugger") {
 		return
 	}
 	writeSuccess(c.Writer, "ok", a.handlers.Handlers())
 }
 
 func (a *API) handleHandlerDebugRun(c *gin.Context) {
-	if a.handlers == nil {
-		writeFail(c.Writer, errCodeHandlerDebuggerUnavailable, "handler debugger is not available")
+	if !requireDependency(c, a.handlers, "handler debugger") {
 		return
 	}
 	var req phandler.DebugRequest

@@ -1,0 +1,42 @@
+{
+  "name": "yamdc-dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspace/yamdc",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js web (yamdc)",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Go API (yamdc server)",
+      "onAutoForward": "notify"
+    }
+  },
+  "containerEnv": {
+    "TZ": "Asia/Shanghai",
+    "GOCACHE": "/workspace/yamdc/.cache/go-build",
+    "GOLANGCI_LINT_CACHE": "/workspace/yamdc/.cache/golangci-lint",
+    "PLAYWRIGHT_BROWSERS_PATH": "/workspace/yamdc/.cache/ms-playwright",
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "API_PROXY_TARGET": "http://localhost:8080"
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-playwright.playwright"
+      ]
+    }
+  }
+}

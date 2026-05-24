@@ -3,7 +3,6 @@ package web
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -164,7 +163,10 @@ func (a *API) handleMediaLibraryFileDelete(c *gin.Context) {
 }
 
 func (a *API) handleMediaLibraryAsset(c *gin.Context) {
-	if a.media == nil || !a.media.IsConfigured() {
+	if !requireDependency(c, a.media, "media") {
+		return
+	}
+	if !a.media.IsConfigured() {
 		writeFail(c.Writer, errCodeLibraryNotConfigured, "library dir is not configured")
 		return
 	}
@@ -179,35 +181,17 @@ func (a *API) handleMediaLibraryAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeInvalidAssetKind, "invalid asset kind")
 		return
 	}
-	header, err := c.FormFile("file")
-	if err != nil {
-		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
+	data, fileName, ok := readUploadImageData(c)
+	if !ok {
 		return
 	}
-	file, err := header.Open()
-	if err != nil {
-		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
-		return
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")
-		return
-	}
-	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
-		writeFail(c.Writer, errCodeUploadFileNotImage, "upload file is not an image")
-		return
-	}
-	detail, err := a.media.ReplaceAsset(c.Request.Context(), id, variantKey, kind, header.Filename, data)
+	detail, err := a.media.ReplaceAsset(c.Request.Context(), id, variantKey, kind, fileName, data)
 	if err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("media library asset replace failed",
 			zap.Int64("media_library_id", id),
 			zap.String("variant", variantKey),
 			zap.String("kind", kind),
-			zap.String("file_name", header.Filename),
+			zap.String("file_name", fileName),
 			zap.Error(err),
 		)
 		writeFail(c.Writer, errCodeMediaLibraryAssetReplaceFailed, err.Error())
@@ -217,7 +201,7 @@ func (a *API) handleMediaLibraryAsset(c *gin.Context) {
 		zap.Int64("media_library_id", id),
 		zap.String("variant", variantKey),
 		zap.String("kind", kind),
-		zap.String("file_name", header.Filename),
+		zap.String("file_name", fileName),
 		zap.String("rel_path", detail.Item.RelPath),
 	)
 	writeSuccess(c.Writer, "media library asset replaced", detail)

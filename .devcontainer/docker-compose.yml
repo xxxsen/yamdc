@@ -1,0 +1,34 @@
+# Devcontainer compose: 单一 dev 服务长驻 (sleep infinity), VS Code Dev
+# Containers / `make devcontainer-up` 都通过 dockerComposeFile 指向这里.
+# 端口 8080 = Go API (yamdc server), 3000 = Next.js dev (yamdc web).
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    working_dir: /workspace/yamdc
+    volumes:
+      - ..:/workspace/yamdc:cached
+      # 挂 named volume 给 go module / node_modules / 自有 dev 数据目录,
+      # 避免 bind mount 把宿主的 go cache / node_modules 拖进容器导致权限
+      # 错乱; 也给跨容器重启时一份持久缓存.
+      - yamdc-go-mod:/go/pkg/mod
+      - yamdc-node-modules:/workspace/yamdc/web/node_modules
+      - yamdc-dev-data:/workspace/yamdc/.devcontainer-data
+      # docker-outside-of-docker: 允许 devcontainer 内调用宿主 docker
+      # daemon, 用来在 integration-test 里临时拉镜像 / 起依赖容器 (本工程
+      # 目前未使用, 保留对齐 fire-manager 模板).
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: Asia/Shanghai
+      API_PROXY_TARGET: http://localhost:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+
+volumes:
+  yamdc-go-mod:
+  yamdc-node-modules:
+  yamdc-dev-data:

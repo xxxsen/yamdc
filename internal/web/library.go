@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -89,6 +88,12 @@ type libraryDetail struct {
 	Files             []libraryFileItem `json:"files"`
 }
 
+// saveLibrary 返回 library handler 用于操作 saveDir / mediaDir 的 Service.
+// 优先复用已注入的 a.media (生产路径); 否则 fallback 到一个仅有 saveDir 的
+// 临时 Service (兼容 review-only / 命令行 server 的最小场景).
+//
+// 调用者必须先确认 saveDir 非空, 否则 NewService 后续 ListSaveItems 会因
+// 路径无效返回业务错误. handler 在入口已经做过 requireSaveDir 校验.
 func (a *API) saveLibrary() *medialib.Service {
 	if a.media != nil {
 		return a.media
@@ -96,7 +101,30 @@ func (a *API) saveLibrary() *medialib.Service {
 	return medialib.NewService(nil, "", a.saveDir)
 }
 
+// requireSaveDir guards library handlers when neither media nor saveDir
+// is configured. 这条路径是 "saveDir 都没传" 的极端最小场景 (例如只挂
+// healthz 的轻量 server), library 路由必须 503 而不是 nil-deref.
+func (a *API) requireSaveDir(c *gin.Context) bool {
+	if a.media != nil {
+		return true
+	}
+	if strings.TrimSpace(a.saveDir) != "" {
+		return true
+	}
+	body := responseBody{
+		Code:    errCodeServiceUnavailable,
+		Message: "library save dir dependency is not available",
+		Data:    nil,
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.AbortWithStatusJSON(http.StatusServiceUnavailable, body)
+	return false
+}
+
 func (a *API) handleListLibrary(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	items, err := a.saveLibrary().ListSaveItems()
 	if err != nil {
 		writeFail(c.Writer, errCodeListLibraryFailed, err.Error())
@@ -106,6 +134,9 @@ func (a *API) handleListLibrary(c *gin.Context) {
 }
 
 func (a *API) handleLibraryItemGet(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
 		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
@@ -125,6 +156,9 @@ func (a *API) handleLibraryItemGet(c *gin.Context) {
 }
 
 func (a *API) handleLibraryItemPatch(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
 		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
@@ -151,6 +185,9 @@ func (a *API) handleLibraryItemPatch(c *gin.Context) {
 }
 
 func (a *API) handleLibraryItemDelete(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
 		writeFail(c.Writer, errCodeMissingLibraryPath, "missing library path")
@@ -173,6 +210,9 @@ func (a *API) handleLibraryItemDelete(c *gin.Context) {
 }
 
 func (a *API) handleLibraryFileGet(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
 		writeFail(c.Writer, errCodeMissingFilePath, "missing file path")
@@ -204,6 +244,9 @@ func (a *API) handleLibraryFileGet(c *gin.Context) {
 }
 
 func (a *API) handleLibraryFileDelete(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	pathValue := strings.TrimSpace(c.Query("path"))
 	if pathValue == "" {
 		writeFail(c.Writer, errCodeMissingFilePath, "missing file path")
@@ -240,6 +283,9 @@ func (a *API) handleLibraryFileDelete(c *gin.Context) {
 }
 
 func (a *API) handleLibraryAsset(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	itemPath := strings.TrimSpace(c.Query("path"))
 	kind := strings.TrimSpace(c.Query("kind"))
 	variantKey := strings.TrimSpace(c.Query("variant"))
@@ -251,35 +297,17 @@ func (a *API) handleLibraryAsset(c *gin.Context) {
 		writeFail(c.Writer, errCodeInvalidAssetKind, "invalid asset kind")
 		return
 	}
-	header, err := c.FormFile("file")
-	if err != nil {
-		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
+	data, fileName, ok := readUploadImageData(c)
+	if !ok {
 		return
 	}
-	file, err := header.Open()
-	if err != nil {
-		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
-		return
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")
-		return
-	}
-	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
-		writeFail(c.Writer, errCodeUploadFileNotImage, "upload file is not an image")
-		return
-	}
-	detail, err := a.saveLibrary().ReplaceSaveAsset(itemPath, variantKey, kind, header.Filename, data)
+	detail, err := a.saveLibrary().ReplaceSaveAsset(itemPath, variantKey, kind, fileName, data)
 	if err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("library asset replace failed",
 			zap.String("path", itemPath),
 			zap.String("variant", variantKey),
 			zap.String("kind", kind),
-			zap.String("file_name", header.Filename),
+			zap.String("file_name", fileName),
 			zap.Error(err),
 		)
 		writeFail(c.Writer, errCodeLibraryAssetReplaceFailed, err.Error())
@@ -289,12 +317,15 @@ func (a *API) handleLibraryAsset(c *gin.Context) {
 		zap.String("path", detail.Item.RelPath),
 		zap.String("variant", variantKey),
 		zap.String("kind", kind),
-		zap.String("file_name", header.Filename),
+		zap.String("file_name", fileName),
 	)
 	writeSuccess(c.Writer, "library asset replaced", a.toLibraryDetail(detail))
 }
 
 func (a *API) handleLibraryPosterCrop(c *gin.Context) {
+	if !a.requireSaveDir(c) {
+		return
+	}
 	itemPath := strings.TrimSpace(c.Query("path"))
 	variantKey := strings.TrimSpace(c.Query("variant"))
 	if itemPath == "" {

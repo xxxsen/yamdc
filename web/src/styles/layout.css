@@ -1,6 +1,7 @@
 /* layout.css — .shell / .app-shell / .sidebar / .main / .panel / .workspace / .two-* 等页面骨架.
  * 由 globals.css 统一通过 @layer components @import, 本文件不自己
- * 声明 @layer. 详见 td/022-frontend-optimization-roadmap.md §2.2.
+ * 声明 @layer (避免 cascade 优先级被局部 @layer 覆盖, 规则被全站
+ * 视为 components 层基线).
  */
 
 .shell {
@@ -207,6 +208,24 @@
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
+}
+.app-inline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(157, 102, 43, 0.25);
+  background: rgba(157, 102, 43, 0.08);
+  color: var(--warning, #8a5a16);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+.app-inline-banner-warn {
+  border-color: rgba(157, 102, 43, 0.32);
+  background: rgba(157, 102, 43, 0.1);
 }
 @media (max-width: 1180px) {
   .app-shell {

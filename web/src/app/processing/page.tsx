@@ -1,15 +1,11 @@
 import { ProcessingShell } from "@/components/processing-shell";
-import { listJobs } from "@/lib/api";
+import { loadProcessingInitialData } from "@/lib/server/initial-loaders";
 
 export default async function ProcessingPage() {
-  const result = await listJobs({
-    status: "init,processing,failed,reviewing",
-    all: true,
-  });
-
+  const { data, errorMessage } = await loadProcessingInitialData();
   return (
     <div style={{ height: "100%" }}>
-      <ProcessingShell initialData={result} />
+      <ProcessingShell initialData={data.jobs} initialError={errorMessage} />
     </div>
   );
 }

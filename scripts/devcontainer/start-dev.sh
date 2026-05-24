@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Boot the Go API (yamdc server) and (optionally) Next.js dev server in
+# the background. 用 setsid 让每个真实子进程都获得自己的 process group,
+# stop-dev.sh 通过 .pgid 文件统一收尾, 避免 `go run` / `npm run dev`
+# 这种"包一层"的进程在被 kill 主 pid 时把真正占着 8080 / 3000 的子进程
+# 留下来.
+#
+# Usage:
+#   start-dev.sh                 # boot backend + frontend
+#   start-dev.sh --backend-only  # boot only backend (used by integration-test)
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$repo_root"
+
+DEV_BACKEND_CONFIG=${DEV_BACKEND_CONFIG:-.devcontainer/config/devcontainer.json}
+DEV_PID_DIR=${DEV_PID_DIR:-.devcontainer-data/pids}
+DEV_LOG_DIR=${DEV_LOG_DIR:-.devcontainer-data/logs}
+
+backend_config="$repo_root/${DEV_BACKEND_CONFIG}"
+pid_dir="$repo_root/${DEV_PID_DIR}"
+log_dir="$repo_root/${DEV_LOG_DIR}"
+
+mkdir -p "$pid_dir" "$log_dir"
+
+# 预先把 backend / save / library / scan 目录建出来. 后端 server 不会
+# 自动 mkdir, integration-test 又要求"临时目录可用", 所以这里直接铺好.
+data_root="$repo_root/.devcontainer-data"
+mkdir -p \
+  "$data_root/scan" \
+  "$data_root/save" \
+  "$data_root/library" \
+  "$data_root/app/logs"
+
+"$repo_root/scripts/devcontainer/stop-dev.sh"
+
+setsid go run ./cmd/yamdc server --config "$backend_config" \
+  > "$log_dir/backend.log" 2>&1 &
+backend_pgid=$!
+echo "$backend_pgid" > "$pid_dir/backend.pgid"
+
+# wait-ready 监听 healthz; 若 backend 在启动阶段就退出 (端口占用 / 配置
+# 错误等) 立即 fail-fast, 不再等满 60s.
+if ! "$repo_root/scripts/devcontainer/wait-ready.sh" \
+    "http://localhost:8080/api/healthz" --pgid "$backend_pgid"; then
+  if ! kill -0 -- "-$backend_pgid" 2>/dev/null; then
+    echo "Backend exited before becoming ready. Last 80 log lines:" >&2
+    tail -n 80 "$log_dir/backend.log" >&2 || true
+  fi
+  exit 1
+fi
+
+if [[ "${1:-}" == "--backend-only" ]]; then
+  echo "Backend ready: http://localhost:8080"
+  echo "  logs: $log_dir/backend.log"
+  exit 0
+fi
+
+(
+  cd "$repo_root/web"
+  setsid env API_PROXY_TARGET=http://localhost:8080 \
+    npm run dev -- --hostname 0.0.0.0 \
+    > "$log_dir/web.log" 2>&1 &
+  echo "$!" > "$pid_dir/web.pgid"
+)
+
+"$repo_root/scripts/devcontainer/wait-ready.sh" "http://localhost:3000"
+
+echo "Dev services ready:"
+echo "  frontend: http://localhost:3000"
+echo "  backend : http://localhost:8080"
+echo "  logs    : $log_dir"

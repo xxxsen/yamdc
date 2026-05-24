@@ -1,6 +1,7 @@
 /* plugin-editor.css — .plugin-* / .wf-* / .body-* / .html-* / .dom-* / .xpath-* plugin editor.
  * 由 globals.css 统一通过 @layer components @import, 本文件不自己
- * 声明 @layer. 详见 td/022-frontend-optimization-roadmap.md §2.2.
+ * 声明 @layer (避免 cascade 优先级被局部 @layer 覆盖, 规则被全站
+ * 视为 components 层基线).
  */
 
 .plugin-editor-output-fill-block {
@@ -1124,6 +1125,23 @@
   user-select: none;
   color: #727272;
   vertical-align: baseline;
+  /* ──── 真 <button> 时的视觉 reset ────
+   * dom-tree-toggle 升级成 <button> 后浏览器会塞 background / border /
+   * padding / font-family / 默认 button styling. 这里全部 unset, 保持
+   * 跟原来 <span> 完全一致的紧凑视觉, 同时保留键盘可达性 + focus-visible
+   * 高亮 (无 outline 会破坏可见焦点, 故只 reset 默认 outline). */
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-family: inherit;
+  appearance: none;
+}
+.dom-tree-toggle:focus-visible {
+  outline: 2px solid var(--accent-strong, #b07a3a);
+  outline-offset: 1px;
+  border-radius: 2px;
 }
 .dom-tree-spacer {
   display: inline-block;

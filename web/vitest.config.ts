@@ -4,12 +4,18 @@ import path from "node:path";
 // coverage.include 刻意只枚举"已经被测试固化"的模块, 目的是让阈值守住
 // 这些模块的行为不被后续重构意外改崩, 而不是给 UI 组件刷无意义的分。
 // 新增被测文件时, 需要同步把它加进 include, 并视情况调 thresholds。
-// 详见 td/022-frontend-optimization-roadmap.md §3.3。
+// 工程基线: 95% statements/functions/lines, 不允许通过缩小 include 维持。
 const COVERED_SOURCES = [
   // api/* 是 lib/api.ts 按资源拆分后的实际实现; lib/api.ts 本身只做 re-export,
   // 不单独列 — 它的行为全部由 api/* 的测试覆盖, 收进 include 只会拉低百分比。
   "src/lib/api/**/*.ts",
   "src/lib/upload-debug.ts",
+  // upload-limits.ts: 32 MiB 上传上限的共享常量与校验, 同时被 review /
+  // library / media-library 上传入口复用; 行为冻结防腐.
+  "src/lib/upload-limits.ts",
+  // server/initial-loaders.ts: 各 Server Component 首屏数据 loader 的统一
+  // 兜底 (返回 { data, errorMessage }), 行为冻结防止 UI 一旦改名丢失兜底.
+  "src/lib/server/initial-loaders.ts",
   // lib/utils.ts: 公共工具函数 (cn / formatBytes / formatUnixMillis),
   // 被全站组件广泛引用, 行为冻结在单测里防止回归。
   "src/lib/utils.ts",
@@ -92,6 +98,51 @@ const COVERED_SOURCES = [
   // /handleCommitEditNumber/handleCancelEditNumber/handleRunSelectedJobs.
   // 回归风险最高的用户交互入口, 行为冻结在单测里.
   "src/components/job-table/use-job-actions.ts",
+  // ── batch 2 非 shell 展示组件 ─────────────────────────────────────────
+  // 这些组件已经有单测覆盖, 把它们补进 include 让阈值真正守护其行为.
+  // 准入门槛: statements / functions / lines >= 95%.
+  // job-table:
+  "src/components/job-table/delete-confirm-modal.tsx",
+  "src/components/job-table/job-log-modal.tsx",
+  "src/components/job-table/job-row.tsx",
+  "src/components/job-table/job-table-header.tsx",
+  "src/components/job-table/number-edit-modal.tsx",
+  "src/components/job-table/number-status-icon.tsx",
+  // review-shell:
+  "src/components/review-shell/asset-gallery.tsx",
+  "src/components/review-shell/delete-confirm-overlay.tsx",
+  "src/components/review-shell/detail-header.tsx",
+  "src/components/review-shell/form-fields.tsx",
+  "src/components/review-shell/list-panel.tsx",
+  "src/components/review-shell/preview-overlay.tsx",
+  "src/components/review-shell/restore-confirm-overlay.tsx",
+  // library-shell:
+  "src/components/library-shell/app-toast.tsx",
+  "src/components/library-shell/asset-gallery.tsx",
+  "src/components/library-shell/bottom-actions.tsx",
+  "src/components/library-shell/detail-header.tsx",
+  "src/components/library-shell/form-fields.tsx",
+  "src/components/library-shell/list-panel.tsx",
+  "src/components/library-shell/variant-switcher.tsx",
+  // media-library-shell:
+  "src/components/media-library-shell/card-grid.tsx",
+  "src/components/media-library-shell/filter-rail.tsx",
+  "src/components/media-library-shell/sync-logs-modal.tsx",
+  // dom-tree.tsx: plugin-editor body inspector 的 DOM 树渲染 + 右键菜单.
+  // 本次 P2 a11y 升级 (按钮化展开控件 + ARIA menu pattern) 单测覆盖了
+  // 三类核心路径, 入白名单冻结防回归.
+  "src/components/plugin-editor/output-panels/dom-tree.tsx",
+  // ── batch 3 顶层 shell (initialError 切换层) ────────────────────────
+  // 这四个 shell 已经被精简为"只负责 Server Component 注入数据 + 失败
+  // 兜底"的薄包装, 主体内容编排被搬到对应的 *-shell-main.tsx (因为
+  // useReducer/useEffect/dynamic 子树极复杂, 单测无法 95% 覆盖, 由 hook
+  // 测试 + 子组件测试 + Playwright E2E 三层共同守护).
+  // 进入 include 后, 任何后续把业务逻辑塞回 shell 顶层的退化都会因为
+  // 触不到的分支拉低覆盖率, 失败 ci-check.
+  "src/components/processing-shell.tsx",
+  "src/components/review-shell.tsx",
+  "src/components/library-shell.tsx",
+  "src/components/media-library-shell.tsx",
   // components/ui/*: 项目公共原子组件 (Button / Badge / Modal ...),
   // 每个组件带单测, 入白名单后阈值守护其行为不被后续重构改崩。
   "src/components/ui/**/*.tsx",

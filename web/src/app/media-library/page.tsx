@@ -1,26 +1,17 @@
 import { MediaLibraryShell } from "@/components/media-library-shell";
-import type { MediaLibraryItem, MediaLibraryStatus } from "@/lib/api";
-import { getMediaLibraryStatus, listMediaLibraryItems } from "@/lib/api";
+import { loadMediaLibraryInitialData } from "@/lib/server/initial-loaders";
 
 export const dynamic = "force-dynamic";
 
 export default async function MediaLibraryPage() {
-  let items: MediaLibraryItem[] = [];
-  let initialStatus: MediaLibraryStatus | null = null;
-  try {
-    items = await listMediaLibraryItems({ sort: "ingested", order: "desc" });
-  } catch {
-    items = [];
-  }
-  try {
-    initialStatus = await getMediaLibraryStatus();
-  } catch {
-    initialStatus = null;
-  }
-
+  const { data, errorMessage } = await loadMediaLibraryInitialData();
   return (
     <div style={{ height: "100%" }}>
-      <MediaLibraryShell items={items} initialStatus={initialStatus} />
+      <MediaLibraryShell
+        items={data.items}
+        initialStatus={data.initialStatus}
+        initialError={errorMessage}
+      />
     </div>
   );
 }

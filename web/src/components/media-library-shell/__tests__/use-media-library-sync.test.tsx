@@ -429,6 +429,133 @@ describe("filter reactivity", () => {
   });
 });
 
+describe("dataStale - 后台 polling 错误的非阻塞提示", () => {
+  // 三类用例:
+  //   1) 正常: 拉到列表后 dataStale=false (即便 mount 时短暂为 true,
+  //      也会被一次成功刷新清除).
+  //   2) 异常: listMediaLibraryItems 失败 -> dataStale=true; 但仍保留
+  //      之前 setItems 的旧数据 (这里通过验证不再 setItems 来体现).
+  //   3) 边缘: 先失败 -> 再成功 -> stale 自愈回到 false.
+  //
+  // 注意刻意不验"用户主动 trigger sync 出错时是否 stale" — 那条路径
+  // 走的是 syncMessage toast, 与 polling stale 通道是两回事.
+  it("正常: 拉到列表后 dataStale=false", async () => {
+    mockListItems.mockResolvedValue([]);
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: true }));
+
+    const { hook } = renderSync({ initialStatus: makeStatus({ configured: true }) });
+    await flushAsync();
+    expect(hook.result.current.dataStale).toBe(false);
+  });
+
+  it("异常: listMediaLibraryItems 失败 -> dataStale=true", async () => {
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: true }));
+    mockListItems.mockRejectedValue(new Error("net down"));
+
+    const { hook } = renderSync({ initialStatus: makeStatus({ configured: true }) });
+    await flushAsync();
+    expect(hook.result.current.dataStale).toBe(true);
+  });
+
+  it("异常: getMediaLibraryStatus 失败 -> dataStale=true", async () => {
+    mockGetStatus.mockRejectedValue(new Error("status down"));
+    mockListItems.mockResolvedValue([]);
+
+    const { hook } = renderSync({ initialStatus: makeStatus({ configured: false }) });
+    await flushAsync();
+    expect(hook.result.current.dataStale).toBe(true);
+  });
+
+  it("异常: listMediaLibraryItems 返回非数组 (undefined) -> dataStale=true 且不抛", async () => {
+    // 真实场景: mock 耗尽 / 后端契约破坏 / 中间层吞回 204 -> resolve(undefined).
+    // refreshItems 必须把它当作非阻塞失败, 不能让 extractYearOptions
+    // 在调用栈里崩成 TypeError 进而拖垮整个 React tree.
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: true }));
+    mockListItems.mockResolvedValue(undefined as never);
+
+    const setItems = vi.fn();
+    const setYearOptions = vi.fn();
+    const { hook } = renderSync({
+      initialStatus: makeStatus({ configured: true }),
+      setItems,
+      setYearOptions,
+    });
+    await flushAsync();
+
+    expect(hook.result.current.dataStale).toBe(true);
+    expect(setItems).not.toHaveBeenCalled();
+    expect(setYearOptions).not.toHaveBeenCalled();
+  });
+
+  it("异常: listMediaLibraryItems 返回 null -> dataStale=true 且保留上一次 items", async () => {
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: true }));
+    mockListItems.mockResolvedValue(null as never);
+
+    const setItems = vi.fn();
+    const { hook } = renderSync({ initialStatus: makeStatus({ configured: true }), setItems });
+    await flushAsync();
+
+    expect(hook.result.current.dataStale).toBe(true);
+    expect(setItems).not.toHaveBeenCalled();
+  });
+
+  it("异常: refreshStatus running->idle 二次 list 返回非数组时 dataStale 保持 true 不被尾部覆盖", async () => {
+    // 回归: refreshStatus 在 running->idle 边沿会再拉一次 listMediaLibraryItems,
+    // 当返回非数组时, 内层防御不能被 try 块尾部的"本次状态拉取成功"路径
+    // setDataStale(false) 覆盖, 否则用户预期的"刷新失败"非阻塞 banner 在该
+    // 路径上永远不会显示.
+    //
+    // 隔离手法:
+    //   1) initialStatus.sync=running -> hook init 时 prevRef/observedRef 全 true,
+    //      mount 的 refreshStatus 拿到 idle 立刻命中 running->idle 边沿;
+    //   2) 让 mock getStatus 返回 configured=false, hook 内 [configured,...filters]
+    //      useEffect 直接 return, 不会让 refreshItems 也触发 listMediaLibraryItems
+    //      并独立把 dataStale 置 true (那会让旧版"尾部覆盖"的 bug 被 refreshItems
+    //      的正确防御掩盖, 测试就抓不到 refreshStatus 的真实路径).
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: false, sync: { status: "idle" } }));
+    mockListItems.mockResolvedValue(undefined as never);
+
+    const setItems = vi.fn();
+    const { hook } = renderSync({
+      initialStatus: makeStatus({ configured: false, sync: { status: "running" } }),
+      setItems,
+    });
+    await flushAsync();
+    await flushAsync();
+
+    expect(hook.result.current.dataStale).toBe(true);
+    expect(setItems).not.toHaveBeenCalled();
+  });
+
+  it("边缘: 先失败再成功, stale 自愈回 false", async () => {
+    mockGetStatus.mockResolvedValue(makeStatus({ configured: true }));
+    mockListItems.mockRejectedValueOnce(new Error("net flicker"));
+    mockListItems.mockResolvedValue([]);
+
+    const hook = renderHook(
+      ({ keyword }) =>
+        useMediaLibrarySync({
+          initialStatus: makeStatus({ configured: true }),
+          deferredKeyword: keyword,
+          yearFilter: "all",
+          sizeFilter: "all" as never,
+          sortMode: "recent" as never,
+          sortOrder: "desc" as never,
+          setItems: vi.fn(),
+          setYearOptions: vi.fn(),
+        }),
+      { initialProps: { keyword: "" } },
+    );
+    await flushAsync();
+    expect(hook.result.current.dataStale).toBe(true);
+
+    // 触发一次新的 refresh: 这次 mock 返回成功
+    hook.rerender({ keyword: "force-refresh" });
+    await flushAsync();
+    expect(hook.result.current.dataStale).toBe(false);
+  });
+});
+
 describe("observedSyncRunningRef guard (initial-running edge case)", () => {
   it("boots with sync already running: 后续 polling 看到 idle 时也能触发 flash", async () => {
     mockGetStatus

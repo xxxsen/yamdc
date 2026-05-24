@@ -16,7 +16,7 @@
  *
  * 为什么分两层: 后续要调整主色 (比如把 accent 从 #b44f2d 往 #a53d1f
  * 偏), 只改 primitive 的 --primitive-orange-500, 不用遍历 6000 行 CSS
- * 找出所有直接引用. 暗色模式已明确不做 (td/022 §6), 没有 dark variant.
+ * 找出所有直接引用. 暗色模式按项目工程规范明确不做, 没有 dark variant.
  *
  * 色值兼容性: 本次切分保证 primitive 字面值 = 原 semantic token 字面值,
  * 即每个 --xxx 变量最终解析结果 与原版完全一致 (bytewise drift 仅体现在
@@ -101,10 +101,11 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(255, 216, 163, 0.35), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(180, 79, 45, 0.14), transparent 28%),
-    linear-gradient(180deg, #fbf7f0 0%, #f3ebdf 100%);
+  /* 桌面工具密度优先: 之前叠了两层 radial-gradient 装饰晕色, 在长时间
+   * 浏览大量影片卡片时会持续干扰主视觉, 让对比度难以稳定预期.
+   * 保留暖米色底 + serif 字体, 删掉装饰晕色, 改为单一线性渐变, 不引入
+   * 新品牌色, 也不切 dark mode (设计原则: 桌面优先, warm serif 复古基调). */
+  background: linear-gradient(180deg, #fbf7f0 0%, #f3ebdf 100%);
   color: var(--foreground);
   /* 字体栈: 西文走 Iowan/Palatino 系 (macOS 原生有, 其它系统 fallback 到
    * Georgia, 都是暖色 serif, 风格接近); 中文显式挂 PingFang SC/思源宋体/
@@ -176,7 +177,7 @@ textarea {
  *   - `*` / `html` / `body` / `a` / `button,input,textarea` (基础复位)
  *   - 全站 `:focus-visible` (无障碍基线, 刻意高于 utility)
  *
- * 详见 td/022-frontend-optimization-roadmap.md §2.1 / §2.2.
+ * 设计目标: token 双层 (primitive + semantic) + 全站基线 components 层.
  */
 @layer components {
   @import "../styles/layout.css";

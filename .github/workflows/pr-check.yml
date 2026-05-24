@@ -129,3 +129,71 @@ jobs:
 
       - name: Run web build
         run: make web-build
+
+  # ────────────────────────────────────────────────────────────────────
+  # devcontainer-integration: 在 ubuntu-latest 上直接跑 backend HTTP API
+  # 集成测试 (不进 devcontainer; CI runner 本身就是隔离环境). 提供 Go +
+  # Node + jq + sqlite3, 然后调 scripts/devcontainer/run-integration-test.sh.
+  # ────────────────────────────────────────────────────────────────────
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install runtime deps (jq / sqlite3 / curl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq sqlite3 curl
+
+      - name: Run backend integration smoke test
+        run: make integration-test
+
+  # ────────────────────────────────────────────────────────────────────
+  # e2e-test: Playwright Desktop Chrome only, 不 fan out 多浏览器矩阵.
+  # 装 Go + Node + chromium 后跑 make e2e-test. 失败时上传 playwright
+  # report / trace artifact 便于线下复现.
+  # ────────────────────────────────────────────────────────────────────
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install runtime deps (jq / curl / ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq curl ffmpeg
+
+      - name: Run e2e (Playwright Desktop Chrome)
+        run: make e2e-test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          if-no-files-found: ignore

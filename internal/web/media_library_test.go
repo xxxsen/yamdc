@@ -280,7 +280,8 @@ func TestHandleMediaLibraryAsset(t *testing.T) {
 		query    string
 		wantCode int
 	}{
-		{"nil media", &API{}, "/api/media-library/asset?id=1&kind=cover", errCodeLibraryNotConfigured},
+		// nil media 现在被 requireDependency 守门, 503 + errCodeServiceUnavailable.
+		{"nil media", &API{}, "/api/media-library/asset?id=1&kind=cover", errCodeServiceUnavailable},
 		{"unconfigured", &API{media: medialib.NewService(nil, "", "")}, "/api/media-library/asset?id=1&kind=cover", errCodeLibraryNotConfigured},
 	}
 	for _, tt := range tests {

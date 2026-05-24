@@ -36,7 +36,9 @@ import { getMediaLibraryStatus, triggerMoveToMediaLibrary } from "@/lib/api";
 // - 新: 单一 MoveRefreshState (move + refresh 两条 status), 类型层消除非法
 //       组合, 所有迁移有单测
 //
-// 详见 td/022-frontend-optimization-roadmap.md §3.4.
+// 工程目标: library 移动后台轮询的状态机化 — 通过 reducer 收敛全部
+// 合法迁移与非法迁移 (no-op), 配套覆盖 idle / running / completed /
+// failed 全路径的单测.
 
 export interface UseLibraryMoveRefreshDeps {
   initialMediaStatus: MediaLibraryStatus | null;
@@ -56,6 +58,10 @@ export interface UseLibraryMoveRefreshResult {
   refreshBusy: boolean;
   refreshButtonLabel: string;
   moveButtonLabel: string;
+  // mediaStatusStale: 后台 polling 的 status 拉取连续失败时为 true; 用户
+  // 点 "重新扫描库" / "移动到媒体库" 时的错误已经走 setMessage toast,
+  // 不会污染这个标记. 任意一次 polling 成功会把它重置回 false.
+  mediaStatusStale: boolean;
   handleRefreshLibrary: () => void;
   handleMoveToMediaLibrary: () => void;
 }
@@ -123,6 +129,8 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
   //   ref.current (因为那个跑中任务 started 时就已经 > 之前的 ack 值了).
   const lastAckedMoveStartedAtRef = useRef<number>(0);
 
+  const [mediaStatusStale, setMediaStatusStale] = useState(false);
+
   const view = deriveView(state, mediaStatus);
   const mediaSyncRunning = mediaStatus?.sync.status === "running";
   const configured = !!mediaStatus?.configured;
@@ -156,8 +164,11 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
     try {
       const next = await getMediaLibraryStatus(signal);
       setMediaStatus(next);
+      setMediaStatusStale(false);
     } catch {
-      // ignore polling errors - next tick 会重试
+      // 后台轮询错误: 不打扰用户, 仅置 stale; 下一 tick 自动重试,
+      // 任意成功会把 stale 自愈回 false.
+      setMediaStatusStale(true);
     }
   });
 
@@ -248,6 +259,7 @@ export function useLibraryMoveRefresh(deps: UseLibraryMoveRefreshDeps): UseLibra
     refreshBusy: view.refreshBusy,
     refreshButtonLabel,
     moveButtonLabel,
+    mediaStatusStale,
     handleRefreshLibrary,
     handleMoveToMediaLibrary,
   };
