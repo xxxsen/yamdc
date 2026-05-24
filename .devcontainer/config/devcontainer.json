@@ -13,5 +13,6 @@
   "network_config": {
     "timeout": 120,
     "proxy": ""
-  }
+  },
+  "dependencies": []
 }
