@@ -758,6 +758,21 @@ func TestHandleListLibraryError(t *testing.T) {
 	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
 }
 
+// TestRequireSaveDirWithMediaService: 边缘路径 — saveDir="" 但 media 已注入时,
+// requireSaveDir 必须直接放行 (走 media 路径), 不能误回 503. 这条与
+// TestHandleListLibraryError 配对覆盖 requireSaveDir 三个分支中的"media 优先".
+func TestRequireSaveDirWithMediaService(t *testing.T) {
+	mediaSvc := medialib.NewService(nil, "", t.TempDir())
+	t.Cleanup(func() {
+		mediaSvc.Stop()
+		mediaSvc.WaitBackground()
+	})
+	api := &API{saveDir: "", media: mediaSvc}
+	c, rec := newGinContext(http.MethodGet, "/api/library", nil)
+	require.True(t, api.requireSaveDir(c))
+	assert.NotEqual(t, http.StatusServiceUnavailable, rec.Code)
+}
+
 func TestHandleLibraryFileGetOpenError(t *testing.T) {
 	saveDir := t.TempDir()
 	filePath := filepath.Join(saveDir, "demo", "unreadable.jpg")

@@ -1662,6 +1662,30 @@ func TestClaimAndFinish(t *testing.T) {
 	assert.True(t, svc.claim(1))
 }
 
+// TestServiceFacadeMethods 覆盖给 internal/review.Service 公开的 thin wrapper:
+// Claim / Finish / AddJobLog / ResolveJobSourcePath / GetBlockingConflict 必须
+// 与对应的 private 方法行为完全一致, 否则 review 包看到的语义会和 job 包内
+// 实现漂移.
+func TestServiceFacadeMethods(t *testing.T) {
+	svc, _ := newTestServiceWithSQLite(t)
+
+	assert.True(t, svc.Claim(42))
+	assert.False(t, svc.Claim(42))
+	svc.Finish(42)
+	assert.True(t, svc.Claim(42))
+	svc.Finish(42)
+
+	svc.AddJobLog(context.Background(), 1, "info", "stage", "msg", "detail")
+
+	_, err := svc.ResolveJobSourcePath(context.Background(), nil)
+	require.ErrorIs(t, err, errJobNotFound)
+	_, err = svc.ResolveJobSourcePath(context.Background(), &jobdef.Job{AbsPath: ""})
+	require.ErrorIs(t, err, errJobSourcePathEmpty)
+
+	_, err = svc.GetBlockingConflict(context.Background(), &jobdef.Job{Status: jobdef.StatusInit})
+	require.ErrorIs(t, err, errNoConflict)
+}
+
 // ---------- ApplyConflicts with done jobs ----------
 
 func TestApplyConflictsAllDone(t *testing.T) {

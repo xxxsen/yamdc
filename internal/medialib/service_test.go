@@ -1242,6 +1242,30 @@ func TestCleanupStaleItemsWithStale(t *testing.T) {
 	assert.Equal(t, 1, deleted)
 }
 
+// TestCleanupStaleItemsDeleteError: 异常路径 - deleteMissing 报错时 (sqlite
+// 已关闭) cleanupStaleItems 必须把错误吞进 state.ErrorCount, 不能向上传播
+// 让整个 sync 任务挂掉. 这条与"happy + with stale"两条配对覆盖完所有分支.
+func TestCleanupStaleItemsDeleteError(t *testing.T) {
+	_, cleanup := withCapturedLogs(t)
+	defer cleanup()
+
+	sqlite, err := repository.NewSQLite(context.Background(), filepath.Join(t.TempDir(), "stale-err.db"))
+	require.NoError(t, err)
+	svc := NewService(sqlite.DB(), t.TempDir(), t.TempDir())
+	t.Cleanup(func() {
+		svc.Stop()
+		svc.WaitBackground()
+	})
+
+	// 关闭底层 DB 让 deleteMissing 走到 sql.ErrConnDone.
+	require.NoError(t, sqlite.Close())
+
+	state := TaskState{}
+	deleted := svc.cleanupStaleItems(context.Background(), zap.NewNop(), map[string]struct{}{}, &state)
+	assert.Equal(t, 0, deleted)
+	assert.Equal(t, 1, state.ErrorCount, "delete error 必须计入 state.ErrorCount")
+}
+
 // --- recoverTaskStates with both idle ---
 
 func TestRecoverTaskStatesBothIdle(t *testing.T) {

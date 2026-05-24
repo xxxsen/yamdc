@@ -111,7 +111,7 @@ func jpegBytes() []byte {
 	return []byte{0xff, 0xd8, 0xff, 0xdb}
 }
 
-func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) { //nolint:unparam // 签名由接口 / 测试期望固定
+func setupTestDB(t *testing.T) (*repository.SQLite, *repository.JobRepository, *repository.LogRepository, *repository.ScrapeDataRepository) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	sqlite, err := repository.NewSQLite(context.Background(), dbPath)

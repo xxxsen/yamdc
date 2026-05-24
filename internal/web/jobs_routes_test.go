@@ -133,6 +133,21 @@ func TestHandleListJobs(t *testing.T) {
 	}
 }
 
+// TestHandleListJobsRepoError: 异常路径 - jobRepo.ListJobs 返回错误时
+// (sqlite 已关闭) handler 必须返回 errCodeListJobsFailed, 不能 panic
+// 也不能让错误吞到 handler 之外 (PanicRecoverMiddleware 兜底).
+func TestHandleListJobsRepoError(t *testing.T) {
+	sqlite, jobRepo, _, _ := setupTestDB(t)
+	// 直接关 DB, 后续 ListJobs 会拿 sql.ErrConnDone.
+	require.NoError(t, sqlite.Close())
+
+	api := &API{jobRepo: jobRepo}
+	c, rec := newGinContext(http.MethodGet, "/api/jobs", nil)
+	api.handleListJobs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeListJobsFailed, resp.Code)
+}
+
 func TestHandleJobRun(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
@@ -1335,6 +1350,32 @@ func TestHandleReviewReject(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, jobdef.StatusFailed, j2.Status)
 	assert.Equal(t, "rejected by reviewer", j2.ErrorMsg)
+}
+
+// uploadMaxBytesErrBody: 用于覆盖 readUploadImageData 中 FormFile 读到
+// *http.MaxBytesError 的分支. ParseMultipartForm 会把外层 MaxBytesReader
+// 包装的 body 一路 Read, 我们直接让 inner Read 返回 *http.MaxBytesError,
+// 上层会 errors.As 命中, 走 isUploadTooLargeErr=true 的 413 分支.
+type uploadMaxBytesErrBody struct{}
+
+func (uploadMaxBytesErrBody) Read(_ []byte) (int, error) {
+	return 0, &http.MaxBytesError{Limit: 1}
+}
+
+func (uploadMaxBytesErrBody) Close() error { return nil }
+
+// TestReadUploadImageDataFormFileMaxBytes: 异常路径 - 在 FormFile 阶段 body
+// 读取就触发 *http.MaxBytesError, 必须返回 HTTP 413 + errCodeUploadFileTooLarge,
+// 不能落到 errCodeInvalidUploadFile 那条 fallback 分支.
+func TestReadUploadImageDataFormFileMaxBytes(t *testing.T) {
+	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(""))
+	c.Request.Body = uploadMaxBytesErrBody{}
+	c.Request.Header.Set("Content-Type", "multipart/form-data; boundary=zzz")
+	_, _, ok := readUploadImageData(c)
+	assert.False(t, ok)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeUploadFileTooLarge, resp.Code)
 }
 
 // TestHandleReviewRejectReadBodyError 覆盖 body 读取失败的兜底: reject 需要

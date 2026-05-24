@@ -1,10 +1,10 @@
 {
-  "scan_dir": "/workspace/yamdc/.devcontainer-data/scan",
-  "save_dir": "/workspace/yamdc/.devcontainer-data/save",
-  "library_dir": "/workspace/yamdc/.devcontainer-data/library",
-  "data_dir": "/workspace/yamdc/.devcontainer-data/app",
+  "scan_dir": ".devcontainer-data/scan",
+  "save_dir": ".devcontainer-data/save",
+  "library_dir": ".devcontainer-data/library",
+  "data_dir": ".devcontainer-data/app",
   "log_config": {
-    "file": "/workspace/yamdc/.devcontainer-data/app/logs/yamdc.log",
+    "file": ".devcontainer-data/app/logs/yamdc.log",
     "level": "debug",
     "file_count": 3,
     "file_size": 20971520,
