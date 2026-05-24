@@ -182,10 +182,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install runtime deps (jq / curl / ffmpeg)
+      - name: Install runtime deps (jq / curl / ffmpeg / sqlite3)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends jq curl ffmpeg
+          sudo apt-get install -y --no-install-recommends jq curl ffmpeg sqlite3
+
+      - name: Check e2e runtime deps
+        run: |
+          command -v sqlite3
+          command -v ffmpeg
+          command -v jq
+          command -v curl
 
       - name: Run e2e (Playwright Desktop Chrome)
         env:
