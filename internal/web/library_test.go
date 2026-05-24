@@ -746,8 +746,9 @@ func TestHandleLibraryItemPatchSuccess(t *testing.T) {
 
 // TestHandleListLibraryError: saveDir 为空且未注入 media 时, library
 // handler 走 requireSaveDir 守门, 返回 503 + errCodeServiceUnavailable.
-// 这是 "纯 healthz / review-only 最小服务" 的正确行为, 与 requireDependency
-// 一致地把"协议外可用性"用 5xx 表达, 不混入业务错误码.
+// 这是 "saveDir 未配置" 的正确行为 (saveDir="" 是 NewAPI 允许的合法值,
+// 由 library 路由层在请求期返 503), 用 5xx 表达"协议外可用性",
+// 不混入业务错误码.
 func TestHandleListLibraryError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodGet, "/api/library", nil)

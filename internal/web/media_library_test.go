@@ -280,8 +280,9 @@ func TestHandleMediaLibraryAsset(t *testing.T) {
 		query    string
 		wantCode int
 	}{
-		// nil media 现在被 requireDependency 守门, 503 + errCodeServiceUnavailable.
-		{"nil media", &API{}, "/api/media-library/asset?id=1&kind=cover", errCodeServiceUnavailable},
+		// NewAPI fail-fast 已保证 a.media != nil, handler 内不再守门;
+		// 这里用 zero-value medialib.NewService 触发 IsConfigured()==false,
+		// 走 errCodeLibraryNotConfigured 这条业务错误.
 		{"unconfigured", &API{media: medialib.NewService(nil, "", "")}, "/api/media-library/asset?id=1&kind=cover", errCodeLibraryNotConfigured},
 	}
 	for _, tt := range tests {

@@ -28,9 +28,6 @@ type pluginEditorResponse struct {
 }
 
 func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
-	if !requireDependency(c, a.cleaner, "movieid cleaner") {
-		return
-	}
 	var req struct {
 		Input string `json:"input"`
 	}
@@ -62,16 +59,10 @@ func (a *API) handleMovieIDCleanerExplain(c *gin.Context) {
 }
 
 func (a *API) handleSearcherDebugPlugins(c *gin.Context) {
-	if !requireDependency(c, a.debugger, "searcher debugger") {
-		return
-	}
 	writeSuccess(c.Writer, "ok", a.debugger.Plugins())
 }
 
 func (a *API) handleSearcherDebugSearch(c *gin.Context) {
-	if !requireDependency(c, a.debugger, "searcher debugger") {
-		return
-	}
 	var req searcher.DebugSearchOptions
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")
@@ -99,9 +90,6 @@ func (a *API) handleSearcherDebugSearch(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorCompile(c *gin.Context) {
-	if !requireDependency(c, a.editor, "plugin editor") {
-		return
-	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("plugin editor compile decode failed", zap.Error(err))
@@ -126,9 +114,6 @@ func (a *API) handlePluginEditorCompile(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorImport(c *gin.Context) {
-	if !requireDependency(c, a.editor, "plugin editor") {
-		return
-	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("plugin editor import decode failed", zap.Error(err))
@@ -162,9 +147,6 @@ type pluginEditorDraftNumberFunc func(
 func (a *API) handlePluginEditorDraftNumberOp(
 	c *gin.Context, opName string, failCode int, fn pluginEditorDraftNumberFunc,
 ) {
-	if !requireDependency(c, a.editor, "plugin editor") {
-		return
-	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("plugin editor "+opName+" decode failed", zap.Error(err))
@@ -218,9 +200,6 @@ func (a *API) handlePluginEditorWorkflow(c *gin.Context) {
 }
 
 func (a *API) handlePluginEditorCase(c *gin.Context) {
-	if !requireDependency(c, a.editor, "plugin editor") {
-		return
-	}
 	var req pluginEditorRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("plugin editor case decode failed", zap.Error(err))
@@ -254,16 +233,10 @@ func (a *API) handlePluginEditorCase(c *gin.Context) {
 }
 
 func (a *API) handleHandlerDebugHandlers(c *gin.Context) {
-	if !requireDependency(c, a.handlers, "handler debugger") {
-		return
-	}
 	writeSuccess(c.Writer, "ok", a.handlers.Handlers())
 }
 
 func (a *API) handleHandlerDebugRun(c *gin.Context) {
-	if !requireDependency(c, a.handlers, "handler debugger") {
-		return
-	}
 	var req phandler.DebugRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		writeFail(c.Writer, errCodeInvalidJSONBody, "invalid json body")

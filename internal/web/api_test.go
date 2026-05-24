@@ -6,38 +6,139 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/job"
+	"github.com/xxxsen/yamdc/internal/medialib"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
+	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
+	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/review"
+	"github.com/xxxsen/yamdc/internal/scanner"
+	"github.com/xxxsen/yamdc/internal/searcher"
+	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
+	"github.com/xxxsen/yamdc/internal/store"
 )
 
-// TestNewAPI: 正常路径 — 全 nil 依赖也能构造 API, 不再 panic.
-// reviewSvc 由生产组装层 (bootstrap) 通过集成测试保证齐全, NewAPI 自身
-// 是 dumb constructor.
-func TestNewAPI(t *testing.T) {
-	stubReview := review.NewService(nil, nil, nil, nil, nil)
-	api := NewAPI(nil, nil, nil, stubReview, "/tmp/save", nil, nil, nil, nil, nil, nil, nil)
-	assert.NotNil(t, api)
-	assert.Equal(t, "/tmp/save", api.saveDir)
-	assert.Same(t, stubReview, api.reviewSvc)
+// stubDeps 把 NewAPI fail-fast 要求的全部"非 nil 必需依赖"打包. 这些 stub
+// 仅满足"构造期非 nil"契约, 内部 *sql.DB / 真实仓库等多数为 nil — 一旦
+// 真去打底层方法 (例如 jobRepo.ListJobs / reviewSvc.SaveReviewData) 立刻
+// nil-deref. 本 helper 只用于 "测 NewAPI 自身 / 测 healthz 这类不打 service
+// 的极简路径". handler-level 单元测试仍然用 &API{cleaner: stub, ...} 这种
+// white-box 写法, 直接构造 zero-value API + 注入需要的字段.
+type stubDeps struct {
+	jobRepo  *repository.JobRepository
+	scanner  *scanner.Service
+	jobSvc   *job.Service
+	reviewer *review.Service
+	media    *medialib.Service
+	storage  store.IStorage
+	cleaner  movieidcleaner.Cleaner
+	debugger *searcher.Debugger
+	handlers *phandler.Debugger
+	editor   *plugineditor.Service
 }
 
-// TestNewAPIAllowsNilReviewService: 异常路径 — 旧版本对 reviewSvc nil
-// 直接 panic, 现版本允许构造但 review 路由命中时由 requireDependency 守门
-// 返回 503. 这保证最小场景 (例如只挂 healthz) 仍可启动.
-func TestNewAPIAllowsNilReviewService(t *testing.T) {
+func newStubDeps(t *testing.T) stubDeps {
+	t.Helper()
+	cli := client.MustNewClient()
+	editorSvc, err := plugineditor.NewService(cli)
+	require.NoError(t, err)
+	return stubDeps{
+		jobRepo:  repository.NewJobRepository(nil),
+		scanner:  scanner.New("", nil, nil, movieidcleaner.NewPassthroughCleaner()),
+		jobSvc:   job.NewService(nil, nil, nil, nil, nil),
+		reviewer: review.NewService(nil, nil, nil, nil, nil),
+		media:    medialib.NewService(nil, "", ""),
+		storage:  store.NewMemStorage(),
+		cleaner:  movieidcleaner.NewPassthroughCleaner(),
+		debugger: searcher.NewDebugger(cli, store.NewMemStorage(), movieidcleaner.NewPassthroughCleaner(), nil, nil),
+		handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), nil, nil),
+		editor:   editorSvc,
+	}
+}
+
+func (s stubDeps) build() *API {
+	return NewAPI(
+		s.jobRepo, s.scanner, s.jobSvc, s.reviewer,
+		"", s.media, s.storage, s.cleaner,
+		s.debugger, s.handlers, s.editor, nil,
+	)
+}
+
+// TestNewAPI: 正常路径 — 全部依赖齐全时构造成功, 字段正确填入.
+func TestNewAPI(t *testing.T) {
+	deps := newStubDeps(t)
+	api := NewAPI(
+		deps.jobRepo, deps.scanner, deps.jobSvc, deps.reviewer,
+		"/tmp/save", deps.media, deps.storage, deps.cleaner,
+		deps.debugger, deps.handlers, deps.editor, nil,
+	)
+	assert.NotNil(t, api)
+	assert.Equal(t, "/tmp/save", api.saveDir)
+	assert.Same(t, deps.reviewer, api.reviewSvc)
+	assert.Same(t, deps.jobRepo, api.jobRepo)
+	assert.Same(t, deps.editor, api.editor)
+}
+
+// TestNewAPIPanicsOnNilRequiredDep: 异常路径 — fail-fast: 任意必需依赖为 nil
+// 都会在 NewAPI 阶段直接 panic, 不允许把"装配错"延迟到 handler 运行期.
+//
+// 这条测试逐项把每个必需依赖换成 nil, 断 NewAPI panic, 守 fail-fast 契约
+// 在加 / 删依赖时不会被悄悄打破 (新加依赖必须挂上对应 == nil 检查 +
+// 新增 stub 字段, 否则这条 test 表里能立刻看到漏掉的项).
+func TestNewAPIPanicsOnNilRequiredDep(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*stubDeps)
+	}{
+		{"nil jobRepo", func(d *stubDeps) { d.jobRepo = nil }},
+		{"nil scanner", func(d *stubDeps) { d.scanner = nil }},
+		{"nil jobSvc", func(d *stubDeps) { d.jobSvc = nil }},
+		{"nil reviewSvc", func(d *stubDeps) { d.reviewer = nil }},
+		{"nil media", func(d *stubDeps) { d.media = nil }},
+		{"nil storage", func(d *stubDeps) { d.storage = nil }},
+		{"nil cleaner", func(d *stubDeps) { d.cleaner = nil }},
+		{"nil debugger", func(d *stubDeps) { d.debugger = nil }},
+		{"nil handlers", func(d *stubDeps) { d.handlers = nil }},
+		{"nil editor", func(d *stubDeps) { d.editor = nil }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := newStubDeps(t)
+			tc.mutate(&deps)
+			assert.Panics(t, func() { _ = deps.build() })
+		})
+	}
+}
+
+// TestNewAPIAllowsNilHealthCheck: 边缘路径 — healthCheck 显式允许 nil
+// (deep 健康检查可选), NewAPI 不应因此 panic.
+func TestNewAPIAllowsNilHealthCheck(t *testing.T) {
+	deps := newStubDeps(t)
 	require.NotPanics(t, func() {
-		api := NewAPI(nil, nil, nil, nil, "/tmp/save", nil, nil, nil, nil, nil, nil, nil)
+		api := deps.build()
 		require.NotNil(t, api)
 	})
 }
 
-// TestEngineHealthzWithAllNilDeps: 边缘路径 — 全 nil 依赖时 /api/healthz
-// 仍可启动并返回 0 code. 这是 "最小依赖也能起 server" 的核心契约.
-func TestEngineHealthzWithAllNilDeps(t *testing.T) {
-	api := NewAPI(nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil)
+// TestNewAPIAllowsEmptySaveDir: 边缘路径 — saveDir="" 表示 library 工作目录
+// 未配置, 这是合法状态 (其它路由仍可工作), NewAPI 不应 panic.
+func TestNewAPIAllowsEmptySaveDir(t *testing.T) {
+	deps := newStubDeps(t)
+	require.NotPanics(t, func() {
+		api := deps.build()
+		require.Equal(t, "", api.saveDir)
+	})
+}
+
+// TestEngineHealthzWithStubDeps: 边缘路径 — 全 stub 依赖时 /api/healthz
+// 仍可启动并返回 0 code. healthz 不依赖任何后端 service, 这条 test 守住
+// "最小可启动 API + 健康探针仍工作" 的契约.
+func TestEngineHealthzWithStubDeps(t *testing.T) {
+	api := newStubDeps(t).build()
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/healthz", nil)
@@ -45,142 +146,4 @@ func TestEngineHealthzWithAllNilDeps(t *testing.T) {
 	engine.ServeHTTP(rec, req)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, 0, resp.Code)
-}
-
-// TestRequireDependencyAvailable: 正常路径 — 依赖存在时 helper 返回 true
-// 且 handler 可继续执行.
-func TestRequireDependencyAvailable(t *testing.T) {
-	c, rec := newGinContext(http.MethodGet, "/", nil)
-	stubReview := review.NewService(nil, nil, nil, nil, nil)
-	ok := requireDependency(c, stubReview, "review")
-	assert.True(t, ok)
-	assert.NotEqual(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestRequireDependencyNil: 异常路径 — typed nil 触发 503 + body code.
-func TestRequireDependencyNil(t *testing.T) {
-	c, rec := newGinContext(http.MethodGet, "/", nil)
-	var nilReview *review.Service
-	ok := requireDependency(c, nilReview, "review")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-	body := decodeResponse(t, rec)
-	assert.Equal(t, errCodeServiceUnavailable, body.Code)
-	assert.Contains(t, body.Message, "review")
-}
-
-// TestRequireDependencyAnyNil: 边缘路径 — any(nil) 也触发 503, 验证 helper
-// 不依赖具体类型也能识别 nil.
-func TestRequireDependencyAnyNil(t *testing.T) {
-	c, rec := newGinContext(http.MethodGet, "/", nil)
-	ok := requireDependency(c, nil, "anything")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestRequireDependencyUnknownType: 边缘路径 — 不在已知 switch 内的类型,
-// 默认放行 (例如 string / int 这些不可能进 NewAPI 的类型, 由调用层负责).
-func TestRequireDependencyUnknownType(t *testing.T) {
-	c, _ := newGinContext(http.MethodGet, "/", nil)
-	type unknown struct{}
-	ok := requireDependency(c, &unknown{}, "x")
-	assert.True(t, ok)
-}
-
-// TestRequireDependencyReflectTypedNilPointer: 边缘路径 — 未列入 switch
-// 的 typed-nil 指针 (例如未来新增的依赖类型还没挂到 switch), 通过 reflect
-// 兜底也必须识别为 "不可用". 避免 typed-nil 漏判导致 nil-deref.
-func TestRequireDependencyReflectTypedNilPointer(t *testing.T) {
-	c, rec := newGinContext(http.MethodGet, "/", nil)
-	type futureDep struct{}
-	var nilFuture *futureDep
-	ok := requireDependency(c, nilFuture, "future")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestRequireDependencyReflectTypedNilInterface: 边缘路径 — typed-nil
-// interface 包装 (var s SomeInterface = (*Impl)(nil)) 直接 == nil 为 false,
-// 必须由 reflect.IsNil 兜住.
-func TestRequireDependencyReflectTypedNilInterface(t *testing.T) {
-	c, rec := newGinContext(http.MethodGet, "/", nil)
-	type Doer interface{ Do() }
-	var nilDoer Doer = (*nilDoerImpl)(nil)
-	ok := requireDependency(c, nilDoer, "doer")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-type nilDoerImpl struct{}
-
-func (n *nilDoerImpl) Do() {}
-
-// TestRequireDependencyReflectValueKinds: 边缘路径 — 走到 reflect 兜底分支的
-// 三类形态: nil map / nil slice / 非 nilable 类型 (string). reflect 兜底
-// 把前两类识别为不可用, 把 string 这种 default 类型识别为可用.
-// 守护点: 未来误把 map / slice 当依赖时不会因为 isDependencyAvailable
-// 误判为可用而走到下一行 nil-deref.
-func TestRequireDependencyReflectValueKinds(t *testing.T) {
-	c1, rec1 := newGinContext(http.MethodGet, "/", nil)
-	var nilMap map[string]int
-	ok := requireDependency(c1, nilMap, "m")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec1.Code)
-
-	c2, rec2 := newGinContext(http.MethodGet, "/", nil)
-	var nilSlice []int
-	ok = requireDependency(c2, nilSlice, "s")
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusServiceUnavailable, rec2.Code)
-
-	c3, rec3 := newGinContext(http.MethodGet, "/", nil)
-	ok = requireDependency(c3, "non-empty-string", "str")
-	assert.True(t, ok)
-	assert.NotEqual(t, http.StatusServiceUnavailable, rec3.Code)
-}
-
-// TestHandleScanWithoutScanner: 异常路径 — 缺 scanner 依赖时 /api/scan
-// 应返回 503 而不是 panic.
-func TestHandleScanWithoutScanner(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContext(http.MethodPost, "/api/scan", nil)
-	api.handleScan(c)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-	body := decodeResponse(t, rec)
-	assert.Equal(t, errCodeServiceUnavailable, body.Code)
-}
-
-// TestHandleListJobsWithoutDeps: 异常路径 — 缺 jobRepo / jobSvc 时返回
-// 503, 不 panic.
-func TestHandleListJobsWithoutDeps(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContext(http.MethodGet, "/api/jobs", nil)
-	api.handleListJobs(c)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestHandleReviewSaveWithoutReviewSvc: 异常路径 — review handler 缺 reviewSvc.
-func TestHandleReviewSaveWithoutReviewSvc(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContextWithParams(http.MethodPut, "/api/review/jobs/1", nil, gin.Params{{Key: "id", Value: "1"}})
-	api.handleReviewSave(c)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestHandleListLibraryWithoutSaveDir: 异常路径 — library handler 在 media
-// 与 saveDir 都为空时返回 503.
-func TestHandleListLibraryWithoutSaveDir(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContext(http.MethodGet, "/api/library", nil)
-	api.handleListLibrary(c)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-}
-
-// TestHandleMovieIDCleanerExplainWithoutCleaner: 异常路径 — debug handler
-// 缺 cleaner 时返回 503.
-func TestHandleMovieIDCleanerExplainWithoutCleaner(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContext(http.MethodPost, "/api/debug/movieid-cleaner/explain", nil)
-	api.handleMovieIDCleanerExplain(c)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }

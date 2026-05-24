@@ -76,8 +76,10 @@ const (
 	errCodeMediaLibrarySyncLogsFailed     = 130015
 
 	// Debug errors. 注意: 140001 / 140101 / 140103 / 140201 (各 *Unavailable
-	// 系列) 已被 requireDependency 统一收编为 errCodeServiceUnavailable
-	// + HTTP 503, 这里不再分配独立业务错误码, 历史编号保留空位避免复用.
+	// 系列) 历史上曾用作 "依赖未注入" 业务错误码, 已统一为 NewAPI 启动期
+	// fail-fast (依赖必须非 nil) + library 路由层的 requireSaveDir 守门
+	// (errCodeServiceUnavailable + HTTP 503). 这里不再分配独立业务错误码,
+	// 历史编号保留空位避免复用.
 	errCodeMovieIDCleanerExplainFailed = 140002
 	errCodeSearcherDebugSearchFailed   = 140102
 	errCodePluginEditorCompileFailed   = 140104

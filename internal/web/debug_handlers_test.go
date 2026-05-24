@@ -30,7 +30,6 @@ func TestHandleMovieIDCleanerExplain(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil cleaner", nil, `{"input":"abc"}`, errCodeServiceUnavailable},
 		{"invalid json", &stubCleaner{}, `{bad`, errCodeInvalidJSONBody},
 		{"empty input", &stubCleaner{}, `{"input":""}`, errCodeInputRequired},
 		{"whitespace input", &stubCleaner{}, `{"input":"  "}`, errCodeInputRequired},
@@ -51,24 +50,6 @@ func TestHandleMovieIDCleanerExplain(t *testing.T) {
 	}
 }
 
-func TestHandleSearcherDebugPlugins(t *testing.T) {
-	tests := []struct {
-		name     string
-		debugger *API
-		wantCode int
-	}{
-		{"nil debugger", &API{}, errCodeServiceUnavailable},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c, rec := newGinContext(http.MethodGet, "/api/debug/searcher/plugins", nil)
-			tt.debugger.handleSearcherDebugPlugins(c)
-			resp := decodeResponse(t, rec)
-			assert.Equal(t, tt.wantCode, resp.Code)
-		})
-	}
-}
-
 func TestHandleSearcherDebugSearch(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -76,7 +57,6 @@ func TestHandleSearcherDebugSearch(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil debugger", &API{}, `{"input":"abc"}`, errCodeServiceUnavailable},
 		{"invalid json", &API{debugger: searcher.NewDebugger(client.MustNewClient(), store.NewMemStorage(), movieidcleaner.NewPassthroughCleaner(), nil, nil)}, `{bad`, errCodeInvalidJSONBody},
 	}
 	for _, tt := range tests {
@@ -117,7 +97,6 @@ func TestHandlePluginEditorCompile(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil editor", &API{}, `{"draft":{}}`, errCodeServiceUnavailable},
 		{"invalid json", &API{editor: editorSvc}, `{bad`, errCodeInvalidJSONBody},
 		{"nil draft", &API{editor: editorSvc}, `{}`, errCodeInputRequired},
 		{"success", &API{editor: editorSvc}, `{
@@ -144,7 +123,6 @@ func TestHandlePluginEditorImport(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil editor", &API{}, `{"yaml":"x"}`, errCodeServiceUnavailable},
 		{"invalid json", &API{editor: editorSvc}, `{bad`, errCodeInvalidJSONBody},
 		{"empty yaml", &API{editor: editorSvc}, `{"yaml":""}`, errCodeInputRequired},
 		{"whitespace yaml", &API{editor: editorSvc}, `{"yaml":"  "}`, errCodeInputRequired},
@@ -170,7 +148,6 @@ func TestHandlePluginEditorDraftNumberOp(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil editor", &API{}, `{"draft":{},"number":"ABC"}`, errCodeServiceUnavailable},
 		{"invalid json", &API{editor: editorSvc}, `{bad`, errCodeInvalidJSONBody},
 		{"nil draft", &API{editor: editorSvc}, `{"number":"ABC"}`, errCodeInputRequired},
 		{"empty number", &API{editor: editorSvc}, `{"draft":{"version":1},"number":""}`, errCodeInputRequired},
@@ -186,14 +163,6 @@ func TestHandlePluginEditorDraftNumberOp(t *testing.T) {
 			assert.Equal(t, tt.wantCode, resp.Code)
 		})
 	}
-}
-
-func TestHandlePluginEditorRequest(t *testing.T) {
-	api := &API{}
-	c, rec := newGinContext(http.MethodPost, "/api/debug/plugin-editor/request", strings.NewReader(`{"draft":{}}`))
-	api.handlePluginEditorRequest(c)
-	resp := decodeResponse(t, rec)
-	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
 }
 
 func TestHandlePluginEditorScrape(t *testing.T) {
@@ -245,7 +214,6 @@ func TestHandlePluginEditorCase(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil editor", &API{}, `{"draft":{},"case":{}}`, errCodeServiceUnavailable},
 		{"invalid json", &API{editor: editorSvc}, `{bad`, errCodeInvalidJSONBody},
 		{"nil draft", &API{editor: editorSvc}, `{"case":{"name":"c1","input":"x","output":{}}}`, errCodeInputRequired},
 		{"nil case", &API{editor: editorSvc}, `{"draft":{"version":1}}`, errCodeInputRequired},
@@ -282,7 +250,6 @@ func TestHandleHandlerDebugHandlers(t *testing.T) {
 		api      *API
 		wantCode int
 	}{
-		{"nil handlers", &API{}, errCodeServiceUnavailable},
 		{"with handlers", &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{}, map[string]phandler.DebugHandlerOption{})}, 0},
 	}
 	for _, tt := range tests {
@@ -302,7 +269,6 @@ func TestHandleHandlerDebugRun(t *testing.T) {
 		body     string
 		wantCode int
 	}{
-		{"nil handlers", &API{}, `{}`, errCodeServiceUnavailable},
 		{"invalid json", &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}, `{bad`, errCodeInvalidJSONBody},
 		{"success", &API{handlers: phandler.NewDebugger(phandlerDebugRuntime(), movieidcleaner.NewPassthroughCleaner(), []string{"number_title"}, map[string]phandler.DebugHandlerOption{})}, `{"mode":"single","handler_id":"number_title","meta":{"number":"ABC-123","title":"sample title"}}`, 0},
 	}
@@ -417,10 +383,10 @@ func TestHandleHandlerDebugRunError(t *testing.T) {
 	assert.Equal(t, errCodeHandlerDebugRunFailed, resp.Code)
 }
 
-// TestHandlePluginEditorRequestWithEditor: 异常路径 - editor 已注入 (不会
-// 被 requireDependency 拦下) 但下游 HTTP 请求失败时, handler 应返回
-// errCodePluginEditorRequestFailed 而非 *Unavailable 系列 (后者已被统一为
-// HTTP 503 + errCodeServiceUnavailable, 不再用于业务错误码).
+// TestHandlePluginEditorRequestWithEditor: 异常路径 - editor 注入但下游
+// HTTP 请求失败时, handler 应返回 errCodePluginEditorRequestFailed.
+// (NewAPI fail-fast 已经保证 editor != nil 才能到 handler, 这里直接构造
+// &API{editor: ...} 走业务错误路径.)
 func TestHandlePluginEditorRequestWithEditor(t *testing.T) {
 	editorSvc, err := plugineditor.NewService(client.MustNewClient())
 	require.NoError(t, err)

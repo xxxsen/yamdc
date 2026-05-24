@@ -14,26 +14,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/xxxsen/yamdc/internal/appdeps"
+	"github.com/xxxsen/yamdc/internal/client"
+	"github.com/xxxsen/yamdc/internal/job"
+	"github.com/xxxsen/yamdc/internal/medialib"
+	"github.com/xxxsen/yamdc/internal/movieidcleaner"
+	phandler "github.com/xxxsen/yamdc/internal/processor/handler"
+	"github.com/xxxsen/yamdc/internal/repository"
 	"github.com/xxxsen/yamdc/internal/review"
+	"github.com/xxxsen/yamdc/internal/scanner"
+	"github.com/xxxsen/yamdc/internal/searcher"
+	plugineditor "github.com/xxxsen/yamdc/internal/searcher/plugin/editor"
+	"github.com/xxxsen/yamdc/internal/store"
 	"github.com/xxxsen/yamdc/internal/web"
 )
 
-// stubReviewSvc 返回一个构造时不会 panic 的 review.Service。内部 coordinator
-// 等依赖均为 nil, 一旦对它调用任何对外方法 (SaveReviewData / Import /
-// CropPosterFromCover) 就会立即 panic (nil pointer deref in Claim / jobRepo 等)。
-// 本文件的测试只走健康检查 / listen failure 路径, 不会触发任何 /api/review/*
-// 路由或 review 方法, 用它满足 web.NewAPI 的"必需非 nil" 契约即可;
-// 若后续新增用例真的要打 review 接口, 必须换成 newTestReviewService 这类
-// 带真实依赖的构造器。
-func stubReviewSvc() *review.Service {
-	return review.NewService(nil, nil, nil, nil, nil)
+// newStubAPI 构造一个所有 NewAPI 必需依赖都已填了形式上合法 stub 的
+// *web.API. 这些 stub 内部多数 *sql.DB / 真实仓库为 nil, 一旦真去打底层
+// service (例如 jobRepo.ListJobs) 立刻 nil-deref. 当前 server_test.go
+// 只走健康检查 / listen failure 路径, 不会触发任何 service 方法, 因此
+// 仅满足"NewAPI fail-fast 要求的非 nil 契约"即可; 若后续新增用例真要打
+// service 接口, 必须在这里替换成带真实依赖的构造.
+func newStubAPI(t *testing.T) *web.API {
+	t.Helper()
+	cli := client.MustNewClient()
+	editorSvc, err := plugineditor.NewService(cli)
+	require.NoError(t, err)
+	return web.NewAPI(
+		repository.NewJobRepository(nil),
+		scanner.New("", nil, nil, movieidcleaner.NewPassthroughCleaner()),
+		job.NewService(nil, nil, nil, nil, nil),
+		review.NewService(nil, nil, nil, nil, nil),
+		"",
+		medialib.NewService(nil, "", ""),
+		store.NewMemStorage(),
+		movieidcleaner.NewPassthroughCleaner(),
+		searcher.NewDebugger(cli, store.NewMemStorage(), movieidcleaner.NewPassthroughCleaner(), nil, nil),
+		phandler.NewDebugger(appdeps.Runtime{Storage: store.NewMemStorage()}, movieidcleaner.NewPassthroughCleaner(), nil, nil),
+		editorSvc,
+		nil,
+	)
 }
 
 // --- 正常 case: ctx 取消后 ServeHTTP 以 graceful shutdown 方式退出 ---
 
 func TestServeHTTPGracefulShutdownOnCtxCancel(t *testing.T) {
 	t.Setenv("YAMDC_SERVER_ADDR", pickFreeAddr(t))
-	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
+	api := newStubAPI(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -65,7 +92,7 @@ func TestServeHTTPListenAndServeFailure(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 
 	t.Setenv("YAMDC_SERVER_ADDR", addr)
-	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
+	api := newStubAPI(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -88,7 +115,7 @@ func TestServeHTTPListenAndServeFailure(t *testing.T) {
 
 func TestServeHTTPCtxAlreadyCanceled(t *testing.T) {
 	t.Setenv("YAMDC_SERVER_ADDR", pickFreeAddr(t))
-	api := web.NewAPI(nil, nil, nil, stubReviewSvc(), "", nil, nil, nil, nil, nil, nil, nil)
+	api := newStubAPI(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

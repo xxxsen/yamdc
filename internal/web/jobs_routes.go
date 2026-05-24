@@ -43,9 +43,6 @@ func (a *API) registerEngineJobRoutes(group *gin.RouterGroup) {
 }
 
 func (a *API) handleScan(c *gin.Context) {
-	if !requireDependency(c, a.scanner, "scanner") {
-		return
-	}
 	logutil.GetLogger(c.Request.Context()).Info("manual scan requested")
 	if err := a.scanner.Scan(c.Request.Context()); err != nil {
 		logutil.GetLogger(c.Request.Context()).Error("manual scan failed", zap.Error(err))
@@ -57,12 +54,6 @@ func (a *API) handleScan(c *gin.Context) {
 }
 
 func (a *API) handleListJobs(c *gin.Context) {
-	if !requireDependency(c, a.jobRepo, "jobRepo") {
-		return
-	}
-	if !requireDependency(c, a.jobSvc, "jobSvc") {
-		return
-	}
 	statuses := parseStatuses(c.Query("status"))
 	page := 1
 	pageSize := 50
@@ -118,14 +109,14 @@ func parseIDParam(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-// jobOpPrelude 把 "依赖 503 守门 + id 解析" 这段固定形状抽出, 让具体
-// handler 只关心 "拿到 id 之后怎么调 service + 写响应". 错误本身仍然
-// 由 handler 自己消费 (writeJobOpResult), 避免把外部包的 err 通过 helper
-// 形参回传 — 那样会被 wrapcheck 视作"未经包内封装的转发".
-func (a *API) jobOpPrelude(c *gin.Context, dep any, depName string) (int64, bool) {
-	if !requireDependency(c, dep, depName) {
-		return 0, false
-	}
+// jobOpPrelude 把 "id 解析" 这段固定形状抽出, 让具体 handler 只关心 "拿到
+// id 之后怎么调 service + 写响应". 错误本身仍然由 handler 自己消费
+// (writeJobOpResult), 避免把外部包的 err 通过 helper 形参回传 — 那样会被
+// wrapcheck 视作"未经包内封装的转发".
+//
+// 不再做"依赖 nil 守门": NewAPI 已 fail-fast 保证所有依赖非 nil,
+// handler 直接访问 a.* 字段不会 nil-deref.
+func (a *API) jobOpPrelude(c *gin.Context) (int64, bool) {
 	id, ok := parseIDParam(c)
 	if !ok {
 		return 0, false
@@ -147,7 +138,7 @@ func writeJobOpResult(c *gin.Context, id int64, opName string, failCode int, suc
 }
 
 func (a *API) handleJobRun(c *gin.Context) {
-	id, ok := a.jobOpPrelude(c, a.jobSvc, "jobSvc")
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
@@ -156,7 +147,7 @@ func (a *API) handleJobRun(c *gin.Context) {
 }
 
 func (a *API) handleJobRerun(c *gin.Context) {
-	id, ok := a.jobOpPrelude(c, a.jobSvc, "jobSvc")
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
@@ -165,9 +156,6 @@ func (a *API) handleJobRerun(c *gin.Context) {
 }
 
 func (a *API) handleJobLogs(c *gin.Context) {
-	if !requireDependency(c, a.jobSvc, "jobSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -193,9 +181,6 @@ func (a *API) handleJobLogs(c *gin.Context) {
 // 否则走老的 number 字段。为保持向后兼容, 既没有 base/variants 又没有 number
 // 时, 仍走老逻辑 (传一个空 number 进 service, 由 service 返回业务错误)。
 func (a *API) handleJobUpdateNumber(c *gin.Context) {
-	if !requireDependency(c, a.jobSvc, "jobSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -276,7 +261,7 @@ func (a *API) handleListNumberVariants(c *gin.Context) {
 }
 
 func (a *API) handleJobDelete(c *gin.Context) {
-	id, ok := a.jobOpPrelude(c, a.jobSvc, "jobSvc")
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
@@ -285,9 +270,6 @@ func (a *API) handleJobDelete(c *gin.Context) {
 }
 
 func (a *API) handleReviewGet(c *gin.Context) {
-	if !requireDependency(c, a.jobSvc, "jobSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -301,9 +283,6 @@ func (a *API) handleReviewGet(c *gin.Context) {
 }
 
 func (a *API) handleReviewSave(c *gin.Context) {
-	if !requireDependency(c, a.reviewSvc, "reviewSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -330,7 +309,7 @@ func (a *API) handleReviewSave(c *gin.Context) {
 }
 
 func (a *API) handleReviewImport(c *gin.Context) {
-	id, ok := a.jobOpPrelude(c, a.reviewSvc, "reviewSvc")
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
@@ -342,9 +321,6 @@ func (a *API) handleReviewImport(c *gin.Context) {
 // 退回到 failed 状态, 删除 scrape_data, 使用户可以重新编辑 number 后 run。
 // reason 字段可选 (空则用默认文案); 行为/边界见 review.Service.Reject 注释。
 func (a *API) handleReviewReject(c *gin.Context) {
-	if !requireDependency(c, a.reviewSvc, "reviewSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -377,9 +353,6 @@ func (a *API) handleReviewReject(c *gin.Context) {
 }
 
 func (a *API) handleReviewPosterCrop(c *gin.Context) {
-	if !requireDependency(c, a.reviewSvc, "reviewSvc") {
-		return
-	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return
@@ -549,14 +522,14 @@ func (a *API) loadReviewMeta(c *gin.Context, id int64) (*model.MovieMeta, bool) 
 
 // handleReviewAsset 拆成几段独立 helper 以避免 gocyclo 触线 (>15):
 //
-//   - guardReviewAssetDeps: 三个依赖的 503 守门 + id 解析 + target 校验.
+//   - parseReviewAssetParams: id 解析 + target 校验 (依赖非 nil 由 NewAPI 保证).
 //   - storeReviewAssetData: 把 multipart 字节存进 a.store, 返回 asset 元.
 //   - applyReviewAssetMeta: 根据 target 把 asset 挂到 meta.cover/poster/sample.
 //   - persistReviewAsset:   把更新后的 meta 序列化并 SaveReviewData.
 //
 // 主函数只剩组装与日志.
 func (a *API) handleReviewAsset(c *gin.Context) {
-	id, target, ok := a.guardReviewAssetDeps(c)
+	id, target, ok := parseReviewAssetParams(c)
 	if !ok {
 		return
 	}
@@ -582,16 +555,7 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 	writeSuccess(c.Writer, "review asset uploaded", asset)
 }
 
-func (a *API) guardReviewAssetDeps(c *gin.Context) (int64, string, bool) {
-	if !requireDependency(c, a.reviewSvc, "reviewSvc") {
-		return 0, "", false
-	}
-	if !requireDependency(c, a.store, "store") {
-		return 0, "", false
-	}
-	if !requireDependency(c, a.jobSvc, "jobSvc") {
-		return 0, "", false
-	}
+func parseReviewAssetParams(c *gin.Context) (int64, string, bool) {
 	id, ok := parseIDParam(c)
 	if !ok {
 		return 0, "", false

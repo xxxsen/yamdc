@@ -163,9 +163,6 @@ func (a *API) handleMediaLibraryFileDelete(c *gin.Context) {
 }
 
 func (a *API) handleMediaLibraryAsset(c *gin.Context) {
-	if !requireDependency(c, a.media, "media") {
-		return
-	}
 	if !a.media.IsConfigured() {
 		writeFail(c.Writer, errCodeLibraryNotConfigured, "library dir is not configured")
 		return

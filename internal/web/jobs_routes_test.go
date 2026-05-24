@@ -689,85 +689,28 @@ func (b *truncatedBody) Read(p []byte) (int, error) {
 
 func (b *truncatedBody) Close() error { return nil }
 
-// TestGuardReviewAssetDeps: 把 handleReviewAsset 拆分后, guardReviewAssetDeps
-// 这条 "依赖守门 + id 解析 + target 校验" 的小函数要被独立覆盖. 否则
-// 整个分支只能靠 happy-path 测试间接走到, 留下未覆盖分支.
-func TestGuardReviewAssetDeps(t *testing.T) {
-	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	memStore := store.NewMemStorage()
-	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
-	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
-
+// TestParseReviewAssetParams: handleReviewAsset 拆分后, parseReviewAssetParams
+// 负责 "id 解析 + target 校验" (依赖非 nil 由 NewAPI fail-fast 保证).
+// 这条小函数要被独立覆盖, 否则只能靠 happy-path 间接走到.
+func TestParseReviewAssetParams(t *testing.T) {
 	tests := []struct {
 		name    string
-		api     *API
 		idParam string
 		target  string
 		wantOK  bool
 	}{
-		{
-			name:    "nil reviewSvc",
-			api:     &API{},
-			idParam: "1",
-			target:  "cover",
-			wantOK:  false,
-		},
-		{
-			name:    "nil store",
-			api:     &API{reviewSvc: reviewSvc},
-			idParam: "1",
-			target:  "cover",
-			wantOK:  false,
-		},
-		{
-			name:    "nil jobSvc",
-			api:     &API{reviewSvc: reviewSvc, store: memStore},
-			idParam: "1",
-			target:  "cover",
-			wantOK:  false,
-		},
-		{
-			name:    "invalid id",
-			api:     &API{reviewSvc: reviewSvc, store: memStore, jobSvc: jobSvc},
-			idParam: "abc",
-			target:  "cover",
-			wantOK:  false,
-		},
-		{
-			name:    "invalid target",
-			api:     &API{reviewSvc: reviewSvc, store: memStore, jobSvc: jobSvc},
-			idParam: "1",
-			target:  "weird",
-			wantOK:  false,
-		},
-		{
-			name:    "all ok cover",
-			api:     &API{reviewSvc: reviewSvc, store: memStore, jobSvc: jobSvc},
-			idParam: "1",
-			target:  "cover",
-			wantOK:  true,
-		},
-		{
-			name:    "all ok poster",
-			api:     &API{reviewSvc: reviewSvc, store: memStore, jobSvc: jobSvc},
-			idParam: "1",
-			target:  "poster",
-			wantOK:  true,
-		},
-		{
-			name:    "all ok fanart",
-			api:     &API{reviewSvc: reviewSvc, store: memStore, jobSvc: jobSvc},
-			idParam: "1",
-			target:  "fanart",
-			wantOK:  true,
-		},
+		{name: "invalid id", idParam: "abc", target: "cover", wantOK: false},
+		{name: "invalid target", idParam: "1", target: "weird", wantOK: false},
+		{name: "ok cover", idParam: "1", target: "cover", wantOK: true},
+		{name: "ok poster", idParam: "1", target: "poster", wantOK: true},
+		{name: "ok fanart", idParam: "1", target: "fanart", wantOK: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := newGinContextWithParams(http.MethodPost, "/test?target="+tt.target, nil,
 				gin.Params{{Key: "id", Value: tt.idParam}})
 			c.Request.URL.RawQuery = "target=" + tt.target
-			_, _, ok := tt.api.guardReviewAssetDeps(c)
+			_, _, ok := parseReviewAssetParams(c)
 			assert.Equal(t, tt.wantOK, ok)
 		})
 	}
