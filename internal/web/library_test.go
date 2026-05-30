@@ -43,6 +43,27 @@ func TestHandleListLibrary(t *testing.T) {
 	assert.Equal(t, 0, resp.Code)
 }
 
+// TestHandleListLibraryListItemsError: 异常路径 - 当 saveDir 指向的目录里
+// 含一个不可读子目录时, listRootItemDirs 会因为权限失败, 触发
+// errCodeListLibraryFailed (而不是崩或者返回空列表).
+func TestHandleListLibraryListItemsError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses permission denied; skip")
+	}
+	tmpDir := t.TempDir()
+	blocked := tmpDir + "/locked"
+	require.NoError(t, os.Mkdir(blocked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	api := &API{saveDir: tmpDir}
+	engine, err := api.Engine(":0")
+	require.NoError(t, err)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/library", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeListLibraryFailed, resp.Code)
+}
+
 func TestHandleLibraryItemGet(t *testing.T) {
 	saveDir := t.TempDir()
 	api := &API{saveDir: saveDir}
@@ -723,12 +744,33 @@ func TestHandleLibraryItemPatchSuccess(t *testing.T) {
 	assert.Equal(t, 0, resp.Code)
 }
 
+// TestHandleListLibraryError: saveDir 为空且未注入 media 时, library
+// handler 走 requireSaveDir 守门, 返回 503 + errCodeServiceUnavailable.
+// 这是 "saveDir 未配置" 的正确行为 (saveDir="" 是 NewAPI 允许的合法值,
+// 由 library 路由层在请求期返 503), 用 5xx 表达"协议外可用性",
+// 不混入业务错误码.
 func TestHandleListLibraryError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodGet, "/api/library", nil)
 	api.handleListLibrary(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	resp := decodeResponse(t, rec)
-	assert.Equal(t, errCodeListLibraryFailed, resp.Code)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
+}
+
+// TestRequireSaveDirWithMediaService: 边缘路径 — saveDir="" 但 media 已注入时,
+// requireSaveDir 必须直接放行 (走 media 路径), 不能误回 503. 这条与
+// TestHandleListLibraryError 配对覆盖 requireSaveDir 三个分支中的"media 优先".
+func TestRequireSaveDirWithMediaService(t *testing.T) {
+	mediaSvc := medialib.NewService(nil, "", t.TempDir())
+	t.Cleanup(func() {
+		mediaSvc.Stop()
+		mediaSvc.WaitBackground()
+	})
+	api := &API{saveDir: "", media: mediaSvc}
+	c, rec := newGinContext(http.MethodGet, "/api/library", nil)
+	require.True(t, api.requireSaveDir(c))
+	assert.NotEqual(t, http.StatusServiceUnavailable, rec.Code)
 }
 
 func TestHandleLibraryFileGetOpenError(t *testing.T) {
@@ -816,19 +858,39 @@ func TestLoadLibraryConflictFlagsWithItems(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
+// TestHandleLibraryFileDeleteResolveError: 空 saveDir 现在被
+// requireSaveDir 守门, 返回 503 + errCodeServiceUnavailable, 与其它
+// "依赖未注入" 路径行为对齐.
 func TestHandleLibraryFileDeleteResolveError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodDelete, "/api/library/file?path=x", nil)
 	c.Request.URL.RawQuery = "path=x"
 	api.handleLibraryFileDelete(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	resp := decodeResponse(t, rec)
-	assert.Equal(t, errCodeResolveLibraryPathFailed, resp.Code)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
 }
 
+// TestHandleLibraryFileGetResolveError: 同上 (GET 路径).
 func TestHandleLibraryFileGetResolveError(t *testing.T) {
 	api := &API{saveDir: ""}
 	c, rec := newGinContext(http.MethodGet, "/api/library/file?path=x", nil)
 	c.Request.URL.RawQuery = "path=x"
+	api.handleLibraryFileGet(c)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeServiceUnavailable, resp.Code)
+}
+
+// TestHandleLibraryFileResolveErrorWithSaveDir: 边缘路径 — saveDir 已设置
+// 但路径 ResolveSavePath 失败时, 走真正的业务错误码 errCodeResolveLibraryPathFailed,
+// 不应被 requireSaveDir 拦截.
+func TestHandleLibraryFileResolveErrorWithSaveDir(t *testing.T) {
+	saveDir := t.TempDir()
+	api := &API{saveDir: saveDir}
+	// 用 .. 触发 ResolveSavePath 的越界保护.
+	c, rec := newGinContext(http.MethodGet, "/api/library/file?path=../escape", nil)
+	c.Request.URL.RawQuery = "path=../escape"
 	api.handleLibraryFileGet(c)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodeResolveLibraryPathFailed, resp.Code)

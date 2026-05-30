@@ -6,6 +6,7 @@ import type { LibraryPreviewState } from "@/components/library-shell/asset-galle
 import { getUploadMessage, getVariantCoverPath, getVariantPosterPath, toErrorMessage } from "@/components/library-shell/utils";
 import type { LibraryDetail, LibraryListItem, LibraryVariant } from "@/lib/api";
 import { cropLibraryPosterFromCover, deleteLibraryFile, getLibraryFileURL, replaceLibraryAsset } from "@/lib/api";
+import { validateUploadSize } from "@/lib/upload-limits";
 import type { CropRect } from "@/components/image-cropper";
 
 export interface UseLibraryAssetActionsDeps {
@@ -126,6 +127,11 @@ export function useLibraryAssetActions(deps: UseLibraryAssetActionsDeps): Librar
       const file = input.files?.[0] ?? null;
       unlock();
       if (!file) {
+        return;
+      }
+      const sizeCheck = validateUploadSize(file);
+      if (!sizeCheck.ok) {
+        setMessage(sizeCheck.message ?? "图片不能超过 32 MiB");
         return;
       }
       startTransition(async () => {

@@ -1,8 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -128,6 +131,21 @@ func TestHandleListJobs(t *testing.T) {
 			assert.Equal(t, tt.wantCode, resp.Code)
 		})
 	}
+}
+
+// TestHandleListJobsRepoError: 异常路径 - jobRepo.ListJobs 返回错误时
+// (sqlite 已关闭) handler 必须返回 errCodeListJobsFailed, 不能 panic
+// 也不能让错误吞到 handler 之外 (PanicRecoverMiddleware 兜底).
+func TestHandleListJobsRepoError(t *testing.T) {
+	sqlite, jobRepo, _, _ := setupTestDB(t)
+	// 直接关 DB, 后续 ListJobs 会拿 sql.ErrConnDone.
+	require.NoError(t, sqlite.Close())
+
+	api := &API{jobRepo: jobRepo}
+	c, rec := newGinContext(http.MethodGet, "/api/jobs", nil)
+	api.handleListJobs(c)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeListJobsFailed, resp.Code)
 }
 
 func TestHandleJobRun(t *testing.T) {
@@ -469,9 +487,10 @@ func TestHandleReviewAsset(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
 	memStore := store.NewMemStorage()
 	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
+	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVASSET-001")
 
-	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, store: memStore}
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, reviewSvc: reviewSvc, store: memStore}
 	engine, err := api.Engine(":0")
 	require.NoError(t, err)
 
@@ -540,14 +559,176 @@ func TestHandleReviewAssetSuccess(t *testing.T) {
 }
 
 func TestReadUploadImageData(t *testing.T) {
-	// Test via the handleReviewAsset path which calls readUploadImageData.
-	// No file.
+	// 异常路径: 没有 multipart form 文件时返回 invalid upload file.
 	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(""))
 	c.Request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	_, _, ok := readUploadImageData(c)
 	assert.False(t, ok)
 	resp := decodeResponse(t, rec)
 	assert.Equal(t, errCodeInvalidUploadFile, resp.Code)
+}
+
+// TestReadUploadImageDataTooLarge: 边缘路径 - 超过 32 MiB+1 字节的文件
+// 必须返回 HTTP 413 + errCodeUploadFileTooLarge, 不能让 handler 走到
+// 真正的存储 / 业务路径.
+func TestReadUploadImageDataTooLarge(t *testing.T) {
+	oversize := make([]byte, maxUploadImageBytes+1)
+	// 前 8 字节伪装成 PNG 签名, 剩余填充, 让 http.DetectContentType 不会
+	// 在 size 校验之前因 "non-image" 提前返错.
+	copy(oversize, pngBytes())
+	for i := 8; i < len(oversize); i++ {
+		oversize[i] = 'A'
+	}
+	body, contentType := buildMultipartImage(t, "file", "big.bin", oversize)
+	c, rec := newGinContext(http.MethodPost, "/test", body)
+	c.Request.Header.Set("Content-Type", contentType)
+	_, _, ok := readUploadImageData(c)
+	assert.False(t, ok)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeUploadFileTooLarge, resp.Code)
+}
+
+// TestReadUploadImageDataExactlyMaxSucceeds: 文件大小刚好 32 MiB 时,
+// multipart body 一定大于 32 MiB (boundary + part header 占额外字节);
+// readUploadImageData 必须把这种合法上传放过去, 不能因为 multipart
+// overhead 导致整个 body 触发 MaxBytesReader 上限.
+func TestReadUploadImageDataExactlyMaxSucceeds(t *testing.T) {
+	payload := make([]byte, maxUploadImageBytes)
+	copy(payload, pngBytes())
+	for i := 8; i < len(payload); i++ {
+		payload[i] = 'P'
+	}
+	body, contentType := buildMultipartImage(t, "file", "exact.png", payload)
+	c, rec := newGinContext(http.MethodPost, "/test", body)
+	c.Request.Header.Set("Content-Type", contentType)
+	data, fileName, ok := readUploadImageData(c)
+	require.True(t, ok, "32 MiB 文件应被接收, rec.Code=%d body=%s", rec.Code, rec.Body.String())
+	assert.Equal(t, "exact.png", fileName)
+	assert.Equal(t, maxUploadImageBytes, len(data))
+}
+
+// TestReadUploadImageDataLargeMultipartHeaderSucceeds: multipart header 区
+// 较大但文件本体未超过 32 MiB 时, 只要整个 body 仍在 33 MiB 内, 上传应
+// 成功. 这条路径覆盖"用户上传 32 MiB-1 文件 + 较多 form 字段 / 长 boundary"
+// 的合法场景, 防止后端因 request body 上限太紧而误拒.
+func TestReadUploadImageDataLargeMultipartHeaderSucceeds(t *testing.T) {
+	payload := make([]byte, maxUploadImageBytes-1)
+	copy(payload, pngBytes())
+	for i := 8; i < len(payload); i++ {
+		payload[i] = 'B'
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	// 写一个长字段, 模拟较大的 multipart header 开销; 但仍然在 1 MiB 容
+	// 量内, 不超过 maxUploadMultipartOverheadBytes.
+	bigHeaderField := strings.Repeat("x", 256*1024)
+	require.NoError(t, w.WriteField("notes", bigHeaderField))
+	part, err := w.CreateFormFile("file", "big-header.png")
+	require.NoError(t, err)
+	_, err = part.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	c, rec := newGinContext(http.MethodPost, "/test", &buf)
+	c.Request.Header.Set("Content-Type", w.FormDataContentType())
+	data, fileName, ok := readUploadImageData(c)
+	require.True(t, ok, "multipart header 较大但 body < 33 MiB 时应通过, rec.Code=%d body=%s", rec.Code, rec.Body.String())
+	assert.Equal(t, "big-header.png", fileName)
+	assert.Equal(t, len(payload), len(data))
+}
+
+// TestIsUploadTooLargeErr: 验证 helper 能识别 stdlib 的 MaxBytesError 与
+// 字符串变体, 但不会把无关错误误判为超限.
+func TestIsUploadTooLargeErr(t *testing.T) {
+	assert.False(t, isUploadTooLargeErr(nil))
+	assert.False(t, isUploadTooLargeErr(errors.New("some other error")))
+	assert.True(t, isUploadTooLargeErr(&http.MaxBytesError{Limit: 100}))
+	assert.True(t, isUploadTooLargeErr(errors.New("http: request body too large")))
+	assert.True(t, isUploadTooLargeErr(errors.New("multipart: NextPart: request body too large")))
+}
+
+// TestReadUploadImageDataReadAllError: 异常路径 - file.Read 中途异常 (非
+// MaxBytes 错误) 时 helper 必须返回 errCodeReadUploadFileFailed.
+//
+// 触发方式: 用一个 multipart, 但 body 在传输中途被截断, 让 io.ReadAll
+// 抛 unexpected EOF; 这条路径 isUploadTooLargeErr 会 false, 走 fallback
+// errCodeReadUploadFileFailed 分支.
+func TestReadUploadImageDataReadAllError(t *testing.T) {
+	// 构造一个 multipart, 但故意让 Content-Length 比真正的 body 长 — Go
+	// 的 multipart reader 会在尾部抛 io.ErrUnexpectedEOF, 触发 ReadAll
+	// 失败 (但不是 MaxBytesError).
+	body, ct := buildMultipartImage(t, "file", "img.png", pngBytes())
+	c, rec := newGinContext(http.MethodPost, "/test", body)
+	c.Request.Header.Set("Content-Type", ct)
+	// 故意把 ContentLength 标比 body 还大, http.MaxBytesReader 不会拦,
+	// 但 multipart reader 在解析时会因为 EOF 提前到达而失败.
+	c.Request.ContentLength = int64(body.Len()) + 100
+	// 包装 body 让 Read 在尾部抛出非 MaxBytes 错误.
+	c.Request.Body = &truncatedBody{buf: body.Bytes(), cutoff: 32}
+	_, _, ok := readUploadImageData(c)
+	assert.False(t, ok)
+	resp := decodeResponse(t, rec)
+	// 截断在 multipart header 之前, 直接 invalid upload file; 截断在 body
+	// 中段时是 read upload file failed. 两者都允许.
+	assert.True(t,
+		resp.Code == errCodeReadUploadFileFailed ||
+			resp.Code == errCodeInvalidUploadFile,
+		"unexpected code %d", resp.Code,
+	)
+}
+
+// truncatedBody: 模拟一个会读到一半就抛错的 ReadCloser, 用来覆盖
+// readUploadImageData 中 ReadAll error 的 fallback 分支.
+type truncatedBody struct {
+	buf    []byte
+	pos    int
+	cutoff int
+}
+
+func (b *truncatedBody) Read(p []byte) (int, error) {
+	if b.pos >= b.cutoff || b.pos >= len(b.buf) {
+		return 0, errors.New("synthetic body read error")
+	}
+	end := b.pos + len(p)
+	if end > b.cutoff {
+		end = b.cutoff
+	}
+	if end > len(b.buf) {
+		end = len(b.buf)
+	}
+	n := copy(p, b.buf[b.pos:end])
+	b.pos += n
+	return n, nil
+}
+
+func (b *truncatedBody) Close() error { return nil }
+
+// TestParseReviewAssetParams: handleReviewAsset 拆分后, parseReviewAssetParams
+// 负责 "id 解析 + target 校验" (依赖非 nil 由 NewAPI fail-fast 保证).
+// 这条小函数要被独立覆盖, 否则只能靠 happy-path 间接走到.
+func TestParseReviewAssetParams(t *testing.T) {
+	tests := []struct {
+		name    string
+		idParam string
+		target  string
+		wantOK  bool
+	}{
+		{name: "invalid id", idParam: "abc", target: "cover", wantOK: false},
+		{name: "invalid target", idParam: "1", target: "weird", wantOK: false},
+		{name: "ok cover", idParam: "1", target: "cover", wantOK: true},
+		{name: "ok poster", idParam: "1", target: "poster", wantOK: true},
+		{name: "ok fanart", idParam: "1", target: "fanart", wantOK: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := newGinContextWithParams(http.MethodPost, "/test?target="+tt.target, nil,
+				gin.Params{{Key: "id", Value: tt.idParam}})
+			c.Request.URL.RawQuery = "target=" + tt.target
+			_, _, ok := parseReviewAssetParams(c)
+			assert.Equal(t, tt.wantOK, ok)
+		})
+	}
 }
 
 func TestLoadReviewMeta(t *testing.T) {
@@ -838,13 +1019,15 @@ func TestHandleReviewPosterCropSuccess(t *testing.T) {
 
 func TestHandleReviewSaveReadBodyError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
+	memStore := store.NewMemStorage()
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
+	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVBODY-001")
 	ok, err := jobRepo.UpdateStatus(context.Background(), j.ID, []jobdef.Status{jobdef.StatusInit}, jobdef.StatusReviewing, "")
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, reviewSvc: reviewSvc}
 	c, rec := newGinContextWithParams(http.MethodPut, "/test", &errReader{}, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
 	api.handleReviewSave(c)
 	resp := decodeResponse(t, rec)
@@ -853,10 +1036,12 @@ func TestHandleReviewSaveReadBodyError(t *testing.T) {
 
 func TestHandleReviewPosterCropReadBodyError(t *testing.T) {
 	_, jobRepo, logRepo, scrapeRepo := setupTestDB(t)
-	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, store.NewMemStorage())
+	memStore := store.NewMemStorage()
+	jobSvc := newTestJobService(t, jobRepo, logRepo, scrapeRepo, memStore)
+	reviewSvc := newTestReviewService(jobSvc, jobRepo, scrapeRepo, memStore)
 	j := createTestJob(t, jobRepo, "RVCROPBODY-001")
 
-	api := &API{jobRepo: jobRepo, jobSvc: jobSvc}
+	api := &API{jobRepo: jobRepo, jobSvc: jobSvc, reviewSvc: reviewSvc}
 	c, rec := newGinContextWithParams(http.MethodPost, "/test", &errReader{}, gin.Params{{Key: "id", Value: fmt.Sprintf("%d", j.ID)}})
 	api.handleReviewPosterCrop(c)
 	resp := decodeResponse(t, rec)
@@ -1165,6 +1350,32 @@ func TestHandleReviewReject(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, jobdef.StatusFailed, j2.Status)
 	assert.Equal(t, "rejected by reviewer", j2.ErrorMsg)
+}
+
+// uploadMaxBytesErrBody: 用于覆盖 readUploadImageData 中 FormFile 读到
+// *http.MaxBytesError 的分支. ParseMultipartForm 会把外层 MaxBytesReader
+// 包装的 body 一路 Read, 我们直接让 inner Read 返回 *http.MaxBytesError,
+// 上层会 errors.As 命中, 走 isUploadTooLargeErr=true 的 413 分支.
+type uploadMaxBytesErrBody struct{}
+
+func (uploadMaxBytesErrBody) Read(_ []byte) (int, error) {
+	return 0, &http.MaxBytesError{Limit: 1}
+}
+
+func (uploadMaxBytesErrBody) Close() error { return nil }
+
+// TestReadUploadImageDataFormFileMaxBytes: 异常路径 - 在 FormFile 阶段 body
+// 读取就触发 *http.MaxBytesError, 必须返回 HTTP 413 + errCodeUploadFileTooLarge,
+// 不能落到 errCodeInvalidUploadFile 那条 fallback 分支.
+func TestReadUploadImageDataFormFileMaxBytes(t *testing.T) {
+	c, rec := newGinContext(http.MethodPost, "/test", strings.NewReader(""))
+	c.Request.Body = uploadMaxBytesErrBody{}
+	c.Request.Header.Set("Content-Type", "multipart/form-data; boundary=zzz")
+	_, _, ok := readUploadImageData(c)
+	assert.False(t, ok)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	resp := decodeResponse(t, rec)
+	assert.Equal(t, errCodeUploadFileTooLarge, resp.Code)
 }
 
 // TestHandleReviewRejectReadBodyError 覆盖 body 读取失败的兜底: reject 需要

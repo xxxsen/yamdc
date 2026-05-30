@@ -34,12 +34,24 @@ type API struct {
 	healthCheck HealthCheckFunc
 }
 
-// NewAPI 组装 HTTP 层 API 对象。reviewSvc 在生产路径是必需的: /api/review/*
-// 路由全部依赖它, 没有它 handler 会 nil-deref。为避免"本地测试时传 nil 启动
-// 成功 → 请求到 review 路由才 panic" 这种滞后故障, 这里在构造时显式拒绝 nil。
-// 其它依赖 (jobRepo / scanner / media / store / cleaner / debugger / handlers /
-// editor / healthCheck) 按 handler 出现时再 nil-check, 因为它们分属互不重叠
-// 的路由子集, 最小场景 (例如只挂 /api/healthz) 允许部分 nil 以便轻量集成测试。
+// NewAPI 组装 HTTP 层 API 对象, 走 fail-fast: 任意必需依赖为 nil 直接 panic,
+// 把"依赖装配错误"在进程启动期暴露, 而不是等到具体 handler 被打到时才发现.
+//
+// 设计取舍:
+//
+//   - 必需依赖一律 == nil 即 panic, 调用方 (生产: internal/bootstrap; 测试:
+//     stub 注入) 必须保证全部非 nil. handler 内部不再做"运行期 nil 守门",
+//     避免漏改一处 guard 就 nil-deref 的隐患.
+//   - 这里的参数都是具体指针类型 (*T) 或具体接口类型 (store.IStorage /
+//     movieidcleaner.Cleaner), == nil 直接生效, 不需要 reflect 处理
+//     "typed-nil 包到 interface 里" 的边角: 调用方若传 typed-nil 是调用方
+//     自身 bug, 由 bootstrap 集成测试守住, 不在运行期再绕一层兜底.
+//
+// 可选项:
+//
+//   - saveDir: 允许 "", 表示未配置 library 工作目录; library 路由会用
+//     requireSaveDir 在请求层返 503, 不在 NewAPI 阻断 (其它路由仍可正常工作).
+//   - healthCheck: 允许 nil, 表示不提供 deep 健康检查; /api/healthz 仍可用.
 func NewAPI(
 	jobRepo *repository.JobRepository,
 	scanner *scanner.Service,
@@ -54,8 +66,35 @@ func NewAPI(
 	editor *plugineditor.Service,
 	healthCheck HealthCheckFunc,
 ) *API {
+	if jobRepo == nil {
+		panic("yamdc: NewAPI requires non-nil jobRepo")
+	}
+	if scanner == nil {
+		panic("yamdc: NewAPI requires non-nil scanner")
+	}
+	if jobSvc == nil {
+		panic("yamdc: NewAPI requires non-nil jobSvc")
+	}
 	if reviewSvc == nil {
-		panic("web.NewAPI: reviewSvc is required")
+		panic("yamdc: NewAPI requires non-nil reviewSvc")
+	}
+	if media == nil {
+		panic("yamdc: NewAPI requires non-nil media")
+	}
+	if storage == nil {
+		panic("yamdc: NewAPI requires non-nil storage")
+	}
+	if cleaner == nil {
+		panic("yamdc: NewAPI requires non-nil cleaner")
+	}
+	if debugger == nil {
+		panic("yamdc: NewAPI requires non-nil debugger")
+	}
+	if handlers == nil {
+		panic("yamdc: NewAPI requires non-nil handlers")
+	}
+	if editor == nil {
+		panic("yamdc: NewAPI requires non-nil editor")
 	}
 	return &API{
 		jobRepo: jobRepo, scanner: scanner, jobSvc: jobSvc, reviewSvc: reviewSvc,

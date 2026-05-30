@@ -29,36 +29,77 @@ import type { XPathMenuState } from "../plugin-editor-types";
 // matchedNodes / forceExpand / textSearch / currentNode 都是 useBodySearch
 // 的派生态, 这里只消费不生产.
 
-function XPathContextMenu({ menu, onClose }: {
+// XPathContextMenu: 右键浮层. 现已升级到完整的 ARIA menu 语义:
+//   - 容器: role="menu" + 来自调用方的 aria-label.
+//   - 选项: role="menuitem" (button 已隐式给 button role, 这里显式覆盖).
+//   - 打开后自动 focus 第一项, 用户可立刻 Tab / Enter / Space 选择.
+//   - Escape 关闭后焦点回到触发节点 (由调用者通过 triggerRef 注入,
+//     这里只负责调 returnFocus()).
+function XPathContextMenu({ menu, onClose, returnFocus }: {
   menu: XPathMenuState;
   onClose: () => void;
+  returnFocus: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menu) return;
-    function handleKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+        returnFocus();
+      }
+    }
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+        // click-outside 也属于 "用户主动放弃" 的关闭路径, ARIA Menu Pattern
+        // 要求关闭后焦点回到触发元素, 否则键盘用户被丢回 <body>, 上下文丢失.
+        returnFocus();
+      }
     }
     window.addEventListener("keydown", handleKey);
     window.addEventListener("mousedown", handleClick);
-    return () => { window.removeEventListener("keydown", handleKey); window.removeEventListener("mousedown", handleClick); };
-  }, [menu, onClose]);
+    // 打开后聚焦第一个 menu item, 让键盘用户不需要再 Tab 进来.
+    firstItemRef.current?.focus();
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("mousedown", handleClick);
+    };
+  }, [menu, onClose, returnFocus]);
 
   if (!menu) return null;
 
   function handleCopy(text: string) {
     copyToClipboard(text);
     onClose();
+    returnFocus();
   }
 
   return createPortal(
-    <div ref={menuRef} className="xpath-context-menu" style={{ left: menu.x, top: menu.y }}>
-      <button type="button" className="xpath-context-menu-item" onClick={() => handleCopy(menu.xpath)}>
+    <div
+      ref={menuRef}
+      className="xpath-context-menu"
+      style={{ left: menu.x, top: menu.y }}
+      role="menu"
+      aria-label="XPath 复制菜单"
+    >
+      <button
+        ref={firstItemRef}
+        type="button"
+        role="menuitem"
+        className="xpath-context-menu-item"
+        onClick={() => handleCopy(menu.xpath)}
+      >
         Copy XPath
       </button>
-      <button type="button" className="xpath-context-menu-item" onClick={() => handleCopy(menu.fullXpath)}>
+      <button
+        type="button"
+        role="menuitem"
+        className="xpath-context-menu-item"
+        onClick={() => handleCopy(menu.fullXpath)}
+      >
         Copy Full XPath
       </button>
     </div>,
@@ -166,7 +207,7 @@ function DomTreeNode({ node, depth, onCtxMenu, matchedNodes, forceExpand, textSe
 
   if (!hasChildren) {
     return (
-      <div className={lineClass} style={indent} onContextMenu={handleCtx} {...currentAttr}>
+      <div className={lineClass} style={indent} tabIndex={-1} onContextMenu={handleCtx} {...currentAttr}>
         <span className="dom-tree-spacer" />
         <DomOpenTag el={el} /><DomCloseTag tag={tag} />
       </div>
@@ -181,7 +222,7 @@ function DomTreeNode({ node, depth, onCtxMenu, matchedNodes, forceExpand, textSe
     const inlineClass = `dom-tree-line${inlineMatch ? " dom-tree-match" : ""}${inlineCurrent ? " dom-tree-match-current" : ""}`;
     const inlineAttr = inlineCurrent ? { "data-current-match": "" } : {};
     return (
-      <div className={inlineClass} style={indent} onContextMenu={handleCtx} {...inlineAttr}>
+      <div className={inlineClass} style={indent} tabIndex={-1} onContextMenu={handleCtx} {...inlineAttr}>
         <span className="dom-tree-spacer" />
         <DomOpenTag el={el} />
         <span className="dom-text">{children[0].textContent?.trim()}</span>
@@ -192,8 +233,8 @@ function DomTreeNode({ node, depth, onCtxMenu, matchedNodes, forceExpand, textSe
 
   if (!expanded) {
     return (
-      <div className={lineClass} style={indent} onContextMenu={handleCtx} {...currentAttr}>
-        <span className="dom-tree-toggle" onClick={() => setUserExpanded(true)} role="button" tabIndex={-1}>&#x25B6;</span>
+      <div className={lineClass} style={indent} tabIndex={-1} onContextMenu={handleCtx} {...currentAttr}>
+        <DomTreeToggle expanded={false} tag={tag} onToggle={() => setUserExpanded(true)} />
         <DomOpenTag el={el} />
         <span className="dom-ellipsis">…</span>
         <DomCloseTag tag={tag} />
@@ -203,18 +244,48 @@ function DomTreeNode({ node, depth, onCtxMenu, matchedNodes, forceExpand, textSe
 
   return (
     <>
-      <div className={lineClass} style={indent} onContextMenu={handleCtx} {...currentAttr}>
-        <span className="dom-tree-toggle" onClick={() => setUserExpanded(false)} role="button" tabIndex={-1}>&#x25BC;</span>
+      <div className={lineClass} style={indent} tabIndex={-1} onContextMenu={handleCtx} {...currentAttr}>
+        <DomTreeToggle expanded={true} tag={tag} onToggle={() => setUserExpanded(false)} />
         <DomOpenTag el={el} />
       </div>
       {children.map((child, i) => (
         <DomTreeNode key={i} node={child} depth={depth + 1} onCtxMenu={onCtxMenu} matchedNodes={matchedNodes} forceExpand={forceExpand} textSearch={textSearch} currentNode={currentNode} />
       ))}
-      <div className={lineClass} style={indent} onContextMenu={handleCtx}>
+      <div className={lineClass} style={indent} tabIndex={-1} onContextMenu={handleCtx}>
         <span className="dom-tree-spacer" />
         <DomCloseTag tag={tag} />
       </div>
     </>
+  );
+}
+
+// DomTreeToggle: 真正的 <button>, 替换原本的 <span role="button" tabIndex={-1}>.
+// span+role 之前的语义是: 鼠标可点, Tab 不可达, Enter/Space 不响应. 对屏幕
+// 阅读器 / 键盘用户来说等于"看得见但用不了".
+//
+// 本实现:
+//   - <button type="button">: 自带 keyboard activation (Enter/Space) + Tab 可达.
+//   - 通过 className 复用现有视觉; 显式覆盖浏览器默认 background/border/padding,
+//     保持与原来的 monospace 树视觉对齐.
+//   - aria-expanded 反映当前展开状态.
+//   - aria-label "展开节点 <tag>" / "收起节点 <tag>" 给 SR 用户读出动作语义.
+function DomTreeToggle({ expanded, tag, onToggle }: {
+  expanded: boolean;
+  tag: string;
+  onToggle: () => void;
+}) {
+  const label = expanded ? `收起节点 ${tag}` : `展开节点 ${tag}`;
+  return (
+    <button
+      type="button"
+      className="dom-tree-toggle"
+      aria-expanded={expanded}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+    >
+      {expanded ? "\u25BC" : "\u25B6"}
+    </button>
   );
 }
 
@@ -227,9 +298,20 @@ export function HtmlInspectorPanel({ doc, matchedNodes, forceExpand, textSearch,
 }) {
   const treeRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<XPathMenuState>(null);
+  // menuTriggerRef: 记住打开菜单时用户当时的右键源 (DOM Element). Escape
+  // 或选中后菜单关闭时, 把焦点还回这个元素 — 这是 ARIA Authoring Practices
+  // 关于 menu pattern 的标准要求, 也避免键盘用户被"扔回 body".
+  // 触发节点 (.dom-tree-line) 默认不可聚焦, DomTreeNode 渲染时给所有
+  // onContextMenu 行加上 tabIndex={-1}, 让 .focus() 真正落到行上而非
+  // 静默回退到 <body>.
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const returnMenuFocus = useCallback(() => {
+    menuTriggerRef.current?.focus();
+  }, []);
 
   const handleCtxMenu = useCallback((e: React.MouseEvent, el: Element) => {
+    menuTriggerRef.current = e.currentTarget as HTMLElement;
     setMenu({ x: e.clientX, y: e.clientY, xpath: computeSmartXPath(el), fullXpath: computeFullXPath(el) });
   }, []);
 
@@ -248,7 +330,7 @@ export function HtmlInspectorPanel({ doc, matchedNodes, forceExpand, textSearch,
           <DomTreeNode key={i} node={child} depth={0} onCtxMenu={handleCtxMenu} matchedNodes={matchedNodes} forceExpand={forceExpand} textSearch={textSearch} currentNode={currentNode} />
         ))}
       </div>
-      <XPathContextMenu menu={menu} onClose={closeMenu} />
+      <XPathContextMenu menu={menu} onClose={closeMenu} returnFocus={returnMenuFocus} />
     </div>
   );
 }

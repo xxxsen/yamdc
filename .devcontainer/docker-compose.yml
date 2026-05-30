@@ -1,0 +1,40 @@
+# Devcontainer compose: 单一 dev 服务长驻 (sleep infinity), VS Code Dev
+# Containers / `make devcontainer-up` 都通过 dockerComposeFile 指向这里.
+# 端口 8080 = Go API (yamdc server), 3000 = Next.js dev (yamdc web).
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    working_dir: /workspace/yamdc
+    volumes:
+      - ..:/workspace/yamdc:cached
+      # 挂 named volume 给 go module / node_modules / 自有 dev 数据目录,
+      # 避免 bind mount 把宿主的 go cache / node_modules 拖进容器导致权限
+      # 错乱; 也给跨容器重启时一份持久缓存.
+      - yamdc-go-mod:/go/pkg/mod
+      - yamdc-node-modules:/workspace/yamdc/web/node_modules
+      - yamdc-dev-data:/workspace/yamdc/.devcontainer-data
+      # docker-outside-of-docker: 把宿主 docker socket 透给 devcontainer,
+      # 让容器内可以调用宿主 docker daemon (例如 integration-test 临时拉
+      # 镜像 / 起依赖容器). 当前工程主体路径未直接用到, 但保留 socket 挂
+      # 载以便集成测试或调试时按需起辅助容器, 避免反复改 compose.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: Asia/Shanghai
+      API_PROXY_TARGET: http://localhost:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+      # 必须在 Compose 这里注入: VS Code Dev Containers 的 containerEnv 在
+      # dockerComposeFile 模式下不一定能传到容器进程 (官方建议 Compose 场景
+      # 用 services.<name>.environment). require-devcontainer.sh guard 直接
+      # 读这个变量.
+      YAMDC_DEVCONTAINER: "1"
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+
+volumes:
+  yamdc-go-mod:
+  yamdc-node-modules:
+  yamdc-dev-data:

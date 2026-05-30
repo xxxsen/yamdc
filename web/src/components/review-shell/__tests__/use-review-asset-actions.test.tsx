@@ -382,4 +382,46 @@ describe("openUploadPicker", () => {
     expect(setMeta).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  // 异常路径: 用户在系统选择器选了 > 32 MiB 的图, 前端必须立即拒绝,
+  // 不能再调 uploadAsset; 与后端 maxUploadImageBytes 形成对称防线.
+  it("超过 32 MiB 直接 setMessage 提示, 不调 uploadAsset", async () => {
+    const { input, spy } = installInputStub();
+    const { hook, setMessage } = renderAsset({ initialMeta: makeMeta() });
+    act(() => {
+      hook.result.current.openUploadPicker("cover");
+    });
+    const file = new File(["xxx"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: 33 * 1024 * 1024 });
+    input.files = { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
+    act(() => {
+      input.listeners.change(new Event("change"));
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenLastCalledWith("图片不能超过 32 MiB");
+    expect(mockUpload).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  // 边缘路径: file.type 为空但仍为合法大小, 前端不再做 MIME 校验,
+  // 把判断交给后端 readUploadImageData 的 http.DetectContentType,
+  // 避免误杀 macOS 系统选择器返回的空 MIME 文件.
+  it("空 MIME 但 size 合法: 仍走上传, 不在前端 setMessage 拦截", async () => {
+    const { input, spy } = installInputStub();
+    const uploadedAsset = makeAsset("ok-empty-mime");
+    mockUpload.mockResolvedValue(uploadedAsset);
+    mockSave.mockResolvedValue({});
+    const { hook } = renderAsset({ initialMeta: makeMeta() });
+    act(() => {
+      hook.result.current.openUploadPicker("cover");
+    });
+    const file = new File(["xxx"], "no-mime.png", { type: "" });
+    input.files = { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
+    act(() => {
+      input.listeners.change(new Event("change"));
+    });
+    await flushAsync();
+    expect(mockUpload).toHaveBeenCalledWith(file);
+    spy.mockRestore();
+  });
 });

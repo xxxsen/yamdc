@@ -183,4 +183,66 @@ describe("ReviewListPanel overflow menu", () => {
     fireEvent.click(rejectItem);
     expect(onReject).toHaveBeenCalledTimes(1);
   });
+
+  // 菜单位置 fallback 分支: 上方空间足够时翻上去 / 上下都不够时贴底
+  // 计算. 通过 mock getBoundingClientRect 模拟不同 viewport 关系.
+  it("computeMenuPosition: 下方空间不足 + 上方足够 → 菜单贴 trigger 上方; 两侧都不够 → 贴底兜底", () => {
+    renderPanel();
+    const trigger = screen.getByRole("button", { name: "更多操作" });
+
+    // 场景 1: 下方 0px, 上方 1000px → 菜单 top 应在 trigger 上方.
+    const origGetRect = trigger.getBoundingClientRect.bind(trigger);
+    Object.defineProperty(trigger, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        top: 700, bottom: 720, left: 100, right: 120, width: 20, height: 20, x: 100, y: 700,
+        toJSON: () => ({}),
+      }),
+    });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 720 });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    fireEvent.click(trigger);
+    let menu = screen.getByRole("menu");
+    let topPx = parseFloat((menu).style.top || "0");
+    expect(topPx).toBeLessThan(700);
+
+    // 关菜单, 切到 "上下都不够" 场景: viewport 极小 + trigger 居中,
+    // spaceBelow 和 spaceAbove 都 < menuHeight, 走兜底分支.
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    Object.defineProperty(trigger, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        top: 30, bottom: 40, left: 100, right: 120, width: 20, height: 10, x: 100, y: 30,
+        toJSON: () => ({}),
+      }),
+    });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 80 });
+    fireEvent.click(trigger);
+    menu = screen.getByRole("menu");
+    topPx = parseFloat((menu).style.top || "0");
+    // 兜底分支: top = max(VIEWPORT_PAD, innerHeight - menuHeight - VIEWPORT_PAD).
+    // 这里 innerHeight 80, menuHeight 估值 ~96, 所以 max(12, -28) = 12.
+    expect(topPx).toBeLessThan(80);
+
+    // 收尾: 还原尺寸, 避免污染后续测试.
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    Object.defineProperty(trigger, "getBoundingClientRect", { configurable: true, value: origGetRect });
+  });
+
+  it("scroll/resize 监听: 菜单打开期间 scroll/resize 都会重新 setPosition (handler 路径覆盖)", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+    expect(screen.getByRole("menu")).toBeTruthy();
+    // 触发一次 scroll capture 路径.
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("resize"));
+    });
+    // 菜单仍可见, 监听器没把 open 翻 false.
+    expect(screen.getByRole("menu")).toBeTruthy();
+  });
 });

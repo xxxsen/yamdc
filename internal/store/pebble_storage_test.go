@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -23,6 +24,35 @@ func newTestPebbleStore(t *testing.T) *pebbleStore {
 		require.NoError(t, s.Close())
 	})
 	return s
+}
+
+// TestPebblePathForDataDir 验证 cache 路径拼装与单一来源职责一致, 防止 bootstrap
+// / cleanup 等多处复用时漂移到不同子目录.
+func TestPebblePathForDataDir(t *testing.T) {
+	assert.Equal(t, filepath.Join("/data", "cache", "pebble"), PebblePathForDataDir("/data"))
+	assert.Equal(t, filepath.Join("relative", "cache", "pebble"), PebblePathForDataDir("relative"))
+}
+
+// TestMustNewPebbleStorageSuccess: NewPebbleStorage 成功时, MustNewPebbleStorage
+// 必须返回相同实例并且不 panic. 这条 happy path 之外的 panic 路径在
+// "新打开的实例" 上无法在测试里稳定触发, 不强求覆盖.
+func TestMustNewPebbleStorageSuccess(t *testing.T) {
+	store := MustNewPebbleStorage(context.Background(), filepath.Join(t.TempDir(), "pebble-must-ok"))
+	require.NotNil(t, store)
+	if closer, ok := store.(interface{ Close() error }); ok {
+		require.NoError(t, closer.Close())
+	}
+}
+
+// TestMustNewPebbleStoragePanicsOnInvalidPath: NewPebbleStorage 失败时 (用一
+// 个普通文件作为父路径), MustNewPebbleStorage 必须 panic, 与 NewPebbleStorage
+// 的 fail-fast 语义保持一致.
+func TestMustNewPebbleStoragePanicsOnInvalidPath(t *testing.T) {
+	bad := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(bad, []byte("x"), 0o600))
+	require.Panics(t, func() {
+		_ = MustNewPebbleStorage(context.Background(), filepath.Join(bad, "child"))
+	})
 }
 
 func TestPebbleStore_PutGet(t *testing.T) {

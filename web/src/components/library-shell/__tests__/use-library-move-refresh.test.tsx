@@ -463,6 +463,54 @@ describe("polling lifecycle", () => {
   });
 });
 
+describe("mediaStatusStale - 后台轮询失败的非阻塞提示", () => {
+  // 三类:
+  //   1) 正常: polling 成功 -> stale=false (mount 默认即 false).
+  //   2) 异常: polling 失败 -> stale=true; 用户主动 trigger 的失败仍走
+  //      setMessage, 不污染 stale 通道.
+  //   3) 边缘: 失败后任意一次成功 polling 自愈回 false.
+
+  it("正常: polling 成功保持 stale=false", async () => {
+    const initial = makeStatus({ status: "idle" }, { status: "running" });
+    mockGetStatus.mockResolvedValue(makeStatus({ status: "idle" }, { status: "running" }));
+
+    const { hook } = renderMoveRefresh({ initialMediaStatus: initial });
+    await flushAsync();
+    expect(hook.result.current.mediaStatusStale).toBe(false);
+  });
+
+  it("异常: polling 拒绝时 stale=true (后台错, 不弹 toast)", async () => {
+    const initial = makeStatus({ status: "idle" }, { status: "running" });
+    mockGetStatus.mockRejectedValue(new Error("net down"));
+
+    const { hook, setMessage } = renderMoveRefresh({ initialMediaStatus: initial });
+    await flushAsync();
+    expect(hook.result.current.mediaStatusStale).toBe(true);
+    // 后台错不应该污染 setMessage (只有用户操作错才进 setMessage).
+    expect(setMessage).not.toHaveBeenCalled();
+  });
+
+  it("边缘: 失败后再成功, stale 自愈回 false", async () => {
+    const initial = makeStatus({ status: "idle" }, { status: "running" });
+    mockGetStatus
+      .mockRejectedValueOnce(new Error("flicker"))
+      .mockResolvedValue(makeStatus({ status: "idle" }, { status: "running" }));
+
+    const { hook } = renderMoveRefresh({ initialMediaStatus: initial });
+    await flushAsync();
+    expect(hook.result.current.mediaStatusStale).toBe(true);
+
+    // 推 3s 让 setInterval 触发下一次 poll
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushAsync();
+    expect(hook.result.current.mediaStatusStale).toBe(false);
+  });
+});
+
 describe("derived view", () => {
   it("exposes taskPercent via moveProgress when running", async () => {
     const initial = makeStatus({ status: "running", started_at: 100, total: 10, processed: 7 });

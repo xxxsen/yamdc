@@ -5,6 +5,7 @@ import { type Dispatch, type RefObject, type SetStateAction, type TransitionStar
 import { buildPayload } from "@/components/review-shell/utils";
 import type { JobItem, ReviewMeta } from "@/lib/api";
 import { cropPosterFromCover, saveReviewJob, uploadAsset } from "@/lib/api";
+import { validateUploadSize } from "@/lib/upload-limits";
 
 export interface UseReviewAssetActionsDeps {
   selected: JobItem | null;
@@ -139,9 +140,15 @@ export function useReviewAssetActions(deps: UseReviewAssetActionsDeps): ReviewAs
     input.addEventListener("change", () => {
       const file = input.files?.[0];
       unlock();
-      if (file) {
-        doUpload(file, target);
+      if (!file) {
+        return;
       }
+      const sizeCheck = validateUploadSize(file);
+      if (!sizeCheck.ok) {
+        setMessage(sizeCheck.message ?? "图片不能超过 32 MiB");
+        return;
+      }
+      doUpload(file, target);
     }, { once: true });
     input.addEventListener("cancel", () => {
       unlock();

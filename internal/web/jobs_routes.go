@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -108,32 +109,50 @@ func parseIDParam(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-func (a *API) handleJobRun(c *gin.Context) {
+// jobOpPrelude 把 "id 解析" 这段固定形状抽出, 让具体 handler 只关心 "拿到
+// id 之后怎么调 service + 写响应". 错误本身仍然由 handler 自己消费
+// (writeJobOpResult), 避免把外部包的 err 通过 helper 形参回传 — 那样会被
+// wrapcheck 视作"未经包内封装的转发".
+//
+// 不再做"依赖 nil 守门": NewAPI 已 fail-fast 保证所有依赖非 nil,
+// handler 直接访问 a.* 字段不会 nil-deref.
+func (a *API) jobOpPrelude(c *gin.Context) (int64, bool) {
 	id, ok := parseIDParam(c)
+	if !ok {
+		return 0, false
+	}
+	return id, true
+}
+
+// writeJobOpResult 统一记录 + 写响应. err 已经在调用点完成消费 (调用点
+// 自己拿到的, 不跨函数边界返回), 这里只读它的 message; 因此不存在
+// wrapcheck 关心的"把 external err 透传上层"问题.
+func writeJobOpResult(c *gin.Context, id int64, opName string, failCode int, successMsg string, err error) {
+	if err != nil {
+		logutil.GetLogger(c.Request.Context()).Warn(opName+" failed", zap.Int64("job_id", id), zap.Error(err))
+		writeFail(c.Writer, failCode, err.Error())
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info(opName+" requested", zap.Int64("job_id", id))
+	writeSuccess(c.Writer, successMsg, nil)
+}
+
+func (a *API) handleJobRun(c *gin.Context) {
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
-	if err := a.jobSvc.Run(c.Request.Context(), id); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("job run failed", zap.Int64("job_id", id), zap.Error(err))
-		writeFail(c.Writer, errCodeJobRunFailed, err.Error())
-		return
-	}
-	logutil.GetLogger(c.Request.Context()).Info("job run requested", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, "job started", nil)
+	err := a.jobSvc.Run(c.Request.Context(), id)
+	writeJobOpResult(c, id, "job run", errCodeJobRunFailed, "job started", err)
 }
 
 func (a *API) handleJobRerun(c *gin.Context) {
-	id, ok := parseIDParam(c)
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
-	if err := a.jobSvc.Rerun(c.Request.Context(), id); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("job rerun failed", zap.Int64("job_id", id), zap.Error(err))
-		writeFail(c.Writer, errCodeJobRerunFailed, err.Error())
-		return
-	}
-	logutil.GetLogger(c.Request.Context()).Info("job rerun requested", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, "job restarted", nil)
+	err := a.jobSvc.Rerun(c.Request.Context(), id)
+	writeJobOpResult(c, id, "job rerun", errCodeJobRerunFailed, "job restarted", err)
 }
 
 func (a *API) handleJobLogs(c *gin.Context) {
@@ -193,7 +212,8 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 		}
 		item, err = a.jobSvc.UpdateNumberStructured(ctx, id, base, req.Variants)
 		if err != nil {
-			logger.Warn("job number update (structured) failed",
+			logger.Warn(
+				"job number update (structured) failed",
 				zap.Int64("job_id", id),
 				zap.String("base", strings.TrimSpace(base)),
 				zap.Int("variants", len(req.Variants)),
@@ -202,7 +222,8 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 			writeFail(c.Writer, errCodeJobUpdateNumberFailed, err.Error())
 			return
 		}
-		logger.Info("job number updated (structured)",
+		logger.Info(
+			"job number updated (structured)",
 			zap.Int64("job_id", id),
 			zap.String("base", strings.TrimSpace(base)),
 			zap.Int("variants", len(req.Variants)),
@@ -213,7 +234,8 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 
 	item, err = a.jobSvc.UpdateNumber(ctx, id, req.Number)
 	if err != nil {
-		logger.Warn("job number update failed",
+		logger.Warn(
+			"job number update failed",
 			zap.Int64("job_id", id),
 			zap.String("number", strings.TrimSpace(req.Number)),
 			zap.Error(err),
@@ -221,7 +243,8 @@ func (a *API) handleJobUpdateNumber(c *gin.Context) {
 		writeFail(c.Writer, errCodeJobUpdateNumberFailed, err.Error())
 		return
 	}
-	logger.Info("job number updated",
+	logger.Info(
+		"job number updated",
 		zap.Int64("job_id", id),
 		zap.String("number", strings.TrimSpace(req.Number)),
 	)
@@ -238,17 +261,12 @@ func (a *API) handleListNumberVariants(c *gin.Context) {
 }
 
 func (a *API) handleJobDelete(c *gin.Context) {
-	id, ok := parseIDParam(c)
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
-	if err := a.jobSvc.Delete(c.Request.Context(), id); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("job delete failed", zap.Int64("job_id", id), zap.Error(err))
-		writeFail(c.Writer, errCodeJobDeleteFailed, err.Error())
-		return
-	}
-	logutil.GetLogger(c.Request.Context()).Info("job deleted", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, "job deleted", nil)
+	err := a.jobSvc.Delete(c.Request.Context(), id)
+	writeJobOpResult(c, id, "job delete", errCodeJobDeleteFailed, "job deleted", err)
 }
 
 func (a *API) handleReviewGet(c *gin.Context) {
@@ -291,17 +309,12 @@ func (a *API) handleReviewSave(c *gin.Context) {
 }
 
 func (a *API) handleReviewImport(c *gin.Context) {
-	id, ok := parseIDParam(c)
+	id, ok := a.jobOpPrelude(c)
 	if !ok {
 		return
 	}
-	if err := a.reviewSvc.Import(c.Request.Context(), id); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("review import failed", zap.Int64("job_id", id), zap.Error(err))
-		writeFail(c.Writer, errCodeReviewImportFailed, err.Error())
-		return
-	}
-	logutil.GetLogger(c.Request.Context()).Info("review import completed", zap.Int64("job_id", id))
-	writeSuccess(c.Writer, "import completed", nil)
+	err := a.reviewSvc.Import(c.Request.Context(), id)
+	writeJobOpResult(c, id, "review import", errCodeReviewImportFailed, "import completed", err)
 }
 
 // handleReviewReject 处理 /api/review/jobs/:id/reject: 把 reviewing 的 job
@@ -322,7 +335,8 @@ func (a *API) handleReviewReject(c *gin.Context) {
 		_ = json.Unmarshal(body, &req)
 	}
 	if err := a.reviewSvc.Reject(c.Request.Context(), id, req.Reason); err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("review reject failed",
+		logutil.GetLogger(c.Request.Context()).Warn(
+			"review reject failed",
 			zap.Int64("job_id", id),
 			zap.String("reason", strings.TrimSpace(req.Reason)),
 			zap.Error(err),
@@ -330,7 +344,8 @@ func (a *API) handleReviewReject(c *gin.Context) {
 		writeFail(c.Writer, errCodeReviewRejectFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("review rejected",
+	logutil.GetLogger(c.Request.Context()).Info(
+		"review rejected",
 		zap.Int64("job_id", id),
 		zap.String("reason", strings.TrimSpace(req.Reason)),
 	)
@@ -363,7 +378,8 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 	}
 	poster, err := a.reviewSvc.CropPosterFromCover(c.Request.Context(), id, req.X, req.Y, req.Width, req.Height)
 	if err != nil {
-		logutil.GetLogger(c.Request.Context()).Warn("review poster crop failed",
+		logutil.GetLogger(c.Request.Context()).Warn(
+			"review poster crop failed",
 			zap.Int64("job_id", id),
 			zap.Int("x", req.X),
 			zap.Int("y", req.Y),
@@ -374,7 +390,8 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 		writeFail(c.Writer, errCodeReviewPosterCropFailed, err.Error())
 		return
 	}
-	logutil.GetLogger(c.Request.Context()).Info("review poster cropped",
+	logutil.GetLogger(c.Request.Context()).Info(
+		"review poster cropped",
 		zap.Int64("job_id", id),
 		zap.Int("x", req.X),
 		zap.Int("y", req.Y),
@@ -385,16 +402,63 @@ func (a *API) handleReviewPosterCrop(c *gin.Context) {
 	writeSuccess(c.Writer, "poster cropped", poster)
 }
 
+// maxUploadImageBytes 是单张上传图片本身 (file) 的硬上限. 32 MiB 足够覆盖
+// 现实中合理的封面 / 海报 / fanart 大小; 任何超出值都视为恶意/异常.
+const maxUploadImageBytes = 32 << 20
+
+// maxUploadMultipartOverheadBytes 是 multipart 形式带来的额外开销
+// (boundary / part header / form 字段), 1 MiB 足够覆盖标准浏览器 +
+// 标准 multipart 库的实现. 业务层仍然只允许文件 <= 32 MiB, 这里只是
+// 把"整个 multipart request body"的硬上限放宽到 33 MiB, 避免一个刚好
+// 32 MiB 的合法图片因为 multipart header 多出几百字节就被
+// http.MaxBytesReader 误拒.
+const maxUploadMultipartOverheadBytes = 1 << 20
+
+// readUploadImageData 从 multipart 表单读取一张图片, 强制 32 MiB 上限,
+// 同时被 review 资产上传 (handleReviewAsset) 与媒体库资产上传
+// (handleMediaLibraryAsset) 复用, 确保两条路径有完全一致的尺寸 / 类型
+// 校验. 任何 helper 失败都会向客户端写好错误 (HTTP 200 + body code, 或
+// 413 给超大文件), 并返回 ok=false 让 caller 直接 return.
+//
+// 体积保护机制:
+//
+//  1. http.MaxBytesReader 把请求 body 包成只能读 maxUploadImageBytes +
+//     maxUploadMultipartOverheadBytes 字节的 reader; 超过即在 Read 时抛
+//     *http.MaxBytesError, 让 handler 立刻拒绝. 因为 multipart body 包含
+//     boundary / part header, 它一定大于文件本体, 所以 request body 上限
+//     必须比文件上限再宽一点, 否则一张刚好 32 MiB 的合法图片会被误拒.
+//  2. 文件本身的 32 MiB 上限通过 header.Size 与 len(data) 做严格校验,
+//     不依赖 request body 上限; 双层保护下任意一方失守都还能拦截.
 func readUploadImageData(c *gin.Context) ([]byte, string, bool) {
+	c.Request.Body = http.MaxBytesReader(
+		c.Writer, c.Request.Body,
+		maxUploadImageBytes+maxUploadMultipartOverheadBytes,
+	)
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		if isUploadTooLargeErr(err) {
+			writeUploadTooLarge(c.Writer)
+			return nil, "", false
+		}
 		writeFail(c.Writer, errCodeInvalidUploadFile, "invalid upload file")
 		return nil, "", false
 	}
 	defer func() { _ = file.Close() }()
-	data, err := io.ReadAll(file)
+	if header != nil && header.Size > maxUploadImageBytes {
+		writeUploadTooLarge(c.Writer)
+		return nil, "", false
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadImageBytes+1))
 	if err != nil {
+		if isUploadTooLargeErr(err) {
+			writeUploadTooLarge(c.Writer)
+			return nil, "", false
+		}
 		writeFail(c.Writer, errCodeReadUploadFileFailed, "read upload file failed")
+		return nil, "", false
+	}
+	if int64(len(data)) > maxUploadImageBytes {
+		writeUploadTooLarge(c.Writer)
 		return nil, "", false
 	}
 	if !strings.HasPrefix(http.DetectContentType(data), "image/") {
@@ -402,6 +466,36 @@ func readUploadImageData(c *gin.Context) ([]byte, string, bool) {
 		return nil, "", false
 	}
 	return data, header.Filename, true
+}
+
+// isUploadTooLargeErr 判定某个错误是否来自 http.MaxBytesReader 的上限触发.
+// 标准库会在不同代码路径里返回不同包装类型, 这里用 errors.As 处理同时兜底
+// 字符串匹配, 防止 stdlib 在不同 minor 版本里换 wrap 方式.
+func isUploadTooLargeErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "http: request body too large") ||
+		strings.Contains(msg, "request body too large")
+}
+
+// writeUploadTooLarge 用 HTTP 413 + 项目统一的 { code, message, data } 协议
+// 拒绝超大上传. 这条路径与 P0 CORS 的 403 同属"协议外保护层", 所以也用
+// 4xx 而不是业务层的 200 + 非 0 code, 与 AGENTS.md 的协议显式区分.
+func writeUploadTooLarge(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusRequestEntityTooLarge)
+	body := responseBody{
+		Code:    errCodeUploadFileTooLarge,
+		Message: "upload file exceeds 32 MiB limit",
+		Data:    nil,
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (a *API) loadReviewMeta(c *gin.Context, id int64) (*model.MovieMeta, bool) {
@@ -426,14 +520,17 @@ func (a *API) loadReviewMeta(c *gin.Context, id int64) (*model.MovieMeta, bool) 
 	return &meta, true
 }
 
+// handleReviewAsset 拆成几段独立 helper 以避免 gocyclo 触线 (>15):
+//
+//   - parseReviewAssetParams: id 解析 + target 校验 (依赖非 nil 由 NewAPI 保证).
+//   - storeReviewAssetData: 把 multipart 字节存进 a.store, 返回 asset 元.
+//   - applyReviewAssetMeta: 根据 target 把 asset 挂到 meta.cover/poster/sample.
+//   - persistReviewAsset:   把更新后的 meta 序列化并 SaveReviewData.
+//
+// 主函数只剩组装与日志.
 func (a *API) handleReviewAsset(c *gin.Context) {
-	id, ok := parseIDParam(c)
+	id, target, ok := parseReviewAssetParams(c)
 	if !ok {
-		return
-	}
-	target := strings.TrimSpace(c.Query("target"))
-	if target != "cover" && target != "poster" && target != "fanart" {
-		writeFail(c.Writer, errCodeInvalidAssetTarget, "invalid asset target")
 		return
 	}
 	data, fileName, ok := readUploadImageData(c)
@@ -444,12 +541,43 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 	if !ok {
 		return
 	}
+	asset, ok := a.storeReviewAssetData(c, fileName, data)
+	if !ok {
+		return
+	}
+	applyReviewAssetMeta(meta, target, asset)
+	if !a.persistReviewAsset(c, id, target, fileName, asset.Key, meta) {
+		return
+	}
+	logutil.GetLogger(c.Request.Context()).Info("review asset uploaded",
+		zap.Int64("job_id", id), zap.String("target", target),
+		zap.String("file_name", fileName), zap.String("asset_key", asset.Key))
+	writeSuccess(c.Writer, "review asset uploaded", asset)
+}
+
+func parseReviewAssetParams(c *gin.Context) (int64, string, bool) {
+	id, ok := parseIDParam(c)
+	if !ok {
+		return 0, "", false
+	}
+	target := strings.TrimSpace(c.Query("target"))
+	if target != "cover" && target != "poster" && target != "fanart" {
+		writeFail(c.Writer, errCodeInvalidAssetTarget, "invalid asset target")
+		return 0, "", false
+	}
+	return id, target, true
+}
+
+func (a *API) storeReviewAssetData(c *gin.Context, fileName string, data []byte) (*model.File, bool) {
 	key, err := store.AnonymousPutDataTo(c.Request.Context(), a.store, data)
 	if err != nil {
 		writeFail(c.Writer, errCodeReviewAssetStoreFailed, err.Error())
-		return
+		return nil, false
 	}
-	asset := &model.File{Name: filepath.Base(fileName), Key: key}
+	return &model.File{Name: filepath.Base(fileName), Key: key}, true
+}
+
+func applyReviewAssetMeta(meta *model.MovieMeta, target string, asset *model.File) {
 	switch target {
 	case "cover":
 		meta.Cover = asset
@@ -458,20 +586,22 @@ func (a *API) handleReviewAsset(c *gin.Context) {
 	case "fanart":
 		meta.SampleImages = append(meta.SampleImages, asset)
 	}
+}
+
+func (a *API) persistReviewAsset(
+	c *gin.Context, id int64, target, fileName, key string, meta *model.MovieMeta,
+) bool {
 	reviewData, err := json.Marshal(meta)
 	if err != nil {
 		writeFail(c.Writer, errCodeReviewMarshalJSONFailed, "marshal review json failed")
-		return
+		return false
 	}
 	if err := a.reviewSvc.SaveReviewData(c.Request.Context(), id, string(reviewData)); err != nil {
 		logutil.GetLogger(c.Request.Context()).Warn("review asset upload save failed",
 			zap.Int64("job_id", id), zap.String("target", target),
 			zap.String("file_name", fileName), zap.String("asset_key", key), zap.Error(err))
 		writeFail(c.Writer, errCodeReviewSaveFailed, err.Error())
-		return
+		return false
 	}
-	logutil.GetLogger(c.Request.Context()).Info("review asset uploaded",
-		zap.Int64("job_id", id), zap.String("target", target),
-		zap.String("file_name", fileName), zap.String("asset_key", key))
-	writeSuccess(c.Writer, "review asset uploaded", asset)
+	return true
 }

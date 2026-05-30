@@ -1,0 +1,18 @@
+{
+  "scan_dir": ".devcontainer-data/scan",
+  "save_dir": ".devcontainer-data/save",
+  "library_dir": ".devcontainer-data/library",
+  "data_dir": ".devcontainer-data/app",
+  "log_config": {
+    "file": ".devcontainer-data/app/logs/yamdc.log",
+    "level": "debug",
+    "file_count": 3,
+    "file_size": 20971520,
+    "keep_days": 7
+  },
+  "network_config": {
+    "timeout": 120,
+    "proxy": ""
+  },
+  "dependencies": []
+}
