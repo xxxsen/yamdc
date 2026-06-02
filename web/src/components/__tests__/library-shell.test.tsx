@@ -184,4 +184,36 @@ describe("LibraryShell - 边缘路径 (重试)", () => {
     await waitFor(() => expect(screen.getByText("第二次也挂")).toBeTruthy());
     expect(screen.getByText("加载已入库列表失败")).toBeTruthy();
   });
+
+  it("重试成功 (列表为空) → 跳过 getLibraryItem, ErrorState 消失", async () => {
+    // items.length === 0 分支: 不应再调 getLibraryItem.
+    listLibraryItemsMock.mockResolvedValueOnce([]);
+    render(
+      <LibraryShell
+        items={[]}
+        initialDetail={null}
+        initialMediaStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => {
+      expect(screen.queryByText("加载已入库列表失败")).toBeNull();
+    });
+    expect(getLibraryItemMock).not.toHaveBeenCalled();
+  });
+
+  it("重试再失败且抛非 Error: 显示兜底文案 '重新加载已入库列表失败'", async () => {
+    listLibraryItemsMock.mockRejectedValueOnce("raw string error");
+    render(
+      <LibraryShell
+        items={[]}
+        initialDetail={null}
+        initialMediaStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.getByText("重新加载已入库列表失败")).toBeTruthy());
+  });
 });

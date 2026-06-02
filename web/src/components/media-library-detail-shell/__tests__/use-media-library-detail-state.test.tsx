@@ -296,6 +296,79 @@ describe("handleSaveEdit", () => {
     expect(result.current.message).toBe("保存媒体库 NFO 失败");
   });
 
+  it("save 成功且 next 切换 variants: current variant 不在 next 时按 primary_variant_key 回落", async () => {
+    // 初始 v1 是 primary, save 成功后 server 返回的 next.primary_variant_key=v9
+    // 且 variants 里只有 v9, v8 — 不包含 v1, 触发 syncDetail 内 setSelectedVariantKey
+    // 的 fallback 分支 (current 不 match -> primary_variant_key 优先).
+    const nextDetail = makeDetail({
+      meta: makeMeta({ title: "from-server" }),
+      primary_variant_key: "v9",
+      variants: [
+        { key: "v9", label: "v9", base_name: "", suffix: "", is_primary: true, video_path: "", nfo_path: "", poster_path: "", cover_path: "", meta: makeMeta(), files: [], file_count: 0 },
+        { key: "v8", label: "v8", base_name: "", suffix: "", is_primary: false, video_path: "", nfo_path: "", poster_path: "", cover_path: "", meta: makeMeta(), files: [], file_count: 0 },
+      ],
+    });
+    mockUpdateItem.mockResolvedValue(nextDetail);
+    const { result } = renderHook(() =>
+      useMediaLibraryDetailState({ initialDetail: makeDetail({ meta: makeMeta({ title: "orig" }) }) }),
+    );
+    act(() => {
+      result.current.handleStartEdit();
+      result.current.updateDraftMeta((prev) => ({ ...prev, title: "changed" }));
+    });
+    act(() => {
+      result.current.handleSaveEdit();
+    });
+    await flushAsync();
+    expect(result.current.selectedVariantKey).toBe("v9");
+  });
+
+  it("save 成功且 next 切换 variants 且 next.primary_variant_key 为空: 回落到 variants[0].key", async () => {
+    // 触发 syncDetail 内 setSelectedVariantKey fallback 的第二档 (variants[0]?.key).
+    const nextDetail = makeDetail({
+      meta: makeMeta({ title: "from-server" }),
+      primary_variant_key: "",
+      variants: [
+        { key: "vAlpha", label: "α", base_name: "", suffix: "", is_primary: false, video_path: "", nfo_path: "", poster_path: "", cover_path: "", meta: makeMeta(), files: [], file_count: 0 },
+        { key: "vBeta", label: "β", base_name: "", suffix: "", is_primary: false, video_path: "", nfo_path: "", poster_path: "", cover_path: "", meta: makeMeta(), files: [], file_count: 0 },
+      ],
+    });
+    mockUpdateItem.mockResolvedValue(nextDetail);
+    const { result } = renderHook(() =>
+      useMediaLibraryDetailState({ initialDetail: makeDetail({ meta: makeMeta({ title: "orig" }) }) }),
+    );
+    act(() => {
+      result.current.handleStartEdit();
+      result.current.updateDraftMeta((prev) => ({ ...prev, title: "changed" }));
+    });
+    act(() => {
+      result.current.handleSaveEdit();
+    });
+    await flushAsync();
+    expect(result.current.selectedVariantKey).toBe("vAlpha");
+  });
+
+  it("save 成功且 next 没有 variants: selectedVariantKey 回落到空字符串", async () => {
+    const nextDetail = makeDetail({
+      meta: makeMeta({ title: "from-server" }),
+      primary_variant_key: "",
+      variants: [],
+    });
+    mockUpdateItem.mockResolvedValue(nextDetail);
+    const { result } = renderHook(() =>
+      useMediaLibraryDetailState({ initialDetail: makeDetail({ meta: makeMeta({ title: "orig" }) }) }),
+    );
+    act(() => {
+      result.current.handleStartEdit();
+      result.current.updateDraftMeta((prev) => ({ ...prev, title: "changed" }));
+    });
+    act(() => {
+      result.current.handleSaveEdit();
+    });
+    await flushAsync();
+    expect(result.current.selectedVariantKey).toBe("");
+  });
+
   it("save 成功会触发 onDetailChange 回调", async () => {
     const nextDetail = makeDetail({ meta: makeMeta({ title: "from-server" }) });
     mockUpdateItem.mockResolvedValue(nextDetail);

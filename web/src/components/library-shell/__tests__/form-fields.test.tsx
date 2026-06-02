@@ -119,6 +119,89 @@ describe("LibraryFormFields", () => {
     expect(onBlurSave).toHaveBeenCalled();
   });
 
+  it("placeholder 三档: translated+title 非空 / translated+title 空 fallback / original 模式", () => {
+    const { rerender, container } = render(
+      <LibraryFormFields
+        draftMeta={makeMeta({ title: "中文T", plot: "中文P" })}
+        copyMode="translated"
+        activeTitleValue="翻T"
+        activePlotValue="翻P"
+        updateDraftMeta={vi.fn()}
+        onBlurSave={vi.fn()}
+      />,
+    );
+    const titleInput = container.querySelector("input.review-input-strong") as HTMLInputElement;
+    const plotArea = container.querySelector("textarea.review-textarea") as HTMLTextAreaElement;
+    expect(titleInput.placeholder).toBe("中文T");
+    expect(plotArea.placeholder).toBe("中文P");
+
+    rerender(
+      <LibraryFormFields
+        draftMeta={makeMeta({ title: "", plot: "" })}
+        copyMode="translated"
+        activeTitleValue=""
+        activePlotValue=""
+        updateDraftMeta={vi.fn()}
+        onBlurSave={vi.fn()}
+      />,
+    );
+    expect((container.querySelector("input.review-input-strong") as HTMLInputElement).placeholder).toBe("暂无中文标题");
+    expect((container.querySelector("textarea.review-textarea") as HTMLTextAreaElement).placeholder).toBe("暂无中文简介");
+
+    rerender(
+      <LibraryFormFields
+        draftMeta={makeMeta()}
+        copyMode="original"
+        activeTitleValue="原T"
+        activePlotValue="原P"
+        updateDraftMeta={vi.fn()}
+        onBlurSave={vi.fn()}
+      />,
+    );
+    expect((container.querySelector("input.review-input-strong") as HTMLInputElement).placeholder).toBe("输入原始标题");
+    expect((container.querySelector("textarea.review-textarea") as HTMLTextAreaElement).placeholder).toBe("输入原始简介");
+  });
+
+  it("original 模式简介 onChange 写入 plot 而非 plot_translated", () => {
+    const updateDraftMeta = vi.fn();
+    render(
+      <LibraryFormFields
+        draftMeta={makeMeta()}
+        copyMode="original"
+        activeTitleValue="原T"
+        activePlotValue="原P"
+        updateDraftMeta={updateDraftMeta}
+        onBlurSave={vi.fn()}
+      />,
+    );
+    const plotArea = screen.getByDisplayValue("原P");
+    fireEvent.change(plotArea, { target: { value: "原P2" } });
+    const updater = captureLastUpdater(updateDraftMeta);
+    plotArea.value = "原P2";
+    const next = updater(makeMeta());
+    expect(next.plot).toBe("原P2");
+    expect(next.plot_translated).toBe("翻P");
+  });
+
+  it("runtime 输入空字符串走 parseInt('0') 分支, 不报错且写入 0", () => {
+    const updateDraftMeta = vi.fn();
+    render(
+      <LibraryFormFields
+        draftMeta={makeMeta()}
+        copyMode="translated"
+        activeTitleValue="翻T"
+        activePlotValue="翻P"
+        updateDraftMeta={updateDraftMeta}
+        onBlurSave={vi.fn()}
+      />,
+    );
+    const runtimeInput = screen.getByDisplayValue("120");
+    fireEvent.change(runtimeInput, { target: { value: "" } });
+    const updater = captureLastUpdater(updateDraftMeta);
+    runtimeInput.value = "";
+    expect(updater(makeMeta()).runtime).toBe(0);
+  });
+
   it("剩余字段: director / studio / label / series / number / release_date / source / 简介 onChange + onBlur 全部接通 (function coverage)", () => {
     // 每个 input 的 onChange 是一份独立的箭头函数, 必须各自触发一次才能
     // 让 v8 function-coverage 识别为已执行. 这条测试的目标就是把 11 个

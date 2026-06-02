@@ -182,6 +182,30 @@ describe("polling effect - 8s interval", () => {
     hook.unmount();
   });
 
+  it("polling tick rejects: catch swallows error silently (no crash, no setMessage)", async () => {
+    const { hook, setMessage } = renderJobActions({ keyword: "x" });
+    await flushAsync();
+    // 先把 250ms debounce 走完, 此时 listJobs 还是 resolve(默认 mockResolvedValue),
+    // setMessage 不会因为 debounce 误触发.
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // debounce 之后任何残留消息已发完, 清干净再针对 8s polling 单独验证.
+    setMessage.mockClear();
+    mockListJobs.mockRejectedValueOnce(new Error("net flapped"));
+    await act(async () => {
+      vi.advanceTimersByTime(8000);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // 8s 轮询的 catch 是哑回吞, 不应触发 setMessage (与 debounce 路径区分).
+    expect(setMessage).not.toHaveBeenCalled();
+    hook.unmount();
+  });
+
   it("filter change resets polling baseline (restarts interval)", async () => {
     const hook = renderHook(
       ({ keyword }: { keyword: string }) => {
@@ -322,6 +346,17 @@ describe("handleRun / handleRerun", () => {
     await flushAsync();
     expect(mockRerunJob).toHaveBeenCalledWith(1);
   });
+
+  it("handleRerun error: setMessage with err", async () => {
+    mockRerunJob.mockRejectedValue(new Error("rerun fail"));
+    const { hook, setMessage } = renderJobActions();
+    await flushAsync();
+    act(() => {
+      hook.result.current.handleRerun(makeJob());
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenCalledWith("rerun fail");
+  });
 });
 
 describe("handleOpenLogs", () => {
@@ -423,6 +458,17 @@ describe("handleDelete + confirmDelete", () => {
     });
     await flushAsync();
     expect(setMessage).toHaveBeenCalledWith("del fail");
+  });
+
+  it("confirmDelete 抛非 Error: setMessage 用兜底文案 '删除任务失败'", async () => {
+    mockDeleteJob.mockRejectedValue("raw");
+    const { hook, setMessage } = renderJobActions();
+    await flushAsync();
+    act(() => {
+      hook.result.current.confirmDelete(makeJob());
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenCalledWith("删除任务失败");
   });
 });
 
@@ -573,6 +619,17 @@ describe("handleSubmitStructuredNumber", () => {
 
     expect(setMessage).toHaveBeenCalledWith("invalid variant");
   });
+
+  it("error 抛非 Error: setMessage 用兜底文案 '更新影片 ID 失败'", async () => {
+    mockUpdateNumberStructured.mockRejectedValue("raw");
+    const { hook, setMessage } = renderJobActions();
+    await flushAsync();
+    act(() => {
+      hook.result.current.handleSubmitStructuredNumber(makeJob(), "ABC-001", []);
+    });
+    await flushAsync();
+    expect(setMessage).toHaveBeenCalledWith("更新影片 ID 失败");
+  });
 });
 
 describe("handleRunSelectedJobs", () => {
@@ -621,5 +678,25 @@ describe("handleRunSelectedJobs", () => {
     await flushAsync(12);
 
     expect(setMessage).toHaveBeenCalledWith("已提交 1 条，失败 1 条");
+  });
+
+  // refreshJobs 在 handleRunSelectedJobs 末尾被 await; 让它在批量提交后抛出 ->
+  // 触发最外层 try/catch 的 catch 分支 (line 316), setMessage 显示统一兜底文案.
+  it("refresh after batch fails: outer catch sets fallback message", async () => {
+    const j1 = makeJob({ id: 1, status: "init" });
+    mockRunJob.mockResolvedValue(undefined);
+    const { hook, setMessage } = renderJobActions({
+      jobs: [j1],
+      selectedJobIds: new Set([1]),
+    });
+    await flushAsync();
+    // 用一个非 Error 字符串 reject, 让 catch 走 fallback 分支 "批量提交失败".
+    mockListJobs.mockRejectedValueOnce("raw");
+    act(() => {
+      hook.result.current.handleRunSelectedJobs();
+    });
+    await flushAsync(12);
+
+    expect(setMessage).toHaveBeenCalledWith("批量提交失败");
   });
 });

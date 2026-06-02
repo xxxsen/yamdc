@@ -141,4 +141,11 @@ describe("ProcessingShell - 边缘路径 (重试)", () => {
     await waitFor(() => expect(screen.getByText("第二次也挂")).toBeTruthy());
     expect(screen.queryByTestId("job-table")).toBeNull();
   });
+
+  it("点击重试 → API 抛非 Error 值 → 兜底文案 '重新加载处理队列失败'", async () => {
+    listJobsMock.mockRejectedValueOnce("raw");
+    render(<ProcessingShell initialData={emptyJobs} initialError="一开始挂了" />);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.getByText("重新加载处理队列失败")).toBeTruthy());
+  });
 });

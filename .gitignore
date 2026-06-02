@@ -16,3 +16,4 @@ config.json
 /issues
 /testdata/
 /web.test
+/.devcontainer-data/
