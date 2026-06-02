@@ -38,7 +38,17 @@ mkdir -p \
 
 "$repo_root/scripts/devcontainer/stop-dev.sh"
 
-setsid go run ./cmd/yamdc server --config "$backend_config" \
+# Pre-build the backend binary instead of `go run`. 在 GitHub Actions runner
+# 网络抖动 / Go module proxy 慢的时候, `go run ./cmd/yamdc server` 会把
+# module download 时间算进 wait-ready 的 60s 窗口, 导致 integration-test /
+# e2e-test 偶发 timeout (Backend still alive but /api/healthz never responded).
+# 这里把"拉依赖 + 编译"挪到独立步骤, 失败立即 fail-fast (set -e),
+# 让 wait-ready 60s 真正只用于"server 已起 + 监听 8080".
+backend_bin="$pid_dir/yamdc-server"
+echo "Building backend binary so wait-ready window only times the server boot..." >&2
+go build -o "$backend_bin" ./cmd/yamdc
+
+setsid "$backend_bin" server --config "$backend_config" \
   > "$log_dir/backend.log" 2>&1 &
 backend_pgid=$!
 echo "$backend_pgid" > "$pid_dir/backend.pgid"
