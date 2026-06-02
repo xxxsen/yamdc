@@ -166,4 +166,54 @@ describe("ReviewShell - 边缘路径 (重试)", () => {
       expect(screen.queryByText("加载待 review 列表失败")).toBeNull();
     });
   });
+
+  it("重试: list 空时跳过 getReviewJob 调用", async () => {
+    listJobsMock.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 200 } as JobListResponse);
+    getMediaLibraryStatusMock.mockResolvedValueOnce(fakeStatus);
+    render(
+      <ReviewShell
+        jobs={[]}
+        initialScrapeData={null}
+        initialMediaStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => {
+      expect(screen.queryByText("加载待 review 列表失败")).toBeNull();
+    });
+    expect(getReviewJobMock).not.toHaveBeenCalled();
+  });
+
+  it("重试: getMediaLibraryStatus 失败被吞 (mediaStatus 降级 null) 仍切到主体壳", async () => {
+    listJobsMock.mockResolvedValueOnce(reviewListResponse);
+    getReviewJobMock.mockResolvedValueOnce({} as ScrapeDataItem);
+    getMediaLibraryStatusMock.mockRejectedValueOnce(new Error("media boom"));
+    render(
+      <ReviewShell
+        jobs={[]}
+        initialScrapeData={null}
+        initialMediaStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => {
+      expect(screen.queryByText("加载待 review 列表失败")).toBeNull();
+    });
+  });
+
+  it("重试再失败且抛非 Error: 显示兜底文案 '重新加载待 review 列表失败'", async () => {
+    listJobsMock.mockRejectedValueOnce("raw");
+    render(
+      <ReviewShell
+        jobs={[]}
+        initialScrapeData={null}
+        initialMediaStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.getByText("重新加载待 review 列表失败")).toBeTruthy());
+  });
 });

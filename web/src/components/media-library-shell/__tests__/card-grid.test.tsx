@@ -95,4 +95,83 @@ describe("MediaLibraryCardGrid", () => {
     expect(screen.getByText("AB")).toBeTruthy();
     expect(container.querySelector(".media-library-load-sentinel")).toBeTruthy();
   });
+
+  it("title 缺失: alt / 标题文本 fallback 到 name; number 缺失: 渲染 '未命名影片'; release_date 缺失: 年份显示 '----'", () => {
+    const { container } = render(
+      <MediaLibraryCardGrid
+        visibleItems={[
+          makeItem({
+            id: 9,
+            title: "",
+            name: "raw-name",
+            number: "",
+            release_date: "",
+            poster_path: "raw/poster.jpg",
+          }),
+        ]}
+        itemsTotal={1}
+        filteredTotal={1}
+        browserRef={createRef<HTMLDivElement>()}
+        loadMoreRef={createRef<HTMLDivElement>()}
+        showLoadMoreSentinel={false}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    const img = container.querySelector<HTMLImageElement>(".media-library-card-image");
+    expect(img?.alt).toBe("raw-name");
+    const titleEl = container.querySelector(".media-library-card-title");
+    expect(titleEl?.textContent).toBe("raw-name");
+    expect(screen.getByText("未命名影片")).toBeTruthy();
+    expect(screen.getByText("----")).toBeTruthy();
+  });
+
+  it("fallback 缩略图三档优先级: number 优先, 其次 title, 最后 name", () => {
+    // number 优先
+    const { container, rerender } = render(
+      <MediaLibraryCardGrid
+        visibleItems={[
+          makeItem({ id: 1, poster_path: "", cover_path: "", number: "MN-9", title: "skip", name: "skip2" }),
+        ]}
+        itemsTotal={1}
+        filteredTotal={1}
+        browserRef={createRef<HTMLDivElement>()}
+        loadMoreRef={createRef<HTMLDivElement>()}
+        showLoadMoreSentinel={false}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("MN");
+
+    // number 缺失 → title
+    rerender(
+      <MediaLibraryCardGrid
+        visibleItems={[
+          makeItem({ id: 2, poster_path: "", cover_path: "", number: "", title: "Hello", name: "skip" }),
+        ]}
+        itemsTotal={1}
+        filteredTotal={1}
+        browserRef={createRef<HTMLDivElement>()}
+        loadMoreRef={createRef<HTMLDivElement>()}
+        showLoadMoreSentinel={false}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("HE");
+
+    // number / title 都缺失 → name
+    rerender(
+      <MediaLibraryCardGrid
+        visibleItems={[
+          makeItem({ id: 3, poster_path: "", cover_path: "", number: "", title: "", name: "raw" }),
+        ]}
+        itemsTotal={1}
+        filteredTotal={1}
+        browserRef={createRef<HTMLDivElement>()}
+        loadMoreRef={createRef<HTMLDivElement>()}
+        showLoadMoreSentinel={false}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("RA");
+  });
 });

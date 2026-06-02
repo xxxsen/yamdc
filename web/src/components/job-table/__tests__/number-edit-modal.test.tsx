@@ -356,6 +356,85 @@ describe("NumberEditModal", () => {
     unmount();
   });
 
+  it("非 Enter 键 (例如 Escape) 不触发 onSubmit", () => {
+    // base 输入框只对 Enter 提交, 其它按键 (Esc / Tab ...) 走 keydown 默认分支.
+    const onSubmit = vi.fn();
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001"),
+      onSubmit,
+    });
+    const baseInput = document.querySelector(".number-edit-modal .input") as HTMLInputElement;
+    act(() => {
+      baseInput.focus();
+      baseInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("indexed 后缀但缺数字 (如 'ABC-001-CD'): tryMatchIndexedSuffix 返回 undefined, 不识别", () => {
+    // CD 后没有任何数字, tryMatchIndexedSuffix 走 digits.length === 0 早退分支.
+    // 因为 indexed descriptor 不在 flag 字典里, 整段 "-CD" 直接留给 base.
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001-CD"),
+    });
+    const baseInput = document.querySelector(".number-edit-modal .input") as HTMLInputElement;
+    expect(baseInput.value).toBe("ABC-001-CD");
+    const cd = Array.from(document.querySelectorAll<HTMLElement>(".number-edit-variant-chip")).find(
+      (c) => c.textContent?.includes("多盘"),
+    )!;
+    expect(cd.getAttribute("data-active")).toBe("false");
+    unmount();
+  });
+
+  it("indexed 越界值 (例如 CD20 当 max=10): 标记 invalid, 保存按钮禁用且 handleSubmit 早退", () => {
+    // descriptor max=10 时 index=20 -> isIndexValid=false -> invalidIndexedIds 命中,
+    // canSubmit=false. saveBtn.click() 走 handleSubmit 的 !canSubmit 早退分支.
+    const onSubmit = vi.fn();
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001"),
+      onSubmit,
+    });
+    const cd = Array.from(document.querySelectorAll<HTMLElement>(".number-edit-variant-chip")).find(
+      (c) => c.textContent?.includes("多盘"),
+    )!;
+    const checkbox = cd.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const numberInput = cd.querySelector(".number-edit-variant-index-input") as HTMLInputElement;
+    act(() => {
+      checkbox.click();
+    });
+    typeInto(numberInput, "20");
+
+    expect(cd.getAttribute("data-invalid")).toBe("true");
+    const saveBtn = findModalButtonByText("保存");
+    expect(saveBtn.disabled).toBe(true);
+    act(() => {
+      saveBtn.click();
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("indexed 输入非数字 (NaN): setIndexedValue 不写入 (Number.isNaN 守卫)", () => {
+    // CD index input 输入 'abc' -> Number.parseInt 得 NaN -> 跳过 setIndexedValue,
+    // 保留之前的 index 值 (这里是默认 min=1).
+    const { unmount } = renderModal({
+      job: makeJob("ABC-001"),
+    });
+    const cd = Array.from(document.querySelectorAll<HTMLElement>(".number-edit-variant-chip")).find(
+      (c) => c.textContent?.includes("多盘"),
+    )!;
+    const checkbox = cd.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const numberInput = cd.querySelector(".number-edit-variant-index-input") as HTMLInputElement;
+    act(() => {
+      checkbox.click();
+    });
+    typeInto(numberInput, "abc");
+    // preview 仍是 ABC-001-CD1 (没被改成 NaN).
+    expect(document.querySelector(".number-edit-preview-value")!.textContent).toBe("ABC-001-CD1");
+    unmount();
+  });
+
   it("Enter 键: 在 base 输入框按回车触发 onSubmit", () => {
     const onSubmit = vi.fn();
     const { unmount } = renderModal({

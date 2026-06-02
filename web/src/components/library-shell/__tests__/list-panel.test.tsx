@@ -105,4 +105,81 @@ describe("LibraryListPanel", () => {
     expect(screen.getByText("已存在(冲突)")).toBeTruthy();
     expect(screen.getByText("3 个文件实例")).toBeTruthy();
   });
+
+  it("无图片路径时渲染 fallback 缩略图: number 优先, 其次 title, 最后 name", () => {
+    const { rerender, container } = render(
+      <LibraryListPanel
+        items={[makeItem({ rel_path: "movies/no-img-1", number: "MNO-005", poster_path: "", cover_path: "" })]}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedPath=""
+        onSelectItem={vi.fn()}
+        resolveImage={(p) => p}
+        bottomActions={null}
+      />,
+    );
+    // number 存在时取前两位大写: "MNO-005" -> "MN"
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("MN");
+    expect(container.querySelector(".library-thumb-image")).toBeNull();
+
+    // number 为空 → fallback 用 title 的前两位
+    rerender(
+      <LibraryListPanel
+        items={[makeItem({ rel_path: "movies/no-img-2", number: "", title: "Hello", poster_path: "", cover_path: "" })]}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedPath=""
+        onSelectItem={vi.fn()}
+        resolveImage={(p) => p}
+        bottomActions={null}
+      />,
+    );
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("HE");
+
+    // number / title 都为空 → fallback 用 name 的前两位
+    rerender(
+      <LibraryListPanel
+        items={[makeItem({ rel_path: "movies/no-img-3", number: "", title: "", name: "raw", poster_path: "", cover_path: "" })]}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedPath=""
+        onSelectItem={vi.fn()}
+        resolveImage={(p) => p}
+        bottomActions={null}
+      />,
+    );
+    expect(container.querySelector(".library-thumb-fallback")?.textContent).toBe("RA");
+  });
+
+  it("title 缺失时影片标题与 title attribute 都回退到 name", () => {
+    const { container } = render(
+      <LibraryListPanel
+        items={[makeItem({ rel_path: "movies/title-fallback", title: "", name: "fallback-name" })]}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedPath=""
+        onSelectItem={vi.fn()}
+        resolveImage={(p) => p}
+        bottomActions={null}
+      />,
+    );
+    const titleEl = container.querySelector(".library-item-title");
+    expect(titleEl?.textContent).toBe("fallback-name");
+    expect(titleEl?.getAttribute("title")).toBe("fallback-name");
+  });
+
+  it("number 缺失时影片号位置渲染 '未命名影片'", () => {
+    render(
+      <LibraryListPanel
+        items={[makeItem({ rel_path: "movies/no-number", number: "" })]}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedPath=""
+        onSelectItem={vi.fn()}
+        resolveImage={(p) => p}
+        bottomActions={null}
+      />,
+    );
+    expect(screen.getByText("未命名影片")).toBeTruthy();
+  });
 });

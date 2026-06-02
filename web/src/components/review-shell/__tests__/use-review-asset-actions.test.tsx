@@ -403,6 +403,42 @@ describe("openUploadPicker", () => {
     spy.mockRestore();
   });
 
+  // doUpload 内部对 meta/selected 二次守卫: 在 openUploadPicker 触发瞬间
+  // 父层把 selected 切到 null (审核条目被切走) 时, 不再 setMessage("上传图片..."),
+  // 也不调 uploadAsset.
+  it("openUploadPicker 选文件后 selected 为 null: doUpload 直接 return", async () => {
+    const { input, spy } = installInputStub();
+    const { hook, setMessage } = renderAsset({ selected: null, initialMeta: makeMeta() });
+    act(() => {
+      hook.result.current.openUploadPicker("cover");
+    });
+    const file = new File(["xxx"], "c.jpg", { type: "image/jpeg" });
+    input.files = { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
+    act(() => {
+      input.listeners.change(new Event("change"));
+    });
+    await flushAsync();
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(setMessage).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("openUploadPicker 选文件后 meta 为 null: doUpload 直接 return", async () => {
+    const { input, spy } = installInputStub();
+    const { hook } = renderAsset({ meta: null, initialMeta: null });
+    act(() => {
+      hook.result.current.openUploadPicker("cover");
+    });
+    const file = new File(["xxx"], "c.jpg", { type: "image/jpeg" });
+    input.files = { 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
+    act(() => {
+      input.listeners.change(new Event("change"));
+    });
+    await flushAsync();
+    expect(mockUpload).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   // 边缘路径: file.type 为空但仍为合法大小, 前端不再做 MIME 校验,
   // 把判断交给后端 readUploadImageData 的 http.DetectContentType,
   // 避免误杀 macOS 系统选择器返回的空 MIME 文件.

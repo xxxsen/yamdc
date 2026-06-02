@@ -417,6 +417,85 @@ describe("handleDeleteFanart", () => {
     expect(setMessage).toHaveBeenCalledWith("no perm");
     expect(syncDetail).not.toHaveBeenCalled();
   });
+
+  it("variant 没有 poster_path 时: setAssetOverride 早退 (path 为空字符串分支)", async () => {
+    // 构造一个所有 poster 字段都为空的 detail. openUploadPicker("poster") 完成后,
+    // setAssetOverride 被调用时 path="" -> 走 if(!path) return 分支, 不写 override.
+    const blankDetail: LibraryDetail = {
+      ...makeDetail(),
+      item: { ...makeDetail().item, poster_path: "" } as never,
+      variants: [
+        { ...makeVariant(), poster_path: "" },
+      ],
+    };
+    mockReplaceAsset.mockResolvedValue(blankDetail);
+    const blankVariant = blankDetail.variants[0];
+    const { hook } = renderAssetActions({ detail: blankDetail, currentVariant: blankVariant });
+    act(() => hook.result.current.openUploadPicker("poster"));
+    act(() => firePickedFile());
+    await flushAsync();
+
+    // 没有 path 的 override 被写入: 解析空路径 (override 表里没有 "") 也不会
+    // 直接撞到 blob:, 行为退化成普通 getLibraryFileURL.
+    expect(hook.result.current.resolveImage("/lib/m-poster.jpg")).toBe(
+      "/api/library/file?path=%2Flib%2Fm-poster.jpg",
+    );
+  });
+
+  it("variant 没有 poster_path 时: handleConfirmCrop 后 bumpAssetVersion 早退 (path 为空)", async () => {
+    const blankDetail: LibraryDetail = {
+      ...makeDetail(),
+      item: { ...makeDetail().item, poster_path: "" } as never,
+      variants: [
+        { ...makeVariant(), poster_path: "" },
+      ],
+    };
+    mockCropPoster.mockResolvedValue(blankDetail);
+    const { hook } = renderAssetActions({
+      detail: blankDetail,
+      currentVariant: blankDetail.variants[0],
+      selectedCover: "/lib/m-cover.jpg",
+    });
+    act(() => {
+      hook.result.current.handleConfirmCrop({ x: 0, y: 0, width: 1, height: 1 } as never);
+    });
+    await flushAsync();
+    // bumpAssetVersion("") 早退 -> resolveImage 不带 &v=.
+    expect(hook.result.current.resolveImage("/lib/m-poster.jpg")).toBe(
+      "/api/library/file?path=%2Flib%2Fm-poster.jpg",
+    );
+  });
+
+  it("path 同时拥有 override + version: 触发 clearAssetOverride 删分支 + setAssetVersions 删分支", async () => {
+    const fanartPath = "/lib/m-poster.jpg";
+    // 第一步: 先用 poster 上传给该路径塞一份 override (走 clearAssetOverride 的 `existing` 分支前置).
+    mockReplaceAsset.mockResolvedValue(makeDetail());
+    const { hook } = renderAssetActions();
+    act(() => hook.result.current.openUploadPicker("poster"));
+    act(() => firePickedFile());
+    await flushAsync();
+    // 此时 hook 内部 assetOverrides[fanartPath] 已被设置, resolveImage 走 override 分支返回 blob:.
+    expect(hook.result.current.resolveImage(fanartPath)).toMatch(/^blob:test\//);
+
+    // 第二步: 通过 handleConfirmCrop 触发 bumpAssetVersion 给 fanartPath 写 version, 让 setAssetVersions 删分支可达.
+    mockCropPoster.mockResolvedValue(makeDetail());
+    act(() => {
+      hook.result.current.handleConfirmCrop({ x: 0, y: 0, width: 1, height: 1 } as never);
+    });
+    await flushAsync();
+
+    // 第三步: handleDeleteFanart 该路径 -> clearAssetOverride 走 `existing` 删除分支
+    // (108-111), setAssetVersions 走 `path in prev` 删除分支 (170-172).
+    mockDeleteFile.mockResolvedValue(makeDetail());
+    act(() => hook.result.current.handleDeleteFanart(fanartPath));
+    await flushAsync();
+
+    expect(mockDeleteFile).toHaveBeenCalledWith(fanartPath);
+    // 删除后: resolveImage 不再返回 blob:, 也不再带 &v= 版本号.
+    expect(hook.result.current.resolveImage(fanartPath)).toBe(
+      "/api/library/file?path=%2Flib%2Fm-poster.jpg",
+    );
+  });
 });
 
 describe("openCropper", () => {

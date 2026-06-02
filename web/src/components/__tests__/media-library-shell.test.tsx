@@ -165,4 +165,17 @@ describe("MediaLibraryShell - 边缘路径 (重试)", () => {
     await waitFor(() => expect(screen.getByText("第二次也挂")).toBeTruthy());
     expect(screen.getByText("加载媒体库失败")).toBeTruthy();
   });
+
+  it("重试再失败且抛非 Error: 兜底文案 '重新加载媒体库失败'", async () => {
+    listMediaLibraryItemsMock.mockRejectedValueOnce("raw");
+    render(
+      <MediaLibraryShell
+        items={[]}
+        initialStatus={null}
+        initialError="一开始挂了"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.getByText("重新加载媒体库失败")).toBeTruthy());
+  });
 });
