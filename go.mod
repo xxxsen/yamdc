@@ -25,6 +25,7 @@ require (
 	go.uber.org/zap v1.23.0
 	golang.org/x/image v0.38.0
 	golang.org/x/net v0.48.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -79,7 +80,7 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.57.1 // indirect
+	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
@@ -97,7 +98,6 @@ require (
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
